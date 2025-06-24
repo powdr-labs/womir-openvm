@@ -6,7 +6,8 @@ license = "MIT OR Apache-2.0"
 [workspace]
 members = [
     "womir-openvm",
-	"rv32im-wom/circuit"
+	"rv32im-wom/circuit",
+	"rv32im-wom/transpiler"
 ]
 resolver = "2"
 
@@ -19,6 +20,7 @@ openvm-circuit-primitives-derive = { git = "https://github.com/powdr-labs/openvm
 openvm-circuit = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
 openvm-circuit-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
 openvm-instructions = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
+openvm-instructions-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
 openvm-rv32im-transpiler = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
 
 strum_macros = "0.26.4"
@@ -34,3 +36,6 @@ num-integer = { version = "0.1.46", default-features = false }
 serde = { version = "1.0.201", default-features = false, features = ["derive"] }
 serde-big-array = "0.5.1"
 struct-reflection = { git = "https://github.com/gzanitti/struct-reflection-rs.git" }
+
+rrs-lib = "0.1.0"
+tracing = "0.1.40"
