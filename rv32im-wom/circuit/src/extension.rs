@@ -13,7 +13,7 @@ use openvm_circuit_primitives::{
 };
 use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
 use openvm_instructions::{program::DEFAULT_PC_STEP, LocalOpcode, PhantomDiscriminant};
-use openvm_rv32im_transpiler::{
+use openvm_rv32im_wom_transpiler::{
     BaseAluOpcode, BranchEqualOpcode, BranchLessThanOpcode, DivRemOpcode, LessThanOpcode,
     MulHOpcode, MulOpcode, Rv32AuipcOpcode, Rv32HintStoreOpcode, Rv32JalLuiOpcode, Rv32JalrOpcode,
     Rv32LoadStoreOpcode, Rv32Phantom, ShiftOpcode,

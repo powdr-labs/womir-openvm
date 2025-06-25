@@ -8,6 +8,9 @@ members = ["womir-openvm", "rv32im-wom/circuit", "rv32im-wom/transpiler"]
 resolver = "2"
 
 [workspace.dependencies]
+openvm-rv32im-wom-circuit = { path = "rv32im-wom/circuit" }
+openvm-rv32im-wom-transpiler = { path = "rv32im-wom/transpiler" }
+
 openvm-stark-sdk = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "37c22d2", default-features = false }
 openvm-stark-backend = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "37c22d2", default-features = false }
 

@@ -27,7 +27,7 @@ use strum::{EnumCount, EnumIter, FromRepr};
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x200]
+#[opcode_offset = 0x1200]
 #[repr(usize)]
 pub enum BaseAluOpcode {
     ADD,
@@ -52,7 +52,7 @@ pub enum BaseAluOpcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x205]
+#[opcode_offset = 0x1205]
 #[repr(usize)]
 pub enum ShiftOpcode {
     SLL,
@@ -75,7 +75,7 @@ pub enum ShiftOpcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x208]
+#[opcode_offset = 0x1208]
 #[repr(usize)]
 pub enum LessThanOpcode {
     SLT,
@@ -97,7 +97,7 @@ pub enum LessThanOpcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x210]
+#[opcode_offset = 0x1210]
 #[repr(usize)]
 pub enum Rv32LoadStoreOpcode {
     LOADW,
@@ -127,7 +127,7 @@ pub enum Rv32LoadStoreOpcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x220]
+#[opcode_offset = 0x1220]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum BranchEqualOpcode {
@@ -150,7 +150,7 @@ pub enum BranchEqualOpcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x225]
+#[opcode_offset = 0x1225]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum BranchLessThanOpcode {
@@ -163,7 +163,7 @@ pub enum BranchLessThanOpcode {
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
 )]
-#[opcode_offset = 0x230]
+#[opcode_offset = 0x1230]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum Rv32JalLuiOpcode {
@@ -174,7 +174,7 @@ pub enum Rv32JalLuiOpcode {
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
 )]
-#[opcode_offset = 0x235]
+#[opcode_offset = 0x1235]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum Rv32JalrOpcode {
@@ -184,7 +184,7 @@ pub enum Rv32JalrOpcode {
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
 )]
-#[opcode_offset = 0x240]
+#[opcode_offset = 0x1240]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum Rv32AuipcOpcode {
@@ -194,7 +194,7 @@ pub enum Rv32AuipcOpcode {
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
 )]
-#[opcode_offset = 0x250]
+#[opcode_offset = 0x1250]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum MulOpcode {
@@ -216,7 +216,7 @@ pub enum MulOpcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x251]
+#[opcode_offset = 0x1251]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum MulHOpcode {
@@ -240,7 +240,7 @@ pub enum MulHOpcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x254]
+#[opcode_offset = 0x1254]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum DivRemOpcode {
@@ -257,7 +257,7 @@ pub enum DivRemOpcode {
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
 )]
-#[opcode_offset = 0x260]
+#[opcode_offset = 0x1260]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum Rv32HintStoreOpcode {
@@ -274,7 +274,7 @@ pub enum Rv32HintStoreOpcode {
 pub enum Rv32Phantom {
     /// Prepare the next input vector for hinting, but prepend it with a 4-byte decomposition of
     /// its length instead of one field element.
-    HintInput = 0x20,
+    HintInput = 0x120,
     /// Peek string from memory and print it to stdout.
     PrintStr,
     /// Prepare given amount of random numbers for hinting.

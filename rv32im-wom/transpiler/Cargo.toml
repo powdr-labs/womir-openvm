@@ -1,5 +1,5 @@
 [package]
-name = "openvm-rv32im-transpiler"
+name = "openvm-rv32im-wom-transpiler"
 description = "OpenVM transpiler extension for RISC-V 32-bit IM instruction set"
 version.workspace = true
 edition.workspace = true

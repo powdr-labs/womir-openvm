@@ -1742,7 +1742,7 @@ dependencies = [
  "openvm-instructions",
  "openvm-rv32-adapters",
  "openvm-rv32im-circuit",
- "openvm-rv32im-transpiler 1.2.1-rc.0",
+ "openvm-rv32im-transpiler",
  "openvm-stark-backend",
  "openvm-stark-sdk",
  "rand",
@@ -1766,7 +1766,7 @@ dependencies = [
  "openvm-bigint-guest",
  "openvm-instructions",
  "openvm-instructions-derive",
- "openvm-rv32im-transpiler 1.2.1-rc.0",
+ "openvm-rv32im-transpiler",
  "openvm-stark-backend",
  "openvm-transpiler",
  "rrs-lib",
@@ -2094,7 +2094,7 @@ dependencies = [
  "openvm-instructions",
  "openvm-instructions-derive",
  "openvm-native-compiler-derive",
- "openvm-rv32im-transpiler 1.2.1-rc.0",
+ "openvm-rv32im-transpiler",
  "openvm-stark-backend",
  "openvm-stark-sdk",
  "serde",
@@ -2279,7 +2279,7 @@ dependencies = [
  "openvm-circuit-primitives",
  "openvm-circuit-primitives-derive",
  "openvm-instructions",
- "openvm-rv32im-transpiler 1.2.1-rc.0",
+ "openvm-rv32im-transpiler",
  "openvm-stark-backend",
  "rand",
  "serde",
@@ -2296,18 +2296,6 @@ dependencies = [
  "openvm-custom-insn",
  "p3-field",
  "strum_macros",
-]
-
-[[package]]
-name = "openvm-rv32im-transpiler"
-version = "0.0.1"
-dependencies = [
- "openvm-instructions",
- "openvm-instructions-derive",
- "openvm-stark-backend",
- "serde",
- "strum",
- "tracing",
 ]
 
 [[package]]
@@ -2340,7 +2328,8 @@ dependencies = [
  "openvm-circuit-primitives",
  "openvm-circuit-primitives-derive",
  "openvm-instructions",
- "openvm-rv32im-transpiler 1.2.1-rc.0",
+ "openvm-rv32im-transpiler",
+ "openvm-rv32im-wom-transpiler",
  "openvm-stark-backend",
  "openvm-stark-sdk",
  "rand",
@@ -2348,6 +2337,18 @@ dependencies = [
  "serde-big-array",
  "struct-reflection",
  "strum",
+]
+
+[[package]]
+name = "openvm-rv32im-wom-transpiler"
+version = "0.0.1"
+dependencies = [
+ "openvm-instructions",
+ "openvm-instructions-derive",
+ "openvm-stark-backend",
+ "serde",
+ "strum",
+ "tracing",
 ]
 
 [[package]]
@@ -2386,7 +2387,7 @@ dependencies = [
  "openvm-pairing-circuit",
  "openvm-pairing-transpiler",
  "openvm-rv32im-circuit",
- "openvm-rv32im-transpiler 1.2.1-rc.0",
+ "openvm-rv32im-transpiler",
  "openvm-sha256-circuit",
  "openvm-sha256-transpiler",
  "openvm-stark-backend",
@@ -4229,12 +4230,18 @@ dependencies = [
 name = "womir-openvm"
 version = "0.1.0"
 dependencies = [
+ "derive_more 1.0.0",
  "eyre",
+ "openvm-circuit",
+ "openvm-circuit-derive",
  "openvm-instructions",
- "openvm-rv32im-transpiler 1.2.1-rc.0",
+ "openvm-rv32im-transpiler",
+ "openvm-rv32im-wom-circuit",
+ "openvm-rv32im-wom-transpiler",
  "openvm-sdk",
  "openvm-stark-backend",
  "openvm-stark-sdk",
+ "serde",
 ]
 
 [[package]]
