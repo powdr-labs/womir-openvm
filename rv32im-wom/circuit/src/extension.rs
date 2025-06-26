@@ -1,28 +1,48 @@
+use std::sync::{Arc, Mutex};
+
 use derive_more::derive::From;
 use openvm_circuit::{
     arch::{
-        InitFileGenerator, SystemConfig, SystemPort, VmExtension, VmInventory, VmInventoryBuilder,
-        VmInventoryError,
+        AdapterRuntimeContext, ExecutionState, InitFileGenerator,
+        InstructionExecutor as InstructionExecutorTrait, SystemConfig, SystemPort,
+        VmAdapterInterface, VmExtension, VmInventory, VmInventoryBuilder, VmInventoryError,
     },
-    system::phantom::PhantomChip,
+    system::{
+        memory::{MemoryController, OfflineMemory},
+        phantom::PhantomChip,
+    },
 };
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor, VmConfig};
 use openvm_circuit_primitives::{
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
     range_tuple::{RangeTupleCheckerBus, SharedRangeTupleCheckerChip},
+    AlignedBorrow,
 };
 use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
-use openvm_instructions::{program::DEFAULT_PC_STEP, LocalOpcode, PhantomDiscriminant};
+use openvm_instructions::{
+    instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode, PhantomDiscriminant, VmOpcode,
+};
 use openvm_rv32im_wom_transpiler::{
     BaseAluOpcode, BranchEqualOpcode, BranchLessThanOpcode, DivRemOpcode, LessThanOpcode,
     MulHOpcode, MulOpcode, Rv32AuipcOpcode, Rv32HintStoreOpcode, Rv32JalLuiOpcode, Rv32JalrOpcode,
     Rv32LoadStoreOpcode, Rv32Phantom, ShiftOpcode,
 };
-use openvm_stark_backend::p3_field::PrimeField32;
-use serde::{Deserialize, Serialize};
+use openvm_stark_backend::{
+    interaction::{BusIndex, InteractionBuilder, PermutationCheckBus},
+    p3_air::{AirBuilder, BaseAir},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
+    p3_matrix::dense::RowMajorMatrix,
+    rap::{BaseAirWithPublicValues, ColumnsAir},
+};
+
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
+use thiserror::Error;
 
 use crate::{adapters::*, *};
+
+use openvm_circuit::arch::Result as ResultVm;
 
 /// Config for a VM with base extension and IO extension
 #[derive(Clone, Debug, VmConfig, derive_new::new, Serialize, Deserialize)]
@@ -137,16 +157,16 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 #[derive(ChipUsageGetter, Chip, InstructionExecutor, From, AnyEnum)]
 pub enum Rv32IExecutor<F: PrimeField32> {
     // Rv32 (for standard 32-bit integers):
-    BaseAlu(Rv32BaseAluChip<F>),
-    LessThan(Rv32LessThanChip<F>),
-    Shift(Rv32ShiftChip<F>),
-    LoadStore(Rv32LoadStoreChip<F>),
-    LoadSignExtend(Rv32LoadSignExtendChip<F>),
-    BranchEqual(Rv32BranchEqualChip<F>),
-    BranchLessThan(Rv32BranchLessThanChip<F>),
-    JalLui(Rv32JalLuiChip<F>),
-    Jalr(Rv32JalrChip<F>),
-    Auipc(Rv32AuipcChip<F>),
+    BaseAlu(Rv32WomBaseAluChip<F>),
+    // LessThan(Rv32LessThanChip<F>),
+    // Shift(Rv32ShiftChip<F>),
+    // LoadStore(Rv32LoadStoreChip<F>),
+    // LoadSignExtend(Rv32LoadSignExtendChip<F>),
+    // BranchEqual(Rv32BranchEqualChip<F>),
+    // BranchLessThan(Rv32BranchLessThanChip<F>),
+    // JalLui(Rv32JalLuiChip<F>),
+    // Jalr(Rv32JalrChip<F>),
+    // Auipc(Rv32AuipcChip<F>),
 }
 
 /// RISC-V 32-bit Multiplication Extension (RV32M) Instruction Executors
@@ -203,6 +223,8 @@ impl<F: PrimeField32> VmExtension<F> for Rv32I {
             memory_bridge,
         } = builder.system_port();
 
+        let frame_bus = FrameBus::new(builder.new_bus_idx());
+
         let range_checker = builder.system_base().range_checker_chip.clone();
         let offline_memory = builder.system_base().offline_memory();
         let pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
@@ -219,14 +241,15 @@ impl<F: PrimeField32> VmExtension<F> for Rv32I {
             chip
         };
 
-        let base_alu_chip = Rv32BaseAluChip::new(
-            Rv32BaseAluAdapterChip::new(
+        let base_alu_chip = Rv32WomBaseAluChip::new(
+            Rv32WomBaseAluAdapterChip::new(
                 execution_bus,
                 program_bus,
+                frame_bus,
                 memory_bridge,
                 bitwise_lu_chip.clone(),
             ),
-            BaseAluCoreChip::new(bitwise_lu_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
+            BaseAluCoreChipWom::new(bitwise_lu_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
             offline_memory.clone(),
         );
         inventory.add_executor(
@@ -234,117 +257,117 @@ impl<F: PrimeField32> VmExtension<F> for Rv32I {
             BaseAluOpcode::iter().map(|x| x.global_opcode()),
         )?;
 
-        let lt_chip = Rv32LessThanChip::new(
-            Rv32BaseAluAdapterChip::new(
-                execution_bus,
-                program_bus,
-                memory_bridge,
-                bitwise_lu_chip.clone(),
-            ),
-            LessThanCoreChip::new(bitwise_lu_chip.clone(), LessThanOpcode::CLASS_OFFSET),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(lt_chip, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
-
-        let shift_chip = Rv32ShiftChip::new(
-            Rv32BaseAluAdapterChip::new(
-                execution_bus,
-                program_bus,
-                memory_bridge,
-                bitwise_lu_chip.clone(),
-            ),
-            ShiftCoreChip::new(
-                bitwise_lu_chip.clone(),
-                range_checker.clone(),
-                ShiftOpcode::CLASS_OFFSET,
-            ),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(shift_chip, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
-
-        let load_store_chip = Rv32LoadStoreChip::new(
-            Rv32LoadStoreAdapterChip::new(
-                execution_bus,
-                program_bus,
-                memory_bridge,
-                pointer_max_bits,
-                range_checker.clone(),
-            ),
-            LoadStoreCoreChip::new(Rv32LoadStoreOpcode::CLASS_OFFSET),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(
-            load_store_chip,
-            Rv32LoadStoreOpcode::iter()
-                .take(Rv32LoadStoreOpcode::STOREB as usize + 1)
-                .map(|x| x.global_opcode()),
-        )?;
-
-        let load_sign_extend_chip = Rv32LoadSignExtendChip::new(
-            Rv32LoadStoreAdapterChip::new(
-                execution_bus,
-                program_bus,
-                memory_bridge,
-                pointer_max_bits,
-                range_checker.clone(),
-            ),
-            LoadSignExtendCoreChip::new(range_checker.clone()),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(
-            load_sign_extend_chip,
-            [Rv32LoadStoreOpcode::LOADB, Rv32LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
-        )?;
-
-        let beq_chip = Rv32BranchEqualChip::new(
-            Rv32BranchAdapterChip::new(execution_bus, program_bus, memory_bridge),
-            BranchEqualCoreChip::new(BranchEqualOpcode::CLASS_OFFSET, DEFAULT_PC_STEP),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(
-            beq_chip,
-            BranchEqualOpcode::iter().map(|x| x.global_opcode()),
-        )?;
-
-        let blt_chip = Rv32BranchLessThanChip::new(
-            Rv32BranchAdapterChip::new(execution_bus, program_bus, memory_bridge),
-            BranchLessThanCoreChip::new(
-                bitwise_lu_chip.clone(),
-                BranchLessThanOpcode::CLASS_OFFSET,
-            ),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(
-            blt_chip,
-            BranchLessThanOpcode::iter().map(|x| x.global_opcode()),
-        )?;
-
-        let jal_lui_chip = Rv32JalLuiChip::new(
-            Rv32CondRdWriteAdapterChip::new(execution_bus, program_bus, memory_bridge),
-            Rv32JalLuiCoreChip::new(bitwise_lu_chip.clone()),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(
-            jal_lui_chip,
-            Rv32JalLuiOpcode::iter().map(|x| x.global_opcode()),
-        )?;
-
-        let jalr_chip = Rv32JalrChip::new(
-            Rv32JalrAdapterChip::new(execution_bus, program_bus, memory_bridge),
-            Rv32JalrCoreChip::new(bitwise_lu_chip.clone(), range_checker.clone()),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(jalr_chip, Rv32JalrOpcode::iter().map(|x| x.global_opcode()))?;
-
-        let auipc_chip = Rv32AuipcChip::new(
-            Rv32RdWriteAdapterChip::new(execution_bus, program_bus, memory_bridge),
-            Rv32AuipcCoreChip::new(bitwise_lu_chip.clone()),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(
-            auipc_chip,
-            Rv32AuipcOpcode::iter().map(|x| x.global_opcode()),
-        )?;
+        // let lt_chip = Rv32LessThanChip::new(
+        //     Rv32WomBaseAluAdapterChip::new(
+        //         execution_bus,
+        //         program_bus,
+        //         memory_bridge,
+        //         bitwise_lu_chip.clone(),
+        //     ),
+        //     LessThanCoreChip::new(bitwise_lu_chip.clone(), LessThanOpcode::CLASS_OFFSET),
+        //     offline_memory.clone(),
+        // );
+        // inventory.add_executor(lt_chip, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
+        //
+        // let shift_chip = Rv32ShiftChip::new(
+        //     Rv32WomBaseAluAdapterChip::new(
+        //         execution_bus,
+        //         program_bus,
+        //         memory_bridge,
+        //         bitwise_lu_chip.clone(),
+        //     ),
+        //     ShiftCoreChip::new(
+        //         bitwise_lu_chip.clone(),
+        //         range_checker.clone(),
+        //         ShiftOpcode::CLASS_OFFSET,
+        //     ),
+        //     offline_memory.clone(),
+        // );
+        // inventory.add_executor(shift_chip, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
+        //
+        // let load_store_chip = Rv32LoadStoreChip::new(
+        //     Rv32LoadStoreAdapterChip::new(
+        //         execution_bus,
+        //         program_bus,
+        //         memory_bridge,
+        //         pointer_max_bits,
+        //         range_checker.clone(),
+        //     ),
+        //     LoadStoreCoreChip::new(Rv32LoadStoreOpcode::CLASS_OFFSET),
+        //     offline_memory.clone(),
+        // );
+        // inventory.add_executor(
+        //     load_store_chip,
+        //     Rv32LoadStoreOpcode::iter()
+        //         .take(Rv32LoadStoreOpcode::STOREB as usize + 1)
+        //         .map(|x| x.global_opcode()),
+        // )?;
+        //
+        // let load_sign_extend_chip = Rv32LoadSignExtendChip::new(
+        //     Rv32LoadStoreAdapterChip::new(
+        //         execution_bus,
+        //         program_bus,
+        //         memory_bridge,
+        //         pointer_max_bits,
+        //         range_checker.clone(),
+        //     ),
+        //     LoadSignExtendCoreChip::new(range_checker.clone()),
+        //     offline_memory.clone(),
+        // );
+        // inventory.add_executor(
+        //     load_sign_extend_chip,
+        //     [Rv32LoadStoreOpcode::LOADB, Rv32LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
+        // )?;
+        //
+        // let beq_chip = Rv32BranchEqualChip::new(
+        //     Rv32BranchAdapterChip::new(execution_bus, program_bus, memory_bridge),
+        //     BranchEqualCoreChip::new(BranchEqualOpcode::CLASS_OFFSET, DEFAULT_PC_STEP),
+        //     offline_memory.clone(),
+        // );
+        // inventory.add_executor(
+        //     beq_chip,
+        //     BranchEqualOpcode::iter().map(|x| x.global_opcode()),
+        // )?;
+        //
+        // let blt_chip = Rv32BranchLessThanChip::new(
+        //     Rv32BranchAdapterChip::new(execution_bus, program_bus, memory_bridge),
+        //     BranchLessThanCoreChip::new(
+        //         bitwise_lu_chip.clone(),
+        //         BranchLessThanOpcode::CLASS_OFFSET,
+        //     ),
+        //     offline_memory.clone(),
+        // );
+        // inventory.add_executor(
+        //     blt_chip,
+        //     BranchLessThanOpcode::iter().map(|x| x.global_opcode()),
+        // )?;
+        //
+        // let jal_lui_chip = Rv32JalLuiChip::new(
+        //     Rv32CondRdWriteAdapterChip::new(execution_bus, program_bus, memory_bridge),
+        //     Rv32JalLuiCoreChip::new(bitwise_lu_chip.clone()),
+        //     offline_memory.clone(),
+        // );
+        // inventory.add_executor(
+        //     jal_lui_chip,
+        //     Rv32JalLuiOpcode::iter().map(|x| x.global_opcode()),
+        // )?;
+        //
+        // let jalr_chip = Rv32JalrChip::new(
+        //     Rv32JalrAdapterChip::new(execution_bus, program_bus, memory_bridge),
+        //     Rv32JalrCoreChip::new(bitwise_lu_chip.clone(), range_checker.clone()),
+        //     offline_memory.clone(),
+        // );
+        // inventory.add_executor(jalr_chip, Rv32JalrOpcode::iter().map(|x| x.global_opcode()))?;
+        //
+        // let auipc_chip = Rv32AuipcChip::new(
+        //     Rv32RdWriteAdapterChip::new(execution_bus, program_bus, memory_bridge),
+        //     Rv32AuipcCoreChip::new(bitwise_lu_chip.clone()),
+        //     offline_memory.clone(),
+        // );
+        // inventory.add_executor(
+        //     auipc_chip,
+        //     Rv32AuipcOpcode::iter().map(|x| x.global_opcode()),
+        // )?;
 
         // There is no downside to adding phantom sub-executors, so we do it in the base extension.
         builder.add_phantom_sub_executor(
@@ -645,5 +668,273 @@ mod phantom {
 
     fn extract_u32(value: &[u8], offset: usize) -> u32 {
         u32::from_le_bytes(value[offset..offset + 4].try_into().unwrap())
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FrameBus {
+    pub inner: PermutationCheckBus,
+}
+
+impl FrameBus {
+    pub const fn new(index: BusIndex) -> Self {
+        Self {
+            inner: PermutationCheckBus::new(index),
+        }
+    }
+
+    #[inline(always)]
+    pub fn index(&self) -> BusIndex {
+        self.inner.index
+    }
+}
+
+#[repr(C)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Default, AlignedBorrow, Serialize, Deserialize, StructReflection,
+)]
+pub struct FrameState<T> {
+    pub pc: T,
+    pub fp: T,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct FrameBridge {
+    frame_bus: FrameBus,
+}
+
+impl FrameBridge {
+    pub fn new(frame_bus: FrameBus) -> Self {
+        Self { frame_bus }
+    }
+}
+
+pub struct FrameBridgeInteractor<AB: InteractionBuilder> {
+    frame_bus: FrameBus,
+    from_state: FrameState<AB::Expr>,
+    to_state: FrameState<AB::Expr>,
+}
+
+impl<T> FrameState<T> {
+    pub fn new(pc: impl Into<T>, fp: impl Into<T>) -> Self {
+        Self {
+            pc: pc.into(),
+            fp: fp.into(),
+        }
+    }
+
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_iter<I: Iterator<Item = T>>(iter: &mut I) -> Self {
+        let mut next = || iter.next().unwrap();
+        Self {
+            pc: next(),
+            fp: next(),
+        }
+    }
+
+    pub fn flatten(self) -> [T; 2] {
+        [self.pc, self.fp]
+    }
+
+    pub fn get_width() -> usize {
+        2
+    }
+
+    pub fn map<U: Clone, F: Fn(T) -> U>(self, function: F) -> FrameState<U> {
+        FrameState::from_iter(&mut self.flatten().map(function).into_iter())
+    }
+}
+
+impl FrameBus {
+    /// Caller must constrain that `enabled` is boolean.
+    pub fn execute<AB: InteractionBuilder>(
+        &self,
+        builder: &mut AB,
+        enabled: impl Into<AB::Expr>,
+        prev_state: FrameState<impl Into<AB::Expr>>,
+        next_state: FrameState<impl Into<AB::Expr>>,
+    ) {
+        let enabled = enabled.into();
+        self.inner.receive(
+            builder,
+            [prev_state.pc.into(), prev_state.fp.into()],
+            enabled.clone(),
+        );
+        self.inner.send(
+            builder,
+            [next_state.pc.into(), next_state.fp.into()],
+            enabled,
+        );
+    }
+}
+
+pub struct VmChipWrapperWom<F, A: VmAdapterChipWom<F>, C: VmCoreChipWom<F, A::Interface>> {
+    pub adapter: A,
+    pub core: C,
+    pub records: Vec<(A::ReadRecord, A::WriteRecord, C::Record)>,
+    offline_memory: Arc<Mutex<OfflineMemory<F>>>,
+}
+
+const DEFAULT_RECORDS_CAPACITY: usize = 1 << 5;
+
+impl<F, A, C> VmChipWrapperWom<F, A, C>
+where
+    A: VmAdapterChipWom<F>,
+    C: VmCoreChipWom<F, A::Interface>,
+{
+    pub fn new(adapter: A, core: C, offline_memory: Arc<Mutex<OfflineMemory<F>>>) -> Self {
+        Self {
+            adapter,
+            core,
+            records: Vec::with_capacity(DEFAULT_RECORDS_CAPACITY),
+            offline_memory,
+        }
+    }
+}
+
+pub trait VmAdapterChipWom<F> {
+    /// Records generated by adapter before main instruction execution
+    type ReadRecord: Send + Serialize + DeserializeOwned;
+    /// Records generated by adapter after main instruction execution
+    type WriteRecord: Send + Serialize + DeserializeOwned;
+    /// AdapterAir should not have public values
+    type Air: BaseAir<F> + Clone;
+
+    type Interface: VmAdapterInterface<F>;
+
+    /// Given instruction, perform memory reads and return only the read data that the integrator
+    /// needs to use. This is called at the start of instruction execution.
+    ///
+    /// The implementer may choose to store data in the `Self::ReadRecord` struct, for example in
+    /// an [Option], which will later be sent to the `postprocess` method.
+    #[allow(clippy::type_complexity)]
+    fn preprocess(
+        &mut self,
+        memory: &mut MemoryController<F>,
+        fp: usize,
+        instruction: &Instruction<F>,
+    ) -> ResultVm<(
+        <Self::Interface as VmAdapterInterface<F>>::Reads,
+        Self::ReadRecord,
+    )>;
+
+    /// Given instruction and the data to write, perform memory writes and return the `(record,
+    /// next_timestamp)` of the full adapter record for this instruction. This is guaranteed to
+    /// be called after `preprocess`.
+    fn postprocess(
+        &mut self,
+        memory: &mut MemoryController<F>,
+        instruction: &Instruction<F>,
+        from_state: ExecutionState<u32>,
+        from_frame: FrameState<u32>,
+        output: AdapterRuntimeContextWom<F, Self::Interface>,
+        read_record: &Self::ReadRecord,
+    ) -> ResultVm<(ExecutionState<u32>, Self::WriteRecord)>;
+
+    /// Populates `row_slice` with values corresponding to `record`.
+    /// The provided `row_slice` will have length equal to `self.air().width()`.
+    /// This function will be called for each row in the trace which is being used, and all other
+    /// rows in the trace will be filled with zeroes.
+    fn generate_trace_row(
+        &self,
+        row_slice: &mut [F],
+        read_record: Self::ReadRecord,
+        write_record: Self::WriteRecord,
+        memory: &OfflineMemory<F>,
+    );
+
+    fn air(&self) -> &Self::Air;
+}
+
+pub struct AdapterRuntimeContextWom<T, I: VmAdapterInterface<T>> {
+    /// Leave as `None` to allow the adapter to decide the `to_pc` automatically.
+    pub to_pc: Option<u32>,
+    pub to_fp: Option<u32>,
+    pub writes: I::Writes,
+}
+
+impl<T, I: VmAdapterInterface<T>> AdapterRuntimeContextWom<T, I> {
+    /// Leave `to_pc` as `None` to allow the adapter to decide the `to_pc` automatically.
+    pub fn without_pc_fp(writes: impl Into<I::Writes>) -> Self {
+        Self {
+            to_pc: None,
+            to_fp: None,
+            writes: writes.into(),
+        }
+    }
+}
+
+pub trait VmCoreChipWom<F, I: VmAdapterInterface<F>> {
+    /// Minimum data that must be recorded to be able to generate trace for one row of
+    /// `PrimitiveAir`.
+    type Record: Send + Serialize + DeserializeOwned;
+    /// The primitive AIR with main constraints that do not depend on memory and other
+    /// architecture-specifics.
+    type Air: BaseAirWithPublicValues<F> + Clone;
+
+    #[allow(clippy::type_complexity)]
+    fn execute_instruction(
+        &self,
+        instruction: &Instruction<F>,
+        from_pc: u32,
+        from_fp: u32,
+        reads: I::Reads,
+    ) -> ResultVm<(AdapterRuntimeContextWom<F, I>, Self::Record)>;
+
+    fn get_opcode_name(&self, opcode: usize) -> String;
+
+    /// Populates `row_slice` with values corresponding to `record`.
+    /// The provided `row_slice` will have length equal to `self.air().width()`.
+    /// This function will be called for each row in the trace which is being used, and all other
+    /// rows in the trace will be filled with zeroes.
+    fn generate_trace_row(&self, row_slice: &mut [F], record: Self::Record);
+
+    /// Returns a list of public values to publish.
+    fn generate_public_values(&self) -> Vec<F> {
+        vec![]
+    }
+
+    fn air(&self) -> &Self::Air;
+
+    /// Finalize the trace, especially the padded rows if the all-zero rows don't satisfy the
+    /// constraints. This is done **after** records are consumed and the trace matrix is
+    /// generated. Most implementations should just leave the default implementation if padding
+    /// with rows of all 0s satisfies the constraints.
+    fn finalize(&self, _trace: &mut RowMajorMatrix<F>, _num_records: usize) {
+        // do nothing by default
+    }
+}
+
+impl<F, A, M> InstructionExecutorTrait<F> for VmChipWrapperWom<F, A, M>
+where
+    F: PrimeField32,
+    A: VmAdapterChipWom<F> + Send + Sync,
+    M: VmCoreChipWom<F, A::Interface> + Send + Sync,
+{
+    fn execute(
+        &mut self,
+        memory: &mut MemoryController<F>,
+        instruction: &Instruction<F>,
+        from_state: ExecutionState<u32>,
+    ) -> ResultVm<ExecutionState<u32>> {
+        let fp = 0;
+        let (reads, read_record) = self.adapter.preprocess(memory, fp, instruction)?;
+        let (output, core_record) =
+            self.core
+                .execute_instruction(instruction, from_state.pc, fp as u32, reads)?;
+        let (to_state, write_record) = self.adapter.postprocess(
+            memory,
+            instruction,
+            from_state,
+            FrameState::default(),
+            output,
+            &read_record,
+        )?;
+        self.records.push((read_record, write_record, core_record));
+        Ok(to_state)
+    }
+
+    fn get_opcode_name(&self, opcode: usize) -> String {
+        self.core.get_opcode_name(opcode)
     }
 }
