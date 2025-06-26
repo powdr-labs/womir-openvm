@@ -830,7 +830,7 @@ pub trait VmAdapterChipWom<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
-        fp: usize,
+        fp: u32,
         instruction: &Instruction<F>,
     ) -> ResultVm<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
@@ -938,7 +938,7 @@ where
     ) -> ResultVm<ExecutionState<u32>> {
         let fp = *self.fp.lock().unwrap();
         println!("Executing inside VmChipWrapperWom instruction: {instruction:?}, from_state: {from_state:?}, fp: {fp}");
-        let (reads, read_record) = self.adapter.preprocess(memory, fp as usize, instruction)?;
+        let (reads, read_record) = self.adapter.preprocess(memory, fp, instruction)?;
         let (output, core_record) =
             self.core
                 .execute_instruction(instruction, from_state.pc, fp, reads)?;

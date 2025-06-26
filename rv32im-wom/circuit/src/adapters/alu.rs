@@ -244,7 +244,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32WomBaseAluAdapterChip<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
-        fp: usize,
+        _fp: u32,
         instruction: &Instruction<F>,
     ) -> ResultVm<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
