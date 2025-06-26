@@ -1,3 +1,4 @@
+use core::net;
 use derive_more::From;
 use eyre::Result;
 use openvm_stark_backend::config::StarkGenericConfig;
@@ -112,8 +113,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let vm_config = SpecializedConfig::new(vm_config);
     let sdk = Sdk::new();
 
-    // let instructions = vec![add::<F>(2, 0, 0), add_wom::<F>(3, 0, 0)];
-    let instructions = vec![add::<F>(2, 0, 0), add_wom::<F>(3, 0, 0), halt()];
+    let instructions = vec![
+        addi::<F>(8, 0, 666),
+        addi::<F>(9, 0, 1),
+        add::<F>(10, 8, 9),
+        add_wom::<F>(3, 0, 0),
+        reveal(10, 0),
+        halt(),
+    ];
     let program = Program::from_instructions(&instructions);
     let exe = VmExe::new(program);
 
@@ -121,6 +128,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
     println!("public values output: {output:?}");
+
+    let output_bytes: Vec<_> = output.iter().map(|n| n.as_canonical_u32() as u8).collect();
+    let output_0 = u32::from_le_bytes(output_bytes[0..4].try_into().unwrap());
+    assert_eq!(output_0, 667);
 
     // let app_log_blowup = 2;
     // let app_fri_params = FriParameters::standard_with_100_bits_conjectured_security(app_log_blowup);
