@@ -39,3 +39,13 @@ struct-reflection = { git = "https://github.com/gzanitti/struct-reflection-rs.gi
 
 rrs-lib = "0.1.0"
 tracing = "0.1.40"
+
+[patch."https://github.com/powdr-labs/openvm.git"]
+openvm-sdk = { path = "../openvm/crates/sdk" }
+openvm-circuit-primitives = { path = "../openvm/crates/circuits/primitives" }
+openvm-circuit-primitives-derive = { path = "../openvm/crates/circuits/primitives/derive" }
+openvm-circuit = { path = "../openvm/crates/vm" }
+openvm-circuit-derive = { path = "../openvm/crates/vm/derive" }
+openvm-instructions = { path = "../openvm/crates/toolchain/instructions" }
+openvm-instructions-derive = { path = "../openvm/crates/toolchain/instructions/derive" }
+openvm-rv32im-transpiler = { path = "../openvm/extensions/rv32im/transpiler" }

@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 serde.workspace = true
 eyre.workspace = true
+tracing.workspace = true
 derive_more.workspace = true
 openvm-rv32im-wom-circuit = { workspace = true }
 openvm-rv32im-wom-transpiler = { workspace = true }

@@ -4,6 +4,7 @@ use openvm_stark_backend::config::StarkGenericConfig;
 use openvm_stark_backend::p3_field::PrimeField32;
 use serde::{Deserialize, Serialize};
 use std::{path::Path, sync::Arc};
+use tracing::Level;
 
 use openvm_circuit::arch::{
     InitFileGenerator, SystemConfig, VmChipComplex, VmConfig, VmInventoryError,
@@ -22,11 +23,12 @@ use openvm_sdk::{
     prover::AggStarkProver,
     Sdk, StdIn,
 };
+use openvm_stark_sdk::config::setup_tracing_with_log_level;
 use openvm_stark_sdk::config::FriParameters;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 mod instruction_builder;
-use instruction_builder::{add, add_wom};
+use instruction_builder::*;
 
 use openvm_rv32im_wom_circuit::{self, Rv32I, Rv32IExecutor, Rv32IPeriphery};
 
@@ -100,6 +102,7 @@ impl VmConfig<F> for SpecializedConfig {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_tracing_with_log_level(Level::WARN);
     let vm_config = SdkVmConfig::builder()
         .system(Default::default())
         .rv32i(Default::default())
@@ -109,7 +112,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let vm_config = SpecializedConfig::new(vm_config);
     let sdk = Sdk::new();
 
-    let instructions = vec![add::<F>(2, 0, 0), add_wom::<F>(3, 0, 0)];
+    // let instructions = vec![add::<F>(2, 0, 0), add_wom::<F>(3, 0, 0)];
+    let instructions = vec![add::<F>(2, 0, 0), add_wom::<F>(3, 0, 0), halt()];
     let program = Program::from_instructions(&instructions);
     let exe = VmExe::new(program);
 
