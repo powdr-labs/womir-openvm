@@ -238,6 +238,8 @@ impl<F: PrimeField32> VmExtension<F> for Rv32I {
         let offline_memory = builder.system_base().offline_memory();
         let pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
 
+        let shared_fp = Arc::new(Mutex::new(0u32));
+
         let bitwise_lu_chip = if let Some(&chip) = builder
             .find_chip::<SharedBitwiseOperationLookupChip<8>>()
             .first()
@@ -260,6 +262,7 @@ impl<F: PrimeField32> VmExtension<F> for Rv32I {
             ),
             BaseAluCoreChipWom::new(bitwise_lu_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
             offline_memory.clone(),
+            shared_fp.clone(),
         );
         inventory.add_executor(
             base_alu_chip,
@@ -782,6 +785,7 @@ pub struct VmChipWrapperWom<F, A: VmAdapterChipWom<F>, C: VmCoreChipWom<F, A::In
     pub core: C,
     pub records: Vec<(A::ReadRecord, A::WriteRecord, C::Record)>,
     offline_memory: Arc<Mutex<OfflineMemory<F>>>,
+    fp: Arc<Mutex<u32>>,
 }
 
 const DEFAULT_RECORDS_CAPACITY: usize = 1 << 5;
@@ -791,12 +795,18 @@ where
     A: VmAdapterChipWom<F>,
     C: VmCoreChipWom<F, A::Interface>,
 {
-    pub fn new(adapter: A, core: C, offline_memory: Arc<Mutex<OfflineMemory<F>>>) -> Self {
+    pub fn new(
+        adapter: A,
+        core: C,
+        offline_memory: Arc<Mutex<OfflineMemory<F>>>,
+        fp: Arc<Mutex<u32>>,
+    ) -> Self {
         Self {
             adapter,
             core,
             records: Vec::with_capacity(DEFAULT_RECORDS_CAPACITY),
             offline_memory,
+            fp,
         }
     }
 }
@@ -926,11 +936,12 @@ where
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
     ) -> ResultVm<ExecutionState<u32>> {
-        let fp = 0;
-        let (reads, read_record) = self.adapter.preprocess(memory, fp, instruction)?;
+        let fp = *self.fp.lock().unwrap();
+        println!("Executing inside VmChipWrapperWom instruction: {instruction:?}, from_state: {from_state:?}, fp: {fp}");
+        let (reads, read_record) = self.adapter.preprocess(memory, fp as usize, instruction)?;
         let (output, core_record) =
             self.core
-                .execute_instruction(instruction, from_state.pc, fp as u32, reads)?;
+                .execute_instruction(instruction, from_state.pc, fp, reads)?;
         let (to_state, write_record) = self.adapter.postprocess(
             memory,
             instruction,
