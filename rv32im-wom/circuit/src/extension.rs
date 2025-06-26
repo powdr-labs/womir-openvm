@@ -4,13 +4,15 @@ use derive_more::derive::From;
 use openvm_circuit::{
     arch::{
         AdapterRuntimeContext, ExecutionState, InitFileGenerator,
-        InstructionExecutor as InstructionExecutorTrait, SystemConfig, SystemPort,
-        VmAdapterInterface, VmExtension, VmInventory, VmInventoryBuilder, VmInventoryError,
+        InstructionExecutor as InstructionExecutorTrait, SystemConfig, SystemPort, VmAdapterAir,
+        VmAdapterInterface, VmAirWrapper, VmCoreAir, VmExtension, VmInventory, VmInventoryBuilder,
+        VmInventoryError,
     },
     system::{
         memory::{MemoryController, OfflineMemory},
         phantom::PhantomChip,
     },
+    utils::next_power_of_two_or_zero,
 };
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor, VmConfig};
 use openvm_circuit_primitives::{
@@ -27,13 +29,20 @@ use openvm_rv32im_wom_transpiler::{
     MulHOpcode, MulOpcode, Rv32AuipcOpcode, Rv32HintStoreOpcode, Rv32JalLuiOpcode, Rv32JalrOpcode,
     Rv32LoadStoreOpcode, Rv32Phantom, ShiftOpcode,
 };
+use openvm_stark_backend::ChipUsageGetter;
 use openvm_stark_backend::{
+    air_builders::{debug::DebugConstraintBuilder, symbolic::SymbolicRapBuilder},
+    config::{StarkGenericConfig, Val},
     interaction::{BusIndex, InteractionBuilder, PermutationCheckBus},
     p3_air::{AirBuilder, BaseAir},
     p3_field::{Field, FieldAlgebra, PrimeField32},
     p3_matrix::dense::RowMajorMatrix,
+    p3_maybe_rayon::prelude::*,
+    prover::types::AirProofInput,
     rap::{BaseAirWithPublicValues, ColumnsAir},
+    AirRef,
 };
+use openvm_stark_backend::{rap::get_air_name, Chip};
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
@@ -936,5 +945,81 @@ where
 
     fn get_opcode_name(&self, opcode: usize) -> String {
         self.core.get_opcode_name(opcode)
+    }
+}
+
+impl<SC, A, C> Chip<SC> for VmChipWrapperWom<Val<SC>, A, C>
+where
+    SC: StarkGenericConfig,
+    Val<SC>: PrimeField32,
+    A: VmAdapterChipWom<Val<SC>> + Send + Sync,
+    C: VmCoreChipWom<Val<SC>, A::Interface> + Send + Sync,
+    A::Air: Send + Sync + 'static,
+    A::Air: VmAdapterAir<SymbolicRapBuilder<Val<SC>>> + ColumnsAir<Val<SC>>,
+    A::Air: for<'a> VmAdapterAir<DebugConstraintBuilder<'a, SC>>,
+    C::Air: Send + Sync + 'static,
+    C::Air: VmCoreAir<
+            SymbolicRapBuilder<Val<SC>>,
+            <A::Air as VmAdapterAir<SymbolicRapBuilder<Val<SC>>>>::Interface,
+        > + ColumnsAir<Val<SC>>,
+    C::Air: for<'a> VmCoreAir<
+        DebugConstraintBuilder<'a, SC>,
+        <A::Air as VmAdapterAir<DebugConstraintBuilder<'a, SC>>>::Interface,
+    >,
+{
+    fn air(&self) -> AirRef<SC> {
+        let air: VmAirWrapper<A::Air, C::Air> = VmAirWrapper {
+            adapter: self.adapter.air().clone(),
+            core: self.core.air().clone(),
+        };
+        Arc::new(air)
+    }
+
+    fn generate_air_proof_input(self) -> AirProofInput<SC> {
+        let num_records = self.records.len();
+        let height = next_power_of_two_or_zero(num_records);
+        let core_width = self.core.air().width();
+        let adapter_width = self.adapter.air().width();
+        let width = core_width + adapter_width;
+        let mut values = Val::<SC>::zero_vec(height * width);
+
+        let memory = self.offline_memory.lock().unwrap();
+
+        // This zip only goes through records.
+        // The padding rows between records.len()..height are filled with zeros.
+        values
+            .par_chunks_mut(width)
+            .zip(self.records.into_par_iter())
+            .for_each(|(row_slice, record)| {
+                let (adapter_row, core_row) = row_slice.split_at_mut(adapter_width);
+                self.adapter
+                    .generate_trace_row(adapter_row, record.0, record.1, &memory);
+                self.core.generate_trace_row(core_row, record.2);
+            });
+
+        let mut trace = RowMajorMatrix::new(values, width);
+        self.core.finalize(&mut trace, num_records);
+
+        AirProofInput::simple(trace, self.core.generate_public_values())
+    }
+}
+
+impl<F, A, M> ChipUsageGetter for VmChipWrapperWom<F, A, M>
+where
+    A: VmAdapterChipWom<F> + Sync,
+    M: VmCoreChipWom<F, A::Interface> + Sync,
+{
+    fn air_name(&self) -> String {
+        format!(
+            "<{},{}>",
+            get_air_name(self.adapter.air()),
+            get_air_name(self.core.air())
+        )
+    }
+    fn current_trace_height(&self) -> usize {
+        self.records.len()
+    }
+    fn trace_width(&self) -> usize {
+        self.adapter.air().width() + self.core.air().width()
     }
 }
