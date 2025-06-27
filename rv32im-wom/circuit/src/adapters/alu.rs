@@ -244,7 +244,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32WomBaseAluAdapterChip<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
-        _fp: u32,
+        fp: u32,
         instruction: &Instruction<F>,
     ) -> ResultVm<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
@@ -257,7 +257,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32WomBaseAluAdapterChip<F> {
             e.as_canonical_u32() == RV32_IMM_AS || e.as_canonical_u32() == RV32_REGISTER_AS
         );
 
-        let rs1 = memory.read::<RV32_REGISTER_NUM_LIMBS>(d, b);
+        let fp_f = F::from_canonical_u32(fp);
+        let rs1 = memory.read::<RV32_REGISTER_NUM_LIMBS>(d, b + fp_f);
         let (rs2, rs2_data, rs2_imm) = if e.is_zero() {
             let c_u32 = c.as_canonical_u32();
             debug_assert_eq!(c_u32 >> 24, 0);
@@ -274,7 +275,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32WomBaseAluAdapterChip<F> {
                 c,
             )
         } else {
-            let rs2_read = memory.read::<RV32_REGISTER_NUM_LIMBS>(e, c);
+            let rs2_read = memory.read::<RV32_REGISTER_NUM_LIMBS>(e, c + fp_f);
             (Some(rs2_read.0), rs2_read.1, F::ZERO)
         };
 
@@ -296,9 +297,10 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32WomBaseAluAdapterChip<F> {
         from_frame: FrameState<u32>,
         output: AdapterRuntimeContextWom<F, Self::Interface>,
         _read_record: &Self::ReadRecord,
-    ) -> ResultVm<(ExecutionState<u32>, Self::WriteRecord)> {
+    ) -> ResultVm<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction { a, d, .. } = instruction;
-        let rd = memory.write(*d, *a, output.writes[0]);
+        let fp_f = F::from_canonical_u32(from_frame.fp);
+        let rd = memory.write(*d, *a + fp_f, output.writes[0]);
 
         let timestamp_delta = memory.timestamp() - from_state.timestamp;
         debug_assert!(
@@ -312,6 +314,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32WomBaseAluAdapterChip<F> {
                 pc: from_state.pc + DEFAULT_PC_STEP,
                 timestamp: memory.timestamp(),
             },
+            from_frame.fp,
             Self::WriteRecord {
                 from_state,
                 from_frame,

@@ -848,7 +848,7 @@ pub trait VmAdapterChipWom<F> {
         from_frame: FrameState<u32>,
         output: AdapterRuntimeContextWom<F, Self::Interface>,
         read_record: &Self::ReadRecord,
-    ) -> ResultVm<(ExecutionState<u32>, Self::WriteRecord)>;
+    ) -> ResultVm<(ExecutionState<u32>, u32, Self::WriteRecord)>;
 
     /// Populates `row_slice` with values corresponding to `record`.
     /// The provided `row_slice` will have length equal to `self.air().width()`.
@@ -942,11 +942,11 @@ where
         let (output, core_record) =
             self.core
                 .execute_instruction(instruction, from_state.pc, fp, reads)?;
-        let (to_state, write_record) = self.adapter.postprocess(
+        let (to_state, to_fp, write_record) = self.adapter.postprocess(
             memory,
             instruction,
             from_state,
-            FrameState::default(),
+            FrameState::new(from_state.pc, fp),
             output,
             &read_record,
         )?;
