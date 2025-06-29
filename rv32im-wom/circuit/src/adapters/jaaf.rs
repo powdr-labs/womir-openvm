@@ -31,24 +31,28 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
+use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
+
 use super::RV32_REGISTER_NUM_LIMBS;
 
 // This adapter reads from [b:4]_d (rs1) and writes to [a:4]_d (rd)
 #[derive(Debug)]
-pub struct Rv32JaafAdapterChip<F: Field> {
-    pub air: Rv32JaafAdapterAir,
+pub struct Rv32JaafAdapterChipWom<F: Field> {
+    pub air: Rv32JaafAdapterAirWom,
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField32> Rv32JaafAdapterChip<F> {
+impl<F: PrimeField32> Rv32JaafAdapterChipWom<F> {
     pub fn new(
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
+        frame_bus: FrameBus,
         memory_bridge: MemoryBridge,
     ) -> Self {
         Self {
-            air: Rv32JaafAdapterAir {
+            air: Rv32JaafAdapterAirWom {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                frame_bridge: FrameBridge::new(frame_bus),
                 memory_bridge,
             },
             _marker: PhantomData,
@@ -65,13 +69,15 @@ pub struct Rv32JaafReadRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Rv32JaafWriteRecord {
     pub from_state: ExecutionState<u32>,
+    pub from_frame: FrameState<u32>,
     pub rd_id: Option<RecordId>,
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
-pub struct Rv32JaafAdapterCols<T> {
+pub struct Rv32JaafAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
+    pub from_frame: FrameState<T>,
     pub rs1_ptr: T,
     pub rs1_aux_cols: MemoryReadAuxCols<T>,
     pub rd_ptr: T,
@@ -82,24 +88,25 @@ pub struct Rv32JaafAdapterCols<T> {
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
-pub struct Rv32JaafAdapterAir {
+pub struct Rv32JaafAdapterAirWom {
     pub(super) memory_bridge: MemoryBridge,
     pub(super) execution_bridge: ExecutionBridge,
+    pub(super) frame_bridge: FrameBridge,
 }
 
-impl<F: Field> BaseAir<F> for Rv32JaafAdapterAir {
+impl<F: Field> BaseAir<F> for Rv32JaafAdapterAirWom {
     fn width(&self) -> usize {
-        Rv32JaafAdapterCols::<F>::width()
+        Rv32JaafAdapterColsWom::<F>::width()
     }
 }
 
-impl<F: Field> ColumnsAir<F> for Rv32JaafAdapterAir {
+impl<F: Field> ColumnsAir<F> for Rv32JaafAdapterAirWom {
     fn columns(&self) -> Option<Vec<String>> {
-        Rv32JaafAdapterCols::<F>::struct_reflection()
+        Rv32JaafAdapterColsWom::<F>::struct_reflection()
     }
 }
 
-impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32JaafAdapterAir {
+impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32JaafAdapterAirWom {
     type Interface = BasicAdapterInterface<
         AB::Expr,
         SignedImmInstruction<AB::Expr>,
@@ -115,7 +122,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32JaafAdapterAir {
         local: &[AB::Var],
         ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local_cols: &Rv32JaafAdapterCols<AB::Var> = local.borrow();
+        let local_cols: &Rv32JaafAdapterColsWom<AB::Var> = local.borrow();
 
         let timestamp: AB::Var = local_cols.from_state.timestamp;
         let mut timestamp_delta: usize = 0;
@@ -182,15 +189,15 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32JaafAdapterAir {
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &Rv32JaafAdapterCols<_> = local.borrow();
+        let cols: &Rv32JaafAdapterColsWom<_> = local.borrow();
         cols.from_state.pc
     }
 }
 
-impl<F: PrimeField32> VmAdapterChip<F> for Rv32JaafAdapterChip<F> {
+impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32JaafAdapterChipWom<F> {
     type ReadRecord = Rv32JaafReadRecord;
     type WriteRecord = Rv32JaafWriteRecord;
-    type Air = Rv32JaafAdapterAir;
+    type Air = Rv32JaafAdapterAirWom;
     type Interface = BasicAdapterInterface<
         F,
         SignedImmInstruction<F>,
@@ -202,6 +209,7 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32JaafAdapterChip<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
@@ -220,9 +228,10 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32JaafAdapterChip<F> {
         memory: &mut MemoryController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
-        output: AdapterRuntimeContext<F, Self::Interface>,
+        from_frame: FrameState<u32>,
+        output: AdapterRuntimeContextWom<F, Self::Interface>,
         _read_record: &Self::ReadRecord,
-    ) -> Result<(ExecutionState<u32>, Self::WriteRecord)> {
+    ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction {
             a, d, f: enabled, ..
         } = *instruction;
@@ -239,7 +248,8 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32JaafAdapterChip<F> {
                 pc: output.to_pc.unwrap_or(from_state.pc + DEFAULT_PC_STEP),
                 timestamp: memory.timestamp(),
             },
-            Self::WriteRecord { from_state, rd_id },
+            from_frame.fp,
+            Self::WriteRecord { from_state, from_frame, rd_id },
         ))
     }
 
@@ -251,7 +261,7 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32JaafAdapterChip<F> {
         memory: &OfflineMemory<F>,
     ) {
         let aux_cols_factory = memory.aux_cols_factory();
-        let adapter_cols: &mut Rv32JaafAdapterCols<_> = row_slice.borrow_mut();
+        let adapter_cols: &mut Rv32JaafAdapterColsWom<_> = row_slice.borrow_mut();
         adapter_cols.from_state = write_record.from_state.map(F::from_canonical_u32);
         let rs1 = memory.record_by_id(read_record.rs1);
         adapter_cols.rs1_ptr = rs1.pointer;

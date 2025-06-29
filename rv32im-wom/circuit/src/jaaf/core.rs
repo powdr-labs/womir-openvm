@@ -27,6 +27,8 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
+use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
+
 use crate::adapters::{compose, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 
 const RV32_LIMB_MAX: u32 = (1 << RV32_CELL_BITS) - 1;
@@ -188,13 +190,13 @@ where
     }
 }
 
-pub struct Rv32JaafCoreChip {
+pub struct Rv32JaafCoreChipWom {
     pub air: Rv32JaafCoreAir,
     pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
     pub range_checker_chip: SharedVariableRangeCheckerChip,
 }
 
-impl Rv32JaafCoreChip {
+impl Rv32JaafCoreChipWom {
     pub fn new(
         bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
         range_checker_chip: SharedVariableRangeCheckerChip,
@@ -211,7 +213,7 @@ impl Rv32JaafCoreChip {
     }
 }
 
-impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChip<F, I> for Rv32JaafCoreChip
+impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChipWom<F, I> for Rv32JaafCoreChipWom
 where
     I::Reads: Into<[[F; RV32_REGISTER_NUM_LIMBS]; 1]>,
     I::Writes: From<[[F; RV32_REGISTER_NUM_LIMBS]; 1]>,
@@ -224,8 +226,9 @@ where
         &self,
         instruction: &Instruction<F>,
         from_pc: u32,
+        from_frame: u32,
         reads: I::Reads,
-    ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
+    ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
         let Instruction { opcode, c, g, .. } = *instruction;
         let local_opcode =
             Rv32JaafOpcode::from_usize(opcode.local_opcode_idx(Rv32JaafOpcode::CLASS_OFFSET));
@@ -253,8 +256,9 @@ where
 
         let rd_data = rd_data.map(F::from_canonical_u32);
 
-        let output = AdapterRuntimeContext {
+        let output = AdapterRuntimeContextWom {
             to_pc: Some(to_pc),
+            to_fp: None,
             writes: [rd_data].into(),
         };
 

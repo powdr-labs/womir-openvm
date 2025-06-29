@@ -26,7 +26,7 @@ use openvm_instructions::{
 };
 use openvm_rv32im_wom_transpiler::{
     BaseAluOpcode, BranchEqualOpcode, BranchLessThanOpcode, DivRemOpcode, LessThanOpcode,
-    MulHOpcode, MulOpcode, Rv32AuipcOpcode, Rv32HintStoreOpcode, Rv32JalLuiOpcode, Rv32JalrOpcode,
+    MulHOpcode, MulOpcode, Rv32AuipcOpcode, Rv32HintStoreOpcode, Rv32JalLuiOpcode, Rv32JalrOpcode, Rv32JaafOpcode,
     Rv32LoadStoreOpcode, Rv32Phantom, ShiftOpcode,
 };
 use openvm_stark_backend::ChipUsageGetter;
@@ -167,6 +167,7 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 pub enum Rv32IExecutor<F: PrimeField32> {
     // Rv32 (for standard 32-bit integers):
     BaseAlu(Rv32WomBaseAluChip<F>),
+    Jaaf(Rv32JaafChipWom<F>),
     // LessThan(Rv32LessThanChip<F>),
     // Shift(Rv32ShiftChip<F>),
     // LoadStore(Rv32LoadStoreChip<F>),
@@ -269,6 +270,14 @@ impl<F: PrimeField32> VmExtension<F> for Rv32I {
             BaseAluOpcode::iter().map(|x| x.global_opcode()),
         )?;
 
+        let jaaf_chip = Rv32JaafChipWom::new(
+            Rv32JaafAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge),
+            Rv32JaafCoreChipWom::new(bitwise_lu_chip.clone(), range_checker.clone()),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(jaaf_chip, Rv32JaafOpcode::iter().map(|x| x.global_opcode()))?;
+ 
         // let lt_chip = Rv32LessThanChip::new(
         //     Rv32WomBaseAluAdapterChip::new(
         //         execution_bus,
