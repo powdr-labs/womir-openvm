@@ -226,7 +226,7 @@ where
         &self,
         instruction: &Instruction<F>,
         from_pc: u32,
-        from_frame: u32,
+        _from_fp: u32,
         reads: I::Reads,
     ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
         let Instruction { opcode, c, g, .. } = *instruction;

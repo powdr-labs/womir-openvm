@@ -209,7 +209,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32JaafAdapterChipWom<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
-        fp: u32,
+        _fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
