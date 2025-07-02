@@ -947,7 +947,7 @@ where
     ) -> ResultVm<ExecutionState<u32>> {
         let mut fp = self.fp.lock().unwrap();
         println!("Executing inside VmChipWrapperWom instruction: {instruction:?}, from_state: {from_state:?}, fp: {fp}");
-        let (reads, read_record) = self.adapter.preprocess(memory, fp, instruction)?;
+        let (reads, read_record) = self.adapter.preprocess(memory, *fp, instruction)?;
         let (output, core_record) =
             self.core
                 .execute_instruction(instruction, from_state.pc, *fp, reads)?;
