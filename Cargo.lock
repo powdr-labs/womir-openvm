@@ -1208,7 +1208,6 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash",
- "serde",
 ]
 
 [[package]]
@@ -3986,15 +3985,13 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.227.1"
+version = "0.235.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f51cad774fb3c9461ab9bccc9c62dfb7388397b5deda31bf40e8108ccd678b2"
+checksum = "161296c618fa2d63f6ed5fffd1112937e803cb9ec71b32b01a76321555660917"
 dependencies = [
  "bitflags",
  "hashbrown 0.15.4",
  "indexmap 2.9.0",
- "semver",
- "serde",
 ]
 
 [[package]]
@@ -4269,9 +4266,6 @@ dependencies = [
  "env_logger",
  "itertools 0.13.0",
  "log",
- "serde",
- "serde_json",
- "tempfile",
  "wasmparser",
 ]
 
