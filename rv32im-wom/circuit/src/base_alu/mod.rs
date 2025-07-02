@@ -1,4 +1,3 @@
-use openvm_circuit::arch::VmChipWrapper;
 
 use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 use crate::{adapters::Rv32WomBaseAluAdapterChip, VmChipWrapperWom};

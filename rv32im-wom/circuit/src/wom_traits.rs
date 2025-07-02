@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use openvm_circuit::{
     arch::{
-        AdapterRuntimeContext, ExecutionState, InstructionExecutor as InstructionExecutorTrait,
+        ExecutionState, InstructionExecutor as InstructionExecutorTrait,
         VmAdapterAir, VmAdapterInterface, VmAirWrapper, VmCoreAir, Result as ResultVm,
     },
     system::memory::{MemoryController, OfflineMemory},
@@ -20,8 +20,8 @@ use openvm_stark_backend::{
     air_builders::{debug::DebugConstraintBuilder, symbolic::SymbolicRapBuilder},
     config::{StarkGenericConfig, Val},
     interaction::{BusIndex, InteractionBuilder, PermutationCheckBus},
-    p3_air::{AirBuilder, BaseAir},
-    p3_field::{Field, FieldAlgebra, PrimeField32},
+    p3_air::BaseAir,
+    p3_field::{FieldAlgebra, PrimeField32},
     p3_matrix::dense::RowMajorMatrix,
     p3_maybe_rayon::prelude::*,
     prover::types::AirProofInput,

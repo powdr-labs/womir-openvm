@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "language-server": {
+      "command": "mcp-language-server",
+      "args": [
+        "--workspace",
+        "/home/leo/devel/womir-openvm/",
+        "--lsp",
+        "rust-analyzer"
+      ]
+    }
+  }
+}

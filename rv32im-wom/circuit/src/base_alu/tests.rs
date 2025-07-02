@@ -1,10 +1,11 @@
 use std::borrow::BorrowMut;
+use std::sync::{Arc, Mutex};
 
 use openvm_circuit::{
     arch::{
         testing::{TestAdapterChip, VmChipTestBuilder, BITWISE_OP_LOOKUP_BUS},
         AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge, ExecutionState,
-        MinimalInstruction, Result, VmAdapterChip, VmAdapterInterface, VmChipWrapper,
+        MinimalInstruction, Result as ResultVm, VmAdapterChip, VmAdapterInterface, VmChipWrapper,
     },
     system::memory::{MemoryController, OfflineMemory},
     utils::generate_long_number,
@@ -28,7 +29,7 @@ use openvm_stark_backend::{
 use openvm_stark_sdk::{p3_baby_bear::BabyBear, utils::create_seeded_rng};
 use rand::Rng;
 
-use super::{core::run_alu, BaseAluCoreChipWom, Rv32BaseAluChip};
+use super::{core::run_alu, BaseAluCoreChipWom, Rv32WomBaseAluChip};
 use crate::{
     adapters::{
         Rv32WomBaseAluAdapterAir, Rv32WomBaseAluAdapterChip, Rv32WomBaseAluReadRecord,
@@ -36,6 +37,7 @@ use crate::{
     },
     base_alu::BaseAluCoreCols,
     test_utils::{generate_rv32_is_type_immediate, rv32_rand_write_register_or_imm},
+    wom_traits::{AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, VmChipWrapperWom},
 };
 
 type F = BabyBear;
@@ -47,21 +49,27 @@ type F = BabyBear;
 // passes all constraints.
 //////////////////////////////////////////////////////////////////////////////////////
 
+const FRAME_BUS_INDEX: u16 = 10;
+
 fn run_rv32_alu_rand_test(opcode: BaseAluOpcode, num_ops: usize) {
     let mut rng = create_seeded_rng();
     let bitwise_bus = BitwiseOperationLookupBus::new(BITWISE_OP_LOOKUP_BUS);
     let bitwise_chip = SharedBitwiseOperationLookupChip::<RV32_CELL_BITS>::new(bitwise_bus);
+    let frame_bus = FrameBus::new(FRAME_BUS_INDEX);
+    let shared_fp = Arc::new(Mutex::new(0u32));
 
     let mut tester = VmChipTestBuilder::default();
-    let mut chip = Rv32BaseAluChip::<F>::new(
+    let mut chip = Rv32WomBaseAluChip::<F>::new(
         Rv32WomBaseAluAdapterChip::new(
             tester.execution_bus(),
             tester.program_bus(),
+            frame_bus,
             tester.memory_bridge(),
             bitwise_chip.clone(),
         ),
         BaseAluCoreChipWom::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
         tester.offline_memory_mutex_arc(),
+        shared_fp.clone(),
     );
 
     for _ in 0..num_ops {
@@ -144,6 +152,7 @@ fn run_rv32_alu_negative_test(
 ) {
     let bitwise_bus = BitwiseOperationLookupBus::new(BITWISE_OP_LOOKUP_BUS);
     let bitwise_chip = SharedBitwiseOperationLookupChip::<RV32_CELL_BITS>::new(bitwise_bus);
+    let shared_fp = Arc::new(Mutex::new(0u32));
 
     let mut tester: VmChipTestBuilder<BabyBear> = VmChipTestBuilder::default();
     let mut chip = Rv32BaseAluTestChip::<F>::new(
@@ -154,6 +163,7 @@ fn run_rv32_alu_negative_test(
         ),
         BaseAluCoreChipWom::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
         tester.offline_memory_mutex_arc(),
+        shared_fp.clone(),
     );
 
     tester.execute(
@@ -162,7 +172,7 @@ fn run_rv32_alu_negative_test(
     );
 
     let trace_width = chip.trace_width();
-    let adapter_width = BaseAir::<F>::width(chip.adapter.air());
+    let adapter_width = BaseAir::<F>::width(&chip.adapter.air);
 
     if (opcode == BaseAluOpcode::ADD || opcode == BaseAluOpcode::SUB)
         && a.iter().all(|&a_val| a_val < (1 << RV32_CELL_BITS))
@@ -341,7 +351,7 @@ fn run_and_sanity_test() {
 // A pranking chip where `preprocess` can have `rs2` limbs that overflow.
 struct Rv32BaseAluAdapterTestChip<F: Field>(Rv32WomBaseAluAdapterChip<F>);
 
-impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterTestChip<F> {
+impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32BaseAluAdapterTestChip<F> {
     type ReadRecord = Rv32WomBaseAluReadRecord<F>;
     type WriteRecord = Rv32WomBaseAluWriteRecord<F>;
     type Air = Rv32WomBaseAluAdapterAir;
@@ -357,8 +367,9 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterTestChip<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        fp: u32,
         instruction: &Instruction<F>,
-    ) -> Result<(
+    ) -> ResultVm<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
@@ -401,11 +412,12 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterTestChip<F> {
         memory: &mut MemoryController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
-        output: AdapterRuntimeContext<F, Self::Interface>,
+        from_frame: FrameState<u32>,
+        output: AdapterRuntimeContextWom<F, Self::Interface>,
         _read_record: &Self::ReadRecord,
-    ) -> Result<(ExecutionState<u32>, Self::WriteRecord)> {
+    ) -> ResultVm<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         self.0
-            .postprocess(memory, instruction, from_state, output, _read_record)
+            .postprocess(memory, instruction, from_state, from_frame, output, _read_record)
     }
 
     fn generate_trace_row(
@@ -420,7 +432,7 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterTestChip<F> {
     }
 
     fn air(&self) -> &Self::Air {
-        self.0.air()
+        &self.0.air
     }
 }
 
@@ -429,17 +441,21 @@ fn rv32_alu_adapter_unconstrained_imm_limb_test() {
     let mut rng = create_seeded_rng();
     let bitwise_bus = BitwiseOperationLookupBus::new(BITWISE_OP_LOOKUP_BUS);
     let bitwise_chip = SharedBitwiseOperationLookupChip::<RV32_CELL_BITS>::new(bitwise_bus);
+    let frame_bus = FrameBus::new(FRAME_BUS_INDEX);
+    let shared_fp = Arc::new(Mutex::new(0u32));
 
     let mut tester = VmChipTestBuilder::default();
-    let mut chip = VmChipWrapper::new(
+    let mut chip = VmChipWrapperWom::new(
         Rv32BaseAluAdapterTestChip(Rv32WomBaseAluAdapterChip::new(
             tester.execution_bus(),
             tester.program_bus(),
+            frame_bus,
             tester.memory_bridge(),
             bitwise_chip.clone(),
         )),
         BaseAluCoreChipWom::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
         tester.offline_memory_mutex_arc(),
+        shared_fp.clone(),
     );
 
     let b = [0, 0, 0, 0];
@@ -469,17 +485,21 @@ fn rv32_alu_adapter_unconstrained_rs2_read_test() {
     let mut rng = create_seeded_rng();
     let bitwise_bus = BitwiseOperationLookupBus::new(BITWISE_OP_LOOKUP_BUS);
     let bitwise_chip = SharedBitwiseOperationLookupChip::<RV32_CELL_BITS>::new(bitwise_bus);
+    let frame_bus = FrameBus::new(FRAME_BUS_INDEX);
+    let shared_fp = Arc::new(Mutex::new(0u32));
 
     let mut tester = VmChipTestBuilder::default();
-    let mut chip = Rv32BaseAluChip::<F>::new(
+    let mut chip = Rv32WomBaseAluChip::<F>::new(
         Rv32WomBaseAluAdapterChip::new(
             tester.execution_bus(),
             tester.program_bus(),
+            frame_bus,
             tester.memory_bridge(),
             bitwise_chip.clone(),
         ),
         BaseAluCoreChipWom::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
         tester.offline_memory_mutex_arc(),
+        shared_fp.clone(),
     );
 
     let b = [1, 1, 1, 1];
@@ -495,7 +515,7 @@ fn rv32_alu_adapter_unconstrained_rs2_read_test() {
     tester.execute(&mut chip, &instruction);
 
     let trace_width = chip.trace_width();
-    let adapter_width = BaseAir::<F>::width(chip.adapter.air());
+    let adapter_width = BaseAir::<F>::width(&chip.adapter.air);
 
     let modify_trace = |trace: &mut DenseMatrix<BabyBear>| {
         let mut values = trace.row_slice(0).to_vec();

@@ -298,7 +298,7 @@ where
 }
 
 // returns (to_pc, rd_data)
-pub(super) fn run_jalr(
+pub fn run_jalr(
     _opcode: Rv32JalrOpcode,
     pc: u32,
     imm: u32,

@@ -5,9 +5,9 @@ use std::{
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge,
+        AdapterAirContext, BasicAdapterInterface, ExecutionBridge,
         ExecutionBus, ExecutionState, MinimalInstruction, Result as ResultVm, VmAdapterAir,
-        VmAdapterChip, VmAdapterInterface,
+        VmAdapterInterface,
     },
     system::{
         memory::{
