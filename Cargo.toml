@@ -23,6 +23,7 @@ openvm-instructions = { git = "https://github.com/powdr-labs/openvm.git", rev = 
 openvm-instructions-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
 openvm-rv32im-transpiler = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
 
+thiserror = "1.0.65"
 strum_macros = "0.26.4"
 strum = { version = "0.26.3", features = ["derive"] }
 derive-new = "0.6.0"

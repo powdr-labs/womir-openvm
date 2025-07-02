@@ -114,10 +114,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sdk = Sdk::new();
 
     let instructions = vec![
-        addi::<F>(8, 0, 666),
-        addi::<F>(9, 0, 1),
-        add::<F>(10, 8, 9),
-        add_wom::<F>(3, 0, 0),
+        addi_wom::<F>(8, 0, 666),
+        addi_wom::<F>(9, 0, 1),
+        add_wom::<F>(10, 8, 9),
         reveal(10, 0),
         halt(),
     ];

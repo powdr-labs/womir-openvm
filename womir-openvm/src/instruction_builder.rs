@@ -56,6 +56,15 @@ pub fn add_wom<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instructio
     )
 }
 
+pub fn addi_wom<F: PrimeField32>(rd: usize, rs1: usize, imm: usize) -> Instruction<F> {
+    instr_i(
+        BaseAluOpcodeWom::ADD.global_opcode().as_usize(),
+        rd,
+        rs1,
+        imm,
+    )
+}
+
 pub fn lui<F: PrimeField32>(rd: usize, imm: usize) -> Instruction<F> {
     Instruction::new(
         Rv32JalLuiOpcode::LUI.global_opcode(),

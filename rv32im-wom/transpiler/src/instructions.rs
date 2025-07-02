@@ -184,6 +184,17 @@ pub enum Rv32JalrOpcode {
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
 )]
+#[opcode_offset = 0x1236]
+#[repr(usize)]
+#[allow(non_camel_case_types)]
+pub enum Rv32JaafOpcode {
+    JAAF, // jump and activate frame
+    RET,  // return to pc and restore frame
+}
+
+#[derive(
+    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
+)]
 #[opcode_offset = 0x1240]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
