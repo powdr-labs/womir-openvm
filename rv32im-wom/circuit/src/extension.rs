@@ -26,8 +26,8 @@ use openvm_instructions::{
 };
 use openvm_rv32im_wom_transpiler::{
     BaseAluOpcode, BranchEqualOpcode, BranchLessThanOpcode, DivRemOpcode, LessThanOpcode,
-    MulHOpcode, MulOpcode, Rv32AuipcOpcode, Rv32HintStoreOpcode, Rv32JalLuiOpcode, Rv32JalrOpcode, Rv32JaafOpcode,
-    Rv32LoadStoreOpcode, Rv32Phantom, ShiftOpcode,
+    MulHOpcode, MulOpcode, Rv32AuipcOpcode, Rv32HintStoreOpcode, Rv32JaafOpcode, Rv32JalLuiOpcode,
+    Rv32JalrOpcode, Rv32LoadStoreOpcode, Rv32Phantom, ShiftOpcode,
 };
 use openvm_stark_backend::ChipUsageGetter;
 use openvm_stark_backend::{
@@ -277,7 +277,7 @@ impl<F: PrimeField32> VmExtension<F> for Rv32I {
             shared_fp.clone(),
         );
         inventory.add_executor(jaaf_chip, Rv32JaafOpcode::iter().map(|x| x.global_opcode()))?;
- 
+
         // let lt_chip = Rv32LessThanChip::new(
         //     Rv32WomBaseAluAdapterChip::new(
         //         execution_bus,
@@ -945,20 +945,21 @@ where
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
     ) -> ResultVm<ExecutionState<u32>> {
-        let fp = *self.fp.lock().unwrap();
+        let mut fp = self.fp.lock().unwrap();
         println!("Executing inside VmChipWrapperWom instruction: {instruction:?}, from_state: {from_state:?}, fp: {fp}");
         let (reads, read_record) = self.adapter.preprocess(memory, fp, instruction)?;
         let (output, core_record) =
             self.core
-                .execute_instruction(instruction, from_state.pc, fp, reads)?;
+                .execute_instruction(instruction, from_state.pc, *fp, reads)?;
         let (to_state, to_fp, write_record) = self.adapter.postprocess(
             memory,
             instruction,
             from_state,
-            FrameState::new(from_state.pc, fp),
+            FrameState::new(from_state.pc, *fp),
             output,
             &read_record,
         )?;
+        *fp = to_fp;
         self.records.push((read_record, write_record, core_record));
         Ok(to_state)
     }
