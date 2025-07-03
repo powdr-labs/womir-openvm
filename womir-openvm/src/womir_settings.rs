@@ -87,7 +87,8 @@ impl<'a> Settings<'a> for WomirSettings {
         trap: TrapReason,
     ) -> impl Into<Tree<Directive>> {
         // We can use unimp instruction, but we won't be able to encode the trap reason.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_allocate_label_frame(
@@ -97,7 +98,8 @@ impl<'a> Settings<'a> for WomirSettings {
         result_ptr: Range<u32>,
     ) -> impl Into<Tree<Directive>> {
         // Needs new instruction to allocate a frame from immediate size. No such concept exists in RISC-V.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_allocate_value_frame(
@@ -107,7 +109,8 @@ impl<'a> Settings<'a> for WomirSettings {
         result_ptr: Range<u32>,
     ) -> impl Into<Tree<Directive>> {
         // Needs new instruction to allocate a frame from size in register. No such concept exists in RISC-V.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_copy(
@@ -118,7 +121,8 @@ impl<'a> Settings<'a> for WomirSettings {
     ) -> impl Into<Tree<Directive>> {
         // Would be easy if we had x0, we could use either addi or ori.
         // Without it, we first define a 0 register, then use either addi or ori to copy the value.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_copy_into_frame(
@@ -129,13 +133,15 @@ impl<'a> Settings<'a> for WomirSettings {
         dest_offset: Range<u32>,
     ) -> impl Into<Tree<Directive>> {
         // New instruction required.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_jump(&self, label: String) -> Directive {
         // This is supposed to be a plain absolute jump, but they don't exist in RISC-V.
         // With a lot of effort, they can be simulated with auipc+jalr.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_jump_into_loop(
@@ -147,7 +153,8 @@ impl<'a> Settings<'a> for WomirSettings {
         saved_curr_fp_ptr: Option<Range<u32>>,
     ) -> impl Into<Tree<Directive>> {
         // New instruction required.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_conditional_jump(
@@ -158,7 +165,8 @@ impl<'a> Settings<'a> for WomirSettings {
         condition_ptr: Range<u32>,
     ) -> impl Into<Tree<Directive>> {
         // Problematic, see `is_jump_condition_available()`.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_conditional_jump_cmp_immediate(
@@ -170,7 +178,8 @@ impl<'a> Settings<'a> for WomirSettings {
         label: String,
     ) -> impl Into<Tree<Directive>> {
         // Hard on account of RISC-V jumps being relative to PC.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_relative_jump(
@@ -178,8 +187,9 @@ impl<'a> Settings<'a> for WomirSettings {
         g: &mut Generators<'a, '_, Self>,
         offset_ptr: Range<u32>,
     ) -> impl Into<Tree<Directive>> {
-        // Just a RISC-V `j`.
-        todo!()
+        // Just a RISC-V `j`, which doesn't exist because it is a jal with x0, and we don't have x0.
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_jump_out_of_loop(
@@ -189,7 +199,8 @@ impl<'a> Settings<'a> for WomirSettings {
         target_frame_ptr: Range<u32>,
     ) -> impl Into<Tree<Directive>> {
         // New instruction required.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_return(
@@ -199,7 +210,8 @@ impl<'a> Settings<'a> for WomirSettings {
         caller_fp_ptr: Range<u32>,
     ) -> impl Into<Tree<Directive>> {
         // New instruction required.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_imported_call(
@@ -211,7 +223,8 @@ impl<'a> Settings<'a> for WomirSettings {
         outputs: Vec<Range<u32>>,
     ) -> impl Into<Tree<Directive>> {
         // This is a system call. Issues one of OpenVM custom instructions.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_function_call(
@@ -223,7 +236,8 @@ impl<'a> Settings<'a> for WomirSettings {
         saved_caller_fp_ptr: Range<u32>,
     ) -> impl Into<Tree<Directive>> {
         // Requires new instruction that is both absolute and handles the frame pointer.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_indirect_call(
@@ -235,7 +249,8 @@ impl<'a> Settings<'a> for WomirSettings {
         saved_caller_fp_ptr: Range<u32>,
     ) -> impl Into<Tree<Directive>> {
         // Requires new instruction that is both absolute and handles the frame pointer.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_table_get(
@@ -247,7 +262,8 @@ impl<'a> Settings<'a> for WomirSettings {
     ) -> impl Into<Tree<Directive>> {
         // This is a simple 3-word load from memory, but we don't have enough information to do it.
         // Must fix the Womir interface trait.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 
     fn emit_wasm_op(
@@ -259,6 +275,7 @@ impl<'a> Settings<'a> for WomirSettings {
     ) -> impl Into<Tree<Directive>> {
         // All ALU, memory and much more goes here...
         // Pretty much everything must be adapted to use FP-relative addressing.
-        todo!()
+        let d: Directive = todo!();
+        d
     }
 }
