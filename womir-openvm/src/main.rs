@@ -1,31 +1,16 @@
-use core::net;
 use derive_more::From;
 use eyre::Result;
-use openvm_stark_backend::config::StarkGenericConfig;
 use openvm_stark_backend::p3_field::PrimeField32;
 use serde::{Deserialize, Serialize};
-use std::{path::Path, sync::Arc};
-use tracing::Level;
+use std::path::Path;
 
 use openvm_circuit::arch::{
     InitFileGenerator, SystemConfig, VmChipComplex, VmConfig, VmInventoryError,
 };
 
-use openvm_circuit::{
-    arch::{VmExtension, VmInventory},
-    circuit_derive::{Chip, ChipUsageGetter},
-    system::phantom::PhantomChip,
-};
-use openvm_circuit_derive::{AnyEnum, InstructionExecutor, VmConfig};
-use openvm_instructions::{exe::VmExe, program::Program};
-use openvm_sdk::{
-    config::{AggStarkConfig, AppConfig, SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery},
-    keygen::AggStarkProvingKey,
-    prover::AggStarkProver,
-    Sdk, StdIn,
-};
-use openvm_stark_sdk::config::setup_tracing_with_log_level;
-use openvm_stark_sdk::config::FriParameters;
+use openvm_circuit::circuit_derive::{Chip, ChipUsageGetter};
+use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
+use openvm_sdk::config::{SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery};
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 mod instruction_builder;
@@ -104,51 +89,176 @@ impl VmConfig<F> for SpecializedConfig {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    setup_tracing_with_log_level(Level::WARN);
-    let vm_config = SdkVmConfig::builder()
-        .system(Default::default())
-        .rv32i(Default::default())
-        .rv32m(Default::default())
-        .io(Default::default())
-        .build();
-    let vm_config = SpecializedConfig::new(vm_config);
-    let sdk = Sdk::new();
+    println!("Run cargo test to execute the tests");
+    Ok(())
+}
 
-    let instructions = {
-        use instruction_builder as wom;
-        use instruction_builder_ref::*;
-        vec![
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use instruction_builder as wom;
+    use instruction_builder_ref::*;
+    use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program};
+    use openvm_sdk::{Sdk, StdIn};
+    use openvm_stark_sdk::config::setup_tracing_with_log_level;
+    use tracing::Level;
+
+    /// Helper function to run a VM test with given instructions and verify the output
+    fn run_vm_test(
+        test_name: &str,
+        instructions: Vec<Instruction<F>>,
+        expected_output: u32,
+        stdin: Option<StdIn>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Create VM configuration
+        let vm_config = SdkVmConfig::builder()
+            .system(Default::default())
+            .rv32i(Default::default())
+            .rv32m(Default::default())
+            .io(Default::default())
+            .build();
+        let vm_config = SpecializedConfig::new(vm_config);
+        let sdk = Sdk::new();
+
+        // Create and execute program
+        let program = Program::from_instructions(&instructions);
+        let exe = VmExe::new(program);
+        let stdin = stdin.unwrap_or_default();
+
+        let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
+        println!("{test_name} output: {output:?}");
+
+        // Verify output
+        let output_bytes: Vec<_> = output.iter().map(|n| n.as_canonical_u32() as u8).collect();
+        let output_0 = u32::from_le_bytes(output_bytes[0..4].try_into().unwrap());
+        assert_eq!(
+            output_0, expected_output,
+            "{test_name} failed: expected {expected_output}, got {output_0}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_basic_wom_operations() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
             wom::addi::<F>(8, 0, 666),
             wom::addi::<F>(9, 0, 1),
             wom::add::<F>(10, 8, 9),
             reveal(10, 0),
             halt(),
-        ]
-    };
-    let program = Program::from_instructions(&instructions);
-    let exe = VmExe::new(program);
+        ];
 
-    let stdin = StdIn::default();
+        run_vm_test("Basic WOM operations", instructions, 667, None)
+    }
 
-    let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
-    println!("public values output: {output:?}");
+    #[test]
+    fn test_jaaf_instruction() -> Result<(), Box<dyn std::error::Error>> {
+        // Simple test with JAAF instruction
+        // We'll set up a value, jump with JAAF, and verify the result
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 42), // x8 = 42
+            wom::addi::<F>(9, 0, 5),  // x9 = 5 (new frame pointer)
+            wom::jaaf::<F>(16, 9),    // Jump to PC=16, set FP=x9
+            halt(),                   // This should be skipped
+            // PC = 16 (byte offset, so instruction at index 4)
+            reveal(8, 0), // Reveal x8 (which should still be 42)
+            halt(),
+        ];
 
-    let output_bytes: Vec<_> = output.iter().map(|n| n.as_canonical_u32() as u8).collect();
-    let output_0 = u32::from_le_bytes(output_bytes[0..4].try_into().unwrap());
-    assert_eq!(output_0, 667);
+        run_vm_test("JAAF instruction", instructions, 42, None)
+    }
 
-    // let app_log_blowup = 2;
-    // let app_fri_params = FriParameters::standard_with_100_bits_conjectured_security(app_log_blowup);
-    // let app_config = AppConfig::new(app_fri_params, vm_config);
-    //
-    // let app_committed_exe = sdk.commit_app_exe(app_fri_params, exe)?;
-    //
-    // let app_pk = Arc::new(sdk.app_keygen(app_config)?);
-    //
-    // let proof = sdk.generate_app_proof(app_pk.clone(), app_committed_exe.clone(), stdin.clone())?;
-    //
-    // let app_vk = app_pk.get_app_vk();
-    // sdk.verify_app_proof(&app_vk, &proof)?;
+    #[test]
+    fn test_jaaf_save_instruction() -> Result<(), Box<dyn std::error::Error>> {
+        // Test JAAF_SAVE: jump and save FP
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 99),       // x8 = 99
+            wom::addi::<F>(9, 0, 10),       // x9 = 10 (new frame pointer)
+            wom::addi::<F>(11, 0, 99),      // x11 = 99 (to show it gets overwritten)
+            wom::jaaf_save::<F>(11, 24, 9), // Jump to PC=24, set FP=x9, save old FP to x11
+            halt(),                         // This should be skipped
+            halt(),                         // This should be skipped too
+            // PC = 24 (byte offset, so instruction at index 6)
+            reveal(11, 0), // Reveal x11 (should be 0, the old FP)
+            halt(),
+        ];
 
-    Ok(())
+        run_vm_test("JAAF_SAVE instruction", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_ret_instruction() -> Result<(), Box<dyn std::error::Error>> {
+        // Test RET: return to saved PC and FP
+        let instructions = vec![
+            wom::addi::<F>(10, 0, 20), // x10 = 20 (return PC)
+            wom::addi::<F>(11, 0, 0),  // x11 = 0 (saved FP)
+            wom::addi::<F>(8, 0, 88),  // x8 = 88
+            wom::ret::<F>(10, 11),     // Return to PC=x10, FP=x11
+            halt(),                    // This should be skipped
+            // PC = 20 (where x10 points)
+            reveal(8, 0), // Reveal x8 (should be 88)
+            halt(),
+        ];
+
+        run_vm_test("RET instruction", instructions, 88, None)
+    }
+
+    #[test]
+    fn test_call_instruction() -> Result<(), Box<dyn std::error::Error>> {
+        // Test CALL: save PC and FP, then jump
+        let instructions = vec![
+            wom::addi::<F>(9, 0, 15),      // x9 = 15 (new FP)
+            wom::call::<F>(10, 11, 20, 9), // Call to PC=20, FP=x9, save PC to x10, FP to x11
+            wom::addi::<F>(8, 0, 123),     // x8 = 123 (after return) - this should NOT execute
+            reveal(8, 0),                  // Reveal x8 - this should NOT execute
+            halt(),                        // Padding
+            // PC = 20 (function start)
+            reveal(10, 0), // Reveal x10 (should be 8, the return address)
+            halt(),        // End the test here, don't return
+        ];
+
+        run_vm_test("CALL instruction", instructions, 8, None)
+    }
+
+    #[test]
+    fn test_call_indirect_instruction() -> Result<(), Box<dyn std::error::Error>> {
+        // Test CALL_INDIRECT: save PC and FP, jump to register value
+        let instructions = vec![
+            wom::addi::<F>(12, 0, 28),              // x12 = 28 (target PC)
+            wom::addi::<F>(9, 0, 20),               // x9 = 20 (new FP)
+            wom::addi::<F>(11, 0, 999),             // x9 = 20 (new FP)
+            wom::call_indirect::<F>(10, 11, 12, 9), // Call to PC=x12, FP=x9, save PC to x10, FP to x11
+            wom::addi::<F>(8, 0, 456), // x8 = 456 (after return) - this should NOT execute
+            reveal(8, 0),              // Reveal x8 - this should NOT execute
+            halt(),                    // Padding
+            // PC = 28 (function start, where x12 points)
+            reveal(11, 0), // Reveal x11 (should be 0, the saved FP)
+            halt(),        // End the test here, don't return
+        ];
+
+        run_vm_test("CALL_INDIRECT instruction", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_call_and_return() -> Result<(), Box<dyn std::error::Error>> {
+        // Test a complete call and return sequence
+        // Note: When FP changes, register addressing changes too
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 50),      // x8 = 50 (at FP=0)
+            wom::addi::<F>(9, 0, 0), // x9 = 0 (new FP for function - using 0 to keep register addressing simple)
+            wom::call::<F>(10, 11, 24, 9), // Call function at PC=24, FP=0
+            reveal(8, 0),            // Reveal x8 after return (should be 75)
+            halt(),
+            halt(), // Padding
+            // Function at PC = 24
+            wom::addi::<F>(8, 8, 25), // x8 = x8 + 25 = 75 (still at FP=0)
+            wom::ret::<F>(10, 11),    // Return using saved PC and FP
+            halt(),
+        ];
+
+        run_vm_test("CALL and RETURN sequence", instructions, 75, None)
+    }
 }

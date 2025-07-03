@@ -1,5 +1,6 @@
 use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOpcode, VmOpcode};
-use openvm_rv32im_wom_transpiler::BaseAluOpcode as BaseAluOpcodeWom;
+use openvm_rv32im_transpiler::{Rv32JalLuiOpcode, Rv32LoadStoreOpcode};
+use openvm_rv32im_wom_transpiler::{BaseAluOpcode as BaseAluOpcodeWom, Rv32JaafOpcode};
 use openvm_stark_backend::p3_field::PrimeField32;
 
 pub fn instr_r<F: PrimeField32>(
@@ -53,5 +54,94 @@ pub fn addi<F: PrimeField32>(rd: usize, rs1: usize, imm: usize) -> Instruction<F
         rd,
         rs1,
         imm,
+    )
+}
+
+/// JAAF instruction: Jump And Activate Frame
+/// Sets PC from immediate and FP from register
+pub fn jaaf<F: PrimeField32>(to_pc_imm: usize, to_fp_reg: usize) -> Instruction<F> {
+    Instruction::new(
+        Rv32JaafOpcode::JAAF.global_opcode(),
+        F::ZERO,                                                             // a: (not used)
+        F::ZERO,                                                             // b: (not used)
+        F::ZERO,                                                             // c: (not used)
+        F::from_canonical_usize(to_pc_imm),                                  // d: to_pc_imm
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: to_fp_reg
+        F::ONE,                                                              // f: enabled
+        F::ZERO, // g: imm sign (0 for positive)
+    )
+}
+
+/// JAAF_SAVE instruction: Jump And Activate Frame, Save FP
+/// Sets PC from immediate, FP from register, and saves current FP
+pub fn jaaf_save<F: PrimeField32>(
+    save_fp: usize,
+    to_pc_imm: usize,
+    to_fp_reg: usize,
+) -> Instruction<F> {
+    Instruction::new(
+        Rv32JaafOpcode::JAAF_SAVE.global_opcode(),
+        F::ZERO,                                                             // a: (not used)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_fp),   // b: save_fp
+        F::ZERO,                                                             // c: (not used)
+        F::from_canonical_usize(to_pc_imm),                                  // d: to_pc_imm
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: to_fp_reg
+        F::ONE,                                                              // f: enabled
+        F::ZERO, // g: imm sign (0 for positive)
+    )
+}
+
+/// RET instruction: Return (restore PC and FP from registers)
+/// Sets PC and FP from registers
+pub fn ret<F: PrimeField32>(to_pc_reg: usize, to_fp_reg: usize) -> Instruction<F> {
+    Instruction::new(
+        Rv32JaafOpcode::RET.global_opcode(),
+        F::ZERO,                                                             // a: (not used)
+        F::ZERO,                                                             // b: (not used)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg), // c: to_pc_reg
+        F::ZERO,                                                             // d: (not used)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: to_fp_reg
+        F::ONE,                                                              // f: enabled
+        F::ZERO,                                                             // g: imm sign
+    )
+}
+
+/// CALL instruction: Call function (save PC and FP, jump to label)
+/// Saves current PC and FP, then sets PC from immediate and FP from register
+pub fn call<F: PrimeField32>(
+    save_pc: usize,
+    save_fp: usize,
+    to_pc_imm: usize,
+    to_fp_reg: usize,
+) -> Instruction<F> {
+    Instruction::new(
+        Rv32JaafOpcode::CALL.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_pc), // a: rd1 (save PC here)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_fp), // b: rd2 (save FP here)
+        F::ZERO,                                                           // c: rs1 (not used)
+        F::from_canonical_usize(to_pc_imm), // d: immediate for PC target
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: rs2 (new FP)
+        F::ONE,                             // f: enabled
+        F::ZERO,                            // g: imm sign (0 for positive)
+    )
+}
+
+/// CALL_INDIRECT instruction: Call function indirect (save PC and FP, jump to register)
+/// Saves current PC and FP, then sets PC and FP from registers
+pub fn call_indirect<F: PrimeField32>(
+    save_pc: usize,
+    save_fp: usize,
+    to_pc_reg: usize,
+    to_fp_reg: usize,
+) -> Instruction<F> {
+    Instruction::new(
+        Rv32JaafOpcode::CALL_INDIRECT.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_pc), // a: rd1 (save PC here)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_fp), // b: rd2 (save FP here)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg), // c: rs1 (PC source)
+        F::ZERO, // d: immediate (not used)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: rs2 (FP source)
+        F::ONE,  // f: enabled
+        F::ZERO, // g: imm sign
     )
 }
