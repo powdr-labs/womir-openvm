@@ -16,9 +16,10 @@ use openvm_circuit_primitives::{
 use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
 use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_rv32im_wom_transpiler::{
-    BaseAluOpcode, DivRemOpcode, MulHOpcode, MulOpcode, Rv32HintStoreOpcode, Rv32JaafOpcode, Rv32Phantom,
+    BaseAluOpcode, DivRemOpcode, MulHOpcode, MulOpcode, Rv32HintStoreOpcode, Rv32JaafOpcode,
+    Rv32Phantom,
 };
-use openvm_stark_backend::{ChipUsageGetter, p3_field::PrimeField32};
+use openvm_stark_backend::p3_field::PrimeField32;
 
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -663,4 +664,3 @@ mod phantom {
         u32::from_le_bytes(value[offset..offset + 4].try_into().unwrap())
     }
 }
-

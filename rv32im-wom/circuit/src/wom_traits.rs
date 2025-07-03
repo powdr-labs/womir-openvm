@@ -1,5 +1,5 @@
 //! Write-Once Memory (WOM) traits and frame pointer support for Womir VM
-//! 
+//!
 //! This module contains the specialized traits and types needed to support
 //! Womir's frame-pointer-based register access model, which differs from
 //! standard RISC-V by using write-once memory regions for efficiency in zkVMs.
@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 
 use openvm_circuit::{
     arch::{
-        AdapterRuntimeContext, ExecutionState, InstructionExecutor as InstructionExecutorTrait,
-        VmAdapterAir, VmAdapterInterface, VmAirWrapper, VmCoreAir, Result as ResultVm,
+        ExecutionState, InstructionExecutor as InstructionExecutorTrait, Result as ResultVm,
+        VmAdapterAir, VmAdapterInterface, VmAirWrapper, VmCoreAir,
     },
     system::memory::{MemoryController, OfflineMemory},
     utils::next_power_of_two_or_zero,
@@ -20,8 +20,8 @@ use openvm_stark_backend::{
     air_builders::{debug::DebugConstraintBuilder, symbolic::SymbolicRapBuilder},
     config::{StarkGenericConfig, Val},
     interaction::{BusIndex, InteractionBuilder, PermutationCheckBus},
-    p3_air::{AirBuilder, BaseAir},
-    p3_field::{Field, FieldAlgebra, PrimeField32},
+    p3_air::BaseAir,
+    p3_field::{FieldAlgebra, PrimeField32},
     p3_matrix::dense::RowMajorMatrix,
     p3_maybe_rayon::prelude::*,
     prover::types::AirProofInput,
