@@ -226,8 +226,8 @@ pub enum Rv32JaafOpcode {
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum Rv32JumpOpcode {
-    JUMP,        // unconditional jump to immediate PC
-    JUMP_IF,     // conditional jump to immediate PC if condition register != 0
+    JUMP,         // unconditional jump to immediate PC
+    JUMP_IF,      // conditional jump to immediate PC if condition register != 0
     JUMP_IF_ZERO, // conditional jump to immediate PC if condition register == 0
 }
 

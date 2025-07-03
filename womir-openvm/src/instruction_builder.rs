@@ -1,6 +1,8 @@
 use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOpcode, VmOpcode};
 use openvm_rv32im_transpiler::{Rv32JalLuiOpcode, Rv32LoadStoreOpcode};
-use openvm_rv32im_wom_transpiler::{BaseAluOpcode as BaseAluOpcodeWom, Rv32JaafOpcode, Rv32JumpOpcode};
+use openvm_rv32im_wom_transpiler::{
+    BaseAluOpcode as BaseAluOpcodeWom, Rv32JaafOpcode, Rv32JumpOpcode,
+};
 use openvm_stark_backend::p3_field::PrimeField32;
 
 pub fn instr_r<F: PrimeField32>(
@@ -151,12 +153,12 @@ pub fn jump<F: PrimeField32>(to_pc_imm: usize) -> Instruction<F> {
     Instruction::new(
         Rv32JumpOpcode::JUMP.global_opcode(),
         F::from_canonical_usize(to_pc_imm), // a: to_pc_imm
-        F::ZERO, // b: (not used)
-        F::ZERO, // c: (not used)
-        F::ZERO, // d: (not used)
-        F::ZERO, // e: (not used)
-        F::ONE,  // f: enabled
-        F::ZERO, // g: imm sign
+        F::ZERO,                            // b: (not used)
+        F::ZERO,                            // c: (not used)
+        F::ZERO,                            // d: (not used)
+        F::ZERO,                            // e: (not used)
+        F::ONE,                             // f: enabled
+        F::ZERO,                            // g: imm sign
     )
 }
 
@@ -166,11 +168,11 @@ pub fn jump_if<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> Instr
         Rv32JumpOpcode::JUMP_IF.global_opcode(),
         F::from_canonical_usize(to_pc_imm), // a: to_pc_imm
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * condition_reg), // b: condition_reg
-        F::ZERO, // c: (not used)
-        F::ZERO, // d: (not used)
-        F::ZERO, // e: (not used)
-        F::ONE,  // f: enabled
-        F::ZERO, // g: imm sign
+        F::ZERO,                            // c: (not used)
+        F::ZERO,                            // d: (not used)
+        F::ZERO,                            // e: (not used)
+        F::ONE,                             // f: enabled
+        F::ZERO,                            // g: imm sign
     )
 }
 
@@ -180,10 +182,10 @@ pub fn jump_if_zero<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> 
         Rv32JumpOpcode::JUMP_IF_ZERO.global_opcode(),
         F::from_canonical_usize(to_pc_imm), // a: to_pc_imm
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * condition_reg), // b: condition_reg
-        F::ZERO, // c: (not used)
-        F::ZERO, // d: (not used)
-        F::ZERO, // e: (not used)
-        F::ONE,  // f: enabled
-        F::ZERO, // g: imm sign
+        F::ZERO,                            // c: (not used)
+        F::ZERO,                            // d: (not used)
+        F::ZERO,                            // e: (not used)
+        F::ONE,                             // f: enabled
+        F::ZERO,                            // g: imm sign
     )
 }

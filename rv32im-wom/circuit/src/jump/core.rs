@@ -124,14 +124,16 @@ where
             to_pc_limbs[0] * AB::F::TWO + to_pc_limbs[1] * AB::F::from_canonical_u32(1 << 16);
 
         // Calculate final PC: if should_jump, use to_pc, otherwise use from_pc + DEFAULT_PC_STEP
-        let final_pc = should_jump * to_pc.clone() + (AB::Expr::ONE - should_jump) * (from_pc + AB::F::from_canonical_u32(DEFAULT_PC_STEP));
+        let final_pc = should_jump * to_pc.clone()
+            + (AB::Expr::ONE - should_jump)
+                * (from_pc + AB::F::from_canonical_u32(DEFAULT_PC_STEP));
 
         let expected_opcode = VmCoreAir::<AB, I>::opcode_to_global_expr(self, JUMP);
 
         AdapterAirContext {
             to_pc: Some(final_pc),
             reads: [condition_data.map(|x| x.into())].into(), // condition register for conditional jumps
-            writes: [].into(), // No writes for jump instructions
+            writes: [].into(),                                // No writes for jump instructions
             instruction: MinimalInstruction {
                 is_valid: is_valid.into(),
                 opcode: expected_opcode,
@@ -197,8 +199,8 @@ where
 
         // Determine if we should jump based on opcode and condition
         let should_jump = match local_opcode {
-            JUMP => true, // Always jump
-            JUMP_IF => condition_val != 0, // Jump if condition != 0
+            JUMP => true,                       // Always jump
+            JUMP_IF => condition_val != 0,      // Jump if condition != 0
             JUMP_IF_ZERO => condition_val == 0, // Jump if condition == 0
         };
 
@@ -212,14 +214,13 @@ where
         let to_pc_least_sig_bit = imm & 1;
         let to_pc_limbs = array::from_fn(|i| ((target_pc >> (1 + i * 15)) & mask));
 
-        self.range_checker_chip
-            .add_count(to_pc_limbs[0], 15);
+        self.range_checker_chip.add_count(to_pc_limbs[0], 15);
         self.range_checker_chip
             .add_count(to_pc_limbs[1], PC_BITS - 16);
 
         let output = AdapterRuntimeContextWom {
             to_pc: Some(final_pc),
-            to_fp: None, // Jump instructions don't modify FP
+            to_fp: None,       // Jump instructions don't modify FP
             writes: [].into(), // No writes
         };
 

@@ -283,4 +283,3 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32JumpAdapterChipWom<F> {
         &self.air
     }
 }
-
