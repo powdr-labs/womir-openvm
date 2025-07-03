@@ -5,9 +5,6 @@ use super::adapters::{Rv32MultAdapterChip, RV32_CELL_BITS, RV32_REGISTER_NUM_LIM
 mod core;
 pub use core::*;
 
-#[cfg(test)]
-mod tests;
-
 pub type Rv32DivRemChip<F> = VmChipWrapper<
     F,
     Rv32MultAdapterChip<F>,

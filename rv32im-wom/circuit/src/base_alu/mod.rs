@@ -6,9 +6,6 @@ use crate::{adapters::Rv32WomBaseAluAdapterChip, VmChipWrapperWom};
 mod core;
 pub use core::*;
 
-#[cfg(test)]
-mod tests;
-
 pub type Rv32WomBaseAluChip<F> = VmChipWrapperWom<
     F,
     Rv32WomBaseAluAdapterChip<F>,

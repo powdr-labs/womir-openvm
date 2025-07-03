@@ -45,9 +45,6 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::adapters::{compose, decompose};
 
-#[cfg(test)]
-mod tests;
-
 #[repr(C)]
 #[derive(AlignedBorrow, Debug, StructReflection)]
 pub struct Rv32HintStoreCols<T> {

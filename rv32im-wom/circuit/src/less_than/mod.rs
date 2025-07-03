@@ -5,9 +5,6 @@ use super::adapters::{Rv32WomBaseAluAdapterChip, RV32_CELL_BITS, RV32_REGISTER_N
 mod core;
 pub use core::*;
 
-#[cfg(test)]
-mod tests;
-
 pub type Rv32LessThanChip<F> = VmChipWrapper<
     F,
     Rv32WomBaseAluAdapterChip<F>,

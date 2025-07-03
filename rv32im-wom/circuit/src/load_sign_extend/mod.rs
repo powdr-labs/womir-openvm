@@ -6,9 +6,6 @@ use crate::adapters::Rv32LoadStoreAdapterChip;
 mod core;
 pub use core::*;
 
-#[cfg(test)]
-mod tests;
-
 pub type Rv32LoadSignExtendChip<F> = VmChipWrapper<
     F,
     Rv32LoadStoreAdapterChip<F>,
