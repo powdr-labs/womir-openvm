@@ -29,7 +29,8 @@ use openvm_stark_sdk::config::FriParameters;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 mod instruction_builder;
-use instruction_builder::*;
+mod instruction_builder_ref;
+mod womir_settings;
 
 use openvm_rv32im_wom_circuit::{self, Rv32I, Rv32IExecutor, Rv32IPeriphery};
 
@@ -113,13 +114,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let vm_config = SpecializedConfig::new(vm_config);
     let sdk = Sdk::new();
 
-    let instructions = vec![
-        addi_wom::<F>(8, 0, 666),
-        addi_wom::<F>(9, 0, 1),
-        add_wom::<F>(10, 8, 9),
-        reveal(10, 0),
-        halt(),
-    ];
+    let instructions = {
+        use instruction_builder as wom;
+        use instruction_builder_ref::*;
+        vec![
+            wom::addi::<F>(8, 0, 666),
+            wom::addi::<F>(9, 0, 1),
+            wom::add::<F>(10, 8, 9),
+            reveal(10, 0),
+            halt(),
+        ]
+    };
     let program = Program::from_instructions(&instructions);
     let exe = VmExe::new(program);
 

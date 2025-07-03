@@ -30,11 +30,11 @@ use strum::{EnumCount, EnumIter, FromRepr};
 #[opcode_offset = 0x1200]
 #[repr(usize)]
 pub enum BaseAluOpcode {
-    ADD,
-    SUB,
-    XOR,
-    OR,
-    AND,
+    ADD, // i32.add
+    SUB, // i32.sub
+    XOR, // i32.xor
+    OR,  // i32.or
+    AND, // i32.and
 }
 
 #[derive(
@@ -55,9 +55,9 @@ pub enum BaseAluOpcode {
 #[opcode_offset = 0x1205]
 #[repr(usize)]
 pub enum ShiftOpcode {
-    SLL,
-    SRL,
-    SRA,
+    SLL, // i32.shl
+    SRL, // i32.shr_u
+    SRA, // i32.shr_s
 }
 
 #[derive(
@@ -78,8 +78,8 @@ pub enum ShiftOpcode {
 #[opcode_offset = 0x1208]
 #[repr(usize)]
 pub enum LessThanOpcode {
-    SLT,
-    SLTU,
+    SLT,  // i32.lt_s, i32.gt_s (inverted)
+    SLTU, // i32.lt_u, i32.gt_u (inverted)
 }
 
 #[derive(
@@ -100,16 +100,16 @@ pub enum LessThanOpcode {
 #[opcode_offset = 0x1210]
 #[repr(usize)]
 pub enum Rv32LoadStoreOpcode {
-    LOADW,
+    LOADW, // i32.load
     /// LOADBU, LOADHU are unsigned extend opcodes, implemented in the same chip with LOADW
-    LOADBU,
-    LOADHU,
-    STOREW,
-    STOREH,
-    STOREB,
+    LOADBU, // i32.load8_u
+    LOADHU, // i32.load16_u
+    STOREW, // i32.store
+    STOREH, // i32.store16
+    STOREB, // i32.store8
     /// The following are signed extend opcodes
-    LOADB,
-    LOADH,
+    LOADB, // i32.load8_s
+    LOADH, // i32.load16_s
 }
 
 #[derive(
@@ -209,7 +209,7 @@ pub enum Rv32AuipcOpcode {
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum MulOpcode {
-    MUL,
+    MUL, // i32.mul
 }
 
 #[derive(
@@ -255,10 +255,11 @@ pub enum MulHOpcode {
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum DivRemOpcode {
-    DIV,
-    DIVU,
-    REM,
-    REMU,
+    // TODO: WASM and RISC-V are diffent in case of division by zero.
+    DIV,  // i32.div_s
+    DIVU, // i32.div_u
+    REM,  // i32.rem_s
+    REMU, // i32.rem_u
 }
 
 // =================================================================================================

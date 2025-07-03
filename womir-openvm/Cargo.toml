@@ -17,3 +17,5 @@ openvm-instructions = { workspace = true }
 openvm-rv32im-transpiler = { workspace = true }
 openvm-stark-sdk = { workspace = true }
 openvm-stark-backend = { workspace = true }
+wasmparser = { workspace = true }
+womir = { workspace = true }
