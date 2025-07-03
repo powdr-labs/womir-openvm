@@ -1,0 +1,103 @@
+# non-SIMD integer instructions, both in 32 or 64 variants:
+const
+clz
+ctz
+popcnt
+add                        : BaseAluOpcode::ADD
+sub                        : BaseAluOpcode::SUB
+mul                        : MulOpcode::MUL
+div_s                      : DivRemOpcode::DIV   (division by zero is different)
+div_u                      : DivRemOpcode::DIVU  (division by zero is different)
+rem_s                      : DivRemOpcode::REM   (division by zero is different)
+rem_u                      : DivRemOpcode::REMU  (division by zero is different)
+and                        : BaseAluOpcode::AND
+or                         : BaseAluOpcode::OR
+xor                        : BaseAluOpcode::XOR
+shl                        : ShiftOpcode::SLL
+shr_s                      : ShiftOpcode::SRA
+shr_u                      : ShiftOpcode::SRL
+rotl
+rotr
+eqz
+eq
+ne
+lt_s                       : LessThanOpcode::SLT
+lt_u                       : LessThanOpcode::SLTU
+gt_s                       : LessThanOpcode::SLT  (inverted)
+gt_u                       : LessThanOpcode::SLTU (inverted)
+le_s
+le_u
+ge_s
+ge_u
+extend8_s
+extend16_s
+extend32_s (64-bit only)
+
+
+# 32-64-bit integer interface:
+i32_wrap_i64
+i64_extend_i32_s
+i64_extend_i32_u
+
+
+# reference instructions:
+ref.null       : basically three i32.const
+ref.is_null    : I think I conventioned null to be i32::MAX, so it is one const and one i32.eq
+ref.func       : also three i32.const
+
+
+# parametric:
+select
+
+
+# variable instructions:
+global.get   : basically one memory load at a constant address
+global.set   : basically one memory store at a constant address
+copy
+copy_into_frame
+
+
+# table instructions:
+table.get     : basically three i32.load
+table.set     : basically three i32.store
+table.size    : basically a i32.load with a constant address
+table.grow
+table.fill
+table.copy
+table.init
+elem.drop     : basically a i32.store zero at a constant address
+
+
+# non-SIMD integer memory instructions, both in 32 or 64 variants:
+load                       : Rv32LoadStoreOpcode::LOADW
+store                      : Rv32LoadStoreOpcode::STOREW
+load8_s                    : Rv32LoadStoreOpcode::LOADB
+load8_u                    : Rv32LoadStoreOpcode::LOADBU
+load16_s                   : Rv32LoadStoreOpcode::LOADH
+load16_u                   : Rv32LoadStoreOpcode::LOADHU
+load32_s (64-bit only)
+load32_u (64-bit only)
+store8                     : Rv32LoadStoreOpcode::STOREB
+store16                    : Rv32LoadStoreOpcode::STOREH
+store32 (64-bit only)
+memory.size                : basically a i32.load with a constant address
+memory.grow
+memory.fill
+memory.copy
+memory.init
+data.drop                  : basically a i32.store zero at a constant address
+
+
+# control instructions:
+nop                   : OR anything with itself writing to itself? should we filter this out?
+unreachable
+jump
+jump_if_z
+jump_if_nz
+skip_n                : not exactly JAL, because this won't save the return address
+return
+call
+call_indirect
+allocate_frame
+allocate_frame_imm
+jaaf
