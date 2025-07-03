@@ -94,8 +94,8 @@ where
         let cols: &Rv32JaafCoreCols<AB::Var> = (*local_core).borrow();
         let Rv32JaafCoreCols::<AB::Var> {
             imm,
-            rs1_data: rs1,
-            rd_data: rd,
+            rs1_data: pc_source_data,
+            rd_data: saved_pc_data,
             is_valid,
             to_pc_least_sig_bit,
             to_pc_limbs,
@@ -103,8 +103,8 @@ where
 
         builder.assert_bool(is_valid);
 
-        // composed is the composition of 3 most significant limbs of rd
-        let composed = rd
+        // composed is the composition of 3 most significant limbs of saved_pc_data
+        let composed = saved_pc_data
             .iter()
             .enumerate()
             .fold(AB::Expr::ZERO, |acc, (i, &val)| {
@@ -113,44 +113,47 @@ where
 
         let least_sig_limb = from_pc + AB::F::from_canonical_u32(DEFAULT_PC_STEP) - composed;
 
-        // rd_data is the final decomposition of `from_pc + DEFAULT_PC_STEP` we need.
-        // The range check on `least_sig_limb` also ensures that `rd_data` correctly represents
-        // `from_pc + DEFAULT_PC_STEP`. Specifically, if `rd_data` does not match the
+        // saved_pc_limbs is the final decomposition of `from_pc + DEFAULT_PC_STEP` we need.
+        // The range check on `least_sig_limb` also ensures that `saved_pc_limbs` correctly represents
+        // `from_pc + DEFAULT_PC_STEP`. Specifically, if `saved_pc_limbs` does not match the
         // expected limb, then `least_sig_limb` becomes the real `least_sig_limb` plus the
         // difference between `composed` and the three most significant limbs of `from_pc +
         // DEFAULT_PC_STEP`. In that case, `least_sig_limb` >= 2^RV32_CELL_BITS.
-        let rd_data = array::from_fn(|i| {
+        let saved_pc_limbs = array::from_fn(|i| {
             if i == 0 {
                 least_sig_limb.clone()
             } else {
-                rd[i - 1].into().clone()
+                saved_pc_data[i - 1].into().clone()
             }
         });
 
-        // Constrain rd_data
+        // Constrain saved_pc_limbs
         // Assumes only from_pc in [0,2^PC_BITS) is allowed by program bus
         self.bitwise_lookup_bus
-            .send_range(rd_data[0].clone(), rd_data[1].clone())
+            .send_range(saved_pc_limbs[0].clone(), saved_pc_limbs[1].clone())
             .eval(builder, is_valid);
         self.range_bus
-            .range_check(rd_data[2].clone(), RV32_CELL_BITS)
+            .range_check(saved_pc_limbs[2].clone(), RV32_CELL_BITS)
             .eval(builder, is_valid);
         self.range_bus
-            .range_check(rd_data[3].clone(), PC_BITS - RV32_CELL_BITS * 3)
+            .range_check(saved_pc_limbs[3].clone(), PC_BITS - RV32_CELL_BITS * 3)
             .eval(builder, is_valid);
 
-        // Constrain to_pc_least_sig_bit + 2 * to_pc_limbs = rs1 + imm as a u32 addition
+        // Constrain to_pc_least_sig_bit + 2 * to_pc_limbs = pc_source + imm as a u32 addition
         // RISC-V spec explicitly sets the least significant bit of `to_pc` to 0
-        let rs1_limbs_01 = rs1[0] + rs1[1] * AB::F::from_canonical_u32(1 << RV32_CELL_BITS);
-        let rs1_limbs_23 = rs1[2] + rs1[3] * AB::F::from_canonical_u32(1 << RV32_CELL_BITS);
+        let pc_source_limbs_01 =
+            pc_source_data[0] + pc_source_data[1] * AB::F::from_canonical_u32(1 << RV32_CELL_BITS);
+        let pc_source_limbs_23 =
+            pc_source_data[2] + pc_source_data[3] * AB::F::from_canonical_u32(1 << RV32_CELL_BITS);
         let inv = AB::F::from_canonical_u32(1 << 16).inverse();
 
         builder.assert_bool(to_pc_least_sig_bit);
-        let carry = (rs1_limbs_01 + imm - to_pc_limbs[0] * AB::F::TWO - to_pc_least_sig_bit) * inv;
+        let carry =
+            (pc_source_limbs_01 + imm - to_pc_limbs[0] * AB::F::TWO - to_pc_least_sig_bit) * inv;
         builder.when(is_valid).assert_bool(carry.clone());
 
         // No sign extension needed since immediates are always positive
-        let carry = (rs1_limbs_23 + carry - to_pc_limbs[1]) * inv;
+        let carry = (pc_source_limbs_23 + carry - to_pc_limbs[1]) * inv;
         builder.when(is_valid).assert_bool(carry);
 
         // preventing to_pc overflow
@@ -168,12 +171,20 @@ where
         let expected_opcode = VmCoreAir::<AB, I>::opcode_to_global_expr(self, JAAF);
 
         // For the Air, we need to provide 2 reads and 2 writes
-        // rs1 is for PC source (when needed), rs2 is for FP source
-        // rd1 is for PC save, rd2 is for FP save
+        // pc_source is for PC source (when needed), fp_source is for FP source
+        // saved_pc is for PC save, saved_fp is for FP save
         AdapterAirContext {
             to_pc: Some(to_pc),
-            reads: [rs1.map(|x| x.into()), rs1.map(|x| x.into())].into(), // Using rs1 twice for now
-            writes: [rd_data.clone(), rd_data].into(), // Both writes use the same data (pc + 4)
+            reads: [
+                pc_source_data.map(|x| x.into()),
+                pc_source_data.map(|x| x.into()),
+            ]
+            .into(), // pc_source for PC, fp_source for FP (pc_source used twice in air for now)
+            writes: [
+                saved_pc_limbs.clone(),
+                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS],
+            ]
+            .into(), // PC save, FP save handled by adapter
             instruction: MinimalInstruction {
                 is_valid: is_valid.into(),
                 opcode: expected_opcode,
@@ -226,25 +237,25 @@ where
         from_fp: u32,
         reads: I::Reads,
     ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
-        let Instruction { opcode, c, .. } = *instruction;
+        let Instruction { opcode, d, .. } = *instruction;
         let local_opcode =
             Rv32JaafOpcode::from_usize(opcode.local_opcode_idx(Rv32JaafOpcode::CLASS_OFFSET));
 
         // For RET and CALL_INDIRECT, the immediate should be 0 as PC comes from register
-        let imm_extended = match local_opcode {
+        let imm = match local_opcode {
             RET | CALL_INDIRECT => 0,
-            _ => c.as_canonical_u32(),
+            _ => d.as_canonical_u32(),
         };
 
         let reads_array: [[F; RV32_REGISTER_NUM_LIMBS]; 2] = reads.into();
-        let rs1 = reads_array[0];
-        let rs1_val = compose(rs1);
+        let pc_source_data = reads_array[0];
+        let pc_source_val = compose(pc_source_data);
 
-        let (to_pc, rd_data) = run_jalr(local_opcode, from_pc, imm_extended, rs1_val);
+        let (to_pc, rd_data) = run_jalr(local_opcode, from_pc, imm, pc_source_val);
 
         // For all JAAF instructions, we also need to handle fp
-        let rs2 = reads_array[1];
-        let to_fp = compose(rs2);
+        let fp_source_data = reads_array[1];
+        let to_fp = compose(fp_source_data);
 
         self.bitwise_lookup_chip
             .request_range(rd_data[0], rd_data[1]);
@@ -254,7 +265,7 @@ where
             .add_count(rd_data[3], PC_BITS - RV32_CELL_BITS * 3);
 
         let mask = (1 << 15) - 1;
-        let to_pc_least_sig_bit = rs1_val.wrapping_add(imm_extended) & 1;
+        let to_pc_least_sig_bit = pc_source_val.wrapping_add(imm) & 1;
 
         let to_pc_limbs = array::from_fn(|i| ((to_pc >> (1 + i * 15)) & mask));
 
@@ -271,7 +282,7 @@ where
             }
             JAAF_SAVE => {
                 // Save fp to rd2
-                [rd_data, decompose::<F>(from_fp)]
+                [[F::ZERO; RV32_REGISTER_NUM_LIMBS], decompose::<F>(from_fp)]
             }
             CALL | CALL_INDIRECT => {
                 // Save pc to rd1 and fp to rd2
@@ -288,9 +299,9 @@ where
         Ok((
             output,
             Rv32JaafCoreRecord {
-                imm: c,
+                imm: d,
                 rd_data: array::from_fn(|i| rd_data[i + 1]),
-                rs1_data: rs1,
+                rs1_data: pc_source_data,
                 to_pc_least_sig_bit: F::from_canonical_u32(to_pc_least_sig_bit),
                 to_pc_limbs,
             },
@@ -327,7 +338,7 @@ pub(super) fn run_jalr(
     opcode: Rv32JaafOpcode,
     pc: u32,
     imm: u32,
-    rs1: u32,
+    pc_source: u32,
 ) -> (u32, [u32; RV32_REGISTER_NUM_LIMBS]) {
     let to_pc = match opcode {
         JAAF | JAAF_SAVE | CALL => {
@@ -335,14 +346,8 @@ pub(super) fn run_jalr(
             imm
         }
         RET | CALL_INDIRECT => {
-            // Use rs1 for PC
-            let to_pc = if imm == 0 {
-                // For RET and CALL_INDIRECT with no offset, use rs1 directly
-                rs1
-            } else {
-                // For JALR-like behavior, add immediate
-                rs1.wrapping_add(imm)
-            };
+            // Use pc_source for PC directly (no offset)
+            let to_pc = pc_source;
             to_pc - (to_pc & 1)
         }
     };

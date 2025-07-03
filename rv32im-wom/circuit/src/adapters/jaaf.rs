@@ -63,7 +63,7 @@ impl<F: PrimeField32> Rv32JaafAdapterChipWom<F> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Rv32JaafReadRecord {
     pub rs1: Option<RecordId>,
-    pub rs2: Option<RecordId>,
+    pub rs2: RecordId, // Always present since FP is always needed
 }
 
 #[repr(C)]
@@ -279,33 +279,32 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32JaafAdapterChipWom<F> {
         let Instruction {
             c, d, e, opcode, ..
         } = *instruction;
-        debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
 
         let local_opcode =
             Rv32JaafOpcode::from_usize(opcode.local_opcode_idx(Rv32JaafOpcode::CLASS_OFFSET));
 
         // Determine which registers to read based on opcode
-        let (rs1_record, rs1_data) = match local_opcode {
+        let (pc_source_record, pc_source_data) = match local_opcode {
             Rv32JaafOpcode::RET | Rv32JaafOpcode::CALL_INDIRECT => {
-                // Read rs1 for target PC
-                let rs1 = memory.read::<RV32_REGISTER_NUM_LIMBS>(d, c);
-                (Some(rs1.0), rs1.1)
+                // Read pc_source (c field) for target PC
+                let pc_source = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, c);
+                (Some(pc_source.0), pc_source.1)
             }
             _ => {
-                // For JAAF, JAAF_SAVE, and CALL, we don't read rs1 but still need to advance timestamp
+                // For JAAF, JAAF_SAVE, and CALL, we don't read pc_source but still need to advance timestamp
                 memory.increment_timestamp();
                 (None, [F::ZERO; RV32_REGISTER_NUM_LIMBS])
             }
         };
 
-        // All opcodes read rs2 for target FP
-        let rs2 = memory.read::<RV32_REGISTER_NUM_LIMBS>(d, e);
+        // All opcodes always read fp_source (e field) for target FP
+        let fp_source = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, e);
 
         Ok((
-            [rs1_data, rs2.1],
+            [pc_source_data, fp_source.1],
             Rv32JaafReadRecord {
-                rs1: rs1_record,
-                rs2: Some(rs2.0),
+                rs1: pc_source_record,
+                rs2: fp_source.0,
             },
         ))
     }
@@ -322,8 +321,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32JaafAdapterChipWom<F> {
         let Instruction {
             a,
             b,
-            d,
-            f: enabled,
+            d: immediate,
+            f: enabled, // instruction enable flag - if ZERO, instruction is a no-op
             opcode,
             ..
         } = *instruction;
@@ -341,15 +340,15 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32JaafAdapterChipWom<F> {
                     (None, None)
                 }
                 Rv32JaafOpcode::JAAF_SAVE => {
-                    // Save fp to rd2
+                    // Save fp to rd2 (b field)
                     memory.increment_timestamp();
-                    let rd2 = memory.write(d, b, output.writes[1]);
+                    let rd2 = memory.write(F::ONE, b, output.writes[1]);
                     (None, Some(rd2.0))
                 }
                 Rv32JaafOpcode::CALL | Rv32JaafOpcode::CALL_INDIRECT => {
-                    // Save both pc to rd1 and fp to rd2
-                    let rd1 = memory.write(d, a, output.writes[0]);
-                    let rd2 = memory.write(d, b, output.writes[1]);
+                    // Save both pc to rd1 (a field) and fp to rd2 (b field)
+                    let rd1 = memory.write(F::ONE, a, output.writes[0]);
+                    let rd2 = memory.write(F::ONE, b, output.writes[1]);
                     (Some(rd1.0), Some(rd2.0))
                 }
             }
@@ -370,7 +369,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32JaafAdapterChipWom<F> {
                 from_frame,
                 rd1_id,
                 rd2_id,
-                imm: instruction.c.as_canonical_u32(),
+                imm: immediate.as_canonical_u32(),
             },
         ))
     }
@@ -396,13 +395,11 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32JaafAdapterChipWom<F> {
             aux_cols_factory.generate_read_aux(rs1, &mut adapter_cols.rs1_aux_cols);
         }
 
-        // Handle rs2 read
-        if let Some(rs2_id) = read_record.rs2 {
-            let rs2 = memory.record_by_id(rs2_id);
-            adapter_cols.rs2_ptr = rs2.pointer;
-            adapter_cols.needs_read_rs2 = F::ONE;
-            aux_cols_factory.generate_read_aux(rs2, &mut adapter_cols.rs2_aux_cols);
-        }
+        // Handle rs2 read (always present since FP is always needed)
+        let rs2 = memory.record_by_id(read_record.rs2);
+        adapter_cols.rs2_ptr = rs2.pointer;
+        adapter_cols.needs_read_rs2 = F::ONE;
+        aux_cols_factory.generate_read_aux(rs2, &mut adapter_cols.rs2_aux_cols);
 
         // Handle rd1 write
         if let Some(id) = write_record.rd1_id {
