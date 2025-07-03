@@ -276,9 +276,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32JaafAdapterChipWom<F> {
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
-        let Instruction {
-            c, d, e, opcode, ..
-        } = *instruction;
+        let Instruction { c, e, opcode, .. } = *instruction;
 
         let local_opcode =
             Rv32JaafOpcode::from_usize(opcode.local_opcode_idx(Rv32JaafOpcode::CLASS_OFFSET));
