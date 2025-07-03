@@ -28,11 +28,11 @@ use openvm_stark_backend::{
 use openvm_stark_sdk::{p3_baby_bear::BabyBear, utils::create_seeded_rng};
 use rand::Rng;
 
-use super::{core::run_alu, BaseAluCoreChip, Rv32BaseAluChip};
+use super::{core::run_alu, BaseAluCoreChipWom, Rv32BaseAluChip};
 use crate::{
     adapters::{
-        Rv32BaseAluAdapterAir, Rv32BaseAluAdapterChip, Rv32BaseAluReadRecord,
-        Rv32BaseAluWriteRecord, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS,
+        Rv32WomBaseAluAdapterAir, Rv32WomBaseAluAdapterChip, Rv32WomBaseAluReadRecord,
+        Rv32WomBaseAluWriteRecord, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS,
     },
     base_alu::BaseAluCoreCols,
     test_utils::{generate_rv32_is_type_immediate, rv32_rand_write_register_or_imm},
@@ -54,13 +54,13 @@ fn run_rv32_alu_rand_test(opcode: BaseAluOpcode, num_ops: usize) {
 
     let mut tester = VmChipTestBuilder::default();
     let mut chip = Rv32BaseAluChip::<F>::new(
-        Rv32BaseAluAdapterChip::new(
+        Rv32WomBaseAluAdapterChip::new(
             tester.execution_bus(),
             tester.program_bus(),
             tester.memory_bridge(),
             bitwise_chip.clone(),
         ),
-        BaseAluCoreChip::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
+        BaseAluCoreChipWom::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
         tester.offline_memory_mutex_arc(),
     );
 
@@ -128,8 +128,11 @@ fn rv32_alu_and_rand_test() {
 // A dummy adapter is used so memory interactions don't indirectly cause false passes.
 //////////////////////////////////////////////////////////////////////////////////////
 
-type Rv32BaseAluTestChip<F> =
-    VmChipWrapper<F, TestAdapterChip<F>, BaseAluCoreChip<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>;
+type Rv32BaseAluTestChip<F> = VmChipWrapper<
+    F,
+    TestAdapterChip<F>,
+    BaseAluCoreChipWom<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+>;
 
 #[allow(clippy::too_many_arguments)]
 fn run_rv32_alu_negative_test(
@@ -149,7 +152,7 @@ fn run_rv32_alu_negative_test(
             vec![None],
             ExecutionBridge::new(tester.execution_bus(), tester.program_bus()),
         ),
-        BaseAluCoreChip::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
+        BaseAluCoreChipWom::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
         tester.offline_memory_mutex_arc(),
     );
 
@@ -336,12 +339,12 @@ fn run_and_sanity_test() {
 //////////////////////////////////////////////////////////////////////////////////////
 
 // A pranking chip where `preprocess` can have `rs2` limbs that overflow.
-struct Rv32BaseAluAdapterTestChip<F: Field>(Rv32BaseAluAdapterChip<F>);
+struct Rv32BaseAluAdapterTestChip<F: Field>(Rv32WomBaseAluAdapterChip<F>);
 
 impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterTestChip<F> {
-    type ReadRecord = Rv32BaseAluReadRecord<F>;
-    type WriteRecord = Rv32BaseAluWriteRecord<F>;
-    type Air = Rv32BaseAluAdapterAir;
+    type ReadRecord = Rv32WomBaseAluReadRecord<F>;
+    type WriteRecord = Rv32WomBaseAluWriteRecord<F>;
+    type Air = Rv32WomBaseAluAdapterAir;
     type Interface = BasicAdapterInterface<
         F,
         MinimalInstruction<F>,
@@ -429,13 +432,13 @@ fn rv32_alu_adapter_unconstrained_imm_limb_test() {
 
     let mut tester = VmChipTestBuilder::default();
     let mut chip = VmChipWrapper::new(
-        Rv32BaseAluAdapterTestChip(Rv32BaseAluAdapterChip::new(
+        Rv32BaseAluAdapterTestChip(Rv32WomBaseAluAdapterChip::new(
             tester.execution_bus(),
             tester.program_bus(),
             tester.memory_bridge(),
             bitwise_chip.clone(),
         )),
-        BaseAluCoreChip::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
+        BaseAluCoreChipWom::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
         tester.offline_memory_mutex_arc(),
     );
 
@@ -469,13 +472,13 @@ fn rv32_alu_adapter_unconstrained_rs2_read_test() {
 
     let mut tester = VmChipTestBuilder::default();
     let mut chip = Rv32BaseAluChip::<F>::new(
-        Rv32BaseAluAdapterChip::new(
+        Rv32WomBaseAluAdapterChip::new(
             tester.execution_bus(),
             tester.program_bus(),
             tester.memory_bridge(),
             bitwise_chip.clone(),
         ),
-        BaseAluCoreChip::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
+        BaseAluCoreChipWom::new(bitwise_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
         tester.offline_memory_mutex_arc(),
     );
 

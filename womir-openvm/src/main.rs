@@ -118,10 +118,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         use instruction_builder as wom;
         use instruction_builder_ref::*;
         vec![
-            addi::<F>(8, 0, 666),
-            addi::<F>(9, 0, 1),
-            add::<F>(10, 8, 9),
-            wom::add::<F>(3, 0, 0),
+            wom::addi::<F>(8, 0, 666),
+            wom::addi::<F>(9, 0, 1),
+            wom::add::<F>(10, 8, 9),
             reveal(10, 0),
             halt(),
         ]

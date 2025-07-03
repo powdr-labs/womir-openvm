@@ -2346,6 +2346,7 @@ dependencies = [
  "serde-big-array",
  "struct-reflection",
  "strum",
+ "thiserror",
 ]
 
 [[package]]

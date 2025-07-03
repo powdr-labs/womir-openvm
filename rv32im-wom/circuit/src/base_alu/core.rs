@@ -4,8 +4,8 @@ use std::{
 };
 
 use openvm_circuit::arch::{
-    AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, Result, VmAdapterInterface,
-    VmCoreAir, VmCoreChip,
+    AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, VmAdapterInterface, VmCoreAir,
+    VmCoreChip,
 };
 use openvm_circuit_primitives::{
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
@@ -24,6 +24,10 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
+
+use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
+
+use openvm_circuit::arch::Result as ResultVm;
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
@@ -188,12 +192,12 @@ pub struct BaseAluCoreRecord<T, const NUM_LIMBS: usize, const LIMB_BITS: usize> 
     pub c: [T; NUM_LIMBS],
 }
 
-pub struct BaseAluCoreChip<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
+pub struct BaseAluCoreChipWom<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
     pub air: BaseAluCoreAir<NUM_LIMBS, LIMB_BITS>,
     pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<LIMB_BITS>,
 }
 
-impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAluCoreChip<NUM_LIMBS, LIMB_BITS> {
+impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAluCoreChipWom<NUM_LIMBS, LIMB_BITS> {
     pub fn new(
         bitwise_lookup_chip: SharedBitwiseOperationLookupChip<LIMB_BITS>,
         offset: usize,
@@ -208,8 +212,8 @@ impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAluCoreChip<NUM_LIMBS, 
     }
 }
 
-impl<F, I, const NUM_LIMBS: usize, const LIMB_BITS: usize> VmCoreChip<F, I>
-    for BaseAluCoreChip<NUM_LIMBS, LIMB_BITS>
+impl<F, I, const NUM_LIMBS: usize, const LIMB_BITS: usize> VmCoreChipWom<F, I>
+    for BaseAluCoreChipWom<NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
     I: VmAdapterInterface<F>,
@@ -224,8 +228,9 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
+        _from_frame: u32,
         reads: I::Reads,
-    ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
+    ) -> ResultVm<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
         let Instruction { opcode, .. } = instruction;
         let local_opcode = BaseAluOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
@@ -234,8 +239,9 @@ where
         let c = data[1].map(|y| y.as_canonical_u32());
         let a = run_alu::<NUM_LIMBS, LIMB_BITS>(local_opcode, &b, &c);
 
-        let output = AdapterRuntimeContext {
+        let output = AdapterRuntimeContextWom {
             to_pc: None,
+            to_fp: None,
             writes: [a.map(F::from_canonical_u32)].into(),
         };
 

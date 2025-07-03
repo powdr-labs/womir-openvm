@@ -28,7 +28,7 @@ use rand::Rng;
 
 use super::{core::run_less_than, LessThanCoreChip, Rv32LessThanChip};
 use crate::{
-    adapters::{Rv32BaseAluAdapterChip, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS},
+    adapters::{Rv32WomBaseAluAdapterChip, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS},
     less_than::LessThanCoreCols,
     test_utils::{generate_rv32_is_type_immediate, rv32_rand_write_register_or_imm},
 };
@@ -49,7 +49,7 @@ fn run_rv32_lt_rand_test(opcode: LessThanOpcode, num_ops: usize) {
 
     let mut tester = VmChipTestBuilder::default();
     let mut chip = Rv32LessThanChip::<F>::new(
-        Rv32BaseAluAdapterChip::new(
+        Rv32WomBaseAluAdapterChip::new(
             tester.execution_bus(),
             tester.program_bus(),
             tester.memory_bridge(),

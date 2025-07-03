@@ -5,6 +5,7 @@ use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
 
 mod alu;
 mod branch;
+mod jaaf;
 mod jalr;
 mod loadstore;
 mod mul;
@@ -12,6 +13,7 @@ mod rdwrite;
 
 pub use alu::*;
 pub use branch::*;
+pub use jaaf::*;
 pub use jalr::*;
 pub use loadstore::*;
 pub use mul::*;

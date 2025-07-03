@@ -1,6 +1,6 @@
 use openvm_circuit::arch::VmChipWrapper;
 
-use super::adapters::{Rv32BaseAluAdapterChip, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+use super::adapters::{Rv32WomBaseAluAdapterChip, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 
 mod core;
 pub use core::*;
@@ -10,6 +10,6 @@ mod tests;
 
 pub type Rv32LessThanChip<F> = VmChipWrapper<
     F,
-    Rv32BaseAluAdapterChip<F>,
+    Rv32WomBaseAluAdapterChip<F>,
     LessThanCoreChip<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;

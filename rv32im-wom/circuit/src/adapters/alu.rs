@@ -6,8 +6,8 @@ use std::{
 use openvm_circuit::{
     arch::{
         AdapterAirContext, AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge,
-        ExecutionBus, ExecutionState, MinimalInstruction, Result, VmAdapterAir, VmAdapterChip,
-        VmAdapterInterface,
+        ExecutionBus, ExecutionState, MinimalInstruction, Result as ResultVm, VmAdapterAir,
+        VmAdapterChip, VmAdapterInterface,
     },
     system::{
         memory::{
@@ -36,27 +36,31 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
+use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
+
 use super::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 
 /// Reads instructions of the form OP a, b, c, d, e where \[a:4\]_d = \[b:4\]_d op \[c:4\]_e.
 /// Operand d can only be 1, and e can be either 1 (for register reads) or 0 (when c
 /// is an immediate).
-pub struct Rv32BaseAluAdapterChip<F: Field> {
-    pub air: Rv32BaseAluAdapterAir,
+pub struct Rv32WomBaseAluAdapterChip<F: Field> {
+    pub air: Rv32WomBaseAluAdapterAir,
     bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField32> Rv32BaseAluAdapterChip<F> {
+impl<F: PrimeField32> Rv32WomBaseAluAdapterChip<F> {
     pub fn new(
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
+        frame_bus: FrameBus,
         memory_bridge: MemoryBridge,
         bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
     ) -> Self {
         Self {
-            air: Rv32BaseAluAdapterAir {
+            air: Rv32WomBaseAluAdapterAir {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                frame_bridge: FrameBridge::new(frame_bus),
                 memory_bridge,
                 bitwise_lookup_bus: bitwise_lookup_chip.bus(),
             },
@@ -69,7 +73,7 @@ impl<F: PrimeField32> Rv32BaseAluAdapterChip<F> {
 #[repr(C)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
-pub struct Rv32BaseAluReadRecord<F: Field> {
+pub struct Rv32WomBaseAluReadRecord<F: Field> {
     /// Read register value from address space d=1
     pub rs1: RecordId,
     /// Either
@@ -83,16 +87,18 @@ pub struct Rv32BaseAluReadRecord<F: Field> {
 #[repr(C)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
-pub struct Rv32BaseAluWriteRecord<F: Field> {
+pub struct Rv32WomBaseAluWriteRecord<F: Field> {
     pub from_state: ExecutionState<u32>,
+    pub from_frame: FrameState<u32>,
     /// Write to destination register
     pub rd: (RecordId, [F; 4]),
 }
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct Rv32BaseAluAdapterCols<T> {
+pub struct Rv32WomBaseAluAdapterCols<T> {
     pub from_state: ExecutionState<T>,
+    pub from_frame: FrameState<T>,
     pub rd_ptr: T,
     pub rs1_ptr: T,
     /// Pointer if rs2 was a read, immediate value otherwise
@@ -105,25 +111,26 @@ pub struct Rv32BaseAluAdapterCols<T> {
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, derive_new::new)]
-pub struct Rv32BaseAluAdapterAir {
+pub struct Rv32WomBaseAluAdapterAir {
     pub(super) execution_bridge: ExecutionBridge,
+    pub(super) frame_bridge: FrameBridge,
     pub(super) memory_bridge: MemoryBridge,
     bitwise_lookup_bus: BitwiseOperationLookupBus,
 }
 
-impl<F: Field> BaseAir<F> for Rv32BaseAluAdapterAir {
+impl<F: Field> BaseAir<F> for Rv32WomBaseAluAdapterAir {
     fn width(&self) -> usize {
-        Rv32BaseAluAdapterCols::<F>::width()
+        Rv32WomBaseAluAdapterCols::<F>::width()
     }
 }
 
-impl<F: Field> ColumnsAir<F> for Rv32BaseAluAdapterAir {
+impl<F: Field> ColumnsAir<F> for Rv32WomBaseAluAdapterAir {
     fn columns(&self) -> Option<Vec<String>> {
-        Rv32BaseAluAdapterCols::<F>::struct_reflection()
+        Rv32WomBaseAluAdapterCols::<F>::struct_reflection()
     }
 }
 
-impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
+impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32WomBaseAluAdapterAir {
     type Interface = BasicAdapterInterface<
         AB::Expr,
         MinimalInstruction<AB::Expr>,
@@ -139,7 +146,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
         local: &[AB::Var],
         ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local: &Rv32BaseAluAdapterCols<_> = local.borrow();
+        let local: &Rv32WomBaseAluAdapterCols<_> = local.borrow();
         let timestamp = local.from_state.timestamp;
         let mut timestamp_delta: usize = 0;
         let mut timestamp_pp = || {
@@ -216,15 +223,15 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &Rv32BaseAluAdapterCols<_> = local.borrow();
+        let cols: &Rv32WomBaseAluAdapterCols<_> = local.borrow();
         cols.from_state.pc
     }
 }
 
-impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterChip<F> {
-    type ReadRecord = Rv32BaseAluReadRecord<F>;
-    type WriteRecord = Rv32BaseAluWriteRecord<F>;
-    type Air = Rv32BaseAluAdapterAir;
+impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32WomBaseAluAdapterChip<F> {
+    type ReadRecord = Rv32WomBaseAluReadRecord<F>;
+    type WriteRecord = Rv32WomBaseAluWriteRecord<F>;
+    type Air = Rv32WomBaseAluAdapterAir;
     type Interface = BasicAdapterInterface<
         F,
         MinimalInstruction<F>,
@@ -237,8 +244,9 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterChip<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        fp: u32,
         instruction: &Instruction<F>,
-    ) -> Result<(
+    ) -> ResultVm<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
@@ -249,7 +257,8 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterChip<F> {
             e.as_canonical_u32() == RV32_IMM_AS || e.as_canonical_u32() == RV32_REGISTER_AS
         );
 
-        let rs1 = memory.read::<RV32_REGISTER_NUM_LIMBS>(d, b);
+        let fp_f = F::from_canonical_u32(fp);
+        let rs1 = memory.read::<RV32_REGISTER_NUM_LIMBS>(d, b + fp_f);
         let (rs2, rs2_data, rs2_imm) = if e.is_zero() {
             let c_u32 = c.as_canonical_u32();
             debug_assert_eq!(c_u32 >> 24, 0);
@@ -266,7 +275,7 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterChip<F> {
                 c,
             )
         } else {
-            let rs2_read = memory.read::<RV32_REGISTER_NUM_LIMBS>(e, c);
+            let rs2_read = memory.read::<RV32_REGISTER_NUM_LIMBS>(e, c + fp_f);
             (Some(rs2_read.0), rs2_read.1, F::ZERO)
         };
 
@@ -285,11 +294,13 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterChip<F> {
         memory: &mut MemoryController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
-        output: AdapterRuntimeContext<F, Self::Interface>,
+        from_frame: FrameState<u32>,
+        output: AdapterRuntimeContextWom<F, Self::Interface>,
         _read_record: &Self::ReadRecord,
-    ) -> Result<(ExecutionState<u32>, Self::WriteRecord)> {
+    ) -> ResultVm<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction { a, d, .. } = instruction;
-        let rd = memory.write(*d, *a, output.writes[0]);
+        let fp_f = F::from_canonical_u32(from_frame.fp);
+        let rd = memory.write(*d, *a + fp_f, output.writes[0]);
 
         let timestamp_delta = memory.timestamp() - from_state.timestamp;
         debug_assert!(
@@ -303,7 +314,12 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterChip<F> {
                 pc: from_state.pc + DEFAULT_PC_STEP,
                 timestamp: memory.timestamp(),
             },
-            Self::WriteRecord { from_state, rd },
+            from_frame.fp,
+            Self::WriteRecord {
+                from_state,
+                from_frame,
+                rd,
+            },
         ))
     }
 
@@ -314,7 +330,7 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32BaseAluAdapterChip<F> {
         write_record: Self::WriteRecord,
         memory: &OfflineMemory<F>,
     ) {
-        let row_slice: &mut Rv32BaseAluAdapterCols<_> = row_slice.borrow_mut();
+        let row_slice: &mut Rv32WomBaseAluAdapterCols<_> = row_slice.borrow_mut();
         let aux_cols_factory = memory.aux_cols_factory();
 
         let rd = memory.record_by_id(write_record.rd.0);
