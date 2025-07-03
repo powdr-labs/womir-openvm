@@ -17,7 +17,7 @@ use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
 use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_rv32im_wom_transpiler::{
     BaseAluOpcode, DivRemOpcode, MulHOpcode, MulOpcode, Rv32HintStoreOpcode, Rv32JaafOpcode,
-    Rv32Phantom,
+    Rv32JumpOpcode, Rv32Phantom,
 };
 use openvm_stark_backend::p3_field::PrimeField32;
 
@@ -141,6 +141,7 @@ pub enum Rv32IExecutor<F: PrimeField32> {
     // Rv32 (for standard 32-bit integers):
     BaseAlu(Rv32WomBaseAluChip<F>),
     Jaaf(Rv32JaafChipWom<F>),
+    Jump(Rv32JumpChipWom<F>),
     // LessThan(Rv32LessThanChip<F>),
     // Shift(Rv32ShiftChip<F>),
     // LoadStore(Rv32LoadStoreChip<F>),
@@ -250,6 +251,14 @@ impl<F: PrimeField32> VmExtension<F> for Rv32I {
             shared_fp.clone(),
         );
         inventory.add_executor(jaaf_chip, Rv32JaafOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let jump_chip = Rv32JumpChipWom::new(
+            Rv32JumpAdapterChipWom::new(execution_bus, program_bus, memory_bridge),
+            Rv32JumpCoreChipWom::new(bitwise_lu_chip.clone(), range_checker.clone()),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(jump_chip, Rv32JumpOpcode::iter().map(|x| x.global_opcode()))?;
 
         // let lt_chip = Rv32LessThanChip::new(
         //     Rv32WomBaseAluAdapterChip::new(
