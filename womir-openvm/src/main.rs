@@ -261,4 +261,118 @@ mod tests {
 
         run_vm_test("CALL and RETURN sequence", instructions, 75, None)
     }
+
+    #[test]
+    fn test_jump_instruction() -> Result<(), Box<dyn std::error::Error>> {
+        // Test unconditional JUMP
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 42),  // PC=0: x8 = 42
+            wom::jump::<F>(20),        // PC=4: Jump to PC=20
+            wom::addi::<F>(8, 0, 999), // PC=8: This should be skipped
+            reveal(8, 0),              // PC=12: This should be skipped
+            halt(),                    // PC=16: Padding
+            // PC = 20 (jump target)
+            wom::addi::<F>(8, 8, 58), // PC=20: x8 = 42 + 58 = 100
+            reveal(8, 0),             // PC=24: Reveal x8 (should be 100)
+            halt(),                   // PC=28: End
+        ];
+
+        run_vm_test("JUMP instruction", instructions, 100, None)
+    }
+
+    #[test]
+    fn test_jump_if_instruction() -> Result<(), Box<dyn std::error::Error>> {
+        // Test conditional JUMP_IF (condition != 0)
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 10),  // PC=0: x8 = 10
+            wom::addi::<F>(9, 0, 5),   // PC=4: x9 = 5 (condition != 0)
+            wom::jump_if::<F>(9, 24),  // PC=8: Jump to PC=24 if x9 != 0 (should jump)
+            wom::addi::<F>(8, 0, 999), // PC=12: This should be skipped
+            reveal(8, 0),              // PC=16: This should be skipped
+            halt(),                    // PC=20: Padding
+            // PC = 24 (jump target)
+            wom::addi::<F>(8, 8, 15), // PC=24: x8 = 10 + 15 = 25
+            reveal(8, 0),             // PC=28: Reveal x8 (should be 25)
+            halt(),                   // PC=32: End
+        ];
+
+        run_vm_test(
+            "JUMP_IF instruction (true condition)",
+            instructions,
+            25,
+            None,
+        )
+    }
+
+    #[test]
+    fn test_jump_if_false_condition() -> Result<(), Box<dyn std::error::Error>> {
+        // Test conditional JUMP_IF with false condition (should not jump)
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 30), // PC=0: x8 = 30
+            wom::addi::<F>(9, 0, 0),  // PC=4: x9 = 0 (condition == 0, should not jump)
+            wom::jump_if::<F>(9, 28), // PC=8: Jump to PC=28 if x9 != 0 (should NOT jump)
+            wom::addi::<F>(8, 8, 20), // PC=12: x8 = 30 + 20 = 50 (this should execute)
+            reveal(8, 0),             // PC=16: Reveal x8 (should be 50)
+            halt(),                   // PC=20: End
+            // PC = 24 (jump target that should not be reached)
+            wom::addi::<F>(8, 0, 999), // PC=24: This should not execute
+            reveal(8, 0),              // PC=28: This should not execute
+            halt(),                    // PC=32: This should not execute
+        ];
+
+        run_vm_test(
+            "JUMP_IF instruction (false condition)",
+            instructions,
+            50,
+            None,
+        )
+    }
+
+    #[test]
+    fn test_jump_if_zero_instruction() -> Result<(), Box<dyn std::error::Error>> {
+        // Test conditional JUMP_IF_ZERO (condition == 0)
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 77),      // PC=0: x8 = 77
+            wom::addi::<F>(9, 0, 0),       // PC=4: x9 = 0 (condition == 0)
+            wom::jump_if_zero::<F>(9, 24), // PC=8: Jump to PC=24 if x9 == 0 (should jump)
+            wom::addi::<F>(8, 0, 999),     // PC=12: This should be skipped
+            reveal(8, 0),                  // PC=16: This should be skipped
+            halt(),                        // PC=20: Padding
+            // PC = 24 (jump target)
+            wom::addi::<F>(8, 8, 23), // PC=24: x8 = 77 + 23 = 100
+            reveal(8, 0),             // PC=28: Reveal x8 (should be 100)
+            halt(),                   // PC=32: End
+        ];
+
+        run_vm_test(
+            "JUMP_IF_ZERO instruction (true condition)",
+            instructions,
+            100,
+            None,
+        )
+    }
+
+    #[test]
+    fn test_jump_if_zero_false_condition() -> Result<(), Box<dyn std::error::Error>> {
+        // Test conditional JUMP_IF_ZERO with false condition (should not jump)
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 60),      // PC=0: x8 = 60
+            wom::addi::<F>(9, 0, 7),       // PC=4: x9 = 7 (condition != 0, should not jump)
+            wom::jump_if_zero::<F>(9, 28), // PC=8: Jump to PC=28 if x9 == 0 (should NOT jump)
+            wom::addi::<F>(8, 8, 40),      // PC=12: x8 = 60 + 40 = 100 (this should execute)
+            reveal(8, 0),                  // PC=16: Reveal x8 (should be 100)
+            halt(),                        // PC=20: End
+            // PC = 24 (jump target that should not be reached)
+            wom::addi::<F>(8, 0, 999), // PC=24: This should not execute
+            reveal(8, 0),              // PC=28: This should not execute
+            halt(),                    // PC=32: This should not execute
+        ];
+
+        run_vm_test(
+            "JUMP_IF_ZERO instruction (false condition)",
+            instructions,
+            100,
+            None,
+        )
+    }
 }

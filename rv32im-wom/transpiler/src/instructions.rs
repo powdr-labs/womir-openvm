@@ -208,6 +208,30 @@ pub enum Rv32JaafOpcode {
 }
 
 #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
+#[opcode_offset = 0x123B]
+#[repr(usize)]
+#[allow(non_camel_case_types)]
+pub enum Rv32JumpOpcode {
+    JUMP,        // unconditional jump to immediate PC
+    JUMP_IF,     // conditional jump to immediate PC if condition register != 0
+    JUMP_IF_ZERO, // conditional jump to immediate PC if condition register == 0
+}
+
+#[derive(
     Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
 )]
 #[opcode_offset = 0x1240]
