@@ -4,6 +4,7 @@ use eyre::Result;
 use openvm_stark_backend::config::StarkGenericConfig;
 use openvm_stark_backend::p3_field::PrimeField32;
 use serde::{Deserialize, Serialize};
+use std::env::args;
 use std::{path::Path, sync::Arc};
 use tracing::Level;
 
@@ -30,7 +31,7 @@ type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 mod instruction_builder;
 mod instruction_builder_ref;
-mod womir_settings;
+mod womir_translation;
 
 use openvm_rv32im_wom_circuit::{self, Rv32I, Rv32IExecutor, Rv32IPeriphery};
 
@@ -114,18 +115,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let vm_config = SpecializedConfig::new(vm_config);
     let sdk = Sdk::new();
 
-    let instructions = {
+    let program = if args().len() > 1 {
+        womir_translation::program_from_wasm(&args().nth(1).unwrap())
+    } else {
         use instruction_builder as wom;
         use instruction_builder_ref::*;
-        vec![
+        let instructions = vec![
             wom::addi::<F>(8, 0, 666),
             wom::addi::<F>(9, 0, 1),
             wom::add::<F>(10, 8, 9),
             reveal(10, 0),
             halt(),
-        ]
+        ];
+        Program::from_instructions(&instructions)
     };
-    let program = Program::from_instructions(&instructions);
     let exe = VmExe::new(program);
 
     let stdin = StdIn::default();
