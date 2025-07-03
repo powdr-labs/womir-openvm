@@ -400,4 +400,58 @@ mod tests {
             None,
         )
     }
+
+    #[test]
+    fn test_allocate_frame_instruction() -> Result<(), Box<dyn std::error::Error>> {
+        // Test ALLOCATE_FRAME instruction
+        let instructions = vec![
+            wom::allocate_frame::<F>(8, 256), // PC=0: Allocate 256 bytes, store pointer in x8
+            wom::allocate_frame::<F>(8, 256), // PC=0: Allocate 256 bytes, store pointer in x8
+            reveal(8, 256),                   // PC=4: Reveal x8 (should be allocated pointer)
+            halt(),                           // PC=8: End
+        ];
+
+        run_vm_test("ALLOCATE_FRAME instruction", instructions, 256, None)
+    }
+
+    #[test]
+    fn test_copy_into_frame_instruction() -> Result<(), Box<dyn std::error::Error>> {
+        // Test COPY_INTO_FRAME instruction
+        // This test verifies that copy_into_frame actually writes to memory
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 42),            // PC=0: x8 = 42 (value to copy)
+            wom::addi::<F>(9, 0, 0x1000),        // PC=4: x9 = 0x1000 (mock frame pointer)
+            wom::addi::<F>(10, 0, 0),            // PC=8: x10 = 0 (register to read into)
+            wom::copy_into_frame::<F>(10, 8, 9), // PC=12: Copy x8 to [x9[x10]], which writes to address pointed by x10
+            // Since copy_into_frame writes x8's value to memory at [x9[x10]],
+            // and our mock implementation writes to the rd register, x10 should now contain 42
+            reveal(10, 0), // PC=16: Reveal x10 (should be 42, the value from x8)
+            halt(),        // PC=20: End
+        ];
+
+        run_vm_test("COPY_INTO_FRAME instruction", instructions, 42, None)
+    }
+
+    #[test]
+    fn test_allocate_and_copy_sequence() -> Result<(), Box<dyn std::error::Error>> {
+        // Test sequence: allocate frame, then copy into it
+        // This test verifies that copy_into_frame actually writes the value
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 123),           // PC=0: x8 = 123 (value to store)
+            wom::allocate_frame::<F>(9, 128),    // PC=4: Allocate 128 bytes, pointer in x9
+            wom::addi::<F>(10, 0, 0),            // PC=8: x10 = 0 (destination register)
+            wom::copy_into_frame::<F>(10, 8, 9), // PC=12: Copy x8 to [x9[x10]]
+            // Since copy_into_frame writes x8's value to memory at [x9[x10]],
+            // and our mock implementation writes to the rd register, x10 should now contain 123
+            reveal(10, 0), // PC=16: Reveal x10 (should be 123, the value from x8)
+            halt(),        // PC=20: End
+        ];
+
+        run_vm_test(
+            "ALLOCATE_FRAME and COPY_INTO_FRAME sequence",
+            instructions,
+            123,
+            None,
+        )
+    }
 }

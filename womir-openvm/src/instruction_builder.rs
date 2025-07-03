@@ -1,7 +1,8 @@
 use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOpcode, VmOpcode};
 use openvm_rv32im_transpiler::{Rv32JalLuiOpcode, Rv32LoadStoreOpcode};
 use openvm_rv32im_wom_transpiler::{
-    BaseAluOpcode as BaseAluOpcodeWom, Rv32JaafOpcode, Rv32JumpOpcode,
+    BaseAluOpcode as BaseAluOpcodeWom, Rv32AllocateFrameOpcode, Rv32CopyIntoFrameOpcode,
+    Rv32JaafOpcode, Rv32JumpOpcode,
 };
 use openvm_stark_backend::p3_field::PrimeField32;
 
@@ -145,6 +146,37 @@ pub fn call_indirect<F: PrimeField32>(
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: rs2 (FP source)
         F::ONE,  // f: enabled
         F::ZERO, // g: imm sign
+    )
+}
+
+/// ALLOCATE_FRAME instruction: Allocate frame and return pointer
+/// target_reg receives the allocated pointer, amount_imm is the amount to allocate
+pub fn allocate_frame<F: PrimeField32>(target_reg: usize, amount_imm: usize) -> Instruction<F> {
+    Instruction::new(
+        Rv32AllocateFrameOpcode::ALLOCATE_FRAME.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
+        F::from_canonical_usize(amount_imm),                                  // b: amount_imm
+        F::ZERO,                                                              // c: (not used)
+        F::ZERO,                                                              // d: (not used)
+        F::ZERO,                                                              // e: (not used)
+        F::ONE,                                                               // f: enabled
+        F::ZERO,                                                              // g: imm sign
+    )
+}
+
+/// COPY_INTO_FRAME instruction: Copy value into frame-relative address
+/// rd is the offset, rs1 is the value to copy, rs2 is the frame pointer
+/// Writes rs1 content to [rs2[rd]]
+pub fn copy_into_frame<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    Instruction::new(
+        Rv32CopyIntoFrameOpcode::COPY_INTO_FRAME.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs2), // a: rs2 (frame pointer)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1 (value to copy)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // c: rd (offset, target address)
+        F::ZERO,                                                      // d: (not used)
+        F::ZERO,                                                      // e: (not used)
+        F::ONE,                                                       // f: enabled
+        F::ZERO,                                                      // g: imm sign
     )
 }
 

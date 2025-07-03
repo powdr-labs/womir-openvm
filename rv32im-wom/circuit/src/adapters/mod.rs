@@ -3,8 +3,10 @@ use std::ops::Mul;
 use openvm_circuit::system::memory::{MemoryController, RecordId};
 use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
 
+mod allocate_frame;
 mod alu;
 mod branch;
+mod copy_into_frame;
 mod jaaf;
 mod jalr;
 mod jump;
@@ -12,8 +14,10 @@ mod loadstore;
 mod mul;
 mod rdwrite;
 
+pub use allocate_frame::*;
 pub use alu::*;
 pub use branch::*;
+pub use copy_into_frame::*;
 pub use jaaf::*;
 pub use jalr::*;
 pub use jump::*;

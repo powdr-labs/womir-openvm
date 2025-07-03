@@ -1,9 +1,11 @@
 pub mod adapters;
 
+mod allocate_frame;
 mod auipc;
 mod base_alu;
 mod branch_eq;
 mod branch_lt;
+mod copy_into_frame;
 mod divrem;
 mod hintstore;
 mod jaaf;
@@ -17,10 +19,12 @@ mod mul;
 mod mulh;
 mod shift;
 
+pub use allocate_frame::*;
 pub use auipc::*;
 pub use base_alu::*;
 pub use branch_eq::*;
 pub use branch_lt::*;
+pub use copy_into_frame::*;
 pub use divrem::*;
 pub use hintstore::*;
 pub use jaaf::*;

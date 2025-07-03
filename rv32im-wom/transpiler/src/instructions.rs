@@ -316,6 +316,50 @@ pub enum Rv32HintStoreOpcode {
     HINT_BUFFER,
 }
 
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
+#[opcode_offset = 0x1265]
+#[repr(usize)]
+#[allow(non_camel_case_types)]
+pub enum Rv32AllocateFrameOpcode {
+    ALLOCATE_FRAME, // allocate frame and return pointer
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
+#[opcode_offset = 0x126A]
+#[repr(usize)]
+#[allow(non_camel_case_types)]
+pub enum Rv32CopyIntoFrameOpcode {
+    COPY_INTO_FRAME, // copy value into frame-relative address
+}
+
 // =================================================================================================
 // Phantom opcodes
 // =================================================================================================
