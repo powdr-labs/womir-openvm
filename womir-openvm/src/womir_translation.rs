@@ -58,7 +58,7 @@ pub fn program_from_wasm<F: Field>(wasm_path: &str, entry_point: &str) -> VmExe<
                 Value(v) => v,
                 FuncAddr(idx) => {
                     let label = func_idx_to_label(idx);
-                    label_map[&label].pc
+                    label_map[&label].pc * 4
                 }
                 FuncFrameSize(func_idx) => {
                     let label = func_idx_to_label(func_idx);
