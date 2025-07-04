@@ -1,7 +1,9 @@
 use derive_more::From;
 use eyre::Result;
+use openvm_sdk::{Sdk, StdIn};
 use openvm_stark_backend::p3_field::PrimeField32;
 use serde::{Deserialize, Serialize};
+use std::env::args;
 use std::path::Path;
 
 use openvm_circuit::arch::{
@@ -15,7 +17,7 @@ type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 mod instruction_builder;
 mod instruction_builder_ref;
-mod womir_settings;
+mod womir_translation;
 
 use openvm_rv32im_wom_circuit::{self, Rv32I, Rv32IExecutor, Rv32IPeriphery};
 
@@ -89,7 +91,30 @@ impl VmConfig<F> for SpecializedConfig {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Run cargo test to execute the tests");
+    // Create VM configuration
+    let vm_config = SdkVmConfig::builder()
+        .system(Default::default())
+        .rv32i(Default::default())
+        .rv32m(Default::default())
+        .io(Default::default())
+        .build();
+    let vm_config = SpecializedConfig::new(vm_config);
+    let sdk = Sdk::new();
+
+    // Create and execute program
+    let mut args = args();
+    if args.len() < 3 {
+        eprintln!("Usage: {} <wasm_path> <entry_point>", args.next().unwrap());
+        return Ok(());
+    }
+    let wasm_path = args.nth(1).unwrap();
+    let entry_point = args.next().unwrap();
+    let exe = womir_translation::program_from_wasm::<F>(&wasm_path, &entry_point);
+    let stdin = StdIn::default();
+
+    let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
+    println!("output: {output:?}");
+
     Ok(())
 }
 
