@@ -76,12 +76,12 @@ pub struct Rv32AllocateFrameWriteRecord {
 pub struct Rv32AllocateFrameAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
-    pub target_reg: T,
-    pub amount_imm: T,
-    pub rd_ptr: T,
-    pub rd_aux_cols: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
-    /// 1 if we need to write rd
-    pub needs_write_rd: T,
+    pub target_reg_offset: T, // target_reg field from instruction (a)
+    pub allocation_size: T,   // amount_imm field from instruction (b)
+    pub target_reg_ptr: T,    // Pointer to target register
+    pub target_reg_aux_cols: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
+    /// 1 if we need to write to target register
+    pub needs_write: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
@@ -169,13 +169,14 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32AllocateFrameAdapterChipWom<F>
             a, b, f: enabled, ..
         } = *instruction;
 
-        let mut rd_id = None;
+        let mut target_reg_id = None;
 
         if enabled != F::ZERO {
             // Write the allocated pointer to target register
-            if let Some(writes) = output.writes.first() {
-                let write_result = memory.write(F::ONE, a, *writes);
-                rd_id = Some(write_result.0);
+            // For simplicity in the mock, we use absolute addressing for the write
+            if let Some(allocated_ptr) = output.writes.first() {
+                let write_result = memory.write(F::ONE, a, *allocated_ptr);
+                target_reg_id = Some(write_result.0);
             }
         }
 
@@ -190,7 +191,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32AllocateFrameAdapterChipWom<F>
                 from_frame,
                 target_reg: a.as_canonical_u32(),
                 amount_imm: b.as_canonical_u32(),
-                rd_id,
+                rd_id: target_reg_id,
             },
         ))
     }
@@ -207,17 +208,18 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32AllocateFrameAdapterChipWom<F>
 
         adapter_cols.from_state = write_record.from_state.map(F::from_canonical_u32);
         adapter_cols.from_frame = write_record.from_frame.map(F::from_canonical_u32);
-        adapter_cols.target_reg = F::from_canonical_u32(write_record.target_reg);
-        adapter_cols.amount_imm = F::from_canonical_u32(write_record.amount_imm);
+        adapter_cols.target_reg_offset = F::from_canonical_u32(write_record.target_reg);
+        adapter_cols.allocation_size = F::from_canonical_u32(write_record.amount_imm);
 
-        // Handle rd write
-        if let Some(rd_id) = write_record.rd_id {
-            let rd_record = memory.record_by_id(rd_id);
-            adapter_cols.rd_ptr = rd_record.pointer;
-            adapter_cols.needs_write_rd = F::ONE;
-            aux_cols_factory.generate_write_aux(rd_record, &mut adapter_cols.rd_aux_cols);
+        // Handle target register write
+        if let Some(target_id) = write_record.rd_id {
+            let target_record = memory.record_by_id(target_id);
+            adapter_cols.target_reg_ptr = target_record.pointer;
+            adapter_cols.needs_write = F::ONE;
+            aux_cols_factory
+                .generate_write_aux(target_record, &mut adapter_cols.target_reg_aux_cols);
         } else {
-            adapter_cols.needs_write_rd = F::ZERO;
+            adapter_cols.needs_write = F::ZERO;
         }
     }
 

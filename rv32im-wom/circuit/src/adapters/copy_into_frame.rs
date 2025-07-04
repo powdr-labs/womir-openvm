@@ -76,15 +76,15 @@ pub struct Rv32CopyIntoFrameWriteRecord {
 pub struct Rv32CopyIntoFrameAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
-    pub rd: T,
-    pub rs1_ptr: T,
-    pub rs1_aux_cols: MemoryReadAuxCols<T>,
-    pub rs2_ptr: T,
-    pub rs2_aux_cols: MemoryReadAuxCols<T>,
-    pub rd_ptr: T,
-    pub rd_aux_cols: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
-    /// 1 if we need to write rd
-    pub needs_write_rd: T,
+    pub offset_within_frame: T, // rd - the offset within the frame
+    pub value_reg_ptr: T,       // rs1 pointer (register containing value to copy)
+    pub value_reg_aux_cols: MemoryReadAuxCols<T>,
+    pub frame_ptr_reg_ptr: T, // rs2 pointer (register containing frame pointer)
+    pub frame_ptr_reg_aux_cols: MemoryReadAuxCols<T>,
+    pub destination_ptr: T, // Where we write: frame_pointer + offset
+    pub destination_aux_cols: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
+    /// 1 if we need to write to destination
+    pub needs_write: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
@@ -156,15 +156,15 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32CopyIntoFrameAdapterChipWom<F>
         let Instruction { a, b, .. } = *instruction;
 
         // COPY_INTO_FRAME: rs2 (a), rs1 (b), rd (c)
-        // Read rs1 (value to copy) and rs2 (frame pointer)
-        let rs1 = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b);
-        let rs2 = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, a);
+        // For the mock implementation, use absolute addressing
+        let value_to_copy = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b);
+        let frame_pointer = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, a);
 
         Ok((
-            [rs1.1, rs2.1],
+            [value_to_copy.1, frame_pointer.1],
             Rv32CopyIntoFrameReadRecord {
-                rs1: Some(rs1.0),
-                rs2: Some(rs2.0),
+                rs1: Some(value_to_copy.0),
+                rs2: Some(frame_pointer.0),
             },
         ))
     }
@@ -176,17 +176,18 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32CopyIntoFrameAdapterChipWom<F>
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
         output: AdapterRuntimeContextWom<F, Self::Interface>,
-        _read_record: &Self::ReadRecord,
+        read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction { c, f: enabled, .. } = *instruction;
 
-        let mut rd_id = None;
+        let mut destination_id = None;
 
         if enabled != F::ZERO {
-            // Write the result to rd register
-            if let Some(writes) = output.writes.first() {
-                let write_result = memory.write(F::ONE, c, *writes);
-                rd_id = Some(write_result.0);
+            // For the mock implementation, we write to rd register
+            // In a real implementation, this would compute [rs2 + rd] and write there
+            if let Some(value_to_write) = output.writes.first() {
+                let write_result = memory.write(F::ONE, c, *value_to_write);
+                destination_id = Some(write_result.0);
             }
         }
 
@@ -200,7 +201,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32CopyIntoFrameAdapterChipWom<F>
                 from_state,
                 from_frame,
                 rd: c.as_canonical_u32(),
-                rd_id,
+                rd_id: destination_id,
             },
         ))
     }
@@ -217,30 +218,32 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32CopyIntoFrameAdapterChipWom<F>
 
         adapter_cols.from_state = write_record.from_state.map(F::from_canonical_u32);
         adapter_cols.from_frame = write_record.from_frame.map(F::from_canonical_u32);
-        adapter_cols.rd = F::from_canonical_u32(write_record.rd);
+        adapter_cols.offset_within_frame = F::from_canonical_u32(write_record.rd);
 
-        // Handle rs1 read
-        if let Some(rs1_id) = read_record.rs1 {
-            let rs1_record = memory.record_by_id(rs1_id);
-            adapter_cols.rs1_ptr = rs1_record.pointer;
-            aux_cols_factory.generate_read_aux(rs1_record, &mut adapter_cols.rs1_aux_cols);
+        // Handle value register read (rs1)
+        if let Some(value_id) = read_record.rs1 {
+            let value_record = memory.record_by_id(value_id);
+            adapter_cols.value_reg_ptr = value_record.pointer;
+            aux_cols_factory.generate_read_aux(value_record, &mut adapter_cols.value_reg_aux_cols);
         }
 
-        // Handle rs2 read
-        if let Some(rs2_id) = read_record.rs2 {
-            let rs2_record = memory.record_by_id(rs2_id);
-            adapter_cols.rs2_ptr = rs2_record.pointer;
-            aux_cols_factory.generate_read_aux(rs2_record, &mut adapter_cols.rs2_aux_cols);
+        // Handle frame pointer register read (rs2)
+        if let Some(frame_ptr_id) = read_record.rs2 {
+            let frame_ptr_record = memory.record_by_id(frame_ptr_id);
+            adapter_cols.frame_ptr_reg_ptr = frame_ptr_record.pointer;
+            aux_cols_factory
+                .generate_read_aux(frame_ptr_record, &mut adapter_cols.frame_ptr_reg_aux_cols);
         }
 
-        // Handle rd write
-        if let Some(rd_id) = write_record.rd_id {
-            let rd_record = memory.record_by_id(rd_id);
-            adapter_cols.rd_ptr = rd_record.pointer;
-            adapter_cols.needs_write_rd = F::ONE;
-            aux_cols_factory.generate_write_aux(rd_record, &mut adapter_cols.rd_aux_cols);
+        // Handle destination write
+        if let Some(dest_id) = write_record.rd_id {
+            let dest_record = memory.record_by_id(dest_id);
+            adapter_cols.destination_ptr = dest_record.pointer;
+            adapter_cols.needs_write = F::ONE;
+            aux_cols_factory
+                .generate_write_aux(dest_record, &mut adapter_cols.destination_aux_cols);
         } else {
-            adapter_cols.needs_write_rd = F::ZERO;
+            adapter_cols.needs_write = F::ZERO;
         }
     }
 

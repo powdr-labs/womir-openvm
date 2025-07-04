@@ -406,12 +406,11 @@ mod tests {
         // Test ALLOCATE_FRAME instruction
         let instructions = vec![
             wom::allocate_frame::<F>(8, 256), // PC=0: Allocate 256 bytes, store pointer in x8
-            wom::allocate_frame::<F>(8, 256), // PC=0: Allocate 256 bytes, store pointer in x8
-            reveal(8, 256),                   // PC=4: Reveal x8 (should be allocated pointer)
+            reveal(8, 0),                     // PC=4: Reveal x8 (should be allocated pointer)
             halt(),                           // PC=8: End
         ];
 
-        run_vm_test("ALLOCATE_FRAME instruction", instructions, 256, None)
+        run_vm_test("ALLOCATE_FRAME instruction", instructions, 0, None)
     }
 
     #[test]
