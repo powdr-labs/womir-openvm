@@ -175,7 +175,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32AllocateFrameAdapterChipWom<F>
             // Write the allocated pointer to target register
             // For simplicity in the mock, we use absolute addressing for the write
             if let Some(allocated_ptr) = output.writes.first() {
-                let write_result = memory.write(F::ONE, a, *allocated_ptr);
+                let write_result = memory.write(F::ONE, a + from_frame.fp, *allocated_ptr);
                 target_reg_id = Some(write_result.0);
             }
         }

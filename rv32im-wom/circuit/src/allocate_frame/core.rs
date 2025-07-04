@@ -1,4 +1,7 @@
-use std::borrow::{Borrow, BorrowMut};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    cell::Cell,
+};
 
 use openvm_circuit::arch::{
     AdapterAirContext, MinimalInstruction, Result, VmAdapterInterface, VmCoreAir,
@@ -104,6 +107,7 @@ pub struct Rv32AllocateFrameCoreChipWom {
     pub air: Rv32AllocateFrameCoreAir,
     pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
     pub range_checker_chip: SharedVariableRangeCheckerChip,
+    pub next_fp: Cell<u32>,
 }
 
 impl Rv32AllocateFrameCoreChipWom {
@@ -119,6 +123,7 @@ impl Rv32AllocateFrameCoreChipWom {
             },
             bitwise_lookup_chip,
             range_checker_chip,
+            next_fp: Cell::new(1),
         }
     }
 }
@@ -135,8 +140,8 @@ where
     fn execute_instruction(
         &self,
         instruction: &Instruction<F>,
-        from_pc: u32,
-        from_fp: u32,
+        _from_pc: u32,
+        _from_fp: u32,
         _reads: I::Reads,
     ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
         let Instruction { a, b, .. } = *instruction;
@@ -145,15 +150,12 @@ where
         let target_reg = a;
         let amount_imm = b.as_canonical_u32();
 
-        // Allocate memory by using current frame pointer
-        let allocated_ptr = from_fp;
-        let new_fp = from_fp + amount_imm; // Increment FP by the allocation amount
-
-        let allocated_data = decompose(allocated_ptr);
+        let allocated_data = decompose(self.next_fp);
+        self.next_fp.set(self.next_fp + amount_imm);
 
         let output = AdapterRuntimeContextWom {
-            to_pc: Some(from_pc + DEFAULT_PC_STEP),
-            to_fp: Some(new_fp), // Return the new frame pointer
+            to_pc: None,
+            to_fp: None,
             writes: [allocated_data].into(),
         };
 
