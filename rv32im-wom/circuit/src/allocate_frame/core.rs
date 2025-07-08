@@ -107,7 +107,6 @@ pub struct Rv32AllocateFrameCoreChipWom {
     pub air: Rv32AllocateFrameCoreAir,
     pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
     pub range_checker_chip: SharedVariableRangeCheckerChip,
-    pub next_fp: Cell<u32>,
 }
 
 impl Rv32AllocateFrameCoreChipWom {
@@ -123,14 +122,13 @@ impl Rv32AllocateFrameCoreChipWom {
             },
             bitwise_lookup_chip,
             range_checker_chip,
-            next_fp: Cell::new(1),
         }
     }
 }
 
 impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChipWom<F, I> for Rv32AllocateFrameCoreChipWom
 where
-    I::Reads: Into<[[F; RV32_REGISTER_NUM_LIMBS]; 0]>,
+    I::Reads: Into<[[F; RV32_REGISTER_NUM_LIMBS]; 1]>,
     I::Writes: From<[[F; RV32_REGISTER_NUM_LIMBS]; 1]>,
 {
     type Record = Rv32AllocateFrameCoreRecord<F>;
@@ -142,16 +140,14 @@ where
         instruction: &Instruction<F>,
         _from_pc: u32,
         _from_fp: u32,
-        _reads: I::Reads,
+        reads: I::Reads,
     ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
         let Instruction { a, b, .. } = *instruction;
 
         // ALLOCATE_FRAME: target_reg (a), amount_imm (b)
         let target_reg = a;
-        let amount_imm = b.as_canonical_u32();
 
-        let allocated_data = decompose(self.next_fp);
-        self.next_fp.set(self.next_fp + amount_imm);
+        let allocated_data = reads.into()[0];
 
         let output = AdapterRuntimeContextWom {
             to_pc: None,

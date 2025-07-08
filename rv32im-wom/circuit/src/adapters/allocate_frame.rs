@@ -1,7 +1,4 @@
-use std::{
-    borrow::{Borrow, BorrowMut},
-    marker::PhantomData,
-};
+use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::{
     arch::{
@@ -27,17 +24,19 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom};
+use crate::{
+    adapters::decompose, AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom,
+};
 
 use super::RV32_REGISTER_NUM_LIMBS;
 
 #[derive(Debug)]
-pub struct Rv32AllocateFrameAdapterChipWom<F: Field> {
+pub struct Rv32AllocateFrameAdapterChipWom {
     pub air: Rv32AllocateFrameAdapterAirWom,
-    _marker: PhantomData<F>,
+    next_fp: u32,
 }
 
-impl<F: PrimeField32> Rv32AllocateFrameAdapterChipWom<F> {
+impl Rv32AllocateFrameAdapterChipWom {
     pub fn new(
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
@@ -50,7 +49,8 @@ impl<F: PrimeField32> Rv32AllocateFrameAdapterChipWom<F> {
                 frame_bus,
                 memory_bridge,
             },
-            _marker: PhantomData,
+            // Start from 1 because 0 is used by the startup code.
+            next_fp: 1,
         }
     }
 }
@@ -128,14 +128,14 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32AllocateFrameAdapterAirWom
     }
 }
 
-impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32AllocateFrameAdapterChipWom<F> {
+impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32AllocateFrameAdapterChipWom {
     type ReadRecord = Rv32AllocateFrameReadRecord;
     type WriteRecord = Rv32AllocateFrameWriteRecord;
     type Air = Rv32AllocateFrameAdapterAirWom;
     type Interface = BasicAdapterInterface<
         F,
         MinimalInstruction<F>,
-        0,
+        1,
         1,
         RV32_REGISTER_NUM_LIMBS,
         RV32_REGISTER_NUM_LIMBS,
@@ -145,15 +145,19 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32AllocateFrameAdapterChipWom<F>
         &mut self,
         memory: &mut MemoryController<F>,
         _fp: u32,
-        _instruction: &Instruction<F>,
+        instruction: &Instruction<F>,
     ) -> Result<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
-        // ALLOCATE_FRAME: No reads needed
+        let Instruction { b, .. } = *instruction;
+
         memory.increment_timestamp();
 
-        Ok(([], Rv32AllocateFrameReadRecord {}))
+        let allocated_ptr = decompose(self.next_fp);
+        self.next_fp += b.as_canonical_u32();
+
+        Ok(([allocated_ptr], Rv32AllocateFrameReadRecord {}))
     }
 
     fn postprocess(
@@ -175,7 +179,11 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32AllocateFrameAdapterChipWom<F>
             // Write the allocated pointer to target register
             // For simplicity in the mock, we use absolute addressing for the write
             if let Some(allocated_ptr) = output.writes.first() {
-                let write_result = memory.write(F::ONE, a + from_frame.fp, *allocated_ptr);
+                let write_result = memory.write(
+                    F::ONE,
+                    a + F::from_canonical_u32(from_frame.fp),
+                    *allocated_ptr,
+                );
                 target_reg_id = Some(write_result.0);
             }
         }
