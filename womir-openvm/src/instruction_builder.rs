@@ -1,8 +1,7 @@
-use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOpcode, VmOpcode};
-use openvm_rv32im_transpiler::{Rv32JalLuiOpcode, Rv32LoadStoreOpcode};
+use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, VmOpcode};
 use openvm_rv32im_wom_transpiler::{
-    BaseAluOpcode as BaseAluOpcodeWom, Rv32AllocateFrameOpcode, Rv32CopyIntoFrameOpcode,
-    Rv32JaafOpcode, Rv32JumpOpcode,
+    BaseAluOpcode as BaseAluOpcodeWom, LessThanOpcode, Rv32AllocateFrameOpcode,
+    Rv32CopyIntoFrameOpcode, Rv32JaafOpcode, Rv32JumpOpcode, ShiftOpcode,
 };
 use openvm_stark_backend::p3_field::PrimeField32;
 
@@ -58,6 +57,77 @@ pub fn addi<F: PrimeField32>(rd: usize, rs1: usize, imm: usize) -> Instruction<F
         rs1,
         imm,
     )
+}
+
+pub fn sub<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        BaseAluOpcodeWom::SUB.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
+pub fn xor<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        BaseAluOpcodeWom::XOR.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
+pub fn or<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        BaseAluOpcodeWom::OR.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
+pub fn and<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        BaseAluOpcodeWom::AND.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
+pub fn shl<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(ShiftOpcode::SLL.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn shr_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(ShiftOpcode::SRL.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn shr_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(ShiftOpcode::SRA.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn lt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        LessThanOpcode::SLTU.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
+pub fn lt_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(LessThanOpcode::SLT.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn gt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    // lt_u, but swapped
+    lt_u(rd, rs2, rs1)
+}
+
+pub fn gt_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    // lt_s, but swapped
+    lt_s(rd, rs2, rs1)
 }
 
 /// JAAF instruction: Jump And Activate Frame
