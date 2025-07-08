@@ -1,14 +1,14 @@
 use std::{collections::HashMap, vec};
 
 use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program};
-use openvm_stark_backend::p3_field::{Field, PrimeField32};
+use openvm_stark_backend::p3_field::PrimeField32;
 use womir::{
     generic_ir::GenericIrSetting,
     linker::LabelValue,
-    loader::{flattening::WriteOnceASM, func_idx_to_label, CommonProgram},
+    loader::{flattening::WriteOnceASM, func_idx_to_label},
 };
 
-use crate::instruction_builder::{self, shr_s};
+use crate::instruction_builder;
 
 pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) -> VmExe<F> {
     let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
@@ -313,12 +313,12 @@ fn translate_directives<F: PrimeField32>(
                 Op::I32Ne => todo!(),
                 Op::I32LtS => Ok(ib::lt_s),
                 Op::I32LtU => Ok(ib::lt_u),
-                Op::I32GtS => todo!(),
-                Op::I32GtU => todo!(),
+                Op::I32GtS => Ok(ib::gt_s),
+                Op::I32GtU => Ok(ib::gt_u),
                 Op::I32LeS => todo!(),
                 Op::I32LeU => todo!(),
-                Op::I32GeS => Ok(ib::ge_s),
-                Op::I32GeU => Ok(ib::ge_u),
+                Op::I32GeS => todo!(),
+                Op::I32GeU => todo!(),
                 Op::I64Eqz => todo!(),
                 Op::I64Eq => todo!(),
                 Op::I64Ne => todo!(),
