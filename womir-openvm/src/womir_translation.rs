@@ -104,6 +104,10 @@ enum Directive<F: Clone> {
         id: String,
         frame_size: Option<u32>,
     },
+    AllocateFrameI {
+        target_frame: String,
+        result_ptr: u32,
+    },
     Jump {
         target: String,
     },
@@ -137,8 +141,18 @@ impl<F: PrimeField32> Directive<F> {
     fn to_instruction(self, label_map: &HashMap<String, LabelValue>) -> Option<Instruction<F>> {
         match self {
             Directive::Nop | Directive::Label { .. } => None,
+            Directive::AllocateFrameI {
+                target_frame,
+                result_ptr,
+            } => {
+                let frame_size = label_map.get(&target_frame).unwrap().frame_size.unwrap();
+                Some(instruction_builder::allocate_frame_imm(
+                    result_ptr as usize,
+                    frame_size as usize,
+                ))
+            }
             Directive::Jump { target } => {
-                let pc = label_map.get(&target)?.pc;
+                let pc = label_map.get(&target).unwrap().pc;
                 Some(instruction_builder::jump(pc as usize))
             }
             Directive::JumpIf {
@@ -222,7 +236,9 @@ impl<F: Clone> womir::linker::Directive for Directive<F> {
 fn translate_directives<F: PrimeField32>(
     directive: womir::generic_ir::Directive,
 ) -> Vec<Directive<F>> {
+    use instruction_builder as ib;
     use womir::generic_ir::Directive as W;
+
     match directive {
         W::Label { id, frame_size } => {
             vec![Directive::Label { id, frame_size }]
@@ -230,7 +246,10 @@ fn translate_directives<F: PrimeField32>(
         W::AllocateFrameI {
             target_frame,
             result_ptr,
-        } => todo!(),
+        } => vec![Directive::AllocateFrameI {
+            target_frame,
+            result_ptr,
+        }],
         W::AllocateFrameV {
             frame_size,
             result_ptr,
@@ -243,7 +262,11 @@ fn translate_directives<F: PrimeField32>(
             src_word,
             dest_frame,
             dest_word,
-        } => todo!(),
+        } => vec![Directive::Instruction(ib::copy_into_frame(
+            dest_frame as usize,
+            src_word as usize,
+            dest_word as usize,
+        ))],
         W::Jump { target } => vec![Directive::Jump { target }],
         W::JumpOffset { offset } => todo!(),
         W::JumpIf { target, condition } => vec![Directive::JumpIf {
@@ -303,7 +326,6 @@ fn translate_directives<F: PrimeField32>(
         } => todo!(),
         W::Trap { reason } => todo!(),
         W::WASMOp { op, inputs, output } => {
-            use instruction_builder as ib;
             use wasmparser::Operator as Op;
 
             let binary_op: Result<fn(usize, usize, usize) -> Instruction<F>, Op> = match op {

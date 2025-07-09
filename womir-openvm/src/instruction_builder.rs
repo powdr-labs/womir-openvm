@@ -221,7 +221,7 @@ pub fn call_indirect<F: PrimeField32>(
 
 /// ALLOCATE_FRAME instruction: Allocate frame and return pointer
 /// target_reg receives the allocated pointer, amount_imm is the amount to allocate
-pub fn allocate_frame<F: PrimeField32>(target_reg: usize, amount_imm: usize) -> Instruction<F> {
+pub fn allocate_frame_imm<F: PrimeField32>(target_reg: usize, amount_imm: usize) -> Instruction<F> {
     Instruction::new(
         Rv32AllocateFrameOpcode::ALLOCATE_FRAME.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
@@ -235,18 +235,22 @@ pub fn allocate_frame<F: PrimeField32>(target_reg: usize, amount_imm: usize) -> 
 }
 
 /// COPY_INTO_FRAME instruction: Copy value into frame-relative address
-/// rd is the offset, rs1 is the value to copy, rs2 is the frame pointer
-/// Writes rs1 content to [rs2[rd]]
-pub fn copy_into_frame<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+/// dest_fp is the frame pointer, src_value is the value to copy, dest_offset is the offset
+/// Writes src_value content to [dest_fp[dest_offset]]
+pub fn copy_into_frame<F: PrimeField32>(
+    dest_fp: usize,
+    src_value: usize,
+    dest_offset: usize,
+) -> Instruction<F> {
     Instruction::new(
         Rv32CopyIntoFrameOpcode::COPY_INTO_FRAME.global_opcode(),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs2), // a: rs2 (frame pointer)
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1 (value to copy)
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // c: rd (offset, target address)
-        F::ZERO,                                                      // d: (not used)
-        F::ZERO,                                                      // e: (not used)
-        F::ONE,                                                       // f: enabled
-        F::ZERO,                                                      // g: imm sign
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * dest_fp), // a: frame pointer
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * src_value), // b: value to copy
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * dest_offset), // c: offset, target address
+        F::ZERO,                                                               // d: (not used)
+        F::ZERO,                                                               // e: (not used)
+        F::ONE,                                                                // f: enabled
+        F::ZERO,                                                               // g: imm sign
     )
 }
 
