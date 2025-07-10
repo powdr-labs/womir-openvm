@@ -153,9 +153,8 @@ pub enum WomirIExecutor<F: PrimeField32> {
 
 #[derive(ChipUsageGetter, Chip, InstructionExecutor, From, AnyEnum)]
 pub enum WomirMExecutor<F: PrimeField32> {
-    Multiplication(Rv32MultiplicationChip<F>),
-    MultiplicationHigh(Rv32MulHChip<F>),
-    DivRem(Rv32DivRemChip<F>),
+    Multiplication(WomMultiplicationChip<F>),
+    DivRem(WomDivRemChip<F>),
 }
 
 #[derive(From, ChipUsageGetter, Chip, AnyEnum)]
@@ -472,21 +471,14 @@ impl<F: PrimeField32> VmExtension<F> for WomirM {
             chip
         };
 
-        let mul_chip = Rv32MultiplicationChip::new(
-            Rv32MultAdapterChip::new(execution_bus, program_bus, memory_bridge),
+        let mul_chip = WomMultiplicationChip::new(
+            WomMultAdapterChip::new(execution_bus, program_bus, memory_bridge),
             MultiplicationCoreChip::new(range_tuple_checker.clone(), MulOpcode::CLASS_OFFSET),
             offline_memory.clone(),
         );
         inventory.add_executor(mul_chip, MulOpcode::iter().map(|x| x.global_opcode()))?;
 
-        let mul_h_chip = Rv32MulHChip::new(
-            Rv32MultAdapterChip::new(execution_bus, program_bus, memory_bridge),
-            MulHCoreChip::new(bitwise_lu_chip.clone(), range_tuple_checker.clone()),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(mul_h_chip, MulHOpcode::iter().map(|x| x.global_opcode()))?;
-
-        let div_rem_chip = Rv32DivRemChip::new(
+        let div_rem_chip = WomDivRemChip::new(
             Rv32MultAdapterChip::new(execution_bus, program_bus, memory_bridge),
             DivRemCoreChip::new(
                 bitwise_lu_chip.clone(),
