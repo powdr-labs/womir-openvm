@@ -175,7 +175,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32CopyIntoFrameAdapterChipWom<F>
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        output: AdapterRuntimeContextWom<F, Self::Interface>,
+        _output: AdapterRuntimeContextWom<F, Self::Interface>,
         read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction { a, f: enabled, .. } = *instruction;
@@ -193,10 +193,10 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32CopyIntoFrameAdapterChipWom<F>
 
         Ok((
             ExecutionState {
-                pc: output.to_pc.unwrap_or(from_state.pc + DEFAULT_PC_STEP),
+                pc: from_state.pc + DEFAULT_PC_STEP,
                 timestamp: memory.timestamp(),
             },
-            output.to_fp.unwrap_or(from_frame.fp),
+            from_frame.fp,
             Self::WriteRecord {
                 from_state,
                 from_frame,
