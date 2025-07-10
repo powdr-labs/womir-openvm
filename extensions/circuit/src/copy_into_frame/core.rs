@@ -57,8 +57,6 @@ where
     ) -> AdapterAirContext<AB::Expr, I> {
         let core_cols: &CopyIntoFrameCoreCols<_> = local_core.borrow();
 
-        let zeroes = [AB::F::ZERO; 4];
-        let data: [AB::Expr; RV32_REGISTER_NUM_LIMBS] = zeroes.map(|x| x.into());
         let opcode = VmCoreAir::<AB, I>::expr_to_global_expr(
             self,
             AB::Expr::from_canonical_usize(CopyIntoFrameOpcode::COPY_INTO_FRAME as usize),
@@ -90,6 +88,12 @@ impl CopyIntoFrameCoreChipWom {
         Self {
             air: CopyIntoFrameCoreAir {},
         }
+    }
+}
+
+impl Default for CopyIntoFrameCoreChipWom {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -125,7 +129,7 @@ where
         )
     }
 
-    fn generate_trace_row(&self, row_slice: &mut [F], record: Self::Record) {}
+    fn generate_trace_row(&self, _row_slice: &mut [F], _record: Self::Record) {}
 
     fn air(&self) -> &Self::Air {
         &self.air

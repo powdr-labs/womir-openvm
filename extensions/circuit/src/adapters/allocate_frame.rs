@@ -45,9 +45,9 @@ impl AllocateFrameAdapterChipWom {
     ) -> Self {
         Self {
             air: AllocateFrameAdapterAirWom {
-                execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
-                frame_bus,
-                memory_bridge,
+                _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                _frame_bus: frame_bus,
+                _memory_bridge: memory_bridge,
             },
             // Start from 4 because 0 is used by the startup code.
             next_fp: 4,
@@ -86,9 +86,9 @@ pub struct AllocateFrameAdapterColsWom<T> {
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct AllocateFrameAdapterAirWom {
-    pub(super) memory_bridge: MemoryBridge,
-    pub(super) execution_bridge: ExecutionBridge,
-    pub(super) frame_bus: FrameBus,
+    pub(super) _memory_bridge: MemoryBridge,
+    pub(super) _execution_bridge: ExecutionBridge,
+    pub(super) _frame_bus: FrameBus,
 }
 
 impl<F: Field> BaseAir<F> for AllocateFrameAdapterAirWom {

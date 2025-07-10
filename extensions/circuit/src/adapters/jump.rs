@@ -198,12 +198,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
-        let Instruction {
-            a: immediate,
-            b,
-            opcode,
-            ..
-        } = *instruction;
+        let Instruction { b, opcode, .. } = *instruction;
 
         let local_opcode =
             JumpOpcode::from_usize(opcode.local_opcode_idx(JumpOpcode::CLASS_OFFSET));
@@ -239,11 +234,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         output: AdapterRuntimeContextWom<F, Self::Interface>,
         _read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
-        let Instruction {
-            a: immediate,
-            f: enabled,
-            ..
-        } = *instruction;
+        let Instruction { a: immediate, .. } = *instruction;
 
         Ok((
             ExecutionState {
