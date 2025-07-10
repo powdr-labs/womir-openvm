@@ -107,14 +107,7 @@ impl<F: Field> ColumnsAir<F> for Rv32CopyIntoFrameAdapterAirWom {
 }
 
 impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32CopyIntoFrameAdapterAirWom {
-    type Interface = BasicAdapterInterface<
-        AB::Expr,
-        MinimalInstruction<AB::Expr>,
-        2,
-        1,
-        RV32_REGISTER_NUM_LIMBS,
-        RV32_REGISTER_NUM_LIMBS,
-    >;
+    type Interface = BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 0, 0, 0, 0>;
 
     fn eval(
         &self,
