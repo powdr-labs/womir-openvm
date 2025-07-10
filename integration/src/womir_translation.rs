@@ -421,6 +421,7 @@ fn translate_directives<F: PrimeField32>(
                 Err(op) => op,
             };
 
+            // The remaining, non-binary operations
             match op {
                 // Integer instructions
                 Op::I32Const { value } => {
@@ -430,7 +431,15 @@ fn translate_directives<F: PrimeField32>(
                         value as usize,
                     ))]
                 }
-                Op::I64Const { value: _ } => todo!(),
+                Op::I64Const { value } => {
+                    let output = output.unwrap().start as usize;
+                    let lower = value as u32;
+                    let upper = (value >> 32) as u32;
+                    vec![
+                        Directive::Instruction(ib::const_32_imm(output, lower as usize)),
+                        Directive::Instruction(ib::const_32_imm(output + 1, upper as usize)),
+                    ]
+                }
                 Op::I32Clz => todo!(),
                 Op::I32Ctz => todo!(),
                 Op::I32Popcnt => todo!(),
@@ -512,8 +521,23 @@ fn translate_directives<F: PrimeField32>(
                 Op::F64Load { memarg: _ } => todo!(),
                 Op::F32Store { memarg: _ } => todo!(),
                 Op::F64Store { memarg: _ } => todo!(),
-                Op::F32Const { value: _ } => todo!(),
-                Op::F64Const { value: _ } => todo!(),
+                Op::F32Const { value } => {
+                    let output = output.unwrap().start as usize;
+                    vec![Directive::Instruction(ib::const_32_imm(
+                        output,
+                        value.bits() as usize,
+                    ))]
+                }
+                Op::F64Const { value } => {
+                    let output = output.unwrap().start as usize;
+                    let value = value.bits();
+                    let lower = value as u32;
+                    let upper = (value >> 32) as u32;
+                    vec![
+                        Directive::Instruction(ib::const_32_imm(output, lower as usize)),
+                        Directive::Instruction(ib::const_32_imm(output + 1, upper as usize)),
+                    ]
+                }
                 Op::F32Abs => todo!(),
                 Op::F32Neg => todo!(),
                 Op::F32Ceil => todo!(),
