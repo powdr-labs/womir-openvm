@@ -48,7 +48,7 @@ impl InitFileGenerator for WomirIConfig {}
 #[derive(Clone, Debug, Default, VmConfig, derive_new::new, Serialize, Deserialize)]
 pub struct WomirImConfig {
     #[config]
-    pub rv32i: WomirIConfig,
+    pub womir_i: WomirIConfig,
     #[extension]
     pub mul: WomirM,
 }
@@ -95,14 +95,14 @@ impl WomirIConfig {
 impl WomirImConfig {
     pub fn with_public_values(public_values: usize) -> Self {
         Self {
-            rv32i: WomirIConfig::with_public_values(public_values),
+            womir_i: WomirIConfig::with_public_values(public_values),
             mul: Default::default(),
         }
     }
 
     pub fn with_public_values_and_segment_len(public_values: usize, segment_len: usize) -> Self {
         Self {
-            rv32i: WomirIConfig::with_public_values_and_segment_len(public_values, segment_len),
+            womir_i: WomirIConfig::with_public_values_and_segment_len(public_values, segment_len),
             mul: Default::default(),
         }
     }
@@ -110,15 +110,15 @@ impl WomirImConfig {
 
 // ============ Extension Implementations ============
 
-/// RISC-V 32-bit Base (RV32I) Extension
+/// Extension similar to RISC-V 32-bit Base (RV32I)
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct WomirI;
 
-/// RISC-V Extension for handling IO (not to be confused with I base extension)
+/// Extension similar to RISC-V for handling IO (not to be confused with I base extension)
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct WomirIo;
 
-/// RISC-V 32-bit Multiplication Extension (RV32M) Extension
+/// Extension similar to RISC-V 32-bit Multiplication Extension (RV32M)
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct WomirM {
     #[serde(default = "default_range_tuple_checker_sizes")]
@@ -139,10 +139,8 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 
 // ============ Executor and Periphery Enums for Extension ============
 
-/// RISC-V 32-bit Base (RV32I) Instruction Executors
 #[derive(ChipUsageGetter, Chip, InstructionExecutor, From, AnyEnum)]
 pub enum WomirIExecutor<F: PrimeField32> {
-    // Rv32 (for standard 32-bit integers):
     BaseAlu(WomBaseAluChip<F>),
     Jaaf(JaafChipWom<F>),
     Jump(JumpChipWom<F>),
@@ -159,7 +157,6 @@ pub enum WomirIExecutor<F: PrimeField32> {
     // Auipc(Rv32AuipcChip<F>),
 }
 
-/// RISC-V 32-bit Multiplication Extension (RV32M) Instruction Executors
 #[derive(ChipUsageGetter, Chip, InstructionExecutor, From, AnyEnum)]
 pub enum WomirMExecutor<F: PrimeField32> {
     Multiplication(Rv32MultiplicationChip<F>),
@@ -402,19 +399,19 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
 
         // There is no downside to adding phantom sub-executors, so we do it in the base extension.
         builder.add_phantom_sub_executor(
-            phantom::Rv32HintInputSubEx,
+            phantom::HintInputSubEx,
             PhantomDiscriminant(Phantom::HintInput as u16),
         )?;
         builder.add_phantom_sub_executor(
-            phantom::Rv32HintRandomSubEx::new(),
+            phantom::HintRandomSubEx::new(),
             PhantomDiscriminant(Phantom::HintRandom as u16),
         )?;
         builder.add_phantom_sub_executor(
-            phantom::Rv32PrintStrSubEx,
+            phantom::PrintStrSubEx,
             PhantomDiscriminant(Phantom::PrintStr as u16),
         )?;
         builder.add_phantom_sub_executor(
-            phantom::Rv32HintLoadByKeySubEx,
+            phantom::HintLoadByKeySubEx,
             PhantomDiscriminant(Phantom::HintLoadByKey as u16),
         )?;
 
@@ -559,19 +556,19 @@ mod phantom {
 
     use crate::adapters::unsafe_read_rv32_register;
 
-    pub struct Rv32HintInputSubEx;
-    pub struct Rv32HintRandomSubEx {
+    pub struct HintInputSubEx;
+    pub struct HintRandomSubEx {
         rng: OsRng,
     }
-    impl Rv32HintRandomSubEx {
+    impl HintRandomSubEx {
         pub fn new() -> Self {
             Self { rng: OsRng }
         }
     }
-    pub struct Rv32PrintStrSubEx;
-    pub struct Rv32HintLoadByKeySubEx;
+    pub struct PrintStrSubEx;
+    pub struct HintLoadByKeySubEx;
 
-    impl<F: Field> PhantomSubExecutor<F> for Rv32HintInputSubEx {
+    impl<F: Field> PhantomSubExecutor<F> for HintInputSubEx {
         fn phantom_execute(
             &mut self,
             _: &MemoryController<F>,
@@ -602,7 +599,7 @@ mod phantom {
         }
     }
 
-    impl<F: PrimeField32> PhantomSubExecutor<F> for Rv32HintRandomSubEx {
+    impl<F: PrimeField32> PhantomSubExecutor<F> for HintRandomSubEx {
         fn phantom_execute(
             &mut self,
             memory: &MemoryController<F>,
@@ -621,7 +618,7 @@ mod phantom {
         }
     }
 
-    impl<F: PrimeField32> PhantomSubExecutor<F> for Rv32PrintStrSubEx {
+    impl<F: PrimeField32> PhantomSubExecutor<F> for PrintStrSubEx {
         fn phantom_execute(
             &mut self,
             memory: &MemoryController<F>,
@@ -646,7 +643,7 @@ mod phantom {
         }
     }
 
-    impl<F: PrimeField32> PhantomSubExecutor<F> for Rv32HintLoadByKeySubEx {
+    impl<F: PrimeField32> PhantomSubExecutor<F> for HintLoadByKeySubEx {
         fn phantom_execute(
             &mut self,
             memory: &MemoryController<F>,
@@ -671,7 +668,7 @@ mod phantom {
                     streams.input_stream.push_front(input);
                 }
             } else {
-                bail!("Rv32HintLoadByKey: key not found");
+                bail!("HintLoadByKey: key not found");
             }
             Ok(())
         }
