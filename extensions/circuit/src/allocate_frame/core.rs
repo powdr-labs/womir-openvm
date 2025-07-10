@@ -1,7 +1,4 @@
-use std::{
-    borrow::{Borrow, BorrowMut},
-    cell::Cell,
-};
+use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::arch::{
     AdapterAirContext, MinimalInstruction, Result, VmAdapterInterface, VmCoreAir,
@@ -11,7 +8,7 @@ use openvm_circuit_primitives::{
     var_range::{SharedVariableRangeCheckerChip, VariableRangeCheckerBus},
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode};
+use openvm_instructions::{instruction::Instruction, LocalOpcode};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
@@ -24,7 +21,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
 
-use crate::adapters::{decompose, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+use crate::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]

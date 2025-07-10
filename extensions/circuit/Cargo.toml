@@ -34,7 +34,6 @@ openvm-circuit = { workspace = true, features = ["test-utils"] }
 [features]
 default = ["parallel", "jemalloc"]
 parallel = ["openvm-circuit/parallel"]
-test-utils = ["openvm-circuit/test-utils", "dep:openvm-stark-sdk"]
 # performance features:
 mimalloc = ["openvm-circuit/mimalloc"]
 jemalloc = ["openvm-circuit/jemalloc"]

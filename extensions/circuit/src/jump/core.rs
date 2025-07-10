@@ -30,7 +30,7 @@ use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
 
 use crate::adapters::{compose, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 
-const RV32_LIMB_MAX: u32 = (1 << RV32_CELL_BITS) - 1;
+const _RV32_LIMB_MAX: u32 = (1 << RV32_CELL_BITS) - 1;
 
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]

@@ -1,14 +1,10 @@
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 
 use openvm_circuit::arch::{
     AdapterAirContext, MinimalInstruction, Result, VmAdapterInterface, VmCoreAir,
 };
-use openvm_circuit_primitives::{
-    bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
-    var_range::{SharedVariableRangeCheckerChip, VariableRangeCheckerBus},
-};
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode};
+use openvm_instructions::{instruction::Instruction, LocalOpcode};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
@@ -16,12 +12,11 @@ use openvm_stark_backend::{
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
 use openvm_womir_transpiler::CopyIntoFrameOpcode;
-use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
 
-use crate::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+use crate::adapters::RV32_REGISTER_NUM_LIMBS;
 
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
@@ -62,8 +57,6 @@ where
     ) -> AdapterAirContext<AB::Expr, I> {
         let core_cols: &CopyIntoFrameCoreCols<_> = local_core.borrow();
 
-        let zeroes = [AB::F::ZERO; 4];
-        let data: [AB::Expr; RV32_REGISTER_NUM_LIMBS] = zeroes.map(|x| x.into());
         let opcode = VmCoreAir::<AB, I>::expr_to_global_expr(
             self,
             AB::Expr::from_canonical_usize(CopyIntoFrameOpcode::COPY_INTO_FRAME as usize),
@@ -95,6 +88,12 @@ impl CopyIntoFrameCoreChipWom {
         Self {
             air: CopyIntoFrameCoreAir {},
         }
+    }
+}
+
+impl Default for CopyIntoFrameCoreChipWom {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -130,7 +129,7 @@ where
         )
     }
 
-    fn generate_trace_row(&self, row_slice: &mut [F], record: Self::Record) {}
+    fn generate_trace_row(&self, _row_slice: &mut [F], _record: Self::Record) {}
 
     fn air(&self) -> &Self::Air {
         &self.air

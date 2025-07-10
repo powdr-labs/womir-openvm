@@ -199,8 +199,7 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32BranchAdapterChip<F> {
         let timestamp_delta = memory.timestamp() - from_state.timestamp;
         debug_assert!(
             timestamp_delta == 2,
-            "timestamp delta is {}, expected 2",
-            timestamp_delta
+            "timestamp delta is {timestamp_delta}, expected 2"
         );
 
         Ok((

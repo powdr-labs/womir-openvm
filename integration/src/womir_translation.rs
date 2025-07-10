@@ -10,7 +10,7 @@ use womir::{
 
 use crate::instruction_builder;
 
-pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) -> VmExe<F> {
+pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, _entry_point: &str) -> VmExe<F> {
     let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
     let ir_program = womir::loader::load_wasm(GenericIrSetting, &wasm_bytes).unwrap();
 
@@ -36,7 +36,7 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
     let mut linked_program = linked_program
         .into_iter()
         .map(|d| {
-            if let Some(i) = d.to_instruction(&label_map) {
+            if let Some(i) = d.into_instruction(&label_map) {
                 i
             } else {
                 unreachable!("All remaining directives should be instructions")
@@ -98,6 +98,7 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
 // The instructions in this IR are 1-to-1 mapped to OpenVM instructions,
 // and it is needed because we can only resolve the labels to PCs during linking.
 #[derive(Clone)]
+#[allow(dead_code)]
 enum Directive<F: Clone> {
     Nop,
     Label {
@@ -115,7 +116,7 @@ enum Directive<F: Clone> {
         target: String,
         condition_reg: u32,
     },
-    JumpIfZero {
+    _JumpIfZero {
         target: String,
         condition_reg: u32,
     },
@@ -138,7 +139,7 @@ enum Directive<F: Clone> {
 }
 
 impl<F: PrimeField32> Directive<F> {
-    fn to_instruction(self, label_map: &HashMap<String, LabelValue>) -> Option<Instruction<F>> {
+    fn into_instruction(self, label_map: &HashMap<String, LabelValue>) -> Option<Instruction<F>> {
         match self {
             Directive::Nop | Directive::Label { .. } => None,
             Directive::AllocateFrameI {
@@ -165,7 +166,7 @@ impl<F: PrimeField32> Directive<F> {
                     pc as usize,
                 ))
             }
-            Directive::JumpIfZero {
+            Directive::_JumpIfZero {
                 target,
                 condition_reg,
             } => {
@@ -251,12 +252,12 @@ fn translate_directives<F: PrimeField32>(
             result_ptr,
         }],
         W::AllocateFrameV {
-            frame_size,
-            result_ptr,
+            frame_size: _,
+            result_ptr: _,
         } => todo!(),
         W::Copy {
-            src_word,
-            dest_word,
+            src_word: _,
+            dest_word: _,
         } => todo!(),
         W::CopyIntoFrame {
             src_word,
@@ -268,7 +269,7 @@ fn translate_directives<F: PrimeField32>(
             dest_word as usize,
         ))],
         W::Jump { target } => vec![Directive::Jump { target }],
-        W::JumpOffset { offset } => todo!(),
+        W::JumpOffset { offset: _ } => todo!(),
         W::JumpIf { target, condition } => vec![Directive::JumpIf {
             target,
             condition_reg: condition,
@@ -319,16 +320,17 @@ fn translate_directives<F: PrimeField32>(
             new_frame_ptr as usize,
         ))],
         W::ImportedCall {
-            module,
-            function,
-            inputs,
-            outputs,
+            module: _,
+            function: _,
+            inputs: _,
+            outputs: _,
         } => todo!(),
-        W::Trap { reason } => todo!(),
+        W::Trap { reason: _ } => todo!(),
         W::WASMOp { op, inputs, output } => {
             use wasmparser::Operator as Op;
 
-            let binary_op: Result<fn(usize, usize, usize) -> Instruction<F>, Op> = match op {
+            type BinaryOpFn<F> = fn(usize, usize, usize) -> Instruction<F>;
+            let binary_op: Result<BinaryOpFn<F>, Op> = match op {
                 // Integer instructions
                 Op::I32Eqz => todo!(),
                 Op::I32Eq => todo!(),
@@ -427,8 +429,8 @@ fn translate_directives<F: PrimeField32>(
 
             match op {
                 // Integer instructions
-                Op::I32Const { value } => todo!(),
-                Op::I64Const { value } => todo!(),
+                Op::I32Const { value: _ } => todo!(),
+                Op::I64Const { value: _ } => todo!(),
                 Op::I32Clz => todo!(),
                 Op::I32Ctz => todo!(),
                 Op::I32Popcnt => todo!(),
@@ -448,61 +450,61 @@ fn translate_directives<F: PrimeField32>(
                 Op::Select => todo!(),
 
                 // Global instructions
-                Op::GlobalGet { global_index } => todo!(),
-                Op::GlobalSet { global_index } => todo!(),
+                Op::GlobalGet { global_index: _ } => todo!(),
+                Op::GlobalSet { global_index: _ } => todo!(),
 
                 // Memory instructions
-                Op::I32Load { memarg } => todo!(),
-                Op::I64Load { memarg } => todo!(),
-                Op::I32Load8S { memarg } => todo!(),
-                Op::I32Load8U { memarg } => todo!(),
-                Op::I32Load16S { memarg } => todo!(),
-                Op::I32Load16U { memarg } => todo!(),
-                Op::I64Load8S { memarg } => todo!(),
-                Op::I64Load8U { memarg } => todo!(),
-                Op::I64Load16S { memarg } => todo!(),
-                Op::I64Load16U { memarg } => todo!(),
-                Op::I64Load32S { memarg } => todo!(),
-                Op::I64Load32U { memarg } => todo!(),
-                Op::I32Store { memarg } => todo!(),
-                Op::I64Store { memarg } => todo!(),
-                Op::I32Store8 { memarg } => todo!(),
-                Op::I32Store16 { memarg } => todo!(),
-                Op::I64Store8 { memarg } => todo!(),
-                Op::I64Store16 { memarg } => todo!(),
-                Op::I64Store32 { memarg } => todo!(),
-                Op::MemorySize { mem } => todo!(),
-                Op::MemoryGrow { mem } => todo!(),
-                Op::MemoryInit { data_index, mem } => todo!(),
-                Op::MemoryCopy { dst_mem, src_mem } => todo!(),
-                Op::MemoryFill { mem } => todo!(),
-                Op::DataDrop { data_index } => todo!(),
+                Op::I32Load { memarg: _ } => todo!(),
+                Op::I64Load { memarg: _ } => todo!(),
+                Op::I32Load8S { memarg: _ } => todo!(),
+                Op::I32Load8U { memarg: _ } => todo!(),
+                Op::I32Load16S { memarg: _ } => todo!(),
+                Op::I32Load16U { memarg: _ } => todo!(),
+                Op::I64Load8S { memarg: _ } => todo!(),
+                Op::I64Load8U { memarg: _ } => todo!(),
+                Op::I64Load16S { memarg: _ } => todo!(),
+                Op::I64Load16U { memarg: _ } => todo!(),
+                Op::I64Load32S { memarg: _ } => todo!(),
+                Op::I64Load32U { memarg: _ } => todo!(),
+                Op::I32Store { memarg: _ } => todo!(),
+                Op::I64Store { memarg: _ } => todo!(),
+                Op::I32Store8 { memarg: _ } => todo!(),
+                Op::I32Store16 { memarg: _ } => todo!(),
+                Op::I64Store8 { memarg: _ } => todo!(),
+                Op::I64Store16 { memarg: _ } => todo!(),
+                Op::I64Store32 { memarg: _ } => todo!(),
+                Op::MemorySize { mem: _ } => todo!(),
+                Op::MemoryGrow { mem: _ } => todo!(),
+                Op::MemoryInit { data_index: _, mem: _ } => todo!(),
+                Op::MemoryCopy { dst_mem: _, src_mem: _ } => todo!(),
+                Op::MemoryFill { mem: _ } => todo!(),
+                Op::DataDrop { data_index: _ } => todo!(),
 
                 // Table instructions
-                Op::TableInit { elem_index, table } => todo!(),
+                Op::TableInit { elem_index: _, table: _ } => todo!(),
                 Op::TableCopy {
-                    dst_table,
-                    src_table,
+                    dst_table: _,
+                    src_table: _,
                 } => todo!(),
-                Op::TableFill { table } => todo!(),
-                Op::TableGet { table } => todo!(),
-                Op::TableSet { table } => todo!(),
-                Op::TableGrow { table } => todo!(),
-                Op::TableSize { table } => todo!(),
-                Op::ElemDrop { elem_index } => todo!(),
+                Op::TableFill { table: _ } => todo!(),
+                Op::TableGet { table: _ } => todo!(),
+                Op::TableSet { table: _ } => todo!(),
+                Op::TableGrow { table: _ } => todo!(),
+                Op::TableSize { table: _ } => todo!(),
+                Op::ElemDrop { elem_index: _ } => todo!(),
 
                 // Reference instructions
-                Op::RefNull { hty } => todo!(),
+                Op::RefNull { hty: _ } => todo!(),
                 Op::RefIsNull => todo!(),
-                Op::RefFunc { function_index } => todo!(),
+                Op::RefFunc { function_index: _ } => todo!(),
 
                 // Float instructions
-                Op::F32Load { memarg } => todo!(),
-                Op::F64Load { memarg } => todo!(),
-                Op::F32Store { memarg } => todo!(),
-                Op::F64Store { memarg } => todo!(),
-                Op::F32Const { value } => todo!(),
-                Op::F64Const { value } => todo!(),
+                Op::F32Load { memarg: _ } => todo!(),
+                Op::F64Load { memarg: _ } => todo!(),
+                Op::F32Store { memarg: _ } => todo!(),
+                Op::F64Store { memarg: _ } => todo!(),
+                Op::F32Const { value: _ } => todo!(),
+                Op::F64Const { value: _ } => todo!(),
                 Op::F32Abs => todo!(),
                 Op::F32Neg => todo!(),
                 Op::F32Ceil => todo!(),

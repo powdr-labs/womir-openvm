@@ -37,6 +37,3 @@ pub use extension::*;
 
 mod wom_traits;
 pub use wom_traits::*;
-
-#[cfg(any(test, feature = "test-utils"))]
-mod test_utils;

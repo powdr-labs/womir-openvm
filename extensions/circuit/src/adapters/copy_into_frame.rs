@@ -46,9 +46,9 @@ impl<F: PrimeField32> CopyIntoFrameAdapterChipWom<F> {
     ) -> Self {
         Self {
             air: CopyIntoFrameAdapterAirWom {
-                execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
-                frame_bus,
-                memory_bridge,
+                _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                _frame_bus: frame_bus,
+                _memory_bridge: memory_bridge,
             },
             _marker: PhantomData,
         }
@@ -89,9 +89,9 @@ pub struct CopyIntoFrameAdapterColsWom<T> {
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct CopyIntoFrameAdapterAirWom {
-    pub(super) memory_bridge: MemoryBridge,
-    pub(super) execution_bridge: ExecutionBridge,
-    pub(super) frame_bus: FrameBus,
+    pub(super) _memory_bridge: MemoryBridge,
+    pub(super) _execution_bridge: ExecutionBridge,
+    pub(super) _frame_bus: FrameBus,
 }
 
 impl<F: Field> BaseAir<F> for CopyIntoFrameAdapterAirWom {
@@ -179,7 +179,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
             let value = read_record.rs1.unwrap().1;
             let future_fp = read_record.rs2.unwrap().1;
             let future_fp_f = F::from_canonical_u32(future_fp);
-            let abs_ptr = a + future_fp_f;
             let write_result = memory.write(F::ONE, a + future_fp_f, decompose(value));
             destination_id = Some(write_result.0);
         }

@@ -23,6 +23,7 @@ pub fn instr_r<F: PrimeField32>(
     )
 }
 
+#[allow(dead_code)]
 pub fn instr_i<F: PrimeField32>(
     opcode: usize,
     rd: usize,
@@ -45,6 +46,7 @@ pub fn add<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(BaseAluOpcode::ADD.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+#[allow(dead_code)]
 pub fn addi<F: PrimeField32>(rd: usize, rs1: usize, imm: usize) -> Instruction<F> {
     instr_i(BaseAluOpcode::ADD.global_opcode().as_usize(), rd, rs1, imm)
 }
@@ -171,6 +173,7 @@ pub fn call<F: PrimeField32>(
 
 /// CALL_INDIRECT instruction: Call function indirect (save PC and FP, jump to register)
 /// Saves current PC and FP, then sets PC and FP from registers
+#[allow(dead_code)]
 pub fn call_indirect<F: PrimeField32>(
     save_pc: usize,
     save_fp: usize,
