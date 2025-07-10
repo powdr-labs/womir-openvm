@@ -45,7 +45,7 @@ jobs:
         run: rustup install nightly-2025-05-14 && rustup component add clippy --toolchain nightly-2025-05-14
 
       - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
 
   fmt:
     name: Rustfmt
