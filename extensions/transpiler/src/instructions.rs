@@ -365,7 +365,7 @@ pub enum CopyIntoFrameOpcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x1265]
+#[opcode_offset = 0x127A]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum ConstOpcodes {
