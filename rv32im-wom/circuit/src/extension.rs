@@ -289,7 +289,7 @@ impl<F: PrimeField32> VmExtension<F> for Rv32I {
                 frame_bus,
                 memory_bridge,
             ),
-            Rv32CopyIntoFrameCoreChipWom::new(bitwise_lu_chip.clone(), range_checker.clone()),
+            Rv32CopyIntoFrameCoreChipWom::new(),
             offline_memory.clone(),
             shared_fp.clone(),
         );
