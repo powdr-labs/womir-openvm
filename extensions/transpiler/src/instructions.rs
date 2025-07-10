@@ -350,6 +350,28 @@ pub enum CopyIntoFrameOpcode {
     COPY_INTO_FRAME, // copy value into frame-relative address
 }
 
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
+#[opcode_offset = 0x1265]
+#[repr(usize)]
+#[allow(non_camel_case_types)]
+pub enum ConstOpcodes {
+    CONST32, // stores an immediate into a register
+}
+
 // =================================================================================================
 // Phantom opcodes
 // =================================================================================================

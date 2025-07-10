@@ -429,7 +429,13 @@ fn translate_directives<F: PrimeField32>(
 
             match op {
                 // Integer instructions
-                Op::I32Const { value: _ } => todo!(),
+                Op::I32Const { value } => {
+                    let output = output.unwrap().start as usize;
+                    vec![Directive::Instruction(ib::const_32_imm(
+                        output,
+                        value as usize,
+                    ))]
+                }
                 Op::I64Const { value: _ } => todo!(),
                 Op::I32Clz => todo!(),
                 Op::I32Ctz => todo!(),
