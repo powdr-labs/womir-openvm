@@ -49,8 +49,8 @@ impl Rv32AllocateFrameAdapterChipWom {
                 frame_bus,
                 memory_bridge,
             },
-            // Start from 1 because 0 is used by the startup code.
-            next_fp: 1,
+            // Start from 4 because 0 is used by the startup code.
+            next_fp: 4,
         }
     }
 }

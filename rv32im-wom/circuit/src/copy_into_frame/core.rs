@@ -139,25 +139,24 @@ where
         from_fp: u32,
         reads: I::Reads,
     ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
-        let Instruction { c, .. } = *instruction;
+        let Instruction { a, .. } = *instruction;
 
-        // COPY_INTO_FRAME: rd (c), rs1 (reads[0]), rs2 (reads[1])
+        // COPY_INTO_FRAME: rd (a), rs1 (reads[0]), rs2 (reads[1])
         let reads_array: [[F; RV32_REGISTER_NUM_LIMBS]; 2] = reads.into();
         let rs1_data = reads_array[0]; // Value to copy
         let rs2_data = reads_array[1]; // Frame pointer
 
-        // For mock implementation, just pass through rs1 data to be written to rd
-        // In real implementation, this would write to memory at [rs2 + rd]
         let output = AdapterRuntimeContextWom {
-            to_pc: Some(from_pc + DEFAULT_PC_STEP),
-            to_fp: Some(from_fp), // FP unchanged
+            to_pc: None,
+            to_fp: None,
+            // writes: [rs1_data, rs2_data].into(),
             writes: [rs1_data].into(),
         };
 
         Ok((
             output,
             Rv32CopyIntoFrameCoreRecord {
-                rd: c,
+                rd: a,
                 rs1_data,
                 rs2_data,
             },
