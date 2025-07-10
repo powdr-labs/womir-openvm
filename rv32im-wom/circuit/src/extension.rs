@@ -16,15 +16,19 @@ use openvm_circuit_primitives::{
 use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
 use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_rv32im_wom_transpiler::{
-    BaseAluOpcode, DivRemOpcode, MulHOpcode, MulOpcode, Rv32HintStoreOpcode, Rv32JaafOpcode,
-    Rv32JumpOpcode, Rv32Phantom,
+    BaseAluOpcode, DivRemOpcode, MulHOpcode, MulOpcode, Rv32AllocateFrameOpcode,
+    Rv32CopyIntoFrameOpcode, Rv32HintStoreOpcode, Rv32JaafOpcode, Rv32JumpOpcode, Rv32Phantom,
 };
 use openvm_stark_backend::p3_field::PrimeField32;
 
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
+use crate::allocate_frame::core::Rv32AllocateFrameCoreChipWom;
+use crate::copy_into_frame::core::Rv32CopyIntoFrameCoreChipWom;
 use crate::{adapters::*, wom_traits::*, *};
+
+const DEFAULT_INIT_FP: u32 = 0;
 
 /// Config for a VM with base extension and IO extension
 #[derive(Clone, Debug, VmConfig, derive_new::new, Serialize, Deserialize)]
@@ -142,6 +146,8 @@ pub enum Rv32IExecutor<F: PrimeField32> {
     BaseAlu(Rv32WomBaseAluChip<F>),
     Jaaf(Rv32JaafChipWom<F>),
     Jump(Rv32JumpChipWom<F>),
+    AllocateFrame(Rv32AllocateFrameChipWom<F>),
+    CopyIntoFrame(Rv32CopyIntoFrameChipWom<F>),
     // LessThan(Rv32LessThanChip<F>),
     // Shift(Rv32ShiftChip<F>),
     // LoadStore(Rv32LoadStoreChip<F>),
@@ -213,7 +219,7 @@ impl<F: PrimeField32> VmExtension<F> for Rv32I {
         let offline_memory = builder.system_base().offline_memory();
         let _pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
 
-        let shared_fp = Arc::new(Mutex::new(0u32));
+        let shared_fp = Arc::new(Mutex::new(DEFAULT_INIT_FP));
 
         let bitwise_lu_chip = if let Some(&chip) = builder
             .find_chip::<SharedBitwiseOperationLookupChip<8>>()
@@ -259,6 +265,38 @@ impl<F: PrimeField32> VmExtension<F> for Rv32I {
             shared_fp.clone(),
         );
         inventory.add_executor(jump_chip, Rv32JumpOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let allocate_frame_chip = Rv32AllocateFrameChipWom::new(
+            Rv32AllocateFrameAdapterChipWom::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+            ),
+            Rv32AllocateFrameCoreChipWom::new(bitwise_lu_chip.clone(), range_checker.clone()),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(
+            allocate_frame_chip,
+            Rv32AllocateFrameOpcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        let copy_into_frame_chip = Rv32CopyIntoFrameChipWom::new(
+            Rv32CopyIntoFrameAdapterChipWom::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+            ),
+            Rv32CopyIntoFrameCoreChipWom::new(),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(
+            copy_into_frame_chip,
+            Rv32CopyIntoFrameOpcode::iter().map(|x| x.global_opcode()),
+        )?;
 
         // let lt_chip = Rv32LessThanChip::new(
         //     Rv32WomBaseAluAdapterChip::new(

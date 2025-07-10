@@ -1,6 +1,7 @@
 use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, VmOpcode};
 use openvm_rv32im_wom_transpiler::{
-    BaseAluOpcode as BaseAluOpcodeWom, LessThanOpcode, Rv32JaafOpcode, Rv32JumpOpcode, ShiftOpcode,
+    BaseAluOpcode as BaseAluOpcodeWom, LessThanOpcode, Rv32AllocateFrameOpcode,
+    Rv32CopyIntoFrameOpcode, Rv32JaafOpcode, Rv32JumpOpcode, ShiftOpcode,
 };
 use openvm_stark_backend::p3_field::PrimeField32;
 
@@ -215,6 +216,42 @@ pub fn call_indirect<F: PrimeField32>(
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: rs2 (FP source)
         F::ONE,  // f: enabled
         F::ZERO, // g: imm sign
+    )
+}
+
+/// ALLOCATE_FRAME instruction: Allocate frame and return pointer
+/// target_reg receives the allocated pointer, amount_imm is the amount to allocate
+pub fn allocate_frame_imm<F: PrimeField32>(target_reg: usize, amount_imm: usize) -> Instruction<F> {
+    Instruction::new(
+        Rv32AllocateFrameOpcode::ALLOCATE_FRAME.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
+        F::from_canonical_usize(amount_imm),                                  // b: amount_imm
+        F::ZERO,                                                              // c: (not used)
+        F::ZERO,                                                              // d: (not used)
+        F::ZERO,                                                              // e: (not used)
+        F::ONE,                                                               // f: enabled
+        F::ZERO,                                                              // g: imm sign
+    )
+}
+
+/// COPY_INTO_FRAME instruction: Copy value into frame-relative address
+/// dest_fp is the frame pointer, src_value is the value to copy, dest_offset is the offset
+/// Writes src_value content to [dest_fp[dest_offset]]
+pub fn copy_into_frame<F: PrimeField32>(
+    target_reg: usize,
+    src_reg: usize,
+    target_fp: usize,
+) -> Instruction<F> {
+    Instruction::new(
+        Rv32CopyIntoFrameOpcode::COPY_INTO_FRAME.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * src_reg),    // b: register
+        // containing value to copy
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_fp), // c: future fp to be used as reference for target_reg
+        F::ZERO,                                                             // d: (not used)
+        F::ZERO,                                                             // e: (not used)
+        F::ONE,                                                              // f: enabled
+        F::ZERO,                                                             // g: (not used)
     )
 }
 
