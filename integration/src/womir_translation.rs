@@ -35,13 +35,7 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, _entry_point: &str) -
     drop(functions);
     let mut linked_program = linked_program
         .into_iter()
-        .map(|d| {
-            if let Some(i) = d.into_instruction(&label_map) {
-                i
-            } else {
-                unreachable!("All remaining directives should be instructions")
-            }
-        })
+        .filter_map(|d| d.into_instruction(&label_map))
         .collect::<Vec<_>>();
 
     // Now we need a little bit of startup code to call the entry point function.
@@ -97,7 +91,7 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, _entry_point: &str) -
 
 // The instructions in this IR are 1-to-1 mapped to OpenVM instructions,
 // and it is needed because we can only resolve the labels to PCs during linking.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[allow(dead_code)]
 enum Directive<F: Clone> {
     Nop,
