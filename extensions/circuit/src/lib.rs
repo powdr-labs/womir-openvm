@@ -13,7 +13,6 @@ mod less_than;
 mod load_sign_extend;
 mod loadstore;
 mod mul;
-mod mulh;
 mod shift;
 
 pub use allocate_frame::*;
@@ -29,7 +28,6 @@ pub use less_than::*;
 pub use load_sign_extend::*;
 pub use loadstore::*;
 pub use mul::*;
-pub use mulh::*;
 pub use shift::*;
 
 mod extension;
