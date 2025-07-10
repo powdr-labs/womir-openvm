@@ -28,7 +28,7 @@ jobs:
         run: cargo build --release
 
       - name: Install Rust deps
-        run: rustup install nightly-2025-05-14 && rustup component add rust-src clippy rustfmt --toolchain nightly-2025-05-14
+        run: rustup install nightly-2025-05-14 && rustup component add rust-src --toolchain nightly-2025-05-14
 
       - name: Run tests
         run: cargo test --release
@@ -40,6 +40,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install Rust deps
+        run: rustup install nightly-2025-05-14 && rustup component add clippy --toolchain nightly-2025-05-14
 
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
