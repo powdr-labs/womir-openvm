@@ -475,13 +475,22 @@ fn translate_directives<F: PrimeField32>(
                 Op::I64Store32 { memarg: _ } => todo!(),
                 Op::MemorySize { mem: _ } => todo!(),
                 Op::MemoryGrow { mem: _ } => todo!(),
-                Op::MemoryInit { data_index: _, mem: _ } => todo!(),
-                Op::MemoryCopy { dst_mem: _, src_mem: _ } => todo!(),
+                Op::MemoryInit {
+                    data_index: _,
+                    mem: _,
+                } => todo!(),
+                Op::MemoryCopy {
+                    dst_mem: _,
+                    src_mem: _,
+                } => todo!(),
                 Op::MemoryFill { mem: _ } => todo!(),
                 Op::DataDrop { data_index: _ } => todo!(),
 
                 // Table instructions
-                Op::TableInit { elem_index: _, table: _ } => todo!(),
+                Op::TableInit {
+                    elem_index: _,
+                    table: _,
+                } => todo!(),
                 Op::TableCopy {
                     dst_table: _,
                     src_table: _,
