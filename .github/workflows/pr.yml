@@ -28,7 +28,7 @@ jobs:
         run: cargo build --release
 
       - name: Install Rust deps
-        run: rustup install nightly-2025-05-14 && rustup component add rust-src --toolchain nightly-2025-05-14
+        run: rustup install nightly-2025-05-14 && rustup component add rust-src clippy rustfmt --toolchain nightly-2025-05-14
 
       - name: Run tests
         run: cargo test --release
