@@ -24,8 +24,8 @@ use openvm_womir_transpiler::{
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
-use crate::allocate_frame::core::AllocateFrameCoreChipWom;
-use crate::copy_into_frame::core::CopyIntoFrameCoreChipWom;
+use crate::allocate_frame::AllocateFrameCoreChipWom;
+use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
 use crate::{adapters::*, wom_traits::*, *};
 
 const DEFAULT_INIT_FP: u32 = 0;
