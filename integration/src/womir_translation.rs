@@ -258,9 +258,9 @@ fn translate_directives<F: PrimeField32>(
             dest_frame,
             dest_word,
         } => vec![Directive::Instruction(ib::copy_into_frame(
-            dest_frame as usize,
-            src_word as usize,
             dest_word as usize,
+            src_word as usize,
+            dest_frame as usize,
         ))],
         W::Jump { target } => vec![Directive::Jump { target }],
         W::JumpOffset { offset: _ } => todo!(),
@@ -416,7 +416,7 @@ fn translate_directives<F: PrimeField32>(
                     let input1 = inputs[0].start as usize;
                     let input2 = inputs[1].start as usize;
                     let output = output.unwrap().start as usize;
-                    return vec![Directive::Instruction(op_fn(input1, input2, output))];
+                    return vec![Directive::Instruction(op_fn(output, input1, input2))];
                 }
                 Err(op) => op,
             };
