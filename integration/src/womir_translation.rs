@@ -1,7 +1,7 @@
 use std::{collections::HashMap, vec};
 
 use crate::instruction_builder as ib;
-use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program};
+use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
 use womir::{
     generic_ir::GenericIrSetting,
@@ -30,12 +30,12 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
         })
         .collect::<Vec<_>>();
 
-    let (linked_program, label_map) = womir::linker::link(&functions, 1);
+    let (linked_program, mut label_map) = womir::linker::link(&functions, 1);
     drop(functions);
-    let mut linked_program = linked_program
-        .into_iter()
-        .filter_map(|d| d.into_instruction(&label_map))
-        .collect::<Vec<_>>();
+
+    for v in label_map.values_mut() {
+        v.pc *= riscv::RV32_REGISTER_NUM_LIMBS as u32;
+    }
 
     // Sanity check the entry point function.
     let entry_point = &label_map[entry_point];
@@ -49,14 +49,32 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
     // We assume the initial frame has space for at least one word: the frame pointer
     // to the entry point function.
     let start_offset = linked_program.len();
+
+    let mut linked_program = linked_program
+        .into_iter()
+        // Remove `nop` added by the linker to avoid pc=0 being a valid instruction.
+        .skip(1)
+        .map(|d| {
+            if let Some(i) = d.into_instruction(&label_map) {
+                i
+            } else {
+                unreachable!("All remaining directives should be instructions")
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // We assume that the loop above removes a single `nop` introduced by the linker.
+    assert_eq!(linked_program.len(), start_offset - 1);
+
     linked_program.extend([
         ib::allocate_frame_imm(0, entry_point.frame_size.unwrap() as usize),
         ib::call(0, 1, entry_point.pc as usize, 0),
+        ib::halt(),
     ]);
 
     // TODO: make womir read and carry debug info
     // Skip the first instruction, which is a nop inserted by the linker, and adjust pc_base accordingly.
-    let program = Program::new_without_debug_infos(&linked_program[1..], 4, 4);
+    let program = Program::new_without_debug_infos(&linked_program, 4, 4);
     drop(linked_program);
 
     let memory_image = ir_program
@@ -69,7 +87,7 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
                 Value(v) => v,
                 FuncAddr(idx) => {
                     let label = func_idx_to_label(idx);
-                    label_map[&label].pc * 4
+                    label_map[&label].pc
                 }
                 FuncFrameSize(func_idx) => {
                     let label = func_idx_to_label(func_idx);
@@ -97,7 +115,7 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
         .collect();
 
     VmExe::new(program)
-        .with_pc_start(start_offset as u32 * 4)
+        .with_pc_start((start_offset * riscv::RV32_REGISTER_NUM_LIMBS) as u32)
         .with_init_memory(memory_image)
 }
 

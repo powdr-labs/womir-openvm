@@ -1,4 +1,5 @@
-use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, VmOpcode};
+use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOpcode, VmOpcode};
+use openvm_rv32im_transpiler::Rv32LoadStoreOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, JaafOpcode, JumpOpcode,
@@ -217,7 +218,7 @@ pub fn allocate_frame_imm<F: PrimeField32>(target_reg: usize, amount_imm: usize)
     Instruction::new(
         AllocateFrameOpcode::ALLOCATE_FRAME.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
-        F::from_canonical_usize(amount_imm),                                  // b: amount_imm
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * amount_imm), // b: amount_imm
         F::ZERO,                                                              // c: (not used)
         F::ZERO,                                                              // d: (not used)
         F::ZERO,                                                              // e: (not used)
@@ -286,5 +287,33 @@ pub fn jump_if_zero<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> 
         F::ZERO,                            // e: (not used)
         F::ONE,                             // f: enabled
         F::ZERO,                            // g: imm sign
+    )
+}
+
+#[allow(dead_code)]
+pub fn reveal<F: PrimeField32>(rs1_data: usize, rd_index: usize) -> Instruction<F> {
+    Instruction::new(
+        Rv32LoadStoreOpcode::STOREW.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1_data),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd_index),
+        F::ZERO,
+        F::ONE,
+        F::from_canonical_usize(3),
+        F::ONE,
+        F::ZERO,
+    )
+}
+
+#[allow(dead_code)]
+pub fn halt<F: PrimeField32>() -> Instruction<F> {
+    Instruction::new(
+        SystemOpcode::TERMINATE.global_opcode(),
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
     )
 }
