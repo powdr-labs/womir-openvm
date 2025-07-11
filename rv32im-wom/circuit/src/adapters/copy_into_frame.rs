@@ -29,7 +29,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom};
 
-use super::RV32_REGISTER_NUM_LIMBS;
+use super::{compose, decompose, RV32_REGISTER_NUM_LIMBS};
 
 #[derive(Debug)]
 pub struct Rv32CopyIntoFrameAdapterChipWom<F: Field> {
@@ -58,8 +58,8 @@ impl<F: PrimeField32> Rv32CopyIntoFrameAdapterChipWom<F> {
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Rv32CopyIntoFrameReadRecord {
-    pub rs1: Option<RecordId>, // Value to copy
-    pub rs2: Option<RecordId>, // Frame pointer
+    pub rs1: Option<(RecordId, u32)>, // Value to copy
+    pub rs2: Option<(RecordId, u32)>, // Frame pointer
 }
 
 #[repr(C)]
@@ -107,14 +107,7 @@ impl<F: Field> ColumnsAir<F> for Rv32CopyIntoFrameAdapterAirWom {
 }
 
 impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32CopyIntoFrameAdapterAirWom {
-    type Interface = BasicAdapterInterface<
-        AB::Expr,
-        MinimalInstruction<AB::Expr>,
-        2,
-        1,
-        RV32_REGISTER_NUM_LIMBS,
-        RV32_REGISTER_NUM_LIMBS,
-    >;
+    type Interface = BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 0, 0, 0, 0>;
 
     fn eval(
         &self,
@@ -147,24 +140,24 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32CopyIntoFrameAdapterChipWom<F>
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
-        _fp: u32,
+        fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
-        let Instruction { a, b, .. } = *instruction;
+        let Instruction { b, c, .. } = *instruction;
 
-        // COPY_INTO_FRAME: rs2 (a), rs1 (b), rd (c)
-        // For the mock implementation, use absolute addressing
-        let value_to_copy = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b);
-        let frame_pointer = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, a);
+        // COPY_INTO_FRAME: target_reg (a), src_reg (b), target_fp (c)
+        let fp_f = F::from_canonical_u32(fp);
+        let value_to_copy = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b + fp_f);
+        let future_fp = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, c + fp_f);
 
         Ok((
-            [value_to_copy.1, frame_pointer.1],
+            [value_to_copy.1, future_fp.1],
             Rv32CopyIntoFrameReadRecord {
-                rs1: Some(value_to_copy.0),
-                rs2: Some(frame_pointer.0),
+                rs1: Some((value_to_copy.0, compose(value_to_copy.1))),
+                rs2: Some((future_fp.0, compose(future_fp.1))),
             },
         ))
     }
@@ -175,32 +168,32 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32CopyIntoFrameAdapterChipWom<F>
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        output: AdapterRuntimeContextWom<F, Self::Interface>,
+        _output: AdapterRuntimeContextWom<F, Self::Interface>,
         read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
-        let Instruction { c, f: enabled, .. } = *instruction;
+        let Instruction { a, f: enabled, .. } = *instruction;
 
         let mut destination_id = None;
 
         if enabled != F::ZERO {
-            // For the mock implementation, we write to rd register
-            // In a real implementation, this would compute [rs2 + rd] and write there
-            if let Some(value_to_write) = output.writes.first() {
-                let write_result = memory.write(F::ONE, c, *value_to_write);
-                destination_id = Some(write_result.0);
-            }
+            let value = read_record.rs1.unwrap().1;
+            let future_fp = read_record.rs2.unwrap().1;
+            let future_fp_f = F::from_canonical_u32(future_fp);
+            let abs_ptr = a + future_fp_f;
+            let write_result = memory.write(F::ONE, a + future_fp_f, decompose(value));
+            destination_id = Some(write_result.0);
         }
 
         Ok((
             ExecutionState {
-                pc: output.to_pc.unwrap_or(from_state.pc + DEFAULT_PC_STEP),
+                pc: from_state.pc + DEFAULT_PC_STEP,
                 timestamp: memory.timestamp(),
             },
-            output.to_fp.unwrap_or(from_frame.fp),
+            from_frame.fp,
             Self::WriteRecord {
                 from_state,
                 from_frame,
-                rd: c.as_canonical_u32(),
+                rd: a.as_canonical_u32(),
                 rd_id: destination_id,
             },
         ))
@@ -222,14 +215,14 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32CopyIntoFrameAdapterChipWom<F>
 
         // Handle value register read (rs1)
         if let Some(value_id) = read_record.rs1 {
-            let value_record = memory.record_by_id(value_id);
+            let value_record = memory.record_by_id(value_id.0);
             adapter_cols.value_reg_ptr = value_record.pointer;
             aux_cols_factory.generate_read_aux(value_record, &mut adapter_cols.value_reg_aux_cols);
         }
 
         // Handle frame pointer register read (rs2)
         if let Some(frame_ptr_id) = read_record.rs2 {
-            let frame_ptr_record = memory.record_by_id(frame_ptr_id);
+            let frame_ptr_record = memory.record_by_id(frame_ptr_id.0);
             adapter_cols.frame_ptr_reg_ptr = frame_ptr_record.pointer;
             aux_cols_factory
                 .generate_read_aux(frame_ptr_record, &mut adapter_cols.frame_ptr_reg_aux_cols);

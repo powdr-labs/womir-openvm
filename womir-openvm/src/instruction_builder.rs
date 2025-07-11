@@ -238,19 +238,20 @@ pub fn allocate_frame_imm<F: PrimeField32>(target_reg: usize, amount_imm: usize)
 /// dest_fp is the frame pointer, src_value is the value to copy, dest_offset is the offset
 /// Writes src_value content to [dest_fp[dest_offset]]
 pub fn copy_into_frame<F: PrimeField32>(
-    dest_fp: usize,
-    src_value: usize,
-    dest_offset: usize,
+    target_reg: usize,
+    src_reg: usize,
+    target_fp: usize,
 ) -> Instruction<F> {
     Instruction::new(
         Rv32CopyIntoFrameOpcode::COPY_INTO_FRAME.global_opcode(),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * dest_fp), // a: frame pointer
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * src_value), // b: value to copy
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * dest_offset), // c: offset, target address
-        F::ZERO,                                                               // d: (not used)
-        F::ZERO,                                                               // e: (not used)
-        F::ONE,                                                                // f: enabled
-        F::ZERO,                                                               // g: imm sign
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * src_reg),    // b: register
+        // containing value to copy
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_fp), // c: future fp to be used as reference for target_reg
+        F::ZERO,                                                             // d: (not used)
+        F::ZERO,                                                             // e: (not used)
+        F::ONE,                                                              // f: enabled
+        F::ZERO,                                                             // g: (not used)
     )
 }
 
