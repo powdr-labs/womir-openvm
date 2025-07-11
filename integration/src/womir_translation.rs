@@ -1,3 +1,4 @@
+use core::num;
 use std::{collections::HashMap, vec};
 
 use crate::instruction_builder as ib;
@@ -6,7 +7,7 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use womir::{
     generic_ir::GenericIrSetting,
     linker::LabelValue,
-    loader::{flattening::WriteOnceASM, func_idx_to_label},
+    loader::{flattening::WriteOnceASM, func_idx_to_label, CommonProgram},
 };
 
 pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) -> VmExe<F> {
@@ -37,14 +38,6 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
         v.pc *= riscv::RV32_REGISTER_NUM_LIMBS as u32;
     }
 
-    // Sanity check the entry point function.
-    let entry_point = &label_map[entry_point];
-    let entry_point_func_type = ir_program.c.get_func_type(entry_point.func_idx.unwrap());
-    assert!(
-        entry_point_func_type.ty.params().is_empty(),
-        "Entry point function should not have parameters"
-    );
-
     // Now we need a little bit of startup code to call the entry point function.
     // We assume the initial frame has space for at least one word: the frame pointer
     // to the entry point function.
@@ -66,11 +59,9 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
     // We assume that the loop above removes a single `nop` introduced by the linker.
     assert_eq!(linked_program.len(), start_offset - 1);
 
-    linked_program.extend([
-        ib::allocate_frame_imm(0, entry_point.frame_size.unwrap() as usize),
-        ib::call(0, 1, entry_point.pc as usize, 0),
-        ib::halt(),
-    ]);
+    // Create the startup code to call the entry point function.
+    let entry_point = &label_map[entry_point];
+    linked_program.extend(create_startup_code(&ir_program.c, entry_point));
 
     // TODO: make womir read and carry debug info
     // Skip the first instruction, which is a nop inserted by the linker, and adjust pc_base accordingly.
@@ -117,6 +108,48 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
     VmExe::new(program)
         .with_pc_start((start_offset * riscv::RV32_REGISTER_NUM_LIMBS) as u32)
         .with_init_memory(memory_image)
+}
+
+fn create_startup_code<F>(ctx: &CommonProgram, entry_point: &LabelValue) -> Vec<Instruction<F>>
+where
+    F: PrimeField32,
+{
+    let mut code = vec![ib::allocate_frame_imm(
+        0,
+        entry_point.frame_size.unwrap() as usize,
+    )];
+
+    let entry_point_func_type = &ctx.get_func_type(entry_point.func_idx.unwrap()).ty;
+
+    // If the entry point function has arguments, we need to fill them with the result from read32
+    let params = entry_point_func_type.params();
+    let num_input_words = womir::word_count_types::<GenericIrSetting>(params);
+    // This is a little hacky because we know the initial first allocated frame starts at 4,
+    // so we can just write directly into it by calculating the offset.
+    // address 4: reserved for return address
+    // address 8: reserved for frame pointer
+    // address 12: first argument
+    // address 12 + i * 4: i-th argument
+    let mut ptr = 12;
+    for _ in 0..num_input_words {
+        code.push(ib::read32(ptr as usize));
+        ptr += 4;
+    }
+
+    code.push(ib::call(0, 1, entry_point.pc as usize, 0));
+
+    // We can also read the return values directly from the function's frame, which happens
+    // to be right after the arguments.
+    let results = entry_point_func_type.results();
+    let num_output_words = womir::word_count_types::<GenericIrSetting>(results);
+    for i in 0..num_output_words {
+        code.push(ib::reveal(ptr as usize, i as usize));
+        ptr += 4;
+    }
+
+    code.push(ib::halt());
+
+    code
 }
 
 // The instructions in this IR are 1-to-1 mapped to OpenVM instructions,
