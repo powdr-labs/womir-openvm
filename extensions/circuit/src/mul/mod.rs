@@ -1,12 +1,11 @@
-use openvm_circuit::arch::VmChipWrapper;
-
-use super::adapters::{Rv32MultAdapterChip, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+use super::adapters::{WomMultAdapterChip, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+use crate::VmChipWrapperWom;
 
 mod core;
 pub use core::*;
 
-pub type Rv32MultiplicationChip<F> = VmChipWrapper<
+pub type WomMultiplicationChip<F> = VmChipWrapperWom<
     F,
-    Rv32MultAdapterChip<F>,
+    WomMultAdapterChip<F>,
     MultiplicationCoreChip<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;

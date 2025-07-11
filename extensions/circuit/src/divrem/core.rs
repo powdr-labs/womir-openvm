@@ -28,6 +28,8 @@ use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
 
+use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
+
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
 pub struct DivRemCoreCols<T, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
@@ -428,7 +430,7 @@ pub(super) enum DivRemCoreSpecialCase {
 }
 
 impl<F: PrimeField32, I: VmAdapterInterface<F>, const NUM_LIMBS: usize, const LIMB_BITS: usize>
-    VmCoreChip<F, I> for DivRemCoreChip<NUM_LIMBS, LIMB_BITS>
+    VmCoreChipWom<F, I> for DivRemCoreChip<NUM_LIMBS, LIMB_BITS>
 where
     I::Reads: Into<[[F; NUM_LIMBS]; 2]>,
     I::Writes: From<[[F; NUM_LIMBS]; 1]>,
@@ -441,8 +443,9 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
+        _from_frame: u32,
         reads: I::Reads,
-    ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
+    ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
         let Instruction { opcode, .. } = instruction;
         let divrem_opcode = DivRemOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
@@ -501,9 +504,13 @@ where
         };
 
         let r_prime_f = r_prime.map(F::from_canonical_u32);
-        let output = AdapterRuntimeContext::without_pc([
-            (if is_div { &q } else { &r }).map(F::from_canonical_u32)
-        ]);
+        let writes = [(if is_div { &q } else { &r }).map(F::from_canonical_u32)].into();
+
+        let output = AdapterRuntimeContextWom {
+            to_pc: None,
+            to_fp: None,
+            writes,
+        };
         let record = DivRemCoreRecord {
             opcode: divrem_opcode,
             b: data[0],

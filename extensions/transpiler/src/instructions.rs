@@ -257,30 +257,6 @@ pub enum MulOpcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x1251]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum MulHOpcode {
-    MULH,
-    MULHSU,
-    MULHU,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
 #[opcode_offset = 0x1254]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
