@@ -172,28 +172,28 @@ impl<F: PrimeField32> Directive<F> {
                 ))
             }
             Directive::Jump { target } => {
-                let pc = label_map.get(&target).unwrap().pc;
+                let pc = label_map.get(&target).unwrap().pc * 4;
                 Some(ib::jump(pc as usize))
             }
             Directive::JumpIf {
                 target,
                 condition_reg,
             } => {
-                let pc = label_map.get(&target)?.pc;
+                let pc = label_map.get(&target)?.pc * 4;
                 Some(ib::jump_if(condition_reg as usize, pc as usize))
             }
             Directive::_JumpIfZero {
                 target,
                 condition_reg,
             } => {
-                let pc = label_map.get(&target)?.pc;
+                let pc = label_map.get(&target)?.pc * 4;
                 Some(ib::jump_if_zero(condition_reg as usize, pc as usize))
             }
             Directive::Jaaf {
                 target,
                 new_frame_ptr,
             } => {
-                let pc = label_map.get(&target)?.pc;
+                let pc = label_map.get(&target)?.pc * 4;
                 Some(ib::jaaf(pc as usize, new_frame_ptr as usize))
             }
             Directive::JaafSave {
@@ -201,7 +201,7 @@ impl<F: PrimeField32> Directive<F> {
                 new_frame_ptr,
                 saved_caller_fp,
             } => {
-                let pc = label_map.get(&target)?.pc;
+                let pc = label_map.get(&target)?.pc * 4;
                 Some(ib::jaaf_save(
                     saved_caller_fp as usize,
                     pc as usize,
@@ -214,7 +214,7 @@ impl<F: PrimeField32> Directive<F> {
                 saved_ret_pc,
                 saved_caller_fp,
             } => {
-                let pc = label_map.get(&target_pc)?.pc;
+                let pc = label_map.get(&target_pc)?.pc * 4;
                 Some(ib::call(
                     pc as usize,
                     new_frame_ptr as usize,
