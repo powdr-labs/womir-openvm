@@ -217,7 +217,7 @@ pub fn allocate_frame_imm<F: PrimeField32>(target_reg: usize, amount_imm: usize)
     Instruction::new(
         AllocateFrameOpcode::ALLOCATE_FRAME.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
-        F::from_canonical_usize(amount_imm),                                  // b: amount_imm
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * amount_imm), // b: amount_imm
         F::ZERO,                                                              // c: (not used)
         F::ZERO,                                                              // d: (not used)
         F::ZERO,                                                              // e: (not used)
