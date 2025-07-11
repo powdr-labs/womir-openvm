@@ -459,4 +459,65 @@ mod tests {
             None,
         )
     }
+
+    #[test]
+    fn test_const32_simple() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0x1234, 0x5678), // Load 0x56781234 into x8
+            reveal(8, 0),
+            halt(),
+        ];
+
+        run_vm_test("CONST32 simple test", instructions, 0x56781234, None)
+    }
+
+    #[test]
+    fn test_const32_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(10, 0, 0), // Load 0 into x10
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("CONST32 zero test", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_const32_max_value() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(12, 0xFFFF, 0xFFFF), // Load 0xFFFFFFFF into x12
+            reveal(12, 0),
+            halt(),
+        ];
+
+        run_vm_test("CONST32 max value test", instructions, 0xFFFFFFFF, None)
+    }
+
+    #[test]
+    fn test_const32_multiple_registers() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
+            wom::const_32_imm::<F>(9, 200, 0), // Load 200 into x9
+            wom::add::<F>(11, 8, 9),           // x11 = x8 + x9 = 300
+            reveal(11, 0),
+            halt(),
+        ];
+
+        run_vm_test("CONST32 multiple registers test", instructions, 300, None)
+    }
+
+    #[test]
+    fn test_const32_with_arithmetic() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 1000, 0), // Load 1000 into x8
+            wom::const_32_imm::<F>(9, 234, 0),  // Load 234 into x9
+            wom::add::<F>(10, 8, 9),            // x10 = x8 + x9 = 1234
+            wom::const_32_imm::<F>(11, 34, 0),  // Load 34 into x11
+            wom::sub::<F>(12, 10, 11),          // x12 = x10 - x11 = 1200
+            reveal(12, 0),
+            halt(),
+        ];
+
+        run_vm_test("CONST32 with arithmetic test", instructions, 1200, None)
+    }
 }
