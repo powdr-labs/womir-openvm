@@ -104,13 +104,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create and execute program
     let mut args = args();
     if args.len() < 3 {
-        eprintln!("Usage: {} <wasm_path> <entry_point>", args.next().unwrap());
+        eprintln!(
+            "Usage: {} <wasm_path> <entry_point> [<32_bit_args>...]",
+            args.next().unwrap()
+        );
         return Ok(());
     }
     let wasm_path = args.nth(1).unwrap();
     let entry_point = args.next().unwrap();
     let exe = womir_translation::program_from_wasm::<F>(&wasm_path, &entry_point);
-    let stdin = StdIn::default();
+
+    let inputs = args
+        .flat_map(|arg| {
+            let val = arg.parse::<u32>().unwrap();
+            val.to_le_bytes().into_iter()
+        })
+        .collect::<Vec<_>>();
+
+    let stdin = StdIn::from_bytes(&inputs);
 
     let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
     println!("output: {output:?}");
