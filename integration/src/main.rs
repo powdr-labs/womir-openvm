@@ -520,4 +520,98 @@ mod tests {
 
         run_vm_test("CONST32 with arithmetic test", instructions, 1200, None)
     }
+
+    #[test]
+    fn test_lt_u_true() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 100, 0),  // Load 100 into x8
+            wom::const_32_imm::<F>(9, 200, 0),  // Load 200 into x9
+            wom::lt_u::<F>(10, 8, 9),           // x10 = (x8 < x9) = (100 < 200) = 1
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLTU true test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_lt_u_false() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 200, 0),  // Load 200 into x8
+            wom::const_32_imm::<F>(9, 100, 0),  // Load 100 into x9
+            wom::lt_u::<F>(10, 8, 9),           // x10 = (x8 < x9) = (200 < 100) = 0
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLTU false test", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_lt_u_equal() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 150, 0),  // Load 150 into x8
+            wom::const_32_imm::<F>(9, 150, 0),  // Load 150 into x9
+            wom::lt_u::<F>(10, 8, 9),           // x10 = (x8 < x9) = (150 < 150) = 0
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLTU equal test", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_lt_s_positive() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 50, 0),   // Load 50 into x8
+            wom::const_32_imm::<F>(9, 100, 0),  // Load 100 into x9
+            wom::lt_s::<F>(10, 8, 9),           // x10 = (x8 < x9) = (50 < 100) = 1
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLT positive numbers test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_lt_s_negative() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0xFFFF, 0xFFFF), // Load -1 into x8
+            wom::const_32_imm::<F>(9, 5, 0),           // Load 5 into x9
+            wom::lt_s::<F>(10, 8, 9),                  // x10 = (x8 < x9) = (-1 < 5) = 1
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLT negative vs positive test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_lt_s_both_negative() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0xFFFE, 0xFFFF), // Load -2 into x8
+            wom::const_32_imm::<F>(9, 0xFFFC, 0xFFFF), // Load -4 into x9
+            wom::lt_s::<F>(10, 8, 9),                  // x10 = (x8 < x9) = (-2 < -4) = 0
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLT both negative test", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_lt_comparison_chain() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 10, 0),   // x8 = 10
+            wom::const_32_imm::<F>(9, 20, 0),   // x9 = 20
+            wom::const_32_imm::<F>(10, 30, 0),  // x10 = 30
+            wom::lt_u::<F>(11, 8, 9),           // x11 = (10 < 20) = 1
+            wom::lt_u::<F>(12, 9, 10),          // x12 = (20 < 30) = 1
+            wom::and::<F>(13, 11, 12),          // x13 = x11 & x12 = 1 & 1 = 1
+            reveal(13, 0),
+            halt(),
+        ];
+
+        run_vm_test("Less than comparison chain test", instructions, 1, None)
+    }
 }
