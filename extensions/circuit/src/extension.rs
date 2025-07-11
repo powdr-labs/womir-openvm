@@ -17,14 +17,15 @@ use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
 use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAluOpcode, CopyIntoFrameOpcode, DivRemOpcode, HintStoreOpcode,
-    JaafOpcode, JumpOpcode, MulHOpcode, MulOpcode, Phantom,
+    AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode,
+    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, MulHOpcode, MulOpcode, Phantom,
 };
 
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use crate::allocate_frame::AllocateFrameCoreChipWom;
+use crate::consts::ConstsCoreChipWom;
 use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
 use crate::{adapters::*, wom_traits::*, *};
 
@@ -146,7 +147,8 @@ pub enum WomirIExecutor<F: PrimeField32> {
     Jump(JumpChipWom<F>),
     AllocateFrame(AllocateFrameChipWom<F>),
     CopyIntoFrame(CopyIntoFrameChipWom<F>),
-    // LessThan(Rv32LessThanChip<F>),
+    Const32(ConstsChipWom<F>),
+    LessThan(LessThanChipWom<F>),
     // Shift(Rv32ShiftChip<F>),
     // LoadStore(Rv32LoadStoreChip<F>),
     // LoadSignExtend(Rv32LoadSignExtendChip<F>),
@@ -285,17 +287,27 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             CopyIntoFrameOpcode::iter().map(|x| x.global_opcode()),
         )?;
 
-        // let lt_chip = Rv32LessThanChip::new(
-        //     Rv32WomBaseAluAdapterChip::new(
-        //         execution_bus,
-        //         program_bus,
-        //         memory_bridge,
-        //         bitwise_lu_chip.clone(),
-        //     ),
-        //     LessThanCoreChip::new(bitwise_lu_chip.clone(), LessThanOpcode::CLASS_OFFSET),
-        //     offline_memory.clone(),
-        // );
-        // inventory.add_executor(lt_chip, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
+        let consts_chip = ConstsChipWom::new(
+            ConstsAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge),
+            ConstsCoreChipWom::new(),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(consts_chip, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
+
+        let lt_chip = LessThanChipWom::new(
+            WomBaseAluAdapterChip::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                bitwise_lu_chip.clone(),
+            ),
+            LessThanCoreChip::new(bitwise_lu_chip.clone(), LessThanOpcode::CLASS_OFFSET),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(lt_chip, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
         //
         // let shift_chip = Rv32ShiftChip::new(
         //     Rv32WomBaseAluAdapterChip::new(
