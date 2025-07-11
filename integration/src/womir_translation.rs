@@ -1,7 +1,7 @@
 use std::{collections::HashMap, vec};
 
 use crate::instruction_builder as ib;
-use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program};
+use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
 use womir::{
     generic_ir::GenericIrSetting,
@@ -30,8 +30,12 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
         })
         .collect::<Vec<_>>();
 
-    let (linked_program, label_map) = womir::linker::link(&functions, 1);
+    let (linked_program, mut label_map) = womir::linker::link(&functions, 1);
     drop(functions);
+
+    for v in label_map.values_mut() {
+        v.pc *= riscv::RV32_REGISTER_NUM_LIMBS as u32;
+    }
 
     // Sanity check the entry point function.
     let entry_point = &label_map[entry_point];
@@ -65,6 +69,7 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
     linked_program.extend([
         ib::allocate_frame_imm(0, entry_point.frame_size.unwrap() as usize),
         ib::call(0, 1, entry_point.pc as usize, 0),
+        ib::halt(),
     ]);
 
     // TODO: make womir read and carry debug info
@@ -82,7 +87,7 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
                 Value(v) => v,
                 FuncAddr(idx) => {
                     let label = func_idx_to_label(idx);
-                    label_map[&label].pc * 4
+                    label_map[&label].pc
                 }
                 FuncFrameSize(func_idx) => {
                     let label = func_idx_to_label(func_idx);
@@ -110,7 +115,7 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
         .collect();
 
     VmExe::new(program)
-        .with_pc_start(start_offset as u32 * 4)
+        .with_pc_start((start_offset * riscv::RV32_REGISTER_NUM_LIMBS) as u32)
         .with_init_memory(memory_image)
 }
 
@@ -172,28 +177,28 @@ impl<F: PrimeField32> Directive<F> {
                 ))
             }
             Directive::Jump { target } => {
-                let pc = label_map.get(&target).unwrap().pc * 4;
+                let pc = label_map.get(&target).unwrap().pc;
                 Some(ib::jump(pc as usize))
             }
             Directive::JumpIf {
                 target,
                 condition_reg,
             } => {
-                let pc = label_map.get(&target)?.pc * 4;
+                let pc = label_map.get(&target)?.pc;
                 Some(ib::jump_if(condition_reg as usize, pc as usize))
             }
             Directive::_JumpIfZero {
                 target,
                 condition_reg,
             } => {
-                let pc = label_map.get(&target)?.pc * 4;
+                let pc = label_map.get(&target)?.pc;
                 Some(ib::jump_if_zero(condition_reg as usize, pc as usize))
             }
             Directive::Jaaf {
                 target,
                 new_frame_ptr,
             } => {
-                let pc = label_map.get(&target)?.pc * 4;
+                let pc = label_map.get(&target)?.pc;
                 Some(ib::jaaf(pc as usize, new_frame_ptr as usize))
             }
             Directive::JaafSave {
@@ -201,7 +206,7 @@ impl<F: PrimeField32> Directive<F> {
                 new_frame_ptr,
                 saved_caller_fp,
             } => {
-                let pc = label_map.get(&target)?.pc * 4;
+                let pc = label_map.get(&target)?.pc;
                 Some(ib::jaaf_save(
                     saved_caller_fp as usize,
                     pc as usize,
@@ -214,7 +219,7 @@ impl<F: PrimeField32> Directive<F> {
                 saved_ret_pc,
                 saved_caller_fp,
             } => {
-                let pc = label_map.get(&target_pc)?.pc * 4;
+                let pc = label_map.get(&target_pc)?.pc;
                 Some(ib::call(
                     pc as usize,
                     new_frame_ptr as usize,
