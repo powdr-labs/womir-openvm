@@ -124,16 +124,17 @@ where
     // If the entry point function has arguments, we need to fill them with the result from read32
     let params = entry_point_func_type.params();
     let num_input_words = womir::word_count_types::<GenericIrSetting>(params);
-    // This is a little hacky because we know the initial first allocated frame starts at 4,
+    // This is a little hacky because we know the initial first allocated frame starts at 1,
     // so we can just write directly into it by calculating the offset.
-    // address 4: reserved for return address
-    // address 8: reserved for frame pointer
-    // address 12: first argument
-    // address 12 + i * 4: i-th argument
-    let mut ptr = 12;
+    // address 1: reserved for return address
+    // address 2: reserved for frame pointer
+    // address 3: first argument
+    // address 3 + i: i-th argument
+    let mut ptr = 3;
     for _ in 0..num_input_words {
-        code.push(ib::read32(ptr as usize));
-        ptr += 4;
+        //code.push(ib::read32(ptr as usize));
+        code.push(ib::const_32_imm(ptr as usize, 10, 0));
+        ptr += 1;
     }
 
     code.push(ib::call(0, 1, entry_point.pc as usize, 0));
@@ -144,7 +145,7 @@ where
     let num_output_words = womir::word_count_types::<GenericIrSetting>(results);
     for i in 0..num_output_words {
         code.push(ib::reveal(ptr as usize, i as usize));
-        ptr += 4;
+        ptr += 1;
     }
 
     code.push(ib::halt());
