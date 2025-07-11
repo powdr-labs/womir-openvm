@@ -2365,44 +2365,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "openvm-rv32im-wom-circuit"
-version = "0.0.1"
-dependencies = [
- "derive-new 0.6.0",
- "derive_more 1.0.0",
- "eyre",
- "num-bigint 0.4.6",
- "num-integer",
- "openvm-circuit",
- "openvm-circuit-derive",
- "openvm-circuit-primitives",
- "openvm-circuit-primitives-derive",
- "openvm-instructions",
- "openvm-rv32im-transpiler",
- "openvm-rv32im-wom-transpiler",
- "openvm-stark-backend",
- "openvm-stark-sdk",
- "rand",
- "serde",
- "serde-big-array",
- "struct-reflection",
- "strum",
- "thiserror",
-]
-
-[[package]]
-name = "openvm-rv32im-wom-transpiler"
-version = "0.0.1"
-dependencies = [
- "openvm-instructions",
- "openvm-instructions-derive",
- "openvm-stark-backend",
- "serde",
- "strum",
- "tracing",
-]
-
-[[package]]
 name = "openvm-sdk"
 version = "1.2.1-rc.0"
 source = "git+https://github.com/powdr-labs/openvm.git?rev=815b3cc#815b3cca2ebb7e4dec1908b670c1992edbe77f78"
@@ -2587,6 +2549,44 @@ dependencies = [
  "openvm-stark-backend",
  "rrs-lib",
  "thiserror",
+]
+
+[[package]]
+name = "openvm-womir-circuit"
+version = "0.0.1"
+dependencies = [
+ "derive-new 0.6.0",
+ "derive_more 1.0.0",
+ "eyre",
+ "num-bigint 0.4.6",
+ "num-integer",
+ "openvm-circuit",
+ "openvm-circuit-derive",
+ "openvm-circuit-primitives",
+ "openvm-circuit-primitives-derive",
+ "openvm-instructions",
+ "openvm-rv32im-transpiler",
+ "openvm-stark-backend",
+ "openvm-stark-sdk",
+ "openvm-womir-transpiler",
+ "rand",
+ "serde",
+ "serde-big-array",
+ "struct-reflection",
+ "strum",
+ "thiserror",
+]
+
+[[package]]
+name = "openvm-womir-transpiler"
+version = "0.0.1"
+dependencies = [
+ "openvm-instructions",
+ "openvm-instructions-derive",
+ "openvm-stark-backend",
+ "serde",
+ "strum",
+ "tracing",
 ]
 
 [[package]]
@@ -4319,7 +4319,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "womir-openvm"
+name = "womir-openvm-integration"
 version = "0.1.0"
 dependencies = [
  "derive_more 1.0.0",
@@ -4328,11 +4328,11 @@ dependencies = [
  "openvm-circuit-derive",
  "openvm-instructions",
  "openvm-rv32im-transpiler",
- "openvm-rv32im-wom-circuit",
- "openvm-rv32im-wom-transpiler",
  "openvm-sdk",
  "openvm-stark-backend",
  "openvm-stark-sdk",
+ "openvm-womir-circuit",
+ "openvm-womir-transpiler",
  "serde",
  "tracing",
  "wasmparser",
