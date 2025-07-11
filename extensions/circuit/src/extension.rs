@@ -18,7 +18,7 @@ use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode,
-    HintStoreOpcode, JaafOpcode, JumpOpcode, MulHOpcode, MulOpcode, Phantom,
+    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, MulHOpcode, MulOpcode, Phantom,
 };
 
 use serde::{Deserialize, Serialize};
@@ -148,7 +148,7 @@ pub enum WomirIExecutor<F: PrimeField32> {
     AllocateFrame(AllocateFrameChipWom<F>),
     CopyIntoFrame(CopyIntoFrameChipWom<F>),
     Const32(ConstsChipWom<F>),
-    // LessThan(Rv32LessThanChip<F>),
+    LessThan(LessThanChipWom<F>),
     // Shift(Rv32ShiftChip<F>),
     // LoadStore(Rv32LoadStoreChip<F>),
     // LoadSignExtend(Rv32LoadSignExtendChip<F>),
@@ -295,17 +295,19 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         );
         inventory.add_executor(consts_chip, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 
-        // let lt_chip = Rv32LessThanChip::new(
-        //     Rv32WomBaseAluAdapterChip::new(
-        //         execution_bus,
-        //         program_bus,
-        //         memory_bridge,
-        //         bitwise_lu_chip.clone(),
-        //     ),
-        //     LessThanCoreChip::new(bitwise_lu_chip.clone(), LessThanOpcode::CLASS_OFFSET),
-        //     offline_memory.clone(),
-        // );
-        // inventory.add_executor(lt_chip, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
+        let lt_chip = LessThanChipWom::new(
+            WomBaseAluAdapterChip::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                bitwise_lu_chip.clone(),
+            ),
+            LessThanCoreChip::new(bitwise_lu_chip.clone(), LessThanOpcode::CLASS_OFFSET),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(lt_chip, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
         //
         // let shift_chip = Rv32ShiftChip::new(
         //     Rv32WomBaseAluAdapterChip::new(

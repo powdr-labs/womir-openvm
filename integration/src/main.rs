@@ -520,4 +520,236 @@ mod tests {
 
         run_vm_test("CONST32 with arithmetic test", instructions, 1200, None)
     }
+
+    #[test]
+    fn test_lt_u_true() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
+            wom::const_32_imm::<F>(9, 200, 0), // Load 200 into x9
+            wom::lt_u::<F>(10, 8, 9),          // x10 = (x8 < x9) = (100 < 200) = 1
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLTU true test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_lt_u_false() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 200, 0), // Load 200 into x8
+            wom::const_32_imm::<F>(9, 100, 0), // Load 100 into x9
+            wom::lt_u::<F>(10, 8, 9),          // x10 = (x8 < x9) = (200 < 100) = 0
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLTU false test", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_lt_u_equal() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 150, 0), // Load 150 into x8
+            wom::const_32_imm::<F>(9, 150, 0), // Load 150 into x9
+            wom::lt_u::<F>(10, 8, 9),          // x10 = (x8 < x9) = (150 < 150) = 0
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLTU equal test", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_lt_s_positive() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 50, 0),  // Load 50 into x8
+            wom::const_32_imm::<F>(9, 100, 0), // Load 100 into x9
+            wom::lt_s::<F>(10, 8, 9),          // x10 = (x8 < x9) = (50 < 100) = 1
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLT positive numbers test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_lt_s_negative() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0xFFFF, 0xFFFF), // Load -1 into x8
+            wom::const_32_imm::<F>(9, 5, 0),           // Load 5 into x9
+            wom::lt_s::<F>(10, 8, 9),                  // x10 = (x8 < x9) = (-1 < 5) = 1
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLT negative vs positive test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_lt_s_both_negative() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0xFFFE, 0xFFFF), // Load -2 into x8
+            wom::const_32_imm::<F>(9, 0xFFFC, 0xFFFF), // Load -4 into x9
+            wom::lt_s::<F>(10, 8, 9),                  // x10 = (x8 < x9) = (-2 < -4) = 0
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("SLT both negative test", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_lt_comparison_chain() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 10, 0),  // x8 = 10
+            wom::const_32_imm::<F>(9, 20, 0),  // x9 = 20
+            wom::const_32_imm::<F>(10, 30, 0), // x10 = 30
+            wom::lt_u::<F>(11, 8, 9),          // x11 = (10 < 20) = 1
+            wom::lt_u::<F>(12, 9, 10),         // x12 = (20 < 30) = 1
+            wom::and::<F>(13, 11, 12),         // x13 = x11 & x12 = 1 & 1 = 1
+            reveal(13, 0),
+            halt(),
+        ];
+
+        run_vm_test("Less than comparison chain test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_gt_u_true() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 200, 0), // Load 200 into x8
+            wom::const_32_imm::<F>(9, 100, 0), // Load 100 into x9
+            wom::gt_u::<F>(10, 8, 9),          // x10 = (x8 > x9) = (200 > 100) = 1
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("GT_U true test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_gt_u_false() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
+            wom::const_32_imm::<F>(9, 200, 0), // Load 200 into x9
+            wom::gt_u::<F>(10, 8, 9),          // x10 = (x8 > x9) = (100 > 200) = 0
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("GT_U false test", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_gt_u_equal() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 150, 0), // Load 150 into x8
+            wom::const_32_imm::<F>(9, 150, 0), // Load 150 into x9
+            wom::gt_u::<F>(10, 8, 9),          // x10 = (x8 > x9) = (150 > 150) = 0
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("GT_U equal test", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_gt_s_positive() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
+            wom::const_32_imm::<F>(9, 50, 0),  // Load 50 into x9
+            wom::gt_s::<F>(10, 8, 9),          // x10 = (x8 > x9) = (100 > 50) = 1
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("GT_S positive numbers test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_gt_s_negative() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 5, 0),           // Load 5 into x8
+            wom::const_32_imm::<F>(9, 0xFFFF, 0xFFFF), // Load -1 into x9
+            wom::gt_s::<F>(10, 8, 9),                  // x10 = (x8 > x9) = (5 > -1) = 1
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("GT_S positive vs negative test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_gt_s_both_negative() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0xFFFE, 0xFFFF), // Load -2 into x8
+            wom::const_32_imm::<F>(9, 0xFFFC, 0xFFFF), // Load -4 into x9
+            wom::gt_s::<F>(10, 8, 9),                  // x10 = (x8 > x9) = (-2 > -4) = 1
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("GT_S both negative test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_gt_edge_cases() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            // Test max unsigned value
+            wom::const_32_imm::<F>(8, 0xFFFF, 0xFFFF), // Load 0xFFFFFFFF (max u32) into x8
+            wom::const_32_imm::<F>(9, 0, 0),           // Load 0 into x9
+            wom::gt_u::<F>(10, 8, 9),                  // x10 = (max > 0) = 1
+            // Test with max signed positive
+            wom::const_32_imm::<F>(11, 0xFFFF, 0x7FFF), // Load 0x7FFFFFFF (max positive) into x11
+            wom::const_32_imm::<F>(12, 0, 0),           // Load 0 into x12
+            wom::gt_s::<F>(13, 11, 12),                 // x13 = (max_pos > 0) = 1
+            // Combine results
+            wom::and::<F>(14, 10, 13), // x14 = 1 & 1 = 1
+            reveal(14, 0),
+            halt(),
+        ];
+
+        run_vm_test("GT edge cases test", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_comparison_equivalence() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 25, 0), // x8 = 25
+            wom::const_32_imm::<F>(9, 10, 0), // x9 = 10
+            // Test that (a > b) == !(a <= b) == !((a < b) || (a == b))
+            wom::gt_u::<F>(10, 8, 9), // x10 = (25 > 10) = 1
+            wom::lt_u::<F>(11, 9, 8), // x11 = (10 < 25) = 1 (equivalent)
+            // Test that gt_u and lt_u with swapped operands are equivalent
+            wom::xor::<F>(12, 10, 11), // x12 = x10 XOR x11 = 1 XOR 1 = 0 (should be 0 if equivalent)
+            reveal(12, 0),
+            halt(),
+        ];
+
+        run_vm_test("Comparison equivalence test", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_mixed_comparisons() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0xFFFE, 0xFFFF), // x8 = -2 (signed)
+            wom::const_32_imm::<F>(9, 2, 0),           // x9 = 2
+            // Unsigned comparison: 0xFFFFFFFE > 2
+            wom::gt_u::<F>(10, 8, 9), // x10 = 1 (large unsigned > small)
+            // Signed comparison: -2 > 2
+            wom::gt_s::<F>(11, 8, 9), // x11 = 0 (negative < positive)
+            // Show the difference
+            wom::sub::<F>(12, 10, 11), // x12 = 1 - 0 = 1
+            reveal(12, 0),
+            halt(),
+        ];
+
+        run_vm_test(
+            "Mixed signed/unsigned comparison test",
+            instructions,
+            1,
+            None,
+        )
+    }
 }
