@@ -426,18 +426,24 @@ fn translate_directives<F: PrimeField32>(
                 // Integer instructions
                 Op::I32Const { value } => {
                     let output = output.unwrap().start as usize;
+                    let value_u = value as u32;
+                    let imm_lo: u16 = (value_u & 0xffff) as u16;
+                    let imm_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
                     vec![Directive::Instruction(ib::const_32_imm(
-                        output,
-                        value as usize,
+                        output, imm_lo, imm_hi,
                     ))]
                 }
                 Op::I64Const { value } => {
                     let output = output.unwrap().start as usize;
                     let lower = value as u32;
+                    let lower_lo: u16 = (lower & 0xffff) as u16;
+                    let lower_hi: u16 = ((lower >> 16) & 0xffff) as u16;
                     let upper = (value >> 32) as u32;
+                    let upper_lo: u16 = (upper & 0xffff) as u16;
+                    let upper_hi: u16 = ((upper >> 16) & 0xffff) as u16;
                     vec![
-                        Directive::Instruction(ib::const_32_imm(output, lower as usize)),
-                        Directive::Instruction(ib::const_32_imm(output + 1, upper as usize)),
+                        Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
+                        Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
                     ]
                 }
                 Op::I32Clz => todo!(),
@@ -523,19 +529,25 @@ fn translate_directives<F: PrimeField32>(
                 Op::F64Store { memarg: _ } => todo!(),
                 Op::F32Const { value } => {
                     let output = output.unwrap().start as usize;
+                    let value_u = value.bits();
+                    let value_lo: u16 = (value_u & 0xffff) as u16;
+                    let value_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
                     vec![Directive::Instruction(ib::const_32_imm(
-                        output,
-                        value.bits() as usize,
+                        output, value_lo, value_hi,
                     ))]
                 }
                 Op::F64Const { value } => {
                     let output = output.unwrap().start as usize;
                     let value = value.bits();
                     let lower = value as u32;
+                    let lower_lo: u16 = (lower & 0xffff) as u16;
+                    let lower_hi: u16 = ((lower >> 16) & 0xffff) as u16;
                     let upper = (value >> 32) as u32;
+                    let upper_lo: u16 = (upper & 0xffff) as u16;
+                    let upper_hi: u16 = ((upper >> 16) & 0xffff) as u16;
                     vec![
-                        Directive::Instruction(ib::const_32_imm(output, lower as usize)),
-                        Directive::Instruction(ib::const_32_imm(output + 1, upper as usize)),
+                        Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
+                        Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
                     ]
                 }
                 Op::F32Abs => todo!(),
