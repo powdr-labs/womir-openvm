@@ -1,7 +1,7 @@
 use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, VmOpcode};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAluOpcode, CopyIntoFrameOpcode, JaafOpcode, JumpOpcode,
+    AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, JaafOpcode, JumpOpcode,
     LessThanOpcode, ShiftOpcode,
 };
 
@@ -100,6 +100,25 @@ pub fn gt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F
 pub fn gt_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     // lt_s, but swapped
     lt_s(rd, rs2, rs1)
+}
+
+pub fn const_32_imm<F: PrimeField32>(
+    target_reg: usize,
+    imm_lo: u16,
+    imm_hi: u16,
+) -> Instruction<F> {
+    Instruction::new(
+        ConstOpcodes::CONST32.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
+        F::from_canonical_usize(imm_lo as usize),                             // b: low 16 bits
+        // of the immediate
+        F::from_canonical_usize(imm_hi as usize), // c: high 16 bits
+        // of the immediate
+        F::ZERO, // d: (not used)
+        F::ZERO, // e: (not used)
+        F::ONE,  // f: enabled
+        F::ZERO, // g: (not used)
+    )
 }
 
 /// JAAF instruction: Jump And Activate Frame
