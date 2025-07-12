@@ -755,10 +755,10 @@ mod tests {
 
     #[test]
     fn test_input_hint() -> Result<(), Box<dyn std::error::Error>> {
-        let instructions = vec![wom::read_u32::<F>(10), reveal(10, 0), halt()];
+        let instructions = vec![wom::read_u32::<F>(10, 0), reveal(10, 0), halt()];
         let mut stdin = StdIn::default();
         stdin.write(&42u32);
 
-        run_vm_test("Input hint", instructions, 0, Some(stdin))
+        run_vm_test("Input hint", instructions, 42, Some(stdin))
     }
 }

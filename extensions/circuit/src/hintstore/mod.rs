@@ -275,8 +275,7 @@ impl<AB: InteractionBuilder> Air<AB> for HintStoreAir {
 pub struct HintStoreRecord<F: Field> {
     pub from_state: ExecutionState<u32>,
     pub instruction: Instruction<F>,
-    pub mem_ptr_read: RecordId,
-    pub mem_ptr: u32,
+    pub rd: u32,
     pub num_words: u32,
 
     pub num_words_read: Option<RecordId>,
@@ -343,63 +342,51 @@ impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
         println!("Hints executing from fp: {fp}");
         let &Instruction {
             opcode,
-            a: num_words_ptr,
-            b: mem_ptr_ptr,
+            a: rd,
+            b: num_words_reg,
             d,
-            e,
             ..
         } = instruction;
         debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
-        debug_assert_eq!(e.as_canonical_u32(), RV32_MEMORY_AS);
         let local_opcode = HintStoreOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
-        let (mem_ptr_read, mem_ptr_limbs) =
-            memory.read::<RV32_REGISTER_NUM_LIMBS>(d, mem_ptr_ptr + fp_f);
         let (num_words, num_words_read) = if local_opcode == HINT_STOREW {
             memory.increment_timestamp();
             (1, None)
         } else {
             let (num_words_read, num_words_limbs) =
-                memory.read::<RV32_REGISTER_NUM_LIMBS>(d, num_words_ptr + fp_f);
+                memory.read::<RV32_REGISTER_NUM_LIMBS>(d, num_words_reg + fp_f);
             (compose(num_words_limbs), Some(num_words_read))
         };
         debug_assert_ne!(num_words, 0);
         debug_assert!(num_words <= (1 << self.air.pointer_max_bits));
 
-        let mem_ptr = compose(mem_ptr_limbs);
-
-        debug_assert!(mem_ptr <= (1 << self.air.pointer_max_bits));
-
         let mut streams = self.streams.get().unwrap().lock().unwrap();
-        if streams.hint_stream.len() < RV32_REGISTER_NUM_LIMBS * num_words as usize {
+        println!("input stream: {:?}", streams.input_stream);
+        println!("hint stream: {:?}", streams.hint_stream);
+        // if streams.hint_stream.len() < RV32_REGISTER_NUM_LIMBS * num_words as usize {
+        if streams.input_stream[0].len() < RV32_REGISTER_NUM_LIMBS * num_words as usize {
             return Err(ExecutionError::HintOutOfBounds { pc: from_state.pc });
         }
 
         let mut record = HintStoreRecord {
             from_state,
             instruction: instruction.clone(),
-            mem_ptr_read,
-            mem_ptr,
+            rd: rd.as_canonical_u32(),
             num_words,
             num_words_read,
             hints: vec![],
         };
 
-        for word_index in 0..num_words {
-            if word_index != 0 {
-                memory.increment_timestamp();
-                memory.increment_timestamp();
-            }
-
-            let data: [F; RV32_REGISTER_NUM_LIMBS] =
-                std::array::from_fn(|_| streams.hint_stream.pop_front().unwrap());
-            let (write, _) = memory.write(
-                e,
-                F::from_canonical_u32(mem_ptr + (RV32_REGISTER_NUM_LIMBS as u32 * word_index)),
-                data,
-            );
-            record.hints.push((data, write));
-        }
+        let data: [F; RV32_REGISTER_NUM_LIMBS] = streams
+            .input_stream
+            .pop_front()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        // std::array::from_fn(|_| streams.hint_stream.pop_front().unwrap());
+        let (write, _) = memory.write(d, rd + fp_f, data);
+        record.hints.push((data, write));
 
         self.height += record.hints.len();
         self.records.push(record);
@@ -455,10 +442,6 @@ impl<F: PrimeField32> HintStoreChip<F> {
 
         cols.from_state = record.from_state.map(F::from_canonical_u32);
         cols.mem_ptr_ptr = record.instruction.b;
-        aux_cols_factory.generate_read_aux(
-            memory.record_by_id(record.mem_ptr_read),
-            &mut cols.mem_ptr_aux_cols,
-        );
 
         cols.num_words_ptr = record.instruction.a;
         if let Some(num_words_read) = record.num_words_read {
@@ -468,38 +451,8 @@ impl<F: PrimeField32> HintStoreChip<F> {
             );
         }
 
-        let mut mem_ptr = record.mem_ptr;
         let mut rem_words = record.num_words;
         let mut used_u32s = 0;
-
-        let mem_ptr_msl = mem_ptr >> ((RV32_REGISTER_NUM_LIMBS - 1) * RV32_CELL_BITS);
-        let rem_words_msl = rem_words >> ((RV32_REGISTER_NUM_LIMBS - 1) * RV32_CELL_BITS);
-        bitwise_lookup_chip.request_range(
-            mem_ptr_msl << (RV32_REGISTER_NUM_LIMBS * RV32_CELL_BITS - pointer_max_bits),
-            rem_words_msl << (RV32_REGISTER_NUM_LIMBS * RV32_CELL_BITS - pointer_max_bits),
-        );
-        for (i, &(data, write)) in record.hints.iter().enumerate() {
-            for half in 0..(RV32_REGISTER_NUM_LIMBS / 2) {
-                bitwise_lookup_chip.request_range(
-                    data[2 * half].as_canonical_u32(),
-                    data[2 * half + 1].as_canonical_u32(),
-                );
-            }
-
-            let cols: &mut HintStoreCols<F> = slice[used_u32s..used_u32s + width].borrow_mut();
-            cols.from_state.timestamp =
-                F::from_canonical_u32(record.from_state.timestamp + (3 * i as u32));
-            cols.data = data;
-            aux_cols_factory.generate_write_aux(memory.record_by_id(write), &mut cols.write_aux);
-            cols.rem_words_limbs = decompose(rem_words);
-            cols.mem_ptr_limbs = decompose(mem_ptr);
-            if i != 0 {
-                cols.is_buffer = F::ONE;
-            }
-            used_u32s += width;
-            mem_ptr += RV32_REGISTER_NUM_LIMBS as u32;
-            rem_words -= 1;
-        }
 
         used_u32s
     }
