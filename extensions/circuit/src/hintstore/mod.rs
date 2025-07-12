@@ -26,10 +26,6 @@ use openvm_instructions::{
     riscv::{RV32_CELL_BITS, RV32_MEMORY_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
     LocalOpcode,
 };
-use openvm_rv32im_transpiler::{
-    Rv32HintStoreOpcode,
-    Rv32HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
-};
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     interaction::InteractionBuilder,
@@ -40,14 +36,19 @@ use openvm_stark_backend::{
     rap::{AnyRap, BaseAirWithPublicValues, ColumnsAir, PartitionedBaseAir},
     Chip, ChipUsageGetter,
 };
+use openvm_womir_transpiler::{
+    HintStoreOpcode,
+    HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
+};
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::adapters::{compose, decompose};
+use crate::{FrameBridge, FrameBus};
 
 #[repr(C)]
 #[derive(AlignedBorrow, Debug, StructReflection)]
-pub struct Rv32HintStoreCols<T> {
+pub struct HintStoreCols<T> {
     // common
     pub is_single: T,
     pub is_buffer: T,
@@ -69,36 +70,37 @@ pub struct Rv32HintStoreCols<T> {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct Rv32HintStoreAir {
+pub struct HintStoreAir {
     pub execution_bridge: ExecutionBridge,
+    pub frame_bridge: FrameBridge,
     pub memory_bridge: MemoryBridge,
     pub bitwise_operation_lookup_bus: BitwiseOperationLookupBus,
     pub offset: usize,
     pointer_max_bits: usize,
 }
 
-impl<F: Field> BaseAir<F> for Rv32HintStoreAir {
+impl<F: Field> BaseAir<F> for HintStoreAir {
     fn width(&self) -> usize {
-        Rv32HintStoreCols::<F>::width()
+        HintStoreCols::<F>::width()
     }
 }
 
-impl<F: Field> ColumnsAir<F> for Rv32HintStoreAir {
+impl<F: Field> ColumnsAir<F> for HintStoreAir {
     fn columns(&self) -> Option<Vec<String>> {
-        Rv32HintStoreCols::<F>::struct_reflection()
+        HintStoreCols::<F>::struct_reflection()
     }
 }
 
-impl<F: Field> BaseAirWithPublicValues<F> for Rv32HintStoreAir {}
-impl<F: Field> PartitionedBaseAir<F> for Rv32HintStoreAir {}
+impl<F: Field> BaseAirWithPublicValues<F> for HintStoreAir {}
+impl<F: Field> PartitionedBaseAir<F> for HintStoreAir {}
 
-impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
+impl<AB: InteractionBuilder> Air<AB> for HintStoreAir {
     fn eval(&self, builder: &mut AB) {
         let main = builder.main();
         let local = main.row_slice(0);
-        let local_cols: &Rv32HintStoreCols<AB::Var> = (*local).borrow();
+        let local_cols: &HintStoreCols<AB::Var> = (*local).borrow();
         let next = main.row_slice(1);
-        let next_cols: &Rv32HintStoreCols<AB::Var> = (*next).borrow();
+        let next_cols: &HintStoreCols<AB::Var> = (*next).borrow();
 
         let timestamp: AB::Var = local_cols.from_state.timestamp;
         let mut timestamp_delta: usize = 0;
@@ -270,7 +272,7 @@ impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
-pub struct Rv32HintStoreRecord<F: Field> {
+pub struct HintStoreRecord<F: Field> {
     pub from_state: ExecutionState<u32>,
     pub instruction: Instruction<F>,
     pub mem_ptr_read: RecordId,
@@ -281,27 +283,31 @@ pub struct Rv32HintStoreRecord<F: Field> {
     pub hints: Vec<([F; RV32_REGISTER_NUM_LIMBS], RecordId)>,
 }
 
-pub struct Rv32HintStoreChip<F: Field> {
-    air: Rv32HintStoreAir,
-    pub records: Vec<Rv32HintStoreRecord<F>>,
+pub struct HintStoreChip<F: Field> {
+    air: HintStoreAir,
+    pub records: Vec<HintStoreRecord<F>>,
     pub height: usize,
     offline_memory: Arc<Mutex<OfflineMemory<F>>>,
     pub streams: OnceLock<Arc<Mutex<Streams<F>>>>,
+    pub shared_fp: Arc<Mutex<u32>>,
     bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
 }
 
-impl<F: PrimeField32> Rv32HintStoreChip<F> {
+impl<F: PrimeField32> HintStoreChip<F> {
     pub fn new(
         execution_bus: ExecutionBus,
+        frame_bus: FrameBus,
         program_bus: ProgramBus,
         bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
         memory_bridge: MemoryBridge,
         offline_memory: Arc<Mutex<OfflineMemory<F>>>,
+        shared_fp: Arc<Mutex<u32>>,
         pointer_max_bits: usize,
         offset: usize,
     ) -> Self {
-        let air = Rv32HintStoreAir {
+        let air = HintStoreAir {
             execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+            frame_bridge: FrameBridge::new(frame_bus),
             memory_bridge,
             bitwise_operation_lookup_bus: bitwise_lookup_chip.bus(),
             offset,
@@ -313,6 +319,7 @@ impl<F: PrimeField32> Rv32HintStoreChip<F> {
             height: 0,
             offline_memory,
             streams: OnceLock::new(),
+            shared_fp,
             bitwise_lookup_chip,
         }
     }
@@ -324,13 +331,16 @@ impl<F: PrimeField32> Rv32HintStoreChip<F> {
     }
 }
 
-impl<F: PrimeField32> InstructionExecutor<F> for Rv32HintStoreChip<F> {
+impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
     fn execute(
         &mut self,
         memory: &mut MemoryController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
     ) -> Result<ExecutionState<u32>, ExecutionError> {
+        let fp = self.shared_fp.lock().unwrap();
+        let fp_f = F::from_canonical_u32(*fp);
+        println!("Hints executing from fp: {fp}");
         let &Instruction {
             opcode,
             a: num_words_ptr,
@@ -341,16 +351,16 @@ impl<F: PrimeField32> InstructionExecutor<F> for Rv32HintStoreChip<F> {
         } = instruction;
         debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
         debug_assert_eq!(e.as_canonical_u32(), RV32_MEMORY_AS);
-        let local_opcode =
-            Rv32HintStoreOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
+        let local_opcode = HintStoreOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
-        let (mem_ptr_read, mem_ptr_limbs) = memory.read::<RV32_REGISTER_NUM_LIMBS>(d, mem_ptr_ptr);
+        let (mem_ptr_read, mem_ptr_limbs) =
+            memory.read::<RV32_REGISTER_NUM_LIMBS>(d, mem_ptr_ptr + fp_f);
         let (num_words, num_words_read) = if local_opcode == HINT_STOREW {
             memory.increment_timestamp();
             (1, None)
         } else {
             let (num_words_read, num_words_limbs) =
-                memory.read::<RV32_REGISTER_NUM_LIMBS>(d, num_words_ptr);
+                memory.read::<RV32_REGISTER_NUM_LIMBS>(d, num_words_ptr + fp_f);
             (compose(num_words_limbs), Some(num_words_read))
         };
         debug_assert_ne!(num_words, 0);
@@ -365,7 +375,7 @@ impl<F: PrimeField32> InstructionExecutor<F> for Rv32HintStoreChip<F> {
             return Err(ExecutionError::HintOutOfBounds { pc: from_state.pc });
         }
 
-        let mut record = Rv32HintStoreRecord {
+        let mut record = HintStoreRecord {
             from_state,
             instruction: instruction.clone(),
             mem_ptr_read,
@@ -412,9 +422,9 @@ impl<F: PrimeField32> InstructionExecutor<F> for Rv32HintStoreChip<F> {
     }
 }
 
-impl<F: Field> ChipUsageGetter for Rv32HintStoreChip<F> {
+impl<F: Field> ChipUsageGetter for HintStoreChip<F> {
     fn air_name(&self) -> String {
-        "Rv32HintStoreAir".to_string()
+        "HintStoreAir".to_string()
     }
 
     fn current_trace_height(&self) -> usize {
@@ -422,22 +432,22 @@ impl<F: Field> ChipUsageGetter for Rv32HintStoreChip<F> {
     }
 
     fn trace_width(&self) -> usize {
-        Rv32HintStoreCols::<F>::width()
+        HintStoreCols::<F>::width()
     }
 }
 
-impl<F: PrimeField32> Rv32HintStoreChip<F> {
+impl<F: PrimeField32> HintStoreChip<F> {
     // returns number of used u32s
     fn record_to_rows(
-        record: Rv32HintStoreRecord<F>,
+        record: HintStoreRecord<F>,
         aux_cols_factory: &MemoryAuxColsFactory<F>,
         slice: &mut [F],
         memory: &OfflineMemory<F>,
         bitwise_lookup_chip: &SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
         pointer_max_bits: usize,
     ) -> usize {
-        let width = Rv32HintStoreCols::<F>::width();
-        let cols: &mut Rv32HintStoreCols<F> = slice[..width].borrow_mut();
+        let width = HintStoreCols::<F>::width();
+        let cols: &mut HintStoreCols<F> = slice[..width].borrow_mut();
 
         cols.is_single = F::from_bool(record.num_words_read.is_none());
         cols.is_buffer = F::from_bool(record.num_words_read.is_some());
@@ -476,7 +486,7 @@ impl<F: PrimeField32> Rv32HintStoreChip<F> {
                 );
             }
 
-            let cols: &mut Rv32HintStoreCols<F> = slice[used_u32s..used_u32s + width].borrow_mut();
+            let cols: &mut HintStoreCols<F> = slice[used_u32s..used_u32s + width].borrow_mut();
             cols.from_state.timestamp =
                 F::from_canonical_u32(record.from_state.timestamp + (3 * i as u32));
             cols.data = data;
@@ -519,7 +529,7 @@ impl<F: PrimeField32> Rv32HintStoreChip<F> {
     }
 }
 
-impl<SC: StarkGenericConfig> Chip<SC> for Rv32HintStoreChip<Val<SC>>
+impl<SC: StarkGenericConfig> Chip<SC> for HintStoreChip<Val<SC>>
 where
     Val<SC>: PrimeField32,
 {

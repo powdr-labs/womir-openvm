@@ -1,12 +1,16 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    cell::RefCell,
+    sync::{Arc, Mutex},
+};
 
+use crate::PhantomChip;
 use derive_more::derive::From;
 use openvm_circuit::{
     arch::{
         InitFileGenerator, SystemConfig, SystemPort, VmExtension, VmInventory, VmInventoryBuilder,
         VmInventoryError,
     },
-    system::phantom::PhantomChip,
+    // system::phantom::PhantomChip,
 };
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor, VmConfig};
 use openvm_circuit_primitives::{
@@ -19,6 +23,7 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode,
     HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, MulHOpcode, MulOpcode, Phantom,
+    WomSystemOpcodes,
 };
 
 use serde::{Deserialize, Serialize};
@@ -38,8 +43,6 @@ pub struct WomirIConfig {
     pub system: SystemConfig,
     #[extension]
     pub base: WomirI,
-    #[extension]
-    pub io: WomirIo,
 }
 
 // Default implementation uses no init file
@@ -63,7 +66,6 @@ impl Default for WomirIConfig {
         Self {
             system,
             base: Default::default(),
-            io: Default::default(),
         }
     }
 }
@@ -76,7 +78,6 @@ impl WomirIConfig {
         Self {
             system,
             base: Default::default(),
-            io: Default::default(),
         }
     }
 
@@ -88,7 +89,6 @@ impl WomirIConfig {
         Self {
             system,
             base: Default::default(),
-            io: Default::default(),
         }
     }
 }
@@ -114,10 +114,6 @@ impl WomirImConfig {
 /// Extension similar to RISC-V 32-bit Base (RV32I)
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct WomirI;
-
-/// Extension similar to RISC-V for handling IO (not to be confused with I base extension)
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
-pub struct WomirIo;
 
 /// Extension similar to RISC-V 32-bit Multiplication Extension (RV32M)
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -149,6 +145,7 @@ pub enum WomirIExecutor<F: PrimeField32> {
     CopyIntoFrame(CopyIntoFrameChipWom<F>),
     Const32(ConstsChipWom<F>),
     LessThan(LessThanChipWom<F>),
+    HintStore(HintStoreChip<F>),
     // Shift(Rv32ShiftChip<F>),
     // LoadStore(Rv32LoadStoreChip<F>),
     // LoadSignExtend(Rv32LoadSignExtendChip<F>),
@@ -166,12 +163,6 @@ pub enum WomirMExecutor<F: PrimeField32> {
     DivRem(Rv32DivRemChip<F>),
 }
 
-/// RISC-V 32-bit Io Instruction Executors
-#[derive(ChipUsageGetter, Chip, InstructionExecutor, From, AnyEnum)]
-pub enum WomirIoExecutor<F: PrimeField32> {
-    HintStore(Rv32HintStoreChip<F>),
-}
-
 #[derive(From, ChipUsageGetter, Chip, AnyEnum)]
 pub enum WomirIPeriphery<F: PrimeField32> {
     BitwiseOperationLookup(SharedBitwiseOperationLookupChip<8>),
@@ -184,13 +175,6 @@ pub enum WomirMPeriphery<F: PrimeField32> {
     BitwiseOperationLookup(SharedBitwiseOperationLookupChip<8>),
     /// Only needed for multiplication extension
     RangeTupleChecker(SharedRangeTupleCheckerChip<2>),
-    // We put this only to get the <F> generic to work
-    Phantom(PhantomChip<F>),
-}
-
-#[derive(From, ChipUsageGetter, Chip, AnyEnum)]
-pub enum WomirIoPeriphery<F: PrimeField32> {
-    BitwiseOperationLookup(SharedBitwiseOperationLookupChip<8>),
     // We put this only to get the <F> generic to work
     Phantom(PhantomChip<F>),
 }
@@ -308,6 +292,34 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             shared_fp.clone(),
         );
         inventory.add_executor(lt_chip, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let mut hintstore_chip = HintStoreChip::new(
+            execution_bus,
+            frame_bus,
+            program_bus,
+            bitwise_lu_chip.clone(),
+            memory_bridge,
+            offline_memory.clone(),
+            shared_fp.clone(),
+            builder.system_config().memory_config.pointer_max_bits,
+            HintStoreOpcode::CLASS_OFFSET,
+        );
+        hintstore_chip.set_streams(builder.streams().clone());
+
+        inventory.add_executor(
+            hintstore_chip,
+            HintStoreOpcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        let streams = builder.streams().clone();
+        let phantom_opcode = WomSystemOpcodes::PHANTOM.global_opcode();
+        let mut phantom_chip =
+            PhantomChip::new(execution_bus, program_bus, WomSystemOpcodes::CLASS_OFFSET);
+        phantom_chip.set_streams(streams.clone());
+        inventory
+            .add_executor(RefCell::new(phantom_chip), [phantom_opcode])
+            .unwrap();
+
         //
         // let shift_chip = Rv32ShiftChip::new(
         //     Rv32WomBaseAluAdapterChip::new(
@@ -501,54 +513,6 @@ impl<F: PrimeField32> VmExtension<F> for WomirM {
         inventory.add_executor(
             div_rem_chip,
             DivRemOpcode::iter().map(|x| x.global_opcode()),
-        )?;
-
-        Ok(inventory)
-    }
-}
-
-impl<F: PrimeField32> VmExtension<F> for WomirIo {
-    type Executor = WomirIoExecutor<F>;
-    type Periphery = WomirIoPeriphery<F>;
-
-    fn build(
-        &self,
-        builder: &mut VmInventoryBuilder<F>,
-    ) -> Result<VmInventory<Self::Executor, Self::Periphery>, VmInventoryError> {
-        let mut inventory = VmInventory::new();
-        let SystemPort {
-            execution_bus,
-            program_bus,
-            memory_bridge,
-        } = builder.system_port();
-        let offline_memory = builder.system_base().offline_memory();
-
-        let bitwise_lu_chip = if let Some(&chip) = builder
-            .find_chip::<SharedBitwiseOperationLookupChip<8>>()
-            .first()
-        {
-            chip.clone()
-        } else {
-            let bitwise_lu_bus = BitwiseOperationLookupBus::new(builder.new_bus_idx());
-            let chip = SharedBitwiseOperationLookupChip::new(bitwise_lu_bus);
-            inventory.add_periphery_chip(chip.clone());
-            chip
-        };
-
-        let mut hintstore_chip = Rv32HintStoreChip::new(
-            execution_bus,
-            program_bus,
-            bitwise_lu_chip.clone(),
-            memory_bridge,
-            offline_memory.clone(),
-            builder.system_config().memory_config.pointer_max_bits,
-            HintStoreOpcode::CLASS_OFFSET,
-        );
-        hintstore_chip.set_streams(builder.streams().clone());
-
-        inventory.add_executor(
-            hintstore_chip,
-            HintStoreOpcode::iter().map(|x| x.global_opcode()),
         )?;
 
         Ok(inventory)
