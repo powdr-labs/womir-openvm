@@ -2570,6 +2570,7 @@ dependencies = [
  "openvm-stark-sdk",
  "openvm-womir-transpiler",
  "rand",
+ "rustc-hash 2.1.1",
  "serde",
  "serde-big-array",
  "struct-reflection",

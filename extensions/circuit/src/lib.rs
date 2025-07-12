@@ -15,6 +15,7 @@ mod load_sign_extend;
 mod loadstore;
 mod mul;
 mod mulh;
+mod phantom;
 mod shift;
 
 pub use allocate_frame::*;
@@ -32,6 +33,7 @@ pub use load_sign_extend::*;
 pub use loadstore::*;
 pub use mul::*;
 pub use mulh::*;
+pub use phantom::*;
 pub use shift::*;
 
 mod extension;
