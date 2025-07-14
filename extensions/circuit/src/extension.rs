@@ -108,7 +108,7 @@ pub enum WomirIExecutor<F: PrimeField32> {
     Const32(ConstsChipWom<F>),
     LessThan(LessThanChipWom<F>),
     HintStore(HintStoreChip<F>),
-    // Multiplication(WomMultiplicationChip<F>),
+    Multiplication(WomMultiplicationChip<F>),
     // DivRem(WomDivRemChip<F>),
     // Shift(Rv32ShiftChip<F>),
     // LoadStore(Rv32LoadStoreChip<F>),
@@ -276,6 +276,15 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             inventory.add_periphery_chip(chip.clone());
             chip
         };
+
+        let mul_chip = WomMultiplicationChip::new(
+            WomMultAdapterChip::new(execution_bus, program_bus, memory_bridge),
+            MultiplicationCoreChip::new(range_tuple_checker.clone(), MulOpcode::CLASS_OFFSET),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(mul_chip, MulOpcode::iter().map(|x| x.global_opcode()))?;
+
         // let shift_chip = Rv32ShiftChip::new(
         //     Rv32WomBaseAluAdapterChip::new(
         //         execution_bus,

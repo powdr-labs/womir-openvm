@@ -180,6 +180,19 @@ mod tests {
     }
 
     #[test]
+    fn test_basic_mul() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 666),
+            wom::addi::<F>(9, 0, 1),
+            wom::mul::<F>(10, 8, 9),
+            reveal(10, 0),
+            halt(),
+        ];
+
+        run_vm_test("Basic multiplication", instructions, 666, None)
+    }
+
+    #[test]
     fn test_jaaf_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Simple test with JAAF instruction
         // We'll set up a value, jump with JAAF, and verify the result
