@@ -20,6 +20,7 @@ derive_more = { workspace = true, features = ["from"] }
 rand.workspace = true
 eyre.workspace = true
 thiserror.workspace = true
+rustc-hash.workspace = true
 # for div_rem:
 num-bigint.workspace = true
 num-integer.workspace = true

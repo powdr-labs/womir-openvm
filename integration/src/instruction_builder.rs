@@ -2,8 +2,8 @@ use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOp
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, JaafOpcode, JumpOpcode,
-    LessThanOpcode, ShiftOpcode,
+    AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, HintStoreOpcode,
+    JaafOpcode, JumpOpcode, LessThanOpcode, Phantom, ShiftOpcode,
 };
 
 pub fn instr_r<F: PrimeField32>(
@@ -315,5 +315,31 @@ pub fn halt<F: PrimeField32>() -> Instruction<F> {
         F::ZERO,
         F::ZERO,
         F::ZERO,
+    )
+}
+
+#[allow(dead_code)]
+pub fn pre_read_u32<F: PrimeField32>() -> Instruction<F> {
+    Instruction::new(
+        SystemOpcode::PHANTOM.global_opcode(),
+        F::ZERO,
+        F::ZERO,
+        F::from_canonical_u32(Phantom::HintInput as u32),
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+    )
+}
+
+#[allow(dead_code)]
+pub fn read_u32<F: PrimeField32>(rd: usize) -> Instruction<F> {
+    Instruction::from_isize(
+        HintStoreOpcode::HINT_STOREW.global_opcode(),
+        (riscv::RV32_REGISTER_NUM_LIMBS * rd) as isize,
+        0,
+        0,
+        1,
+        0,
     )
 }

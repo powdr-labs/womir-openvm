@@ -752,4 +752,55 @@ mod tests {
             None,
         )
     }
+
+    #[test]
+    fn test_input_hint() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::pre_read_u32::<F>(),
+            wom::read_u32::<F>(10),
+            reveal(10, 0),
+            halt(),
+        ];
+        let mut stdin = StdIn::default();
+        stdin.write(&42u32);
+
+        run_vm_test("Input hint", instructions, 42, Some(stdin))
+    }
+
+    #[test]
+    fn test_input_hint_with_frame_jump_and_xor() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            // Read first value into r8
+            wom::pre_read_u32::<F>(),
+            wom::read_u32::<F>(8),
+            wom::allocate_frame_imm::<F>(9, 64), // Allocate frame, pointer in 99
+            wom::copy_into_frame::<F>(2, 8, 9),  // Copy r8 to frame[2]
+            // Jump to new frame
+            wom::jaaf::<F>(24, 9), // Jump to PC=24, activate frame at r9
+            // This should be skipped
+            halt(),
+            // Read second value into r3
+            wom::pre_read_u32::<F>(),
+            wom::read_u32::<F>(3),
+            // Xor the two read values
+            wom::xor::<F>(4, 2, 3),
+            // TODO: register 5 below is the absolute value for local register 4 used above,
+            // due to the `loadstore` chip not being fp relative yet.
+            // The allocated frame is 4 (first allocation). Registers are 4-aligned,
+            // so in order to access local reg 4 we need (fp / 4 + local reg) = 4/4+1.
+            reveal(5, 0),
+            halt(),
+        ];
+
+        let mut stdin = StdIn::default();
+        stdin.write(&170u32); // First value: 170 in decimal
+        stdin.write(&204u32); // Second value: 204 in decimal
+
+        run_vm_test(
+            "Input hint with frame jump and XOR",
+            instructions,
+            102,
+            Some(stdin),
+        )
+    }
 }
