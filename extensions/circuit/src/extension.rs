@@ -18,7 +18,7 @@ use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode,
-    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, MulHOpcode, MulOpcode, Phantom,
+    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, MulOpcode, Phantom,
 };
 
 use serde::{Deserialize, Serialize};
@@ -48,8 +48,6 @@ impl InitFileGenerator for WomirIConfig {}
 pub struct WomirImConfig {
     #[config]
     pub womir_i: WomirIConfig,
-    #[extension]
-    pub mul: WomirM,
 }
 
 // Default implementation uses no init file
@@ -106,18 +104,13 @@ impl WomirImConfig {
 
 // ============ Extension Implementations ============
 
-/// Extension similar to RISC-V 32-bit Base (RV32I)
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
-pub struct WomirI;
-
-/// Extension similar to RISC-V 32-bit Multiplication Extension (RV32M)
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct WomirM {
+pub struct WomirI {
     #[serde(default = "default_range_tuple_checker_sizes")]
     pub range_tuple_checker_sizes: [u32; 2],
 }
 
-impl Default for WomirM {
+impl Default for WomirI {
     fn default() -> Self {
         Self {
             range_tuple_checker_sizes: default_range_tuple_checker_sizes(),
@@ -141,6 +134,8 @@ pub enum WomirIExecutor<F: PrimeField32> {
     Const32(ConstsChipWom<F>),
     LessThan(LessThanChipWom<F>),
     HintStore(HintStoreChip<F>),
+    Multiplication(WomMultiplicationChip<F>),
+    DivRem(WomDivRemChip<F>),
     // Shift(Rv32ShiftChip<F>),
     // LoadStore(Rv32LoadStoreChip<F>),
     // LoadSignExtend(Rv32LoadSignExtendChip<F>),
@@ -151,21 +146,8 @@ pub enum WomirIExecutor<F: PrimeField32> {
     // Auipc(Rv32AuipcChip<F>),
 }
 
-#[derive(ChipUsageGetter, Chip, InstructionExecutor, From, AnyEnum)]
-pub enum WomirMExecutor<F: PrimeField32> {
-    Multiplication(WomMultiplicationChip<F>),
-    DivRem(WomDivRemChip<F>),
-}
-
 #[derive(From, ChipUsageGetter, Chip, AnyEnum)]
 pub enum WomirIPeriphery<F: PrimeField32> {
-    BitwiseOperationLookup(SharedBitwiseOperationLookupChip<8>),
-    // We put this only to get the <F> generic to work
-    Phantom(PhantomChip<F>),
-}
-
-#[derive(From, ChipUsageGetter, Chip, AnyEnum)]
-pub enum WomirMPeriphery<F: PrimeField32> {
     BitwiseOperationLookup(SharedBitwiseOperationLookupChip<8>),
     /// Only needed for multiplication extension
     RangeTupleChecker(SharedRangeTupleCheckerChip<2>),
@@ -421,75 +403,6 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         builder.add_phantom_sub_executor(
             phantom::HintLoadByKeySubEx,
             PhantomDiscriminant(Phantom::HintLoadByKey as u16),
-        )?;
-
-        Ok(inventory)
-    }
-}
-
-impl<F: PrimeField32> VmExtension<F> for WomirM {
-    type Executor = WomirMExecutor<F>;
-    type Periphery = WomirMPeriphery<F>;
-
-    fn build(
-        &self,
-        builder: &mut VmInventoryBuilder<F>,
-    ) -> Result<VmInventory<WomirMExecutor<F>, WomirMPeriphery<F>>, VmInventoryError> {
-        let mut inventory = VmInventory::new();
-        let SystemPort {
-            execution_bus,
-            program_bus,
-            memory_bridge,
-        } = builder.system_port();
-        let offline_memory = builder.system_base().offline_memory();
-
-        let bitwise_lu_chip = if let Some(&chip) = builder
-            .find_chip::<SharedBitwiseOperationLookupChip<8>>()
-            .first()
-        {
-            chip.clone()
-        } else {
-            let bitwise_lu_bus = BitwiseOperationLookupBus::new(builder.new_bus_idx());
-            let chip = SharedBitwiseOperationLookupChip::new(bitwise_lu_bus);
-            inventory.add_periphery_chip(chip.clone());
-            chip
-        };
-
-        let range_tuple_checker = if let Some(chip) = builder
-            .find_chip::<SharedRangeTupleCheckerChip<2>>()
-            .into_iter()
-            .find(|c| {
-                c.bus().sizes[0] >= self.range_tuple_checker_sizes[0]
-                    && c.bus().sizes[1] >= self.range_tuple_checker_sizes[1]
-            }) {
-            chip.clone()
-        } else {
-            let range_tuple_bus =
-                RangeTupleCheckerBus::new(builder.new_bus_idx(), self.range_tuple_checker_sizes);
-            let chip = SharedRangeTupleCheckerChip::new(range_tuple_bus);
-            inventory.add_periphery_chip(chip.clone());
-            chip
-        };
-
-        let mul_chip = WomMultiplicationChip::new(
-            WomMultAdapterChip::new(execution_bus, program_bus, memory_bridge),
-            MultiplicationCoreChip::new(range_tuple_checker.clone(), MulOpcode::CLASS_OFFSET),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(mul_chip, MulOpcode::iter().map(|x| x.global_opcode()))?;
-
-        let div_rem_chip = WomDivRemChip::new(
-            Rv32MultAdapterChip::new(execution_bus, program_bus, memory_bridge),
-            DivRemCoreChip::new(
-                bitwise_lu_chip.clone(),
-                range_tuple_checker.clone(),
-                DivRemOpcode::CLASS_OFFSET,
-            ),
-            offline_memory.clone(),
-        );
-        inventory.add_executor(
-            div_rem_chip,
-            DivRemOpcode::iter().map(|x| x.global_opcode()),
         )?;
 
         Ok(inventory)
