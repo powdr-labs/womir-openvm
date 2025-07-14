@@ -155,9 +155,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
         memory.increment_timestamp();
 
         let allocated_ptr = decompose(self.next_fp);
-        println!("next_fp before allocation: {}", self.next_fp);
         self.next_fp += b.as_canonical_u32();
-        println!("next_fp after allocation: {}", self.next_fp);
 
         Ok(([allocated_ptr], AllocateFrameReadRecord {}))
     }
@@ -181,7 +179,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
             // Write the allocated pointer to target register
             // For simplicity in the mock, we use absolute addressing for the write
             if let Some(allocated_ptr) = output.writes.first() {
-                println!("Writing to local reg {a} with fp {}", from_frame.fp);
                 let write_result = memory.write(
                     F::ONE,
                     a + F::from_canonical_u32(from_frame.fp),

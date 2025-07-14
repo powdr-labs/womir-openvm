@@ -135,7 +135,9 @@ where
     let mut ptr = 4;
     for _ in 0..num_input_words {
         //code.push(ib::read32(ptr as usize));
-        code.push(ib::const_32_imm(ptr as usize, 10, 0));
+        // code.push(ib::const_32_imm(ptr as usize, 10, 0));
+        code.push(ib::pre_read_u32::<F>());
+        code.push(ib::read_u32::<F>(ptr as usize));
         ptr += 1;
     }
 
