@@ -39,11 +39,11 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
 
     // Sanity check the entry point function.
     let entry_point = &label_map[entry_point];
-    let _entry_point_func_type = ir_program.c.get_func_type(entry_point.func_idx.unwrap());
-    // assert!(
-    //     entry_point_func_type.ty.params().is_empty(),
-    //     "Entry point function should not have parameters"
-    // );
+    let entry_point_func_type = ir_program.c.get_func_type(entry_point.func_idx.unwrap());
+    assert!(
+        entry_point_func_type.ty.params().is_empty(),
+        "Entry point function should not have parameters"
+    );
 
     // Now we need a little bit of startup code to call the entry point function.
     // We assume the initial frame has space for at least one word: the frame pointer
