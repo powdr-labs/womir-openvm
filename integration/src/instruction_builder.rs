@@ -319,6 +319,24 @@ pub fn reveal<F: PrimeField32>(rs1_data: usize, rd_index: usize) -> Instruction<
 }
 
 #[allow(dead_code)]
+pub fn reveal_imm<F: PrimeField32>(
+    data_reg: usize,
+    output_index_reg: usize,
+    output_index_imm: usize,
+) -> Instruction<F> {
+    Instruction::new(
+        Rv32LoadStoreOpcode::STOREW.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * data_reg),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * output_index_reg),
+        F::from_canonical_usize(output_index_imm),
+        F::ONE,
+        F::from_canonical_usize(3),
+        F::ONE,
+        F::ZERO,
+    )
+}
+
+#[allow(dead_code)]
 pub fn halt<F: PrimeField32>() -> Instruction<F> {
     Instruction::new(
         SystemOpcode::TERMINATE.global_opcode(),

@@ -114,37 +114,39 @@ fn create_startup_code<F>(ctx: &CommonProgram, entry_point: &LabelValue) -> Vec<
 where
     F: PrimeField32,
 {
-    let mut code = vec![ib::allocate_frame_imm(
-        0,
-        entry_point.frame_size.unwrap() as usize,
-    )];
+    let fn_fp = 1;
+    let zero_reg = 0;
+    let mut code = vec![
+        ib::allocate_frame_imm(fn_fp, entry_point.frame_size.unwrap() as usize),
+        ib::const_32_imm(zero_reg, 0, 0),
+    ];
 
     let entry_point_func_type = &ctx.get_func_type(entry_point.func_idx.unwrap()).ty;
 
     // If the entry point function has arguments, we need to fill them with the result from read32
     let params = entry_point_func_type.params();
     let num_input_words = womir::word_count_types::<GenericIrSetting>(params);
-    // This is a little hacky because we know the initial first allocated frame starts at 1,
+    // This is a little hacky because we know the initial first allocated frame starts at 2,
     // so we can just write directly into it by calculating the offset.
-    // address 1: reserved for return address
-    // address 2: reserved for frame pointer
-    // address 3: first argument
-    // address 3 + i: i-th argument
-    let mut ptr = 3;
+    // address 2: reserved for return address
+    // address 3: reserved for frame pointer
+    // address 4: first argument
+    // address 4 + i: i-th argument
+    let mut ptr = 4;
     for _ in 0..num_input_words {
         //code.push(ib::read32(ptr as usize));
         code.push(ib::const_32_imm(ptr as usize, 10, 0));
         ptr += 1;
     }
 
-    code.push(ib::call(0, 1, entry_point.pc as usize, 0));
+    code.push(ib::call(0, 1, entry_point.pc as usize, fn_fp));
 
     // We can also read the return values directly from the function's frame, which happens
     // to be right after the arguments.
     let results = entry_point_func_type.results();
     let num_output_words = womir::word_count_types::<GenericIrSetting>(results);
     for i in 0..num_output_words {
-        code.push(ib::reveal(ptr as usize, i as usize));
+        code.push(ib::reveal_imm(ptr as usize, zero_reg, i as usize));
         ptr += 1;
     }
 

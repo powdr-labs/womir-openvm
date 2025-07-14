@@ -270,7 +270,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
-        _fp: u32,
+        fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
@@ -281,11 +281,13 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
         let local_opcode =
             JaafOpcode::from_usize(opcode.local_opcode_idx(JaafOpcode::CLASS_OFFSET));
 
+        let fp_f = F::from_canonical_u32(fp);
+
         // Determine which registers to read based on opcode
         let (pc_source_record, pc_source_data) = match local_opcode {
             JaafOpcode::RET | JaafOpcode::CALL_INDIRECT => {
                 // Read pc_source (c field) for target PC
-                let pc_source = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, c);
+                let pc_source = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, c + fp_f);
                 (Some(pc_source.0), pc_source.1)
             }
             _ => {
@@ -296,7 +298,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
         };
 
         // All opcodes always read fp_source (e field) for target FP
-        let fp_source = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, e);
+        let fp_source = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, e + fp_f);
 
         Ok((
             [pc_source_data, fp_source.1],
@@ -325,6 +327,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
             ..
         } = *instruction;
 
+        let to_fp = output.to_fp.unwrap();
+
         let local_opcode =
             JaafOpcode::from_usize(opcode.local_opcode_idx(JaafOpcode::CLASS_OFFSET));
 
@@ -340,13 +344,16 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
                 JaafOpcode::JAAF_SAVE => {
                     // Save fp to rd2 (b field)
                     memory.increment_timestamp();
-                    let rd2 = memory.write(F::ONE, b, output.writes[1]);
+                    let rd2 =
+                        memory.write(F::ONE, b + F::from_canonical_u32(to_fp), output.writes[1]);
                     (None, Some(rd2.0))
                 }
                 JaafOpcode::CALL | JaafOpcode::CALL_INDIRECT => {
                     // Save both pc to rd1 (a field) and fp to rd2 (b field)
-                    let rd1 = memory.write(F::ONE, a, output.writes[0]);
-                    let rd2 = memory.write(F::ONE, b, output.writes[1]);
+                    let rd1 =
+                        memory.write(F::ONE, a + F::from_canonical_u32(to_fp), output.writes[0]);
+                    let rd2 =
+                        memory.write(F::ONE, b + F::from_canonical_u32(to_fp), output.writes[1]);
                     (Some(rd1.0), Some(rd2.0))
                 }
             }
@@ -361,7 +368,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
                 pc: output.to_pc.unwrap_or(from_state.pc + DEFAULT_PC_STEP),
                 timestamp: memory.timestamp(),
             },
-            output.to_fp.unwrap_or(from_frame.fp),
+            to_fp,
             Self::WriteRecord {
                 from_state,
                 from_frame,
