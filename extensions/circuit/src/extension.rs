@@ -43,16 +43,6 @@ pub struct WomirIConfig {
 // Default implementation uses no init file
 impl InitFileGenerator for WomirIConfig {}
 
-/// Config for a VM with base extension, IO extension, and multiplication extension
-#[derive(Clone, Debug, Default, VmConfig, derive_new::new, Serialize, Deserialize)]
-pub struct WomirImConfig {
-    #[config]
-    pub womir_i: WomirIConfig,
-}
-
-// Default implementation uses no init file
-impl InitFileGenerator for WomirImConfig {}
-
 impl Default for WomirIConfig {
     fn default() -> Self {
         let system = SystemConfig::default().with_continuations();
@@ -82,22 +72,6 @@ impl WomirIConfig {
         Self {
             system,
             base: Default::default(),
-        }
-    }
-}
-
-impl WomirImConfig {
-    pub fn with_public_values(public_values: usize) -> Self {
-        Self {
-            womir_i: WomirIConfig::with_public_values(public_values),
-            mul: Default::default(),
-        }
-    }
-
-    pub fn with_public_values_and_segment_len(public_values: usize, segment_len: usize) -> Self {
-        Self {
-            womir_i: WomirIConfig::with_public_values_and_segment_len(public_values, segment_len),
-            mul: Default::default(),
         }
     }
 }
@@ -134,8 +108,8 @@ pub enum WomirIExecutor<F: PrimeField32> {
     Const32(ConstsChipWom<F>),
     LessThan(LessThanChipWom<F>),
     HintStore(HintStoreChip<F>),
-    Multiplication(WomMultiplicationChip<F>),
-    DivRem(WomDivRemChip<F>),
+    // Multiplication(WomMultiplicationChip<F>),
+    // DivRem(WomDivRemChip<F>),
     // Shift(Rv32ShiftChip<F>),
     // LoadStore(Rv32LoadStoreChip<F>),
     // LoadSignExtend(Rv32LoadSignExtendChip<F>),
@@ -287,6 +261,21 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             HintStoreOpcode::iter().map(|x| x.global_opcode()),
         )?;
 
+        let range_tuple_checker = if let Some(chip) = builder
+            .find_chip::<SharedRangeTupleCheckerChip<2>>()
+            .into_iter()
+            .find(|c| {
+                c.bus().sizes[0] >= self.range_tuple_checker_sizes[0]
+                    && c.bus().sizes[1] >= self.range_tuple_checker_sizes[1]
+            }) {
+            chip.clone()
+        } else {
+            let range_tuple_bus =
+                RangeTupleCheckerBus::new(builder.new_bus_idx(), self.range_tuple_checker_sizes);
+            let chip = SharedRangeTupleCheckerChip::new(range_tuple_bus);
+            inventory.add_periphery_chip(chip.clone());
+            chip
+        };
         // let shift_chip = Rv32ShiftChip::new(
         //     Rv32WomBaseAluAdapterChip::new(
         //         execution_bus,

@@ -31,7 +31,7 @@ impl SpecializedConfig {
     fn new(sdk_config: SdkVmConfig) -> Self {
         Self {
             sdk_config,
-            wom: WomirI,
+            wom: WomirI::default(),
         }
     }
 }
