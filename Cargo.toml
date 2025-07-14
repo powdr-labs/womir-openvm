@@ -43,7 +43,7 @@ rrs-lib = "0.1.0"
 tracing = "0.1.40"
 
 wasmparser = { version = "0.235", default-features = false }
-womir = { git = "https://github.com/powdr-labs/womir.git", rev = "afa3a42" }
+womir = { git = "https://github.com/powdr-labs/womir.git", rev = "d1bf15f" }
 
 # [patch."https://github.com/powdr-labs/openvm.git"]
 # openvm-sdk = { path = "../openvm/crates/sdk" }

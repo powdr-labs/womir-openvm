@@ -192,7 +192,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
-        _fp: u32,
+        fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
@@ -203,11 +203,13 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         let local_opcode =
             JumpOpcode::from_usize(opcode.local_opcode_idx(JumpOpcode::CLASS_OFFSET));
 
+        let fp_f = F::from_canonical_u32(fp);
+
         // Determine which registers to read based on opcode
         let (condition_record, condition_data) = match local_opcode {
             JumpOpcode::JUMP_IF | JumpOpcode::JUMP_IF_ZERO => {
                 // Read condition (b field) for conditional jumps
-                let condition = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b);
+                let condition = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b + fp_f);
                 (Some(condition.0), condition.1)
             }
             _ => {

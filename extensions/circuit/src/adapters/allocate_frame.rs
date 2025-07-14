@@ -49,8 +49,8 @@ impl AllocateFrameAdapterChipWom {
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
             },
-            // Start from 4 because 0 is used by the startup code.
-            next_fp: 4,
+            // Start from 8 because 0 and 4 are used by the startup code.
+            next_fp: 8,
         }
     }
 }

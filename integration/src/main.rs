@@ -104,13 +104,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create and execute program
     let mut args = args();
     if args.len() < 3 {
-        eprintln!("Usage: {} <wasm_path> <entry_point>", args.next().unwrap());
+        eprintln!(
+            "Usage: {} <wasm_path> <entry_point> [<32_bit_args>...]",
+            args.next().unwrap()
+        );
         return Ok(());
     }
     let wasm_path = args.nth(1).unwrap();
     let entry_point = args.next().unwrap();
     let exe = womir_translation::program_from_wasm::<F>(&wasm_path, &entry_point);
-    let stdin = StdIn::default();
+
+    let inputs = args
+        .flat_map(|arg| {
+            let val = arg.parse::<u32>().unwrap();
+            val.to_le_bytes().into_iter()
+        })
+        .collect::<Vec<_>>();
+
+    let stdin = StdIn::from_bytes(&inputs);
 
     let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
     println!("output: {output:?}");
@@ -572,7 +583,8 @@ mod tests {
             halt(),                         // This should be skipped
             halt(),                         // This should be skipped too
             // PC = 24 (byte offset, so instruction at index 6)
-            reveal(11, 0), // Reveal x11 (should be 0, the old FP)
+            // TODO: replace by 11 once reveal uses fp.
+            reveal(2 + 11, 0), // Reveal x11 (should be 0, the old FP)
             halt(),
         ];
 
@@ -600,14 +612,15 @@ mod tests {
     fn test_call_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Test CALL: save PC and FP, then jump
         let instructions = vec![
-            wom::addi::<F>(9, 0, 15),      // x9 = 15 (new FP)
+            wom::addi::<F>(9, 0, 16),      // x9 = 15 (new FP)
             wom::call::<F>(10, 11, 20, 9), // Call to PC=20, FP=x9, save PC to x10, FP to x11
             wom::addi::<F>(8, 0, 123),     // x8 = 123 (after return) - this should NOT execute
             reveal(8, 0),                  // Reveal x8 - this should NOT execute
             halt(),                        // Padding
             // PC = 20 (function start)
-            reveal(10, 0), // Reveal x10 (should be 8, the return address)
-            halt(),        // End the test here, don't return
+            // TODO: change reveal to just 10 once it uses fp.
+            reveal(4 + 10, 0), // Reveal x10 (should be 8, the return address)
+            halt(),            // End the test here, don't return
         ];
 
         run_vm_test("CALL instruction", instructions, 8, None)
@@ -619,14 +632,14 @@ mod tests {
         let instructions = vec![
             wom::addi::<F>(12, 0, 28),              // x12 = 28 (target PC)
             wom::addi::<F>(9, 0, 20),               // x9 = 20 (new FP)
-            wom::addi::<F>(11, 0, 999),             // x9 = 20 (new FP)
+            wom::addi::<F>(11, 0, 999),             // x11 = 999
             wom::call_indirect::<F>(10, 11, 12, 9), // Call to PC=x12, FP=x9, save PC to x10, FP to x11
             wom::addi::<F>(8, 0, 456), // x8 = 456 (after return) - this should NOT execute
             reveal(8, 0),              // Reveal x8 - this should NOT execute
             halt(),                    // Padding
             // PC = 28 (function start, where x12 points)
-            reveal(11, 0), // Reveal x11 (should be 0, the saved FP)
-            halt(),        // End the test here, don't return
+            reveal(5 + 11, 0), // Reveal x11 (should be 0, the saved FP)
+            halt(),            // End the test here, don't return
         ];
 
         run_vm_test("CALL_INDIRECT instruction", instructions, 0, None)
@@ -776,7 +789,7 @@ mod tests {
         ];
 
         // We expect 4 because the register allocator starts at 4 as convention.
-        run_vm_test("ALLOCATE_FRAME instruction", instructions, 4, None)
+        run_vm_test("ALLOCATE_FRAME instruction", instructions, 8, None)
     }
 
     #[test]
@@ -807,13 +820,13 @@ mod tests {
         // This test verifies that copy_into_frame actually writes the value
         let instructions = vec![
             wom::addi::<F>(8, 0, 123),            // PC=0: x8 = 123 (value to store)
-            wom::allocate_frame_imm::<F>(9, 128), // PC=4: Allocate 128 bytes, pointer in x9. x9=1
+            wom::allocate_frame_imm::<F>(9, 128), // PC=4: Allocate 128 bytes, pointer in x9. x9=2
             // by convention on the first allocation.
             wom::addi::<F>(10, 0, 0), // PC=8: x10 = 0 (destination register)
             wom::copy_into_frame::<F>(10, 8, 9), // PC=12: Copy x8 to [x9[x10]]
             // TODO: `reveal` uses the loadstore chip which does not use fp. Change back to 10 once
             // it does.
-            reveal(1 + 10, 0), // PC=16: Reveal x10 (should be 123, the value from x8)
+            reveal(2 + 10, 0), // PC=16: Reveal x10 (should be 123, the value from x8)
             halt(),            // PC=20: End
         ];
 
@@ -1138,7 +1151,7 @@ mod tests {
             // Read first value into r8
             wom::pre_read_u32::<F>(),
             wom::read_u32::<F>(8),
-            wom::allocate_frame_imm::<F>(9, 64), // Allocate frame, pointer in 99
+            wom::allocate_frame_imm::<F>(9, 64), // Allocate frame, pointer in r9
             wom::copy_into_frame::<F>(2, 8, 9),  // Copy r8 to frame[2]
             // Jump to new frame
             wom::jaaf::<F>(24, 9), // Jump to PC=24, activate frame at r9
@@ -1149,11 +1162,11 @@ mod tests {
             wom::read_u32::<F>(3),
             // Xor the two read values
             wom::xor::<F>(4, 2, 3),
-            // TODO: register 5 below is the absolute value for local register 4 used above,
+            // TODO: register 6 below is the absolute value for local register 4 used above,
             // due to the `loadstore` chip not being fp relative yet.
-            // The allocated frame is 4 (first allocation). Registers are 4-aligned,
-            // so in order to access local reg 4 we need (fp / 4 + local reg) = 4/4+1.
-            reveal(5, 0),
+            // The allocated frame is 8 (first allocation). Registers are 4-aligned,
+            // so in order to access local reg 4 we need (fp / 4 + local reg) = 8/4+1.
+            reveal(6, 0),
             halt(),
         ];
 

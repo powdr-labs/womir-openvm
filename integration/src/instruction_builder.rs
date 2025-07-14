@@ -212,11 +212,11 @@ pub fn call_indirect<F: PrimeField32>(
 ) -> Instruction<F> {
     Instruction::new(
         JaafOpcode::CALL_INDIRECT.global_opcode(),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_pc), // a: rd1 (save PC here)
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_fp), // b: rd2 (save FP here)
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg), // c: rs1 (PC source)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_pc),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_fp),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg),
         F::ZERO, // d: immediate (not used)
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: rs2 (FP source)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg),
         F::ONE,  // f: enabled
         F::ZERO, // g: imm sign
     )
@@ -307,6 +307,24 @@ pub fn reveal<F: PrimeField32>(rs1_data: usize, rd_index: usize) -> Instruction<
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1_data),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd_index),
         F::ZERO,
+        F::ONE,
+        F::from_canonical_usize(3),
+        F::ONE,
+        F::ZERO,
+    )
+}
+
+#[allow(dead_code)]
+pub fn reveal_imm<F: PrimeField32>(
+    data_reg: usize,
+    output_index_reg: usize,
+    output_index_imm: usize,
+) -> Instruction<F> {
+    Instruction::new(
+        Rv32LoadStoreOpcode::STOREW.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * data_reg),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * output_index_reg),
+        F::from_canonical_usize(output_index_imm),
         F::ONE,
         F::from_canonical_usize(3),
         F::ONE,
