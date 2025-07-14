@@ -333,11 +333,11 @@ pub fn pre_read_u32<F: PrimeField32>() -> Instruction<F> {
 }
 
 #[allow(dead_code)]
-pub fn read_u32<F: PrimeField32>(rd: usize, num_words: usize) -> Instruction<F> {
+pub fn read_u32<F: PrimeField32>(rd: usize) -> Instruction<F> {
     Instruction::from_isize(
         HintStoreOpcode::HINT_STOREW.global_opcode(),
         (riscv::RV32_REGISTER_NUM_LIMBS * rd) as isize,
-        (riscv::RV32_REGISTER_NUM_LIMBS * num_words) as isize,
+        0,
         0,
         1,
         0,
