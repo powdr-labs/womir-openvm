@@ -755,7 +755,12 @@ mod tests {
 
     #[test]
     fn test_input_hint() -> Result<(), Box<dyn std::error::Error>> {
-        let instructions = vec![wom::read_u32::<F>(10, 0), reveal(10, 0), halt()];
+        let instructions = vec![
+            wom::pre_read_u32::<F>(),
+            wom::read_u32::<F>(10, 0),
+            reveal(10, 0),
+            halt(),
+        ];
         let mut stdin = StdIn::default();
         stdin.write(&42u32);
 

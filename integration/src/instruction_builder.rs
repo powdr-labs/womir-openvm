@@ -318,6 +318,21 @@ pub fn halt<F: PrimeField32>() -> Instruction<F> {
     )
 }
 
+#[allow(dead_code)]
+pub fn pre_read_u32<F: PrimeField32>() -> Instruction<F> {
+    Instruction::new(
+        WomSystemOpcodes::PHANTOM.global_opcode(),
+        F::ZERO,
+        F::ZERO,
+        F::from_canonical_u32(Phantom::HintInput as u32),
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+    )
+}
+
+#[allow(dead_code)]
 pub fn read_u32<F: PrimeField32>(rd: usize, num_words: usize) -> Instruction<F> {
     Instruction::from_isize(
         HintStoreOpcode::HINT_STOREW.global_opcode(),
@@ -327,16 +342,4 @@ pub fn read_u32<F: PrimeField32>(rd: usize, num_words: usize) -> Instruction<F> 
         1,
         0,
     )
-    /*
-        Instruction::new(
-            WomSystemOpcodes::PHANTOM.global_opcode(),
-            F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd),
-            F::ZERO,
-            F::from_canonical_u32(Phantom::HintInput as u32),
-            F::ZERO,
-            F::ZERO,
-            F::ZERO,
-            F::ZERO,
-        )
-    */
 }

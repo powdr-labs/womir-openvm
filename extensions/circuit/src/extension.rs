@@ -1,7 +1,4 @@
-use std::{
-    cell::RefCell,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use crate::PhantomChip;
 use derive_more::derive::From;
@@ -146,7 +143,7 @@ pub enum WomirIExecutor<F: PrimeField32> {
     Const32(ConstsChipWom<F>),
     LessThan(LessThanChipWom<F>),
     HintStore(HintStoreChip<F>),
-    // Phantom(PhantomChip<F>),
+    Phantom(PhantomChip<F>),
     // Shift(Rv32ShiftChip<F>),
     // LoadStore(Rv32LoadStoreChip<F>),
     // LoadSignExtend(Rv32LoadSignExtendChip<F>),
@@ -312,24 +309,18 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             HintStoreOpcode::iter().map(|x| x.global_opcode()),
         )?;
 
-        /*
-                let streams = builder.streams().clone();
-                let phantom_opcode = WomSystemOpcodes::PHANTOM.global_opcode();
-                let mut phantom_chip =
-                    PhantomChip::new(execution_bus, program_bus, WomSystemOpcodes::CLASS_OFFSET);
-                println!(
-                    "phantom opcode: {phantom_opcode:?}, offset: {}",
-                    WomSystemOpcodes::CLASS_OFFSET
-                );
-                phantom_chip.set_streams(streams.clone());
-                let _ = phantom_chip.add_sub_executor(
-                    phantom::HintInputSubEx,
-                    PhantomDiscriminant(Phantom::HintInput as u16),
-                );
-                inventory
-                    .add_executor(phantom_chip, [phantom_opcode])
-                    .unwrap();
-        */
+        let streams = builder.streams().clone();
+        let phantom_opcode = WomSystemOpcodes::PHANTOM.global_opcode();
+        let mut phantom_chip =
+            PhantomChip::new(execution_bus, program_bus, WomSystemOpcodes::CLASS_OFFSET);
+        phantom_chip.set_streams(streams.clone());
+        let _ = phantom_chip.add_sub_executor(
+            phantom::HintInputSubEx,
+            PhantomDiscriminant(Phantom::HintInput as u16),
+        );
+        inventory
+            .add_executor(phantom_chip, [phantom_opcode])
+            .unwrap();
 
         //
         // let shift_chip = Rv32ShiftChip::new(
@@ -565,24 +556,23 @@ mod phantom {
             _: F,
             _: u16,
         ) -> eyre::Result<()> {
-            println!("Inside PhantomSubExecutor::HintInputSubEx");
-            let mut hint = match streams.input_stream.pop_front() {
+            let hint = match streams.input_stream.pop_front() {
                 Some(hint) => hint,
                 None => {
                     bail!("EndOfInputStream");
                 }
             };
-            println!("hint = {hint:?}");
             streams.hint_stream.clear();
-            streams.hint_stream.extend(
-                (hint.len() as u32)
-                    .to_le_bytes()
-                    .iter()
-                    .map(|b| F::from_canonical_u8(*b)),
-            );
-            // Extend by 0 for 4 byte alignment
-            let capacity = hint.len().div_ceil(4) * 4;
-            hint.resize(capacity, F::ZERO);
+            // TODO add this back when we support generic read over serialized data.
+            // streams.hint_stream.extend(
+            //     (hint.len() as u32)
+            //         .to_le_bytes()
+            //         .iter()
+            //         .map(|b| F::from_canonical_u8(*b)),
+            // );
+            // // Extend by 0 for 4 byte alignment
+            // let capacity = hint.len().div_ceil(4) * 4;
+            // hint.resize(capacity, F::ZERO);
             streams.hint_stream.extend(hint);
             Ok(())
         }

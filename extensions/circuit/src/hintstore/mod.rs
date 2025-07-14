@@ -1,5 +1,5 @@
 use std::{
-    borrow::{Borrow, BorrowMut},
+    borrow::Borrow,
     sync::{Arc, Mutex, OnceLock},
 };
 
@@ -43,7 +43,7 @@ use openvm_womir_transpiler::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::adapters::{compose, decompose};
+use crate::adapters::compose;
 use crate::{FrameBridge, FrameBus};
 
 #[repr(C)]
@@ -293,6 +293,7 @@ pub struct HintStoreChip<F: Field> {
 }
 
 impl<F: PrimeField32> HintStoreChip<F> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         execution_bus: ExecutionBus,
         frame_bus: FrameBus,
@@ -339,7 +340,6 @@ impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
     ) -> Result<ExecutionState<u32>, ExecutionError> {
         let fp = self.shared_fp.lock().unwrap();
         let fp_f = F::from_canonical_u32(*fp);
-        println!("Hints executing from fp: {fp}");
         let &Instruction {
             opcode,
             a: rd,
@@ -362,10 +362,7 @@ impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
         debug_assert!(num_words <= (1 << self.air.pointer_max_bits));
 
         let mut streams = self.streams.get().unwrap().lock().unwrap();
-        println!("input stream: {:?}", streams.input_stream);
-        println!("hint stream: {:?}", streams.hint_stream);
-        // if streams.hint_stream.len() < RV32_REGISTER_NUM_LIMBS * num_words as usize {
-        if streams.input_stream[0].len() < RV32_REGISTER_NUM_LIMBS * num_words as usize {
+        if streams.hint_stream.len() < RV32_REGISTER_NUM_LIMBS * num_words as usize {
             return Err(ExecutionError::HintOutOfBounds { pc: from_state.pc });
         }
 
@@ -378,13 +375,8 @@ impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
             hints: vec![],
         };
 
-        let data: [F; RV32_REGISTER_NUM_LIMBS] = streams
-            .input_stream
-            .pop_front()
-            .unwrap()
-            .try_into()
-            .unwrap();
-        // std::array::from_fn(|_| streams.hint_stream.pop_front().unwrap());
+        let data: [F; RV32_REGISTER_NUM_LIMBS] =
+            std::array::from_fn(|_| streams.hint_stream.pop_front().unwrap());
         let (write, _) = memory.write(d, rd + fp_f, data);
         record.hints.push((data, write));
 
@@ -426,35 +418,14 @@ impl<F: Field> ChipUsageGetter for HintStoreChip<F> {
 impl<F: PrimeField32> HintStoreChip<F> {
     // returns number of used u32s
     fn record_to_rows(
-        record: HintStoreRecord<F>,
-        aux_cols_factory: &MemoryAuxColsFactory<F>,
-        slice: &mut [F],
-        memory: &OfflineMemory<F>,
-        bitwise_lookup_chip: &SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
-        pointer_max_bits: usize,
+        _record: HintStoreRecord<F>,
+        _aux_cols_factory: &MemoryAuxColsFactory<F>,
+        _slice: &mut [F],
+        _memory: &OfflineMemory<F>,
+        _bitwise_lookup_chip: &SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
+        _pointer_max_bits: usize,
     ) -> usize {
-        let width = HintStoreCols::<F>::width();
-        let cols: &mut HintStoreCols<F> = slice[..width].borrow_mut();
-
-        cols.is_single = F::from_bool(record.num_words_read.is_none());
-        cols.is_buffer = F::from_bool(record.num_words_read.is_some());
-        cols.is_buffer_start = cols.is_buffer;
-
-        cols.from_state = record.from_state.map(F::from_canonical_u32);
-        cols.mem_ptr_ptr = record.instruction.b;
-
-        cols.num_words_ptr = record.instruction.a;
-        if let Some(num_words_read) = record.num_words_read {
-            aux_cols_factory.generate_read_aux(
-                memory.record_by_id(num_words_read),
-                &mut cols.num_words_aux_cols,
-            );
-        }
-
-        let mut rem_words = record.num_words;
-        let mut used_u32s = 0;
-
-        used_u32s
+        0
     }
 
     fn generate_trace(self) -> RowMajorMatrix<F> {
