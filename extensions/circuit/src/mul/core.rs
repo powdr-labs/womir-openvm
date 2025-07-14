@@ -4,8 +4,7 @@ use std::{
 };
 
 use openvm_circuit::arch::{
-    AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, Result, VmAdapterInterface,
-    VmCoreAir, VmCoreChip,
+    AdapterAirContext, MinimalInstruction, Result, VmAdapterInterface, VmCoreAir,
 };
 use openvm_circuit_primitives::range_tuple::{RangeTupleCheckerBus, SharedRangeTupleCheckerChip};
 use openvm_circuit_primitives_derive::AlignedBorrow;
@@ -20,6 +19,8 @@ use openvm_stark_backend::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
+
+use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
@@ -164,7 +165,7 @@ pub struct MultiplicationCoreRecord<T, const NUM_LIMBS: usize, const LIMB_BITS: 
 }
 
 impl<F: PrimeField32, I: VmAdapterInterface<F>, const NUM_LIMBS: usize, const LIMB_BITS: usize>
-    VmCoreChip<F, I> for MultiplicationCoreChip<NUM_LIMBS, LIMB_BITS>
+    VmCoreChipWom<F, I> for MultiplicationCoreChip<NUM_LIMBS, LIMB_BITS>
 where
     I::Reads: Into<[[F; NUM_LIMBS]; 2]>,
     I::Writes: From<[[F; NUM_LIMBS]; 1]>,
@@ -177,8 +178,9 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
+        _from_frame: u32,
         reads: I::Reads,
-    ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
+    ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
         let Instruction { opcode, .. } = instruction;
         assert_eq!(
             MulOpcode::from_usize(opcode.local_opcode_idx(self.air.offset)),
@@ -194,7 +196,11 @@ where
             self.range_tuple_chip.add_count(&[*a, *carry]);
         }
 
-        let output = AdapterRuntimeContext::without_pc([a.map(F::from_canonical_u32)]);
+        let output = AdapterRuntimeContextWom {
+            to_pc: None,
+            to_fp: None,
+            writes: [a.map(F::from_canonical_u32)].into(),
+        };
         let record = MultiplicationCoreRecord {
             a: a.map(F::from_canonical_u32),
             b: data[0],
