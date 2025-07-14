@@ -6,8 +6,7 @@ use std::{
 use num_bigint::BigUint;
 use num_integer::Integer;
 use openvm_circuit::arch::{
-    AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, Result, VmAdapterInterface,
-    VmCoreAir, VmCoreChip,
+    AdapterAirContext, MinimalInstruction, Result, VmAdapterInterface, VmCoreAir,
 };
 use openvm_circuit_primitives::{
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},

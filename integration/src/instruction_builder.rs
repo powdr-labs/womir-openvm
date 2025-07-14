@@ -2,8 +2,8 @@ use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOp
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, HintStoreOpcode,
-    JaafOpcode, JumpOpcode, LessThanOpcode, MulOpcode, Phantom, ShiftOpcode,
+    AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode,
+    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, MulOpcode, Phantom, ShiftOpcode,
 };
 
 pub fn instr_r<F: PrimeField32>(
@@ -56,8 +56,14 @@ pub fn sub<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(BaseAluOpcode::SUB.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+#[allow(dead_code)]
 pub fn mul<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(MulOpcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+#[allow(dead_code)]
+pub fn div<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(DivRemOpcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 pub fn xor<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
