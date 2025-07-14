@@ -307,6 +307,145 @@ mod tests {
     }
 
     #[test]
+    fn test_basic_div() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 100),
+            wom::addi::<F>(9, 0, 10),
+            wom::div::<F>(10, 8, 9),  // 100 / 10 = 10
+            reveal(10, 0),
+            halt(),
+        ];
+        run_vm_test("Basic division", instructions, 10, None)
+    }
+
+    #[test]
+    fn test_div_by_one() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 999),
+            wom::addi::<F>(9, 0, 1),
+            wom::div::<F>(10, 8, 9),  // 999 / 1 = 999
+            reveal(10, 0),
+            halt(),
+        ];
+        run_vm_test("Division by one", instructions, 999, None)
+    }
+
+    #[test]
+    fn test_div_equal_numbers() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 42),
+            wom::addi::<F>(9, 0, 42),
+            wom::div::<F>(10, 8, 9),  // 42 / 42 = 1
+            reveal(10, 0),
+            halt(),
+        ];
+        run_vm_test("Division of equal numbers", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_div_with_remainder() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 17),
+            wom::addi::<F>(9, 0, 5),
+            wom::div::<F>(10, 8, 9),  // 17 / 5 = 3 (integer division)
+            reveal(10, 0),
+            halt(),
+        ];
+        run_vm_test("Division with remainder", instructions, 3, None)
+    }
+
+    #[test]
+    fn test_div_zero_dividend() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 0),
+            wom::addi::<F>(9, 0, 100),
+            wom::div::<F>(10, 8, 9),  // 0 / 100 = 0
+            reveal(10, 0),
+            halt(),
+        ];
+        run_vm_test("Division of zero", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_div_large_numbers() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0, 1000),      // 65536000
+            wom::const_32_imm::<F>(9, 256, 0),       // 256
+            wom::div::<F>(10, 8, 9),                 // 65536000 / 256 = 256000
+            reveal(10, 0),
+            halt(),
+        ];
+        run_vm_test("Division of large numbers", instructions, 256000, None)
+    }
+
+    #[test]
+    fn test_div_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 128),
+            wom::addi::<F>(9, 0, 8),   // 2^3
+            wom::div::<F>(10, 8, 9),   // 128 / 8 = 16
+            reveal(10, 0),
+            halt(),
+        ];
+        run_vm_test("Division by power of 2", instructions, 16, None)
+    }
+
+    #[test]
+    fn test_div_chain() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 120),
+            wom::addi::<F>(9, 0, 2),
+            wom::addi::<F>(10, 0, 3),
+            wom::div::<F>(11, 8, 9),   // 120 / 2 = 60
+            wom::div::<F>(12, 11, 10), // 60 / 3 = 20
+            reveal(12, 0),
+            halt(),
+        ];
+        run_vm_test("Chained division", instructions, 20, None)
+    }
+
+    #[test]
+    fn test_div_negative_signed() -> Result<(), Box<dyn std::error::Error>> {
+        // Testing signed division with negative numbers
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0xFFF6, 0xFFFF), // -10 in two's complement
+            wom::addi::<F>(9, 0, 2),
+            wom::div::<F>(10, 8, 9),                    // -10 / 2 = -5
+            reveal(10, 0),
+            halt(),
+        ];
+        // -5 in 32-bit two's complement is 0xFFFFFFFB
+        run_vm_test("Signed division with negative dividend", instructions, 0xFFFFFFFB, None)
+    }
+
+    #[test]
+    fn test_div_both_negative() -> Result<(), Box<dyn std::error::Error>> {
+        // Testing signed division with both numbers negative
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0xFFEC, 0xFFFF), // -20 in two's complement
+            wom::const_32_imm::<F>(9, 0xFFFB, 0xFFFF), // -5 in two's complement
+            wom::div::<F>(10, 8, 9),                    // -20 / -5 = 4
+            reveal(10, 0),
+            halt(),
+        ];
+        run_vm_test("Signed division with both negative", instructions, 4, None)
+    }
+
+    #[test]
+    fn test_div_and_mul_inverse() -> Result<(), Box<dyn std::error::Error>> {
+        // Test that (a / b) * b ≈ a (with integer truncation)
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 100),
+            wom::addi::<F>(9, 0, 7),
+            wom::div::<F>(10, 8, 9),   // 100 / 7 = 14
+            wom::mul::<F>(11, 10, 9),  // 14 * 7 = 98 (not 100 due to truncation)
+            reveal(11, 0),
+            halt(),
+        ];
+        run_vm_test("Division and multiplication relationship", instructions, 98, None)
+    }
+
+    #[test]
     fn test_jaaf_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Simple test with JAAF instruction
         // We'll set up a value, jump with JAAF, and verify the result
