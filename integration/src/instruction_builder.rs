@@ -113,10 +113,6 @@ pub fn gt_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F
     lt_s(rd, rs2, rs1)
 }
 
-pub fn read32<F: PrimeField32>(rd: usize) -> Instruction<F> {
-    todo!()
-}
-
 pub fn const_32_imm<F: PrimeField32>(
     target_reg: usize,
     imm_lo: u16,

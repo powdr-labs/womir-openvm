@@ -1,4 +1,3 @@
-use core::num;
 use std::{collections::HashMap, vec};
 
 use crate::instruction_builder as ib;
