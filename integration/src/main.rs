@@ -197,7 +197,7 @@ mod tests {
         let instructions = vec![
             wom::addi::<F>(8, 0, 12345),
             wom::addi::<F>(9, 0, 0),
-            wom::mul::<F>(10, 8, 9),  // 12345 * 0 = 0
+            wom::mul::<F>(10, 8, 9), // 12345 * 0 = 0
             reveal(10, 0),
             halt(),
         ];
@@ -209,7 +209,7 @@ mod tests {
         let instructions = vec![
             wom::addi::<F>(8, 0, 999),
             wom::addi::<F>(9, 0, 1),
-            wom::mul::<F>(10, 8, 9),  // 999 * 1 = 999
+            wom::mul::<F>(10, 8, 9), // 999 * 1 = 999
             reveal(10, 0),
             halt(),
         ];
@@ -220,8 +220,8 @@ mod tests {
     fn test_mul_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::addi::<F>(8, 0, 7),
-            wom::addi::<F>(9, 0, 8),  // 2^3
-            wom::mul::<F>(10, 8, 9),  // 7 * 8 = 56
+            wom::addi::<F>(9, 0, 8), // 2^3
+            wom::mul::<F>(10, 8, 9), // 7 * 8 = 56
             reveal(10, 0),
             halt(),
         ];
@@ -232,22 +232,27 @@ mod tests {
     fn test_mul_large_numbers() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             // Load large numbers
-            wom::const_32_imm::<F>(8, 1, 1),     // 65537 = 0x10001 (1 << 16 | 1)
-            wom::const_32_imm::<F>(9, 65521, 0),     // 65521 = 0xFFF1
-            wom::mul::<F>(10, 8, 9),          // 65537 * 65521 = 4,294,836,577
+            wom::const_32_imm::<F>(8, 1, 1), // 65537 = 0x10001 (1 << 16 | 1)
+            wom::const_32_imm::<F>(9, 65521, 0), // 65521 = 0xFFF1
+            wom::mul::<F>(10, 8, 9),         // 65537 * 65521 = 4,294,836,577
             reveal(10, 0),
             halt(),
         ];
-        run_vm_test("Multiplication of large numbers", instructions, 4294049777u32, None)
+        run_vm_test(
+            "Multiplication of large numbers",
+            instructions,
+            4294049777u32,
+            None,
+        )
     }
 
     #[test]
     fn test_mul_overflow() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             // Test multiplication that would overflow 32-bit
-            wom::const_32_imm::<F>(8, 0, 1),     // 2^16 = 65536 (upper=1, lower=0)
-            wom::const_32_imm::<F>(9, 1, 1),     // 65537 (upper=1, lower=1)
-            wom::mul::<F>(10, 8, 9),           // 65536 * 65537 = 4,295,032,832 (overflows to 65536 in 32-bit)
+            wom::const_32_imm::<F>(8, 0, 1), // 2^16 = 65536 (upper=1, lower=0)
+            wom::const_32_imm::<F>(9, 1, 1), // 65537 (upper=1, lower=1)
+            wom::mul::<F>(10, 8, 9), // 65536 * 65537 = 4,295,032,832 (overflows to 65536 in 32-bit)
             reveal(10, 0),
             halt(),
         ];
@@ -289,11 +294,16 @@ mod tests {
             // Test with maximum 32-bit value
             wom::const_32_imm::<F>(8, 0xFFFF, 0xFFFF), // 2^32 - 1
             wom::addi::<F>(9, 0, 1),
-            wom::mul::<F>(10, 8, 9),          // (2^32 - 1) * 1 = 2^32 - 1
+            wom::mul::<F>(10, 8, 9), // (2^32 - 1) * 1 = 2^32 - 1
             reveal(10, 0),
             halt(),
         ];
-        run_vm_test("Multiplication with max value", instructions, 0xFFFFFFFF, None)
+        run_vm_test(
+            "Multiplication with max value",
+            instructions,
+            0xFFFFFFFF,
+            None,
+        )
     }
 
     #[test]
