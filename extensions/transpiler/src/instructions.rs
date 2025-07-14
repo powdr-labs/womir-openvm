@@ -372,28 +372,6 @@ pub enum ConstOpcodes {
     CONST32, // stores an immediate into a register
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x128A]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum WomSystemOpcodes {
-    PHANTOM,
-}
-
 // =================================================================================================
 // Phantom opcodes
 // =================================================================================================

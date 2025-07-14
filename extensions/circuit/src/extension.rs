@@ -1,13 +1,12 @@
 use std::sync::{Arc, Mutex};
 
-use crate::PhantomChip;
 use derive_more::derive::From;
 use openvm_circuit::{
     arch::{
         InitFileGenerator, SystemConfig, SystemPort, VmExtension, VmInventory, VmInventoryBuilder,
         VmInventoryError,
     },
-    // system::phantom::PhantomChip,
+    system::phantom::PhantomChip,
 };
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor, VmConfig};
 use openvm_circuit_primitives::{
@@ -20,7 +19,6 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode,
     HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, MulHOpcode, MulOpcode, Phantom,
-    WomSystemOpcodes,
 };
 
 use serde::{Deserialize, Serialize};
@@ -143,7 +141,6 @@ pub enum WomirIExecutor<F: PrimeField32> {
     Const32(ConstsChipWom<F>),
     LessThan(LessThanChipWom<F>),
     HintStore(HintStoreChip<F>),
-    Phantom(PhantomChip<F>),
     // Shift(Rv32ShiftChip<F>),
     // LoadStore(Rv32LoadStoreChip<F>),
     // LoadSignExtend(Rv32LoadSignExtendChip<F>),
@@ -309,20 +306,6 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             HintStoreOpcode::iter().map(|x| x.global_opcode()),
         )?;
 
-        let streams = builder.streams().clone();
-        let phantom_opcode = WomSystemOpcodes::PHANTOM.global_opcode();
-        let mut phantom_chip =
-            PhantomChip::new(execution_bus, program_bus, WomSystemOpcodes::CLASS_OFFSET);
-        phantom_chip.set_streams(streams.clone());
-        let _ = phantom_chip.add_sub_executor(
-            phantom::HintInputSubEx,
-            PhantomDiscriminant(Phantom::HintInput as u16),
-        );
-        inventory
-            .add_executor(phantom_chip, [phantom_opcode])
-            .unwrap();
-
-        //
         // let shift_chip = Rv32ShiftChip::new(
         //     Rv32WomBaseAluAdapterChip::new(
         //         execution_bus,

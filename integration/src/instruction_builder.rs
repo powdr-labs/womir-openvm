@@ -3,7 +3,7 @@ use openvm_rv32im_transpiler::Rv32LoadStoreOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, HintStoreOpcode,
-    JaafOpcode, JumpOpcode, LessThanOpcode, Phantom, ShiftOpcode, WomSystemOpcodes,
+    JaafOpcode, JumpOpcode, LessThanOpcode, Phantom, ShiftOpcode,
 };
 
 pub fn instr_r<F: PrimeField32>(
@@ -321,7 +321,7 @@ pub fn halt<F: PrimeField32>() -> Instruction<F> {
 #[allow(dead_code)]
 pub fn pre_read_u32<F: PrimeField32>() -> Instruction<F> {
     Instruction::new(
-        WomSystemOpcodes::PHANTOM.global_opcode(),
+        SystemOpcode::PHANTOM.global_opcode(),
         F::ZERO,
         F::ZERO,
         F::from_canonical_u32(Phantom::HintInput as u32),
