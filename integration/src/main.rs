@@ -307,11 +307,100 @@ mod tests {
     }
 
     #[test]
+    fn test_mul_negative_positive() -> Result<(), Box<dyn std::error::Error>> {
+        // Test multiplication of negative and positive numbers
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0xFFFB, 0xFFFF), // -5 in two's complement
+            wom::addi::<F>(9, 0, 3),
+            wom::mul::<F>(10, 8, 9), // -5 * 3 = -15
+            reveal(10, 0),
+            halt(),
+        ];
+        // -15 in 32-bit two's complement is 0xFFFFFFF1
+        run_vm_test(
+            "Multiplication negative * positive",
+            instructions,
+            0xFFFFFFF1,
+            None,
+        )
+    }
+
+    #[test]
+    fn test_mul_positive_negative() -> Result<(), Box<dyn std::error::Error>> {
+        // Test multiplication of positive and negative numbers
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 4),
+            wom::const_32_imm::<F>(9, 0xFFFA, 0xFFFF), // -6 in two's complement
+            wom::mul::<F>(10, 8, 9),                   // 4 * -6 = -24
+            reveal(10, 0),
+            halt(),
+        ];
+        // -24 in 32-bit two's complement is 0xFFFFFFE8
+        run_vm_test(
+            "Multiplication positive * negative",
+            instructions,
+            0xFFFFFFE8,
+            None,
+        )
+    }
+
+    #[test]
+    fn test_mul_both_negative() -> Result<(), Box<dyn std::error::Error>> {
+        // Test multiplication of two negative numbers
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0xFFF9, 0xFFFF), // -7 in two's complement
+            wom::const_32_imm::<F>(9, 0xFFFD, 0xFFFF), // -3 in two's complement
+            wom::mul::<F>(10, 8, 9),                   // -7 * -3 = 21
+            reveal(10, 0),
+            halt(),
+        ];
+        run_vm_test("Multiplication both negative", instructions, 21, None)
+    }
+
+    #[test]
+    fn test_mul_negative_one() -> Result<(), Box<dyn std::error::Error>> {
+        // Test multiplication by -1
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 42),
+            wom::const_32_imm::<F>(9, 0xFFFF, 0xFFFF), // -1 in two's complement
+            wom::mul::<F>(10, 8, 9),                   // 42 * -1 = -42
+            reveal(10, 0),
+            halt(),
+        ];
+        // -42 in 32-bit two's complement is 0xFFFFFFD6
+        run_vm_test(
+            "Multiplication by negative one",
+            instructions,
+            0xFFFFFFD6,
+            None,
+        )
+    }
+
+    #[test]
+    fn test_mul_negative_overflow() -> Result<(), Box<dyn std::error::Error>> {
+        // Test multiplication that would overflow with signed numbers
+        let instructions = vec![
+            wom::const_32_imm::<F>(8, 0x0000, 0x8000), // -2147483648 (INT32_MIN)
+            wom::const_32_imm::<F>(9, 0xFFFF, 0xFFFF), // -1
+            wom::mul::<F>(10, 8, 9),                   // INT32_MIN * -1 = INT32_MIN (overflow)
+            reveal(10, 0),
+            halt(),
+        ];
+        // INT32_MIN * -1 overflows back to INT32_MIN (0x80000000)
+        run_vm_test(
+            "Multiplication negative overflow",
+            instructions,
+            0x80000000,
+            None,
+        )
+    }
+
+    #[test]
     fn test_basic_div() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::addi::<F>(8, 0, 100),
             wom::addi::<F>(9, 0, 10),
-            wom::div::<F>(10, 8, 9),  // 100 / 10 = 10
+            wom::div::<F>(10, 8, 9), // 100 / 10 = 10
             reveal(10, 0),
             halt(),
         ];
@@ -323,7 +412,7 @@ mod tests {
         let instructions = vec![
             wom::addi::<F>(8, 0, 999),
             wom::addi::<F>(9, 0, 1),
-            wom::div::<F>(10, 8, 9),  // 999 / 1 = 999
+            wom::div::<F>(10, 8, 9), // 999 / 1 = 999
             reveal(10, 0),
             halt(),
         ];
@@ -335,7 +424,7 @@ mod tests {
         let instructions = vec![
             wom::addi::<F>(8, 0, 42),
             wom::addi::<F>(9, 0, 42),
-            wom::div::<F>(10, 8, 9),  // 42 / 42 = 1
+            wom::div::<F>(10, 8, 9), // 42 / 42 = 1
             reveal(10, 0),
             halt(),
         ];
@@ -347,7 +436,7 @@ mod tests {
         let instructions = vec![
             wom::addi::<F>(8, 0, 17),
             wom::addi::<F>(9, 0, 5),
-            wom::div::<F>(10, 8, 9),  // 17 / 5 = 3 (integer division)
+            wom::div::<F>(10, 8, 9), // 17 / 5 = 3 (integer division)
             reveal(10, 0),
             halt(),
         ];
@@ -359,7 +448,7 @@ mod tests {
         let instructions = vec![
             wom::addi::<F>(8, 0, 0),
             wom::addi::<F>(9, 0, 100),
-            wom::div::<F>(10, 8, 9),  // 0 / 100 = 0
+            wom::div::<F>(10, 8, 9), // 0 / 100 = 0
             reveal(10, 0),
             halt(),
         ];
@@ -369,9 +458,9 @@ mod tests {
     #[test]
     fn test_div_large_numbers() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm::<F>(8, 0, 1000),      // 65536000
-            wom::const_32_imm::<F>(9, 256, 0),       // 256
-            wom::div::<F>(10, 8, 9),                 // 65536000 / 256 = 256000
+            wom::const_32_imm::<F>(8, 0, 1000), // 65536000
+            wom::const_32_imm::<F>(9, 256, 0),  // 256
+            wom::div::<F>(10, 8, 9),            // 65536000 / 256 = 256000
             reveal(10, 0),
             halt(),
         ];
@@ -382,8 +471,8 @@ mod tests {
     fn test_div_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::addi::<F>(8, 0, 128),
-            wom::addi::<F>(9, 0, 8),   // 2^3
-            wom::div::<F>(10, 8, 9),   // 128 / 8 = 16
+            wom::addi::<F>(9, 0, 8), // 2^3
+            wom::div::<F>(10, 8, 9), // 128 / 8 = 16
             reveal(10, 0),
             halt(),
         ];
@@ -410,12 +499,17 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm::<F>(8, 0xFFF6, 0xFFFF), // -10 in two's complement
             wom::addi::<F>(9, 0, 2),
-            wom::div::<F>(10, 8, 9),                    // -10 / 2 = -5
+            wom::div::<F>(10, 8, 9), // -10 / 2 = -5
             reveal(10, 0),
             halt(),
         ];
         // -5 in 32-bit two's complement is 0xFFFFFFFB
-        run_vm_test("Signed division with negative dividend", instructions, 0xFFFFFFFB, None)
+        run_vm_test(
+            "Signed division with negative dividend",
+            instructions,
+            0xFFFFFFFB,
+            None,
+        )
     }
 
     #[test]
@@ -424,7 +518,7 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm::<F>(8, 0xFFEC, 0xFFFF), // -20 in two's complement
             wom::const_32_imm::<F>(9, 0xFFFB, 0xFFFF), // -5 in two's complement
-            wom::div::<F>(10, 8, 9),                    // -20 / -5 = 4
+            wom::div::<F>(10, 8, 9),                   // -20 / -5 = 4
             reveal(10, 0),
             halt(),
         ];
@@ -437,12 +531,17 @@ mod tests {
         let instructions = vec![
             wom::addi::<F>(8, 0, 100),
             wom::addi::<F>(9, 0, 7),
-            wom::div::<F>(10, 8, 9),   // 100 / 7 = 14
-            wom::mul::<F>(11, 10, 9),  // 14 * 7 = 98 (not 100 due to truncation)
+            wom::div::<F>(10, 8, 9),  // 100 / 7 = 14
+            wom::mul::<F>(11, 10, 9), // 14 * 7 = 98 (not 100 due to truncation)
             reveal(11, 0),
             halt(),
         ];
-        run_vm_test("Division and multiplication relationship", instructions, 98, None)
+        run_vm_test(
+            "Division and multiplication relationship",
+            instructions,
+            98,
+            None,
+        )
     }
 
     #[test]
