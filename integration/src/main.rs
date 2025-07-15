@@ -1181,4 +1181,42 @@ mod tests {
             Some(stdin),
         )
     }
+
+    #[test]
+    fn test_loadw_basic() -> Result<(), Box<dyn std::error::Error>> {
+        // Test basic LOADW instruction
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 100), // x8 = 100 (base address)
+            wom::addi::<F>(9, 0, 42),  // x9 = 42 (value to store)
+            wom::storew::<F>(9, 8, 0), // MEM[x8 + 0] = x9 (store 42 at address 100)
+            wom::addi::<F>(10, 0, 0),  // x10 = 0 (clear register)
+            wom::loadw::<F>(10, 8, 0), // x10 = MEM[x8 + 0] (load from address 100)
+            wom::reveal(10, 0),        // Reveal x10 (should be 42)
+            wom::halt(),
+        ];
+
+        run_vm_test("LOADW basic test", instructions, 42, None)
+    }
+
+    #[test]
+    fn test_storew_with_offset() -> Result<(), Box<dyn std::error::Error>> {
+        // Test STOREW with positive offset
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 200),  // x8 = 200 (base address)
+            wom::addi::<F>(9, 0, 111),  // x9 = 111 (first value)
+            wom::addi::<F>(10, 0, 222), // x10 = 222 (second value)
+            wom::storew::<F>(9, 8, 0),  // MEM[x8 + 0] = 111
+            wom::storew::<F>(10, 8, 4), // MEM[x8 + 4] = 222
+            wom::addi::<F>(11, 0, 0),   // x11 = 0 (clear register)
+            wom::addi::<F>(12, 0, 0),   // x12 = 0 (clear register)
+            wom::loadw::<F>(11, 8, 0),  // x11 = MEM[x8 + 0] (should be 111)
+            wom::loadw::<F>(12, 8, 4),  // x12 = MEM[x8 + 4] (should be 222)
+            // Test that we loaded the correct values
+            wom::add::<F>(13, 11, 12), // x13 = x11 + x12 = 111 + 222 = 333
+            wom::reveal(13, 0),        // Reveal x13 (should be 333)
+            wom::halt(),
+        ];
+
+        run_vm_test("STOREW with offset test", instructions, 333, None)
+    }
 }

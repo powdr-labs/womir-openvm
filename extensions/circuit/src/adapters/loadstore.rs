@@ -6,8 +6,8 @@ use std::{
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterRuntimeContext, ExecutionBridge, ExecutionBus, ExecutionState,
-        Result, VmAdapterAir, VmAdapterChip, VmAdapterInterface,
+        AdapterAirContext, ExecutionBridge, ExecutionBus, ExecutionState, Result, VmAdapterAir,
+        VmAdapterInterface,
     },
     system::{
         memory::{
@@ -30,18 +30,19 @@ use openvm_instructions::{
     riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
     LocalOpcode,
 };
-use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
+use openvm_womir_transpiler::LoadStoreOpcode::*;
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use super::{compose, RV32_REGISTER_NUM_LIMBS};
 use crate::adapters::RV32_CELL_BITS;
+use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
 
 /// LoadStore Adapter handles all memory and register operations, so it must be aware
 /// of the instruction type, specifically whether it is a load or store
@@ -107,6 +108,7 @@ impl<F: PrimeField32> Rv32LoadStoreAdapterChip<F> {
     pub fn new(
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
+        frame_bus: FrameBus,
         memory_bridge: MemoryBridge,
         pointer_max_bits: usize,
         range_checker_chip: SharedVariableRangeCheckerChip,
@@ -115,6 +117,7 @@ impl<F: PrimeField32> Rv32LoadStoreAdapterChip<F> {
         Self {
             air: Rv32LoadStoreAdapterAir {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                frame_bridge: FrameBridge::new(frame_bus),
                 memory_bridge,
                 range_bus: range_checker_chip.bus(),
                 pointer_max_bits,
@@ -150,6 +153,7 @@ pub struct Rv32LoadStoreWriteRecord<F: Field> {
     /// there is no write.
     pub write_id: RecordId,
     pub from_state: ExecutionState<u32>,
+    pub from_frame: FrameState<u32>,
     pub rd_rs2_ptr: F,
 }
 
@@ -157,6 +161,7 @@ pub struct Rv32LoadStoreWriteRecord<F: Field> {
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
 pub struct Rv32LoadStoreAdapterCols<T> {
     pub from_state: ExecutionState<T>,
+    pub from_frame: FrameState<T>,
     pub rs1_ptr: T,
     pub rs1_data: [T; RV32_REGISTER_NUM_LIMBS],
     pub rs1_aux_cols: MemoryReadAuxCols<T>,
@@ -182,8 +187,9 @@ pub struct Rv32LoadStoreAdapterCols<T> {
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct Rv32LoadStoreAdapterAir {
-    pub(super) memory_bridge: MemoryBridge,
     pub(super) execution_bridge: ExecutionBridge,
+    pub(super) frame_bridge: FrameBridge,
+    pub(super) memory_bridge: MemoryBridge,
     pub range_bus: VariableRangeCheckerBus,
     pointer_max_bits: usize,
 }
@@ -239,12 +245,12 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             .when(is_valid.clone() - write_count)
             .assert_zero(local_cols.rd_rs2_ptr);
 
-        // read rs1
+        // read rs1 with fp offset
         self.memory_bridge
             .read(
                 MemoryAddress::new(
                     AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.rs1_ptr,
+                    local_cols.rs1_ptr + local_cols.from_frame.fp,
                 ),
                 local_cols.rs1_data,
                 timestamp_pp(),
@@ -305,13 +311,16 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             AB::F::from_canonical_u32(RV32_REGISTER_AS),
         );
 
-        // read_ptr is mem_ptr for loads and rd_rs2_ptr for stores
+        // read_ptr is mem_ptr for loads and rd_rs2_ptr + fp for stores
         // Note: shift_amount is expected to have degree 2, thus we can't put it in the select
         // clause       since the resulting read_ptr/write_ptr's degree will be 3 which is
         // too high.       Instead, the solution without using additional columns is to get
         // two different shift amounts from core chip
-        let read_ptr = select::<AB::Expr>(is_load.clone(), mem_ptr.clone(), local_cols.rd_rs2_ptr)
-            - load_shift_amount;
+        let read_ptr = select::<AB::Expr>(
+            is_load.clone(),
+            mem_ptr.clone(),
+            local_cols.rd_rs2_ptr + local_cols.from_frame.fp,
+        ) - load_shift_amount;
 
         self.memory_bridge
             .read(
@@ -331,9 +340,12 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             local_cols.mem_as,
         );
 
-        // write_ptr is rd_rs2_ptr for loads and mem_ptr for stores
-        let write_ptr = select::<AB::Expr>(is_load.clone(), local_cols.rd_rs2_ptr, mem_ptr.clone())
-            - store_shift_amount;
+        // write_ptr is rd_rs2_ptr + fp for loads and mem_ptr for stores
+        let write_ptr = select::<AB::Expr>(
+            is_load.clone(),
+            local_cols.rd_rs2_ptr + local_cols.from_frame.fp,
+            mem_ptr.clone(),
+        ) - store_shift_amount;
 
         self.memory_bridge
             .write(
@@ -361,11 +373,19 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
                 ],
                 local_cols.from_state,
                 ExecutionState {
-                    pc: to_pc,
+                    pc: to_pc.clone(),
                     timestamp: timestamp + AB::F::from_canonical_usize(timestamp_delta),
                 },
             )
-            .eval(builder, is_valid);
+            .eval(builder, is_valid.clone());
+
+        // Handle frame transitions - loadstore doesn't change fp
+        self.frame_bridge.frame_bus.execute(
+            builder,
+            is_valid,
+            local_cols.from_frame,
+            FrameState::new(to_pc.clone(), local_cols.from_frame.fp),
+        );
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -374,7 +394,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
     }
 }
 
-impl<F: PrimeField32> VmAdapterChip<F> for Rv32LoadStoreAdapterChip<F> {
+impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
     type ReadRecord = Rv32LoadStoreReadRecord<F>;
     type WriteRecord = Rv32LoadStoreWriteRecord<F>;
     type Air = Rv32LoadStoreAdapterAir;
@@ -384,6 +404,7 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32LoadStoreAdapterChip<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
@@ -402,10 +423,12 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32LoadStoreAdapterChip<F> {
         debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
         debug_assert!(e.as_canonical_u32() != RV32_IMM_AS);
 
-        let local_opcode = Rv32LoadStoreOpcode::from_usize(
-            opcode.local_opcode_idx(Rv32LoadStoreOpcode::CLASS_OFFSET),
+        let local_opcode = openvm_womir_transpiler::LoadStoreOpcode::from_usize(
+            opcode.local_opcode_idx(openvm_womir_transpiler::LoadStoreOpcode::CLASS_OFFSET),
         );
-        let rs1_record = memory.read::<RV32_REGISTER_NUM_LIMBS>(d, b);
+
+        let fp_f = F::from_canonical_u32(fp);
+        let rs1_record = memory.read::<RV32_REGISTER_NUM_LIMBS>(d, b + fp_f);
 
         let rs1_val = compose(rs1_record.1);
         let imm = c.as_canonical_u32();
@@ -427,7 +450,7 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32LoadStoreAdapterChip<F> {
             LOADW | LOADB | LOADH | LOADBU | LOADHU => {
                 memory.read::<RV32_REGISTER_NUM_LIMBS>(e, F::from_canonical_u32(ptr_val))
             }
-            STOREW | STOREH | STOREB => memory.read::<RV32_REGISTER_NUM_LIMBS>(d, a),
+            STOREW | STOREH | STOREB => memory.read::<RV32_REGISTER_NUM_LIMBS>(d, a + fp_f),
         };
 
         // We need to keep values of some cells to keep them unchanged when writing to those cells
@@ -435,9 +458,9 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32LoadStoreAdapterChip<F> {
             STOREW | STOREH | STOREB => array::from_fn(|i| {
                 memory.unsafe_read_cell(e, F::from_canonical_usize(ptr_val as usize + i))
             }),
-            LOADW | LOADB | LOADH | LOADBU | LOADHU => {
-                array::from_fn(|i| memory.unsafe_read_cell(d, a + F::from_canonical_usize(i)))
-            }
+            LOADW | LOADB | LOADH | LOADBU | LOADHU => array::from_fn(|i| {
+                memory.unsafe_read_cell(d, a + fp_f + F::from_canonical_usize(i))
+            }),
         };
 
         Ok((
@@ -463,9 +486,10 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32LoadStoreAdapterChip<F> {
         memory: &mut MemoryController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
-        output: AdapterRuntimeContext<F, Self::Interface>,
+        from_frame: FrameState<u32>,
+        output: AdapterRuntimeContextWom<F, Self::Interface>,
         read_record: &Self::ReadRecord,
-    ) -> Result<(ExecutionState<u32>, Self::WriteRecord)> {
+    ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction {
             opcode,
             a,
@@ -475,10 +499,11 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32LoadStoreAdapterChip<F> {
             ..
         } = *instruction;
 
-        let local_opcode = Rv32LoadStoreOpcode::from_usize(
-            opcode.local_opcode_idx(Rv32LoadStoreOpcode::CLASS_OFFSET),
+        let local_opcode = openvm_womir_transpiler::LoadStoreOpcode::from_usize(
+            opcode.local_opcode_idx(openvm_womir_transpiler::LoadStoreOpcode::CLASS_OFFSET),
         );
 
+        let fp_f = F::from_canonical_u32(from_frame.fp);
         let write_id = if enabled != F::ZERO {
             let (record_id, _) = match local_opcode {
                 STOREW | STOREH | STOREB => {
@@ -486,7 +511,9 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32LoadStoreAdapterChip<F> {
                         + read_record.mem_ptr_limbs[1] * (1 << (RV32_CELL_BITS * 2));
                     memory.write(e, F::from_canonical_u32(ptr & 0xfffffffc), output.writes[0])
                 }
-                LOADW | LOADB | LOADH | LOADBU | LOADHU => memory.write(d, a, output.writes[0]),
+                LOADW | LOADB | LOADH | LOADBU | LOADHU => {
+                    memory.write(d, a + fp_f, output.writes[0])
+                }
             };
             record_id
         } else {
@@ -500,8 +527,10 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32LoadStoreAdapterChip<F> {
                 pc: output.to_pc.unwrap_or(from_state.pc + DEFAULT_PC_STEP),
                 timestamp: memory.timestamp(),
             },
+            output.to_fp.unwrap_or(from_frame.fp),
             Self::WriteRecord {
                 from_state,
+                from_frame,
                 write_id,
                 rd_rs2_ptr: a,
             },
@@ -527,6 +556,7 @@ impl<F: PrimeField32> VmAdapterChip<F> for Rv32LoadStoreAdapterChip<F> {
         let aux_cols_factory = memory.aux_cols_factory();
         let adapter_cols: &mut Rv32LoadStoreAdapterCols<_> = row_slice.borrow_mut();
         adapter_cols.from_state = write_record.from_state.map(F::from_canonical_u32);
+        adapter_cols.from_frame = write_record.from_frame.map(F::from_canonical_u32);
         let rs1 = memory.record_by_id(read_record.rs1_record);
         adapter_cols.rs1_data.copy_from_slice(rs1.data_slice());
         aux_cols_factory.generate_read_aux(rs1, &mut adapter_cols.rs1_aux_cols);
