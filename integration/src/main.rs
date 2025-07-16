@@ -1292,6 +1292,9 @@ mod wast_tests {
     use std::process::Command;
     use tracing::Level;
 
+    type TestCase = (String, Vec<u32>, Vec<u32>);
+    type TestModule = (String, u32, Vec<TestCase>);
+
     #[derive(Debug, Deserialize)]
     struct TestFile {
         commands: Vec<CommandEntry>,
@@ -1313,25 +1316,28 @@ mod wast_tests {
         action_type: String,
         field: Option<String>,
         args: Option<Vec<Value>>,
+        #[allow(dead_code)]
         module: Option<String>,
     }
 
     #[derive(Debug, Deserialize)]
     struct Expected {
         #[serde(rename = "type")]
+        #[allow(dead_code)]
         expected_type: String,
+        #[allow(dead_code)]
         lane: Option<String>,
         value: Option<String>,
     }
 
     fn extract_wast_test_info(
         wast_file: &str,
-    ) -> Result<Vec<(String, u32, Vec<(String, Vec<u32>, Vec<u32>)>)>, Box<dyn std::error::Error>>
+    ) -> Result<Vec<TestModule>, Box<dyn std::error::Error>>
     {
         // Convert .wast to .json using wast2json
         let wast_path = Path::new(wast_file);
         let json_path = wast_path.with_extension("json");
-        let output_dir = wast_path.parent().unwrap_or(Path::new("."));
+        let _output_dir = wast_path.parent().unwrap_or(Path::new("."));
 
         let output = Command::new("wast2json")
             .arg(wast_file)
@@ -1416,6 +1422,7 @@ mod wast_tests {
         Ok(test_cases)
     }
 
+    #[allow(dead_code)]
     fn parse_val(s: &str) -> Result<u32, Box<dyn std::error::Error>> {
         if s.starts_with("i32.const ") {
             let val_str = s.trim_start_matches("i32.const ").trim();
@@ -1473,8 +1480,7 @@ mod wast_tests {
             let output_0 = u32::from_le_bytes(output_bytes[0..4].try_into().unwrap());
             assert_eq!(
                 output_0, expected[0],
-                "Test failed for {}({:?}): expected {:?}, got {:?}",
-                function, args, expected, output_0
+                "Test failed for {function}({args:?}): expected {expected:?}, got {output_0:?}"
             );
         }
 
@@ -1488,7 +1494,7 @@ mod wast_tests {
         // Find the first "add" test case
         for (module_path, _line, cases) in &test_cases {
             // Prepend ../ to the module path since we're running from integration directory
-            let full_module_path = format!("../{}", module_path);
+            let full_module_path = format!("../{module_path}");
             for (function, args, expected) in cases {
                 if function == "add" && args == &vec![1, 1] && expected == &vec![2] {
                     run_single_wast_test(&full_module_path, function, args, expected)?;
