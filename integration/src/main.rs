@@ -1209,4 +1209,73 @@ mod tests {
 
         run_vm_test("STOREW with offset test", instructions, 333, None)
     }
+
+    #[test]
+    fn test_loadbu_basic() -> Result<(), Box<dyn std::error::Error>> {
+        // Test LOADBU instruction (load byte unsigned)
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 300),  // x8 = 300 (base address)
+            wom::addi::<F>(9, 0, 0xFF), // x9 = 255 (max byte value)
+            wom::storeb::<F>(9, 8, 0),  // MEM[x8 + 0] = 255 (store as byte)
+            wom::addi::<F>(10, 0, 0),   // x10 = 0 (clear register)
+            wom::loadbu::<F>(10, 8, 0), // x10 = MEM[x8 + 0] (load byte unsigned)
+            wom::reveal(10, 0),         // Reveal x10 (should be 255)
+            wom::halt(),
+        ];
+        run_vm_test("LOADBU basic test", instructions, 255, None)
+    }
+
+    #[test]
+    fn test_loadhu_basic() -> Result<(), Box<dyn std::error::Error>> {
+        // Test LOADHU instruction (load halfword unsigned)
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 400),            // x8 = 400 (base address)
+            wom::const_32_imm::<F>(9, 0xABCD, 0), // x9 = 0xABCD (43981)
+            wom::storeh::<F>(9, 8, 0),            // MEM[x8 + 0] = 0xABCD (store as halfword)
+            wom::addi::<F>(10, 0, 0),             // x10 = 0 (clear register)
+            wom::loadhu::<F>(10, 8, 0),           // x10 = MEM[x8 + 0] (load halfword unsigned)
+            wom::reveal(10, 0),                   // Reveal x10 (should be 0xABCD = 43981)
+            wom::halt(),
+        ];
+        run_vm_test("LOADHU basic test", instructions, 0xABCD, None)
+    }
+
+    #[test]
+    fn test_storeb_with_offset() -> Result<(), Box<dyn std::error::Error>> {
+        // Test STOREB with offset and masking
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 500),            // x8 = 500 (base address)
+            wom::const_32_imm::<F>(9, 0x1234, 0), // x9 = 0x1234 (only lowest byte 0x34 will be stored)
+            wom::storeb::<F>(9, 8, 0),            // MEM[x8 + 0] = 0x34 (store lowest byte)
+            wom::storeb::<F>(9, 8, 1),            // MEM[x8 + 1] = 0x34 (store at offset 1)
+            wom::addi::<F>(10, 0, 0),             // x10 = 0
+            wom::addi::<F>(11, 0, 0),             // x11 = 0
+            wom::loadbu::<F>(10, 8, 0),           // x10 = MEM[x8 + 0] (should be 0x34 = 52)
+            wom::loadbu::<F>(11, 8, 1),           // x11 = MEM[x8 + 1] (should be 0x34 = 52)
+            wom::add::<F>(12, 10, 11),            // x12 = x10 + x11 = 52 + 52 = 104
+            wom::reveal(12, 0),                   // Reveal x12 (should be 104)
+            wom::halt(),
+        ];
+        run_vm_test("STOREB with offset test", instructions, 104, None)
+    }
+
+    #[test]
+    fn test_storeh_with_offset() -> Result<(), Box<dyn std::error::Error>> {
+        // Test STOREH with offset
+        let instructions = vec![
+            wom::addi::<F>(8, 0, 600),             // x8 = 600 (base address)
+            wom::const_32_imm::<F>(9, 0x1111, 0),  // x9 = 0x1111
+            wom::const_32_imm::<F>(10, 0x2222, 0), // x10 = 0x2222
+            wom::storeh::<F>(9, 8, 0),             // MEM[x8 + 0] = 0x1111 (store halfword)
+            wom::storeh::<F>(10, 8, 2),            // MEM[x8 + 2] = 0x2222 (store at offset 2)
+            wom::addi::<F>(11, 0, 0),              // x11 = 0
+            wom::addi::<F>(12, 0, 0),              // x12 = 0
+            wom::loadhu::<F>(11, 8, 0),            // x11 = MEM[x8 + 0] (should be 0x1111 = 4369)
+            wom::loadhu::<F>(12, 8, 2),            // x12 = MEM[x8 + 2] (should be 0x2222 = 8738)
+            wom::add::<F>(13, 11, 12),             // x13 = 4369 + 8738 = 13107
+            wom::reveal(13, 0),                    // Reveal x13 (should be 13107)
+            wom::halt(),
+        ];
+        run_vm_test("STOREH with offset test", instructions, 13107, None)
+    }
 }

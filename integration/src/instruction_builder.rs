@@ -338,6 +338,82 @@ pub fn storew<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<
     )
 }
 
+/// LOADBU instruction: Load byte unsigned from memory
+/// rd = MEM[rs1 + imm] (zero-extended)
+#[allow(dead_code)]
+pub fn loadbu<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
+    let imm_unsigned = (imm & 0xFFFF) as usize;
+    let imm_sign = if imm < 0 { 1 } else { 0 };
+
+    Instruction::new(
+        LoadStoreOpcode::LOADBU.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: rd
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1
+        F::from_canonical_usize(imm_unsigned),                        // c: imm (lower 16 bits)
+        F::ONE,                                                       // d: register address space
+        F::from_canonical_usize(2), // e: memory address space (2 for byte, same as word)
+        F::ONE,                     // f: enabled
+        F::from_canonical_usize(imm_sign), // g: imm sign
+    )
+}
+
+/// LOADHU instruction: Load halfword unsigned from memory
+/// rd = MEM[rs1 + imm] (zero-extended)
+#[allow(dead_code)]
+pub fn loadhu<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
+    let imm_unsigned = (imm & 0xFFFF) as usize;
+    let imm_sign = if imm < 0 { 1 } else { 0 };
+
+    Instruction::new(
+        LoadStoreOpcode::LOADHU.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: rd
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1
+        F::from_canonical_usize(imm_unsigned),                        // c: imm (lower 16 bits)
+        F::ONE,                                                       // d: register address space
+        F::from_canonical_usize(2), // e: memory address space (2 for halfword, same as word)
+        F::ONE,                     // f: enabled
+        F::from_canonical_usize(imm_sign), // g: imm sign
+    )
+}
+
+/// STOREB instruction: Store byte to memory
+/// MEM[rs1 + imm] = rs2 (lowest byte)
+#[allow(dead_code)]
+pub fn storeb<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<F> {
+    let imm_unsigned = (imm & 0xFFFF) as usize;
+    let imm_sign = if imm < 0 { 1 } else { 0 };
+
+    Instruction::new(
+        LoadStoreOpcode::STOREB.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs2), // a: rs2 (data to store)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1 (base address)
+        F::from_canonical_usize(imm_unsigned),                         // c: imm (offset)
+        F::ONE,                                                        // d: register address space
+        F::from_canonical_usize(2), // e: memory address space (2 for byte, same as word)
+        F::ONE,                     // f: enabled
+        F::from_canonical_usize(imm_sign), // g: imm sign
+    )
+}
+
+/// STOREH instruction: Store halfword to memory
+/// MEM[rs1 + imm] = rs2 (lowest halfword)
+#[allow(dead_code)]
+pub fn storeh<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<F> {
+    let imm_unsigned = (imm & 0xFFFF) as usize;
+    let imm_sign = if imm < 0 { 1 } else { 0 };
+
+    Instruction::new(
+        LoadStoreOpcode::STOREH.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs2), // a: rs2 (data to store)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1 (base address)
+        F::from_canonical_usize(imm_unsigned),                         // c: imm (offset)
+        F::ONE,                                                        // d: register address space
+        F::from_canonical_usize(2), // e: memory address space (2 for halfword, same as word)
+        F::ONE,                     // f: enabled
+        F::from_canonical_usize(imm_sign), // g: imm sign
+    )
+}
+
 #[allow(dead_code)]
 pub fn reveal<F: PrimeField32>(rs1_data: usize, rd_index: usize) -> Instruction<F> {
     Instruction::new(
