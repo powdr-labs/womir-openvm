@@ -1332,8 +1332,7 @@ mod wast_tests {
 
     fn extract_wast_test_info(
         wast_file: &str,
-    ) -> Result<Vec<TestModule>, Box<dyn std::error::Error>>
-    {
+    ) -> Result<Vec<TestModule>, Box<dyn std::error::Error>> {
         // Convert .wast to .json using wast2json
         let wast_path = Path::new(wast_file);
         let json_path = wast_path.with_extension("json");
@@ -1488,21 +1487,21 @@ mod wast_tests {
     }
 
     #[test]
-    fn test_i32_add_simple() -> Result<(), Box<dyn std::error::Error>> {
-        // First, let's test if we can load the wast file
+    fn test_i32_add_all() -> Result<(), Box<dyn std::error::Error>> {
+        // Load all test cases from the add_only.wast file
         let test_cases = extract_wast_test_info("../add_only.wast")?;
-        // Find the first "add" test case
+
+        // Run all test cases
         for (module_path, _line, cases) in &test_cases {
             // Prepend ../ to the module path since we're running from integration directory
             let full_module_path = format!("../{module_path}");
+
             for (function, args, expected) in cases {
-                if function == "add" && args == &vec![1, 1] && expected == &vec![2] {
-                    run_single_wast_test(&full_module_path, function, args, expected)?;
-                    return Ok(());
-                }
+                println!("Running: {function}({args:?}) = {expected:?}");
+                run_single_wast_test(&full_module_path, function, args, expected)?;
             }
         }
 
-        Err("Could not find the simple add test case".into())
+        Ok(())
     }
 }
