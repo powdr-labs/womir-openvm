@@ -302,6 +302,7 @@ pub fn jump_if_zero<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> 
 
 /// LOADW instruction: Load word from memory
 /// rd = MEM[rs1 + imm]
+#[allow(dead_code)]
 pub fn loadw<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
     let imm_unsigned = (imm & 0xFFFF) as usize;
     let imm_sign = if imm < 0 { 1 } else { 0 };
@@ -320,6 +321,7 @@ pub fn loadw<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F>
 
 /// STOREW instruction: Store word to memory
 /// MEM[rs1 + imm] = rs2
+#[allow(dead_code)]
 pub fn storew<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<F> {
     let imm_unsigned = (imm & 0xFFFF) as usize;
     let imm_sign = if imm < 0 { 1 } else { 0 };
