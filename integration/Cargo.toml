@@ -19,3 +19,4 @@ openvm-stark-sdk = { workspace = true }
 openvm-stark-backend = { workspace = true }
 wasmparser = { workspace = true }
 womir = { workspace = true }
+serde_json = { workspace = true }

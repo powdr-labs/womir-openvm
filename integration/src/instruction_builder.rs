@@ -66,6 +66,21 @@ pub fn div<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(DivRemOpcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+#[allow(dead_code)]
+pub fn divu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(DivRemOpcode::DIVU.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+#[allow(dead_code)]
+pub fn rem<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(DivRemOpcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+#[allow(dead_code)]
+pub fn remu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(DivRemOpcode::REMU.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
 pub fn xor<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(BaseAluOpcode::XOR.global_opcode().as_usize(), rd, rs1, rs2)
 }

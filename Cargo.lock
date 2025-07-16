@@ -4335,6 +4335,7 @@ dependencies = [
  "openvm-womir-circuit",
  "openvm-womir-transpiler",
  "serde",
+ "serde_json",
  "tracing",
  "wasmparser",
  "womir",
