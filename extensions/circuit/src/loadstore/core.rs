@@ -1,17 +1,16 @@
 use std::borrow::{Borrow, BorrowMut};
 
-use openvm_circuit::arch::{
-    AdapterAirContext, AdapterRuntimeContext, Result, VmAdapterInterface, VmCoreAir, VmCoreChip,
-};
+use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
+use openvm_circuit::arch::{AdapterAirContext, Result, VmAdapterInterface, VmCoreAir};
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{instruction::Instruction, LocalOpcode};
-use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
+use openvm_womir_transpiler::LoadStoreOpcode::{self, *};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
@@ -61,7 +60,7 @@ pub struct LoadStoreCoreCols<T, const NUM_CELLS: usize> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "F: Serialize + DeserializeOwned")]
 pub struct LoadStoreCoreRecord<F, const NUM_CELLS: usize> {
-    pub opcode: Rv32LoadStoreOpcode,
+    pub opcode: LoadStoreOpcode,
     pub shift: u32,
     #[serde(with = "BigArray")]
     pub read_data: [F; NUM_CELLS],
@@ -266,7 +265,7 @@ impl<const NUM_CELLS: usize> LoadStoreCoreChip<NUM_CELLS> {
     }
 }
 
-impl<F: PrimeField32, I: VmAdapterInterface<F>, const NUM_CELLS: usize> VmCoreChip<F, I>
+impl<F: PrimeField32, I: VmAdapterInterface<F>, const NUM_CELLS: usize> VmCoreChipWom<F, I>
     for LoadStoreCoreChip<NUM_CELLS>
 where
     I::Reads: Into<([[F; NUM_CELLS]; 2], F)>,
@@ -280,17 +279,18 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
+        _from_fp: u32,
         reads: I::Reads,
-    ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
+    ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
         let local_opcode =
-            Rv32LoadStoreOpcode::from_usize(instruction.opcode.local_opcode_idx(self.air.offset));
+            LoadStoreOpcode::from_usize(instruction.opcode.local_opcode_idx(self.air.offset));
 
         let (reads, shift_amount) = reads.into();
         let shift = shift_amount.as_canonical_u32();
         let prev_data = reads[0];
         let read_data = reads[1];
         let write_data = run_write_data(local_opcode, read_data, prev_data, shift);
-        let output = AdapterRuntimeContext::without_pc([write_data]);
+        let output = AdapterRuntimeContextWom::without_pc_fp([write_data]);
 
         Ok((
             output,
@@ -307,7 +307,7 @@ where
     fn get_opcode_name(&self, opcode: usize) -> String {
         format!(
             "{:?}",
-            Rv32LoadStoreOpcode::from_usize(opcode - self.air.offset)
+            LoadStoreOpcode::from_usize(opcode - self.air.offset)
         )
     }
 
@@ -348,7 +348,7 @@ where
 }
 
 pub(super) fn run_write_data<F: PrimeField32, const NUM_CELLS: usize>(
-    opcode: Rv32LoadStoreOpcode,
+    opcode: LoadStoreOpcode,
     read_data: [F; NUM_CELLS],
     prev_data: [F; NUM_CELLS],
     shift: u32,

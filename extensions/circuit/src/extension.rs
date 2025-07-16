@@ -18,7 +18,7 @@ use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode,
-    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, MulOpcode, Phantom,
+    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom,
 };
 
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,7 @@ use strum::IntoEnumIterator;
 use crate::allocate_frame::AllocateFrameCoreChipWom;
 use crate::consts::ConstsCoreChipWom;
 use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
+use crate::loadstore::{LoadStoreCoreChip, Rv32LoadStoreChip};
 use crate::{adapters::*, wom_traits::*, *};
 
 const DEFAULT_INIT_FP: u32 = 0;
@@ -111,7 +112,7 @@ pub enum WomirIExecutor<F: PrimeField32> {
     Multiplication(WomMultiplicationChip<F>),
     DivRem(WomDivRemChip<F>),
     // Shift(Rv32ShiftChip<F>),
-    // LoadStore(Rv32LoadStoreChip<F>),
+    LoadStore(Rv32LoadStoreChip<F>),
     // LoadSignExtend(Rv32LoadSignExtendChip<F>),
     // BranchEqual(Rv32BranchEqualChip<F>),
     // BranchLessThan(Rv32BranchLessThanChip<F>),
@@ -316,23 +317,25 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         // );
         // inventory.add_executor(shift_chip, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
         //
-        // let load_store_chip = Rv32LoadStoreChip::new(
-        //     Rv32LoadStoreAdapterChip::new(
-        //         execution_bus,
-        //         program_bus,
-        //         memory_bridge,
-        //         pointer_max_bits,
-        //         range_checker.clone(),
-        //     ),
-        //     LoadStoreCoreChip::new(Rv32LoadStoreOpcode::CLASS_OFFSET),
-        //     offline_memory.clone(),
-        // );
-        // inventory.add_executor(
-        //     load_store_chip,
-        //     Rv32LoadStoreOpcode::iter()
-        //         .take(Rv32LoadStoreOpcode::STOREB as usize + 1)
-        //         .map(|x| x.global_opcode()),
-        // )?;
+        let load_store_chip = Rv32LoadStoreChip::new(
+            Rv32LoadStoreAdapterChip::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                _pointer_max_bits,
+                range_checker.clone(),
+            ),
+            LoadStoreCoreChip::new(LoadStoreOpcode::CLASS_OFFSET),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(
+            load_store_chip,
+            LoadStoreOpcode::iter()
+                .take(LoadStoreOpcode::STOREB as usize + 1)
+                .map(|x| x.global_opcode()),
+        )?;
         //
         // let load_sign_extend_chip = Rv32LoadSignExtendChip::new(
         //     Rv32LoadStoreAdapterChip::new(
