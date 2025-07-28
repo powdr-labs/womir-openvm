@@ -1489,15 +1489,14 @@ mod wast_tests {
     #[test]
     fn test_i32_add_all() -> Result<(), Box<dyn std::error::Error>> {
         // Load all test cases from the add_only.wast file
-        let test_cases = extract_wast_test_info("../add_only.wast")?;
+        let test_cases = extract_wast_test_info("../wasm_tests/add_only.wast")?;
 
         // Run all test cases
         for (module_path, _line, cases) in &test_cases {
             // Prepend ../ to the module path since we're running from integration directory
-            let full_module_path = format!("../{module_path}");
+            let full_module_path = format!("../wasm_tests/{module_path}");
 
             for (function, args, expected) in cases {
-                println!("Running: {function}({args:?}) = {expected:?}");
                 run_single_wast_test(&full_module_path, function, args, expected)?;
             }
         }
