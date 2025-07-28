@@ -30,6 +30,12 @@ jobs:
       - name: Install Rust deps
         run: rustup install nightly-2025-05-14 && rustup component add rust-src --toolchain nightly-2025-05-14
 
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install -y wabt
+
+      - name: Install WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+
       - name: Run tests
         run: cargo test --release
 
