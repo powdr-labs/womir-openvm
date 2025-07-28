@@ -1279,3 +1279,228 @@ mod tests {
         run_vm_test("STOREH with offset test", instructions, 13107, None)
     }
 }
+
+#[cfg(test)]
+mod wast_tests {
+    use super::*;
+    use openvm_sdk::{Sdk, StdIn};
+    use openvm_stark_sdk::config::setup_tracing_with_log_level;
+    use serde::Deserialize;
+    use serde_json::Value;
+    use std::fs;
+    use std::path::Path;
+    use std::process::Command;
+    use tracing::Level;
+
+    type TestCase = (String, Vec<u32>, Vec<u32>);
+    type TestModule = (String, u32, Vec<TestCase>);
+
+    #[derive(Debug, Deserialize)]
+    struct TestFile {
+        commands: Vec<CommandEntry>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct CommandEntry {
+        #[serde(rename = "type")]
+        cmd_type: String,
+        filename: Option<String>,
+        line: Option<u32>,
+        action: Option<Action>,
+        expected: Option<Vec<Expected>>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct Action {
+        #[serde(rename = "type")]
+        action_type: String,
+        field: Option<String>,
+        args: Option<Vec<Value>>,
+        #[allow(dead_code)]
+        module: Option<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct Expected {
+        #[serde(rename = "type")]
+        #[allow(dead_code)]
+        expected_type: String,
+        #[allow(dead_code)]
+        lane: Option<String>,
+        value: Option<String>,
+    }
+
+    fn extract_wast_test_info(
+        wast_file: &str,
+    ) -> Result<Vec<TestModule>, Box<dyn std::error::Error>> {
+        // Convert .wast to .json using wast2json
+        let wast_path = Path::new(wast_file);
+        let json_path = wast_path.with_extension("json");
+        let _output_dir = wast_path.parent().unwrap_or(Path::new("."));
+
+        let output = Command::new("wast2json")
+            .arg(wast_file)
+            .arg("-o")
+            .arg(&json_path)
+            .arg("--debug-names")
+            .output()?;
+
+        if !output.status.success() {
+            return Err(format!(
+                "wast2json failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+
+        // Parse the JSON file
+        let json_content = fs::read_to_string(&json_path)?;
+        let test_file: TestFile = serde_json::from_str(&json_content)?;
+
+        let mut test_cases = Vec::new();
+        let mut current_module = None;
+        let mut current_line = 0;
+        let mut assert_cases = Vec::new();
+
+        for cmd in test_file.commands {
+            match cmd.cmd_type.as_str() {
+                "module" => {
+                    if let Some(module) = current_module.take() {
+                        if !assert_cases.is_empty() {
+                            test_cases.push((module, current_line, assert_cases.clone()));
+                            assert_cases.clear();
+                        }
+                    }
+                    current_module = cmd.filename;
+                    current_line = cmd.line.unwrap_or(0);
+                }
+                "assert_return" => {
+                    if let (Some(action), Some(expected)) = (cmd.action, cmd.expected) {
+                        if action.action_type == "invoke" {
+                            if let (Some(field), Some(args)) = (action.field, action.args) {
+                                let args_u32: Vec<u32> = args
+                                    .iter()
+                                    .filter_map(|v| {
+                                        if let Value::Object(obj) = v {
+                                            if let Some(Value::String(val_str)) = obj.get("value") {
+                                                val_str.parse::<u32>().ok()
+                                            } else {
+                                                None
+                                            }
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .collect();
+
+                                let expected_u32: Vec<u32> = expected
+                                    .iter()
+                                    .filter_map(|e| {
+                                        e.value.as_ref().and_then(|v| v.parse::<u32>().ok())
+                                    })
+                                    .collect();
+
+                                assert_cases.push((field, args_u32, expected_u32));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if let Some(module) = current_module {
+            if !assert_cases.is_empty() {
+                test_cases.push((module, current_line, assert_cases));
+            }
+        }
+
+        // Clean up JSON file
+        let _ = fs::remove_file(&json_path);
+
+        Ok(test_cases)
+    }
+
+    #[allow(dead_code)]
+    fn parse_val(s: &str) -> Result<u32, Box<dyn std::error::Error>> {
+        if s.starts_with("i32.const ") {
+            let val_str = s.trim_start_matches("i32.const ").trim();
+            if val_str.starts_with("0x") {
+                u32::from_str_radix(val_str.trim_start_matches("0x"), 16).map_err(|e| e.into())
+            } else if val_str.starts_with("-0x") {
+                u32::from_str_radix(val_str.trim_start_matches("-0x"), 16)
+                    .map(|v| (!v).wrapping_add(1))
+                    .map_err(|e| e.into())
+            } else if val_str.starts_with("-") {
+                val_str
+                    .parse::<i32>()
+                    .map(|v| v as u32)
+                    .map_err(|e| e.into())
+            } else {
+                val_str.parse::<u32>().map_err(|e| e.into())
+            }
+        } else {
+            Err("Unsupported value format".into())
+        }
+    }
+
+    fn run_single_wast_test(
+        module_path: &str,
+        function: &str,
+        args: &[u32],
+        expected: &[u32],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Create VM configuration
+        let vm_config = SdkVmConfig::builder()
+            .system(Default::default())
+            .rv32i(Default::default())
+            .rv32m(Default::default())
+            .io(Default::default())
+            .build();
+        let vm_config = SpecializedConfig::new(vm_config);
+        let sdk = Sdk::new();
+
+        // Load and execute the module
+        let exe = womir_translation::program_from_wasm::<F>(module_path, function);
+
+        // Prepare input
+        let mut stdin = StdIn::default();
+        for &arg in args {
+            stdin.write(&arg);
+        }
+
+        let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
+
+        // Verify output
+        if !expected.is_empty() {
+            let output_bytes: Vec<_> = output.iter().map(|n| n.as_canonical_u32() as u8).collect();
+            let output_0 = u32::from_le_bytes(output_bytes[0..4].try_into().unwrap());
+            assert_eq!(
+                output_0, expected[0],
+                "Test failed for {function}({args:?}): expected {expected:?}, got {output_0:?}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_i32_add_all() -> Result<(), Box<dyn std::error::Error>> {
+        // Load all test cases from the add_only.wast file
+        let test_cases = extract_wast_test_info("../wasm_tests/add_only.wast")?;
+
+        // Run all test cases
+        for (module_path, _line, cases) in &test_cases {
+            // Prepend ../ to the module path since we're running from integration directory
+            let full_module_path = format!("../wasm_tests/{module_path}");
+
+            for (function, args, expected) in cases {
+                run_single_wast_test(&full_module_path, function, args, expected)?;
+            }
+        }
+
+        Ok(())
+    }
+}
