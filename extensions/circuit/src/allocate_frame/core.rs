@@ -12,7 +12,7 @@ use openvm_instructions::{instruction::Instruction, LocalOpcode};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, FieldAlgebra, PrimeField32},
+    p3_field::{Field, PrimeField32},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
 use openvm_womir_transpiler::AllocateFrameOpcode;
@@ -27,7 +27,7 @@ use crate::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
 pub struct AllocateFrameCoreCols<T> {
     pub target_reg: T,
-    pub amount_imm: T,
+    pub amount_imm: [T; RV32_REGISTER_NUM_LIMBS],
     pub allocated_ptr: [T; RV32_REGISTER_NUM_LIMBS],
     pub is_valid: T,
 }
@@ -36,7 +36,7 @@ pub struct AllocateFrameCoreCols<T> {
 #[derive(Serialize, Deserialize)]
 pub struct AllocateFrameCoreRecord<F> {
     pub target_reg: F,
-    pub amount_imm: F,
+    pub amount_imm: [F; RV32_REGISTER_NUM_LIMBS],
     pub allocated_ptr: [F; RV32_REGISTER_NUM_LIMBS],
 }
 
@@ -78,10 +78,8 @@ where
         let allocated_ptr: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
             core_cols.allocated_ptr.map(|x| x.into());
 
-        let opcode = VmCoreAir::<AB, I>::expr_to_global_expr(
-            self,
-            AB::Expr::from_canonical_usize(AllocateFrameOpcode::ALLOCATE_FRAME as usize),
-        );
+        let opcode =
+            VmCoreAir::<AB, I>::opcode_to_global_expr(self, AllocateFrameOpcode::ALLOCATE_FRAME);
 
         AdapterAirContext {
             to_pc: None,
@@ -125,7 +123,7 @@ impl AllocateFrameCoreChipWom {
 
 impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChipWom<F, I> for AllocateFrameCoreChipWom
 where
-    I::Reads: Into<[[F; RV32_REGISTER_NUM_LIMBS]; 1]>,
+    I::Reads: Into<[[F; RV32_REGISTER_NUM_LIMBS]; 2]>,
     I::Writes: From<[[F; RV32_REGISTER_NUM_LIMBS]; 1]>,
 {
     type Record = AllocateFrameCoreRecord<F>;
@@ -139,12 +137,11 @@ where
         _from_fp: u32,
         reads: I::Reads,
     ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
-        let Instruction { a, b, .. } = *instruction;
+        let Instruction { a: target_reg, .. } = *instruction;
 
-        // ALLOCATE_FRAME: target_reg (a), amount_imm (b)
-        let target_reg = a;
-
-        let allocated_data = reads.into()[0];
+        let reads = reads.into();
+        let allocated_data = reads[0];
+        let amount_imm = reads[1];
 
         let output = AdapterRuntimeContextWom {
             to_pc: None,
@@ -156,7 +153,7 @@ where
             output,
             AllocateFrameCoreRecord {
                 target_reg,
-                amount_imm: b,
+                amount_imm,
                 allocated_ptr: allocated_data,
             },
         ))

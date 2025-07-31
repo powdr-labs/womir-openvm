@@ -135,7 +135,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
     type Interface = BasicAdapterInterface<
         F,
         MinimalInstruction<F>,
-        1,
+        2,
         1,
         RV32_REGISTER_NUM_LIMBS,
         RV32_REGISTER_NUM_LIMBS,
@@ -150,14 +150,16 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
-        let Instruction { b, .. } = *instruction;
+        let Instruction { b: amount_imm, .. } = *instruction;
 
         memory.increment_timestamp();
 
+        let amount_imm = RV32_REGISTER_NUM_LIMBS as u32 * amount_imm.as_canonical_u32();
         let allocated_ptr = decompose(self.next_fp);
-        self.next_fp += b.as_canonical_u32();
+        self.next_fp += amount_imm;
+        let amount_imm = decompose(amount_imm);
 
-        Ok(([allocated_ptr], AllocateFrameReadRecord {}))
+        Ok(([allocated_ptr, amount_imm], AllocateFrameReadRecord {}))
     }
 
     fn postprocess(
