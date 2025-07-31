@@ -25,7 +25,8 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    adapters::decompose, AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom,
+    adapters::{compose, decompose},
+    AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom,
 };
 
 use super::RV32_REGISTER_NUM_LIMBS;
@@ -150,16 +151,30 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
-        let Instruction { b: amount_imm, .. } = *instruction;
+        let Instruction {
+            b: amount_imm,
+            c: amount_reg,
+            d: use_reg,
+            ..
+        } = *instruction;
+
+        let amount = if use_reg == F::ZERO {
+            // If use_reg is zero, we use the immediate value
+            amount_imm.as_canonical_u32()
+        } else {
+            // Otherwise, we read the value from the register
+            let reg_value = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, amount_reg);
+            compose(reg_value.1)
+        };
+        let amount_bytes = RV32_REGISTER_NUM_LIMBS as u32 * amount;
 
         memory.increment_timestamp();
 
-        let amount_imm = RV32_REGISTER_NUM_LIMBS as u32 * amount_imm.as_canonical_u32();
         let allocated_ptr = decompose(self.next_fp);
-        self.next_fp += amount_imm;
-        let amount_imm = decompose(amount_imm);
+        self.next_fp += amount_bytes;
+        let amount_bytes = decompose(amount_bytes);
 
-        Ok(([allocated_ptr, amount_imm], AllocateFrameReadRecord {}))
+        Ok(([allocated_ptr, amount_bytes], AllocateFrameReadRecord {}))
     }
 
     fn postprocess(

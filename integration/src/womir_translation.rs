@@ -303,9 +303,12 @@ fn translate_directives<F: PrimeField32>(
             result_ptr,
         }],
         W::AllocateFrameV {
-            frame_size: _,
-            result_ptr: _,
-        } => todo!(),
+            frame_size,
+            result_ptr,
+        } => vec![Directive::Instruction(ib::allocate_frame_reg(
+            result_ptr as usize,
+            frame_size as usize,
+        ))],
         W::Copy {
             src_word,
             dest_word,
