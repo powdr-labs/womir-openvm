@@ -237,18 +237,33 @@ pub fn call_indirect<F: PrimeField32>(
     )
 }
 
-/// ALLOCATE_FRAME instruction: Allocate frame and return pointer
+/// ALLOCATE_FRAME_I instruction: Allocate frame from immediate size and return pointer
 /// target_reg receives the allocated pointer, amount_imm is the amount to allocate
 pub fn allocate_frame_imm<F: PrimeField32>(target_reg: usize, amount_imm: usize) -> Instruction<F> {
     Instruction::new(
         AllocateFrameOpcode::ALLOCATE_FRAME.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * amount_imm), // b: amount_imm
-        F::ZERO,                                                              // c: (not used)
-        F::ZERO,                                                              // d: (not used)
-        F::ZERO,                                                              // e: (not used)
-        F::ONE,                                                               // f: enabled
-        F::ZERO,                                                              // g: imm sign
+        F::from_canonical_usize(amount_imm),                                  // b: amount_imm
+        F::ZERO,                                                              // c: amount_reg
+        F::ZERO, // d: whether to use the amount immediate (ZERO) or register (ONE)
+        F::ZERO, // e: (not used)
+        F::ONE,  // f: enabled
+        F::ZERO, // g: imm sign
+    )
+}
+
+/// ALLOCATE_FRAME_V instruction: Allocate frame from register and return pointer
+/// target_reg receives the allocated pointer, amount_reg is the register containing the amount to allocate
+pub fn allocate_frame_reg<F: PrimeField32>(target_reg: usize, amount_reg: usize) -> Instruction<F> {
+    Instruction::new(
+        AllocateFrameOpcode::ALLOCATE_FRAME.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
+        F::ZERO,                                                              // b: amount_imm
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * amount_reg), // c: amount_reg
+        F::ONE,  // d: whether to use the amount immediate (ZERO) or register (ONE)
+        F::ZERO, // e: (not used)
+        F::ONE,  // f: enabled
+        F::ZERO, // g: imm sign
     )
 }
 
