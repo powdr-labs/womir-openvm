@@ -160,6 +160,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
 
         let amount = if use_reg == F::ZERO {
             // If use_reg is zero, we use the immediate value
+            memory.increment_timestamp();
             amount_imm.as_canonical_u32()
         } else {
             // Otherwise, we read the value from the register
@@ -167,8 +168,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
             compose(reg_value.1)
         };
         let amount_bytes = RV32_REGISTER_NUM_LIMBS as u32 * amount;
-
-        memory.increment_timestamp();
 
         let allocated_ptr = decompose(self.next_fp);
         self.next_fp += amount_bytes;
