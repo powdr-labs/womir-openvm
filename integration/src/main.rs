@@ -1488,7 +1488,7 @@ mod wast_tests {
 
     #[test]
     fn test_i32() -> Result<(), Box<dyn std::error::Error>> {
-        // Load all test cases from the add_only.wast file
+        // Load test cases
         let test_cases = extract_wast_test_info("../wasm_tests/i32.wast")?;
 
         // Run all test cases
