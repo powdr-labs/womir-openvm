@@ -18,7 +18,7 @@ use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode,
-    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom,
+    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, ShiftOpcode,
 };
 
 use serde::{Deserialize, Serialize};
@@ -111,7 +111,7 @@ pub enum WomirIExecutor<F: PrimeField32> {
     HintStore(HintStoreChip<F>),
     Multiplication(WomMultiplicationChip<F>),
     DivRem(WomDivRemChip<F>),
-    // Shift(Rv32ShiftChip<F>),
+    Shift(Rv32ShiftChip<F>),
     LoadStore(Rv32LoadStoreChip<F>),
     // LoadSignExtend(Rv32LoadSignExtendChip<F>),
     // BranchEqual(Rv32BranchEqualChip<F>),
@@ -301,22 +301,27 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             DivRemOpcode::iter().map(|x| x.global_opcode()),
         )?;
 
-        // let shift_chip = Rv32ShiftChip::new(
-        //     Rv32WomBaseAluAdapterChip::new(
-        //         execution_bus,
-        //         program_bus,
-        //         memory_bridge,
-        //         bitwise_lu_chip.clone(),
-        //     ),
-        //     ShiftCoreChip::new(
-        //         bitwise_lu_chip.clone(),
-        //         range_checker.clone(),
-        //         ShiftOpcode::CLASS_OFFSET,
-        //     ),
-        //     offline_memory.clone(),
-        // );
-        // inventory.add_executor(shift_chip, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
-        //
+        let shift_chip = Rv32ShiftChip::new(
+            WomBaseAluAdapterChip::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                bitwise_lu_chip.clone(),
+            ),
+            ShiftCoreChip::new(
+                bitwise_lu_chip.clone(),
+                range_checker.clone(),
+                ShiftOpcode::CLASS_OFFSET,
+            ),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(
+            shift_chip,
+            ShiftOpcode::iter().map(|x| x.global_opcode())
+        )?;
+
         let load_store_chip = Rv32LoadStoreChip::new(
             Rv32LoadStoreAdapterChip::new(
                 execution_bus,
