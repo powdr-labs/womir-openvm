@@ -177,7 +177,7 @@ enum Directive<F: Clone> {
         target: String,
         condition_reg: u32,
     },
-    _JumpIfZero {
+    JumpIfZero {
         target: String,
         condition_reg: u32,
     },
@@ -224,7 +224,7 @@ impl<F: PrimeField32> Directive<F> {
                 let pc = label_map.get(&target)?.pc;
                 Some(ib::jump_if(condition_reg as usize, pc as usize))
             }
-            Directive::_JumpIfZero {
+            Directive::JumpIfZero {
                 target,
                 condition_reg,
             } => {
@@ -332,7 +332,10 @@ fn translate_directives<F: PrimeField32>(
             target,
             condition_reg: condition,
         }],
-        // W::JumpIfZero { target, condition } => {}, // TODO: implement jump if zero in Womir
+        W::JumpIfZero { target, condition } => vec![Directive::JumpIfZero {
+            target,
+            condition_reg: condition,
+        }],
         W::JumpAndActivateFrame {
             target,
             new_frame_ptr,
