@@ -18,7 +18,8 @@ use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode,
-    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, ShiftOpcode,
+    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom,
+    ShiftOpcode,
 };
 
 use serde::{Deserialize, Serialize};
@@ -317,10 +318,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             offline_memory.clone(),
             shared_fp.clone(),
         );
-        inventory.add_executor(
-            shift_chip,
-            ShiftOpcode::iter().map(|x| x.global_opcode())
-        )?;
+        inventory.add_executor(shift_chip, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
 
         let load_store_chip = Rv32LoadStoreChip::new(
             Rv32LoadStoreAdapterChip::new(
