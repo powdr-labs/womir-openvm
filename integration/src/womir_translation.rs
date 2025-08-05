@@ -6,7 +6,10 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use womir::{
     generic_ir::GenericIrSetting,
     linker::LabelValue,
-    loader::{flattening::WriteOnceASM, func_idx_to_label, CommonProgram},
+    loader::{
+        flattening::{settings::Settings, WriteOnceASM},
+        func_idx_to_label, CommonProgram,
+    },
 };
 
 pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) -> VmExe<F> {
@@ -197,6 +200,217 @@ enum Directive<F: Clone> {
         saved_caller_fp: u32,
     },
     Instruction(Instruction<F>),
+}
+
+struct OpenVMSettings<F> {
+    _phantom: std::marker::PhantomData<F>,
+}
+
+impl<'a, F: Clone> Settings<'a> for OpenVMSettings<F> {
+    type Directive = Directive<F>;
+
+    fn bytes_per_word() -> u32 {
+        4
+    }
+
+    fn words_per_ptr() -> u32 {
+        1
+    }
+
+    fn is_jump_condition_available(
+        cond: womir::loader::flattening::settings::JumpCondition,
+    ) -> bool {
+        true
+    }
+
+    fn is_relative_jump_available() -> bool {
+        true
+    }
+
+    fn allocate_loop_frame_slots(
+        &self,
+        need_ret_info: bool,
+        saved_fps: std::collections::BTreeSet<u32>,
+    ) -> (
+        womir::loader::flattening::RegisterGenerator<'a, Self>,
+        womir::loader::flattening::settings::LoopFrameLayout,
+    ) {
+        todo!()
+    }
+
+    fn to_plain_local_jump(directive: Self::Directive) -> Result<String, Self::Directive> {
+        todo!()
+    }
+
+    fn emit_label(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        name: String,
+        frame_size: Option<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_trap(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        trap: womir::loader::flattening::TrapReason,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_allocate_label_frame(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        label: String,
+        result_ptr: std::ops::Range<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_allocate_value_frame(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        frame_size_ptr: std::ops::Range<u32>,
+        result_ptr: std::ops::Range<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_copy(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        src_ptr: std::ops::Range<u32>,
+        dest_ptr: std::ops::Range<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_copy_into_frame(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        src_ptr: std::ops::Range<u32>,
+        dest_frame_ptr: std::ops::Range<u32>,
+        dest_offset: std::ops::Range<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_jump(&self, label: String) -> Self::Directive {
+        todo!()
+    }
+
+    fn emit_jump_into_loop(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        loop_label: String,
+        loop_frame_ptr: std::ops::Range<u32>,
+        ret_info_to_copy: Option<womir::loader::flattening::settings::ReturnInfosToCopy>,
+        saved_curr_fp_ptr: Option<std::ops::Range<u32>>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_conditional_jump(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        condition_type: womir::loader::flattening::settings::JumpCondition,
+        label: String,
+        condition_ptr: std::ops::Range<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_conditional_jump_cmp_immediate(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        cmp: womir::loader::flattening::settings::ComparisonFunction,
+        value_ptr: std::ops::Range<u32>,
+        immediate: u32,
+        label: String,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_relative_jump(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        offset_ptr: std::ops::Range<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_jump_out_of_loop(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        target_label: String,
+        target_frame_ptr: std::ops::Range<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_return(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        ret_pc_ptr: std::ops::Range<u32>,
+        caller_fp_ptr: std::ops::Range<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_imported_call(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        module: &'a str,
+        function: &'a str,
+        inputs: Vec<std::ops::Range<u32>>,
+        outputs: Vec<std::ops::Range<u32>>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_function_call(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        function_label: String,
+        function_frame_ptr: std::ops::Range<u32>,
+        saved_ret_pc_ptr: std::ops::Range<u32>,
+        saved_caller_fp_ptr: std::ops::Range<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_indirect_call(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        target_pc_ptr: std::ops::Range<u32>,
+        function_frame_ptr: std::ops::Range<u32>,
+        saved_ret_pc_ptr: std::ops::Range<u32>,
+        saved_caller_fp_ptr: std::ops::Range<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_table_get(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        table_idx: u32,
+        entry_idx_ptr: std::ops::Range<u32>,
+        dest_ptr: std::ops::Range<u32>,
+    ) -> impl Into<womir::loader::flattening::Tree<Self::Directive>> {
+        todo!()
+    }
+
+    fn emit_wasm_op(
+        &self,
+        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        op: wasmparser::Operator<'a>,
+        inputs: Vec<std::ops::Range<u32>>,
+        output: Option<std::ops::Range<u32>>,
+    ) -> Vec<Self::Directive> {
+        let reg = g.r.allocate_type(wasmparser::ValType::I32);
+        todo!("Implement wasm op translation for OpenVM")
+    }
 }
 
 impl<F: PrimeField32> Directive<F> {
