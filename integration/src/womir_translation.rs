@@ -1,16 +1,22 @@
-use std::{collections::{BTreeSet, HashMap}, vec};
+use std::{
+    collections::{BTreeSet, HashMap},
+    vec,
+};
 
 use crate::instruction_builder as ib;
 use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
+use wasmparser::{Operator as Op, ValType};
 use womir::{
     linker::LabelValue,
     loader::{
-        flattening::{settings::{ComparisonFunction, JumpCondition, LoopFrameLayout, Settings}, RegisterGenerator, ReturnInfo, WriteOnceASM},
+        flattening::{
+            settings::{ComparisonFunction, JumpCondition, LoopFrameLayout, Settings},
+            RegisterGenerator, ReturnInfo, WriteOnceASM,
+        },
         func_idx_to_label, CommonProgram,
     },
 };
-use wasmparser::{Operator as Op, ValType};
 
 pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) -> VmExe<F> {
     let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
@@ -20,10 +26,7 @@ pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) ->
         .functions
         .into_iter()
         .map(|f| {
-            let directives = f
-                .directives
-                .into_iter()
-                .collect();
+            let directives = f.directives.into_iter().collect();
             WriteOnceASM {
                 directives,
                 func_idx: f.func_idx,
@@ -231,9 +234,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         1
     }
 
-    fn is_jump_condition_available(
-        _cond: JumpCondition,
-    ) -> bool {
+    fn is_jump_condition_available(_cond: JumpCondition) -> bool {
         true
     }
 
@@ -245,10 +246,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         &self,
         need_ret_info: bool,
         saved_fps: BTreeSet<u32>,
-    ) -> (
-        RegisterGenerator<'a, Self>,
-        LoopFrameLayout,
-    ) {
+    ) -> (RegisterGenerator<'a, Self>, LoopFrameLayout) {
         let mut rgen = RegisterGenerator::new();
 
         let ret_info = need_ret_info.then(|| {
@@ -292,7 +290,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     ) -> Self::Directive {
         Directive::Label {
             id: name,
-            frame_size
+            frame_size,
         }
     }
 
@@ -334,11 +332,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         src_ptr: std::ops::Range<u32>,
         dest_ptr: std::ops::Range<u32>,
     ) -> Self::Directive {
-        Directive::Instruction(ib::addi(
-            dest_ptr.start as usize,
-            src_ptr.start as usize,
-            0,
-        ))
+        Directive::Instruction(ib::addi(dest_ptr.start as usize, src_ptr.start as usize, 0))
     }
 
     fn emit_copy_into_frame(
@@ -410,18 +404,14 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         condition_ptr: std::ops::Range<u32>,
     ) -> Self::Directive {
         match condition_type {
-            JumpCondition::IfNotZero => {
-                Directive::JumpIf {
-                    target: label,
-                    condition_reg: condition_ptr.start,
-                }
-            }
-            JumpCondition::IfZero => {
-                Directive::JumpIfZero {
-                    target: label,
-                    condition_reg: condition_ptr.start,
-                }
-            }
+            JumpCondition::IfNotZero => Directive::JumpIf {
+                target: label,
+                condition_reg: condition_ptr.start,
+            },
+            JumpCondition::IfZero => Directive::JumpIfZero {
+                target: label,
+                condition_reg: condition_ptr.start,
+            },
         }
     }
 
@@ -446,11 +436,12 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         let imm_hi: u16 = ((immediate >> 16) & 0xffff) as u16;
 
         vec![
-            Directive::Instruction(ib::const_32_imm(
-                const_value.start as usize, imm_lo, imm_hi)),
-            Directive::Instruction(cmp_insn(comparison.start as usize,
-                                            value_ptr.start as usize,
-                                            const_value.start as usize)),
+            Directive::Instruction(ib::const_32_imm(const_value.start as usize, imm_lo, imm_hi)),
+            Directive::Instruction(cmp_insn(
+                comparison.start as usize,
+                value_ptr.start as usize,
+                const_value.start as usize,
+            )),
             Directive::JumpIf {
                 target: label,
                 condition_reg: comparison.start,
@@ -472,7 +463,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         target_label: String,
         target_frame_ptr: std::ops::Range<u32>,
     ) -> Self::Directive {
-        Directive::Jaaf { target: target_label, new_frame_ptr: target_frame_ptr.start }
+        Directive::Jaaf {
+            target: target_label,
+            new_frame_ptr: target_frame_ptr.start,
+        }
     }
 
     fn emit_return(
