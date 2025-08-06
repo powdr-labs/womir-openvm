@@ -12,7 +12,13 @@ use womir::{
 pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) -> VmExe<F> {
     let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
     let ir_program = womir::loader::load_wasm(GenericIrSetting, &wasm_bytes).unwrap();
+    program_from_womir(ir_program, entry_point)
+}
 
+pub fn program_from_womir<F: PrimeField32>(
+    ir_program: womir::loader::Program<GenericIrSetting>,
+    entry_point: &str,
+) -> VmExe<F> {
     let functions = ir_program
         .functions
         .into_iter()
