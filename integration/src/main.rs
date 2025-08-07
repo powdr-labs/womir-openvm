@@ -1,9 +1,9 @@
+use clap::{Parser, Subcommand};
 use derive_more::From;
 use eyre::Result;
 use openvm_sdk::{Sdk, StdIn};
 use openvm_stark_backend::p3_field::PrimeField32;
 use serde::{Deserialize, Serialize};
-use std::env::args;
 use std::path::Path;
 
 use openvm_circuit::arch::{
@@ -19,6 +19,8 @@ mod instruction_builder;
 mod womir_translation;
 
 use openvm_womir_circuit::{self, WomirI, WomirIExecutor, WomirIPeriphery};
+
+use crate::womir_translation::OpenVMSettings;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SpecializedConfig {
@@ -89,41 +91,85 @@ impl VmConfig<F> for SpecializedConfig {
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create VM configuration
-    let vm_config = SdkVmConfig::builder()
-        .system(Default::default())
-        .rv32i(Default::default())
-        .rv32m(Default::default())
-        .io(Default::default())
-        .build();
-    let vm_config = SpecializedConfig::new(vm_config);
-    let sdk = Sdk::new();
+#[derive(Parser)]
+struct CliArgs {
+    #[command(subcommand)]
+    command: Commands,
+}
 
-    // Create and execute program
-    let mut args = args();
-    if args.len() < 3 {
-        eprintln!(
-            "Usage: {} <wasm_path> <entry_point> [<32_bit_args>...]",
-            args.next().unwrap()
-        );
-        return Ok(());
+#[derive(Subcommand)]
+enum Commands {
+    /// Just prints the program WOM listing
+    PrintWom {
+        /// Path to the WASM program
+        program: String,
+    },
+    /// Runs a function from the program with arguments
+    Run {
+        /// Path to the WASM program
+        program: String,
+        /// Function name
+        function: String,
+        /// Arguments to pass to the function
+        args: Vec<String>,
+    },
+}
+
+impl Commands {
+    fn get_program_path(&self) -> &str {
+        match self {
+            Commands::PrintWom { program } => program,
+            Commands::Run { program, .. } => program,
+        }
     }
-    let wasm_path = args.nth(1).unwrap();
-    let entry_point = args.next().unwrap();
-    let exe = womir_translation::program_from_wasm::<F>(&wasm_path, &entry_point);
+}
 
-    let inputs = args
-        .flat_map(|arg| {
-            let val = arg.parse::<u32>().unwrap();
-            val.to_le_bytes().into_iter()
-        })
-        .collect::<Vec<_>>();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Parse command line arguments
+    let cli_args = CliArgs::parse();
+    let wasm_path = cli_args.command.get_program_path();
 
-    let stdin = StdIn::from_bytes(&inputs);
+    // Load the program
+    let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
+    let ir_program = womir::loader::load_wasm(OpenVMSettings::<F>::new(), &wasm_bytes).unwrap();
 
-    let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
-    println!("output: {output:?}");
+    match cli_args.command {
+        Commands::PrintWom { .. } => {
+            for func in &ir_program.functions {
+                println!("Function {}:", func.func_idx);
+                for directive in &func.directives {
+                    println!("  {directive:?}");
+                }
+            }
+        }
+        Commands::Run { function, args, .. } => {
+            // Create VM configuration
+            let vm_config = SdkVmConfig::builder()
+                .system(Default::default())
+                .rv32i(Default::default())
+                .rv32m(Default::default())
+                .io(Default::default())
+                .build();
+            let vm_config = SpecializedConfig::new(vm_config);
+            let sdk = Sdk::new();
+
+            // Create and execute program
+            let exe = womir_translation::program_from_womir::<F>(ir_program, &function);
+
+            let inputs = args
+                .into_iter()
+                .flat_map(|arg| {
+                    let val = arg.parse::<u32>().unwrap();
+                    val.to_le_bytes().into_iter()
+                })
+                .collect::<Vec<_>>();
+
+            let stdin = StdIn::from_bytes(&inputs);
+
+            let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
+            println!("output: {output:?}");
+        }
+    }
 
     Ok(())
 }
@@ -1282,7 +1328,10 @@ mod tests {
 
 #[cfg(test)]
 mod wast_tests {
+    use crate::womir_translation::program_from_womir;
+
     use super::*;
+    use openvm_instructions::exe::VmExe;
     use openvm_sdk::{Sdk, StdIn};
     use openvm_stark_sdk::config::setup_tracing_with_log_level;
     use serde::Deserialize;
@@ -1444,6 +1493,12 @@ mod wast_tests {
         }
     }
 
+    fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) -> VmExe<F> {
+        let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
+        let ir_program = womir::loader::load_wasm(OpenVMSettings::new(), &wasm_bytes).unwrap();
+        program_from_womir(ir_program, entry_point)
+    }
+
     fn run_single_wast_test(
         module_path: &str,
         function: &str,
@@ -1463,7 +1518,7 @@ mod wast_tests {
         let sdk = Sdk::new();
 
         // Load and execute the module
-        let exe = womir_translation::program_from_wasm::<F>(module_path, function);
+        let exe = program_from_wasm::<F>(module_path, function);
 
         // Prepare input
         let mut stdin = StdIn::default();
