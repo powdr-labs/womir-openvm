@@ -5,7 +5,6 @@ use openvm_sdk::{Sdk, StdIn};
 use openvm_stark_backend::p3_field::PrimeField32;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use womir::generic_ir::GenericIrSetting;
 
 use openvm_circuit::arch::{
     InitFileGenerator, SystemConfig, VmChipComplex, VmConfig, VmInventoryError,
@@ -20,6 +19,8 @@ mod instruction_builder;
 mod womir_translation;
 
 use openvm_womir_circuit::{self, WomirI, WomirIExecutor, WomirIPeriphery};
+
+use crate::womir_translation::OpenVMSettings;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SpecializedConfig {
@@ -130,14 +131,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load the program
     let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-    let ir_program = womir::loader::load_wasm(GenericIrSetting, &wasm_bytes).unwrap();
+    let ir_program = womir::loader::load_wasm(OpenVMSettings::<F>::new(), &wasm_bytes).unwrap();
 
     match cli_args.command {
         Commands::PrintWom { .. } => {
             for func in &ir_program.functions {
                 println!("Function {}:", func.func_idx);
                 for directive in &func.directives {
-                    println!("  {directive}");
+                    println!("  {directive:?}");
                 }
             }
         }
@@ -1494,7 +1495,7 @@ mod wast_tests {
 
     fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) -> VmExe<F> {
         let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-        let ir_program = womir::loader::load_wasm(GenericIrSetting, &wasm_bytes).unwrap();
+        let ir_program = womir::loader::load_wasm(OpenVMSettings::new(), &wasm_bytes).unwrap();
         program_from_womir(ir_program, entry_point)
     }
 
