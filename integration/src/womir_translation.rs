@@ -1,27 +1,29 @@
-use std::{collections::HashMap, vec};
+use std::{collections::HashMap, ops::Range, vec};
 
 use crate::instruction_builder as ib;
 use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
+use wasmparser::{Operator as Op, ValType};
 use womir::{
-    generic_ir::GenericIrSetting,
     linker::LabelValue,
-    loader::{flattening::WriteOnceASM, func_idx_to_label, CommonProgram},
+    loader::{
+        flattening::{
+            settings::{ComparisonFunction, JumpCondition, Settings},
+            Generators, WriteOnceASM,
+        },
+        func_idx_to_label, CommonProgram,
+    },
 };
 
 pub fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) -> VmExe<F> {
     let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-    let ir_program = womir::loader::load_wasm(GenericIrSetting, &wasm_bytes).unwrap();
+    let ir_program = womir::loader::load_wasm(OpenVMSettings::new(), &wasm_bytes).unwrap();
 
     let functions = ir_program
         .functions
         .into_iter()
         .map(|f| {
-            let directives = f
-                .directives
-                .into_iter()
-                .flat_map(|d| translate_directives::<F>(d))
-                .collect();
+            let directives = f.directives.into_iter().collect();
             WriteOnceASM {
                 directives,
                 func_idx: f.func_idx,
@@ -124,7 +126,7 @@ where
 
     // If the entry point function has arguments, we need to fill them with the result from read32
     let params = entry_point_func_type.params();
-    let num_input_words = womir::word_count_types::<GenericIrSetting>(params);
+    let num_input_words = womir::word_count_types::<OpenVMSettings<F>>(params);
     // This is a little hacky because we know the initial first allocated frame starts at 2,
     // so we can just write directly into it by calculating the offset.
     // address 2: reserved for return address
@@ -145,7 +147,7 @@ where
     // We can also read the return values directly from the function's frame, which happens
     // to be right after the arguments.
     let results = entry_point_func_type.results();
-    let num_output_words = womir::word_count_types::<GenericIrSetting>(results);
+    let num_output_words = womir::word_count_types::<OpenVMSettings<F>>(results);
     for i in 0..num_output_words {
         code.push(ib::reveal_imm(ptr as usize, zero_reg, i as usize));
         ptr += 1;
@@ -160,7 +162,7 @@ where
 // and it is needed because we can only resolve the labels to PCs during linking.
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
-enum Directive<F: Clone> {
+enum Directive<F> {
     Nop,
     Label {
         id: String,
@@ -197,6 +199,573 @@ enum Directive<F: Clone> {
         saved_caller_fp: u32,
     },
     Instruction(Instruction<F>),
+}
+
+struct OpenVMSettings<F> {
+    _phantom: std::marker::PhantomData<F>,
+}
+
+impl<F> OpenVMSettings<F> {
+    pub fn new() -> Self {
+        Self {
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+#[allow(refining_impl_trait)]
+impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
+    type Directive = Directive<F>;
+
+    fn bytes_per_word() -> u32 {
+        4
+    }
+
+    fn words_per_ptr() -> u32 {
+        1
+    }
+
+    fn is_jump_condition_available(_cond: JumpCondition) -> bool {
+        true
+    }
+
+    fn is_relative_jump_available() -> bool {
+        true
+    }
+
+    fn to_plain_local_jump(directive: Self::Directive) -> Result<String, Self::Directive> {
+        if let Directive::Jump { target } = directive {
+            Ok(target)
+        } else {
+            Err(directive)
+        }
+    }
+
+    fn emit_label(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        name: String,
+        frame_size: Option<u32>,
+    ) -> Self::Directive {
+        Directive::Label {
+            id: name,
+            frame_size,
+        }
+    }
+
+    fn emit_trap(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        _trap: womir::loader::flattening::TrapReason,
+    ) -> Self::Directive {
+        todo!()
+    }
+
+    fn emit_allocate_label_frame(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        label: String,
+        result_ptr: Range<u32>,
+    ) -> Self::Directive {
+        Directive::AllocateFrameI {
+            target_frame: label,
+            result_ptr: result_ptr.start,
+        }
+    }
+
+    fn emit_allocate_value_frame(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        frame_size_ptr: Range<u32>,
+        result_ptr: Range<u32>,
+    ) -> Self::Directive {
+        Directive::Instruction(ib::allocate_frame_reg(
+            result_ptr.start as usize,
+            frame_size_ptr.start as usize,
+        ))
+    }
+
+    fn emit_copy(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        src_ptr: Range<u32>,
+        dest_ptr: Range<u32>,
+    ) -> Self::Directive {
+        Directive::Instruction(ib::addi(dest_ptr.start as usize, src_ptr.start as usize, 0))
+    }
+
+    fn emit_copy_into_frame(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        src_ptr: Range<u32>,
+        dest_frame_ptr: Range<u32>,
+        dest_offset: Range<u32>,
+    ) -> Self::Directive {
+        Directive::Instruction(ib::copy_into_frame(
+            dest_offset.start as usize,
+            src_ptr.start as usize,
+            dest_frame_ptr.start as usize,
+        ))
+    }
+
+    fn emit_jump(&self, label: String) -> Self::Directive {
+        Directive::Jump { target: label }
+    }
+
+    fn emit_jump_into_loop(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        loop_label: String,
+        loop_frame_ptr: Range<u32>,
+        ret_info_to_copy: Option<womir::loader::flattening::settings::ReturnInfosToCopy>,
+        saved_curr_fp_ptr: Option<Range<u32>>,
+    ) -> Vec<Self::Directive> {
+        let mut directives = if let Some(to_copy) = ret_info_to_copy {
+            assert_eq!(Self::words_per_ptr(), 1);
+            vec![
+                Directive::Instruction(ib::copy_into_frame(
+                    to_copy.dest.ret_pc.start as usize,
+                    to_copy.src.ret_pc.start as usize,
+                    loop_frame_ptr.start as usize,
+                )),
+                Directive::Instruction(ib::copy_into_frame(
+                    to_copy.dest.ret_fp.start as usize,
+                    to_copy.src.ret_fp.start as usize,
+                    loop_frame_ptr.start as usize,
+                )),
+            ]
+        } else {
+            Vec::new()
+        };
+
+        let jump = if let Some(saved_caller_fp) = saved_curr_fp_ptr {
+            Directive::JaafSave {
+                target: loop_label,
+                new_frame_ptr: loop_frame_ptr.start,
+                saved_caller_fp: saved_caller_fp.start,
+            }
+        } else {
+            Directive::Jaaf {
+                target: loop_label,
+                new_frame_ptr: loop_frame_ptr.start,
+            }
+        };
+
+        directives.push(jump);
+        directives
+    }
+
+    fn emit_conditional_jump(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        condition_type: womir::loader::flattening::settings::JumpCondition,
+        label: String,
+        condition_ptr: Range<u32>,
+    ) -> Self::Directive {
+        match condition_type {
+            JumpCondition::IfNotZero => Directive::JumpIf {
+                target: label,
+                condition_reg: condition_ptr.start,
+            },
+            JumpCondition::IfZero => Directive::JumpIfZero {
+                target: label,
+                condition_reg: condition_ptr.start,
+            },
+        }
+    }
+
+    fn emit_conditional_jump_cmp_immediate(
+        &self,
+        g: &mut Generators<'a, '_, Self>,
+        cmp: womir::loader::flattening::settings::ComparisonFunction,
+        value_ptr: Range<u32>,
+        immediate: u32,
+        label: String,
+    ) -> Vec<Self::Directive> {
+        let cmp_insn = match cmp {
+            ComparisonFunction::Equal => todo!(), // i32eq
+            ComparisonFunction::GreaterThanOrEqualUnsigned => todo!(), // i32geu
+            ComparisonFunction::LessThanUnsigned => ib::lt_u,
+        };
+
+        let const_value = g.r.allocate_type(ValType::I32);
+        let comparison = g.r.allocate_type(ValType::I32);
+
+        let imm_lo: u16 = (immediate & 0xffff) as u16;
+        let imm_hi: u16 = ((immediate >> 16) & 0xffff) as u16;
+
+        vec![
+            Directive::Instruction(ib::const_32_imm(const_value.start as usize, imm_lo, imm_hi)),
+            Directive::Instruction(cmp_insn(
+                comparison.start as usize,
+                value_ptr.start as usize,
+                const_value.start as usize,
+            )),
+            Directive::JumpIf {
+                target: label,
+                condition_reg: comparison.start,
+            },
+        ]
+    }
+
+    fn emit_relative_jump(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        _offset_ptr: Range<u32>,
+    ) -> Self::Directive {
+        todo!()
+    }
+
+    fn emit_jump_out_of_loop(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        target_label: String,
+        target_frame_ptr: Range<u32>,
+    ) -> Self::Directive {
+        Directive::Jaaf {
+            target: target_label,
+            new_frame_ptr: target_frame_ptr.start,
+        }
+    }
+
+    fn emit_return(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        ret_pc_ptr: Range<u32>,
+        caller_fp_ptr: Range<u32>,
+    ) -> Self::Directive {
+        Directive::Instruction(ib::ret(
+            ret_pc_ptr.start as usize,
+            caller_fp_ptr.start as usize,
+        ))
+    }
+
+    fn emit_imported_call(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        _module: &'a str,
+        _function: &'a str,
+        _inputs: Vec<Range<u32>>,
+        _outputs: Vec<Range<u32>>,
+    ) -> Self::Directive {
+        todo!()
+    }
+
+    fn emit_function_call(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        function_label: String,
+        function_frame_ptr: Range<u32>,
+        saved_ret_pc_ptr: Range<u32>,
+        saved_caller_fp_ptr: Range<u32>,
+    ) -> Self::Directive {
+        Directive::Call {
+            target_pc: function_label,
+            new_frame_ptr: function_frame_ptr.start,
+            saved_ret_pc: saved_ret_pc_ptr.start,
+            saved_caller_fp: saved_caller_fp_ptr.start,
+        }
+    }
+
+    fn emit_indirect_call(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        target_pc_ptr: Range<u32>,
+        function_frame_ptr: Range<u32>,
+        saved_ret_pc_ptr: Range<u32>,
+        saved_caller_fp_ptr: Range<u32>,
+    ) -> Self::Directive {
+        Directive::Instruction(ib::call(
+            saved_ret_pc_ptr.start as usize,
+            saved_caller_fp_ptr.start as usize,
+            target_pc_ptr.start as usize,
+            function_frame_ptr.start as usize,
+        ))
+    }
+
+    fn emit_table_get(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        _table_idx: u32,
+        _entry_idx_ptr: Range<u32>,
+        _dest_ptr: Range<u32>,
+    ) -> Self::Directive {
+        todo!()
+    }
+
+    fn emit_wasm_op(
+        &self,
+        _g: &mut Generators<'a, '_, Self>,
+        op: Op<'a>,
+        inputs: Vec<Range<u32>>,
+        output: Option<Range<u32>>,
+    ) -> Vec<Self::Directive> {
+        type BinaryOpFn<F> = fn(usize, usize, usize) -> Instruction<F>;
+        let binary_op: Result<BinaryOpFn<F>, Op> = match op {
+            // Integer instructions
+            Op::I32Eqz => todo!(),
+            Op::I32Eq => todo!(),
+            Op::I32Ne => todo!(),
+            Op::I32LtS => Ok(ib::lt_s),
+            Op::I32LtU => Ok(ib::lt_u),
+            Op::I32GtS => Ok(ib::gt_s),
+            Op::I32GtU => Ok(ib::gt_u),
+            Op::I32LeS => todo!(),
+            Op::I32LeU => todo!(),
+            Op::I32GeS => todo!(),
+            Op::I32GeU => todo!(),
+            Op::I64Eqz => todo!(),
+            Op::I64Eq => todo!(),
+            Op::I64Ne => todo!(),
+            Op::I64LtS => todo!(),
+            Op::I64LtU => todo!(),
+            Op::I64GtS => todo!(),
+            Op::I64GtU => todo!(),
+            Op::I64LeS => todo!(),
+            Op::I64LeU => todo!(),
+            Op::I64GeS => todo!(),
+            Op::I64GeU => todo!(),
+            Op::I32Add => Ok(ib::add),
+            Op::I32Sub => Ok(ib::sub),
+            Op::I32Mul => Ok(ib::mul),
+            Op::I32DivS => Ok(ib::div),
+            Op::I32DivU => Ok(ib::divu),
+            Op::I32RemS => Ok(ib::rem),
+            Op::I32RemU => Ok(ib::remu),
+            Op::I32And => Ok(ib::and),
+            Op::I32Or => Ok(ib::or),
+            Op::I32Xor => Ok(ib::xor),
+            Op::I32Shl => Ok(ib::shl),
+            Op::I32ShrS => Ok(ib::shr_s),
+            Op::I32ShrU => Ok(ib::shr_u),
+            Op::I32Rotl => todo!("I32Rotl not implemented"),
+            Op::I32Rotr => todo!("I32Rotr not implemented"),
+            Op::I64Add => todo!(),
+            Op::I64Sub => todo!(),
+            Op::I64Mul => todo!(),
+            Op::I64DivS => todo!(),
+            Op::I64DivU => todo!(),
+            Op::I64RemS => todo!(),
+            Op::I64RemU => todo!(),
+            Op::I64And => todo!(),
+            Op::I64Or => todo!(),
+            Op::I64Xor => todo!(),
+            Op::I64Shl => todo!(),
+            Op::I64ShrS => todo!(),
+            Op::I64ShrU => todo!(),
+            Op::I64Rotl => todo!(),
+            Op::I64Rotr => todo!(),
+
+            // Float instructions
+            Op::F32Eq => todo!(),
+            Op::F32Ne => todo!(),
+            Op::F32Lt => todo!(),
+            Op::F32Gt => todo!(),
+            Op::F32Le => todo!(),
+            Op::F32Ge => todo!(),
+            Op::F64Eq => todo!(),
+            Op::F64Ne => todo!(),
+            Op::F64Lt => todo!(),
+            Op::F64Gt => todo!(),
+            Op::F64Le => todo!(),
+            Op::F64Ge => todo!(),
+            Op::F32Add => todo!(),
+            Op::F32Sub => todo!(),
+            Op::F32Mul => todo!(),
+            Op::F32Div => todo!(),
+            Op::F32Min => todo!(),
+            Op::F32Max => todo!(),
+            Op::F32Copysign => todo!(),
+            Op::F64Add => todo!(),
+            Op::F64Sub => todo!(),
+            Op::F64Mul => todo!(),
+            Op::F64Div => todo!(),
+            Op::F64Min => todo!(),
+            Op::F64Max => todo!(),
+            Op::F64Copysign => todo!(),
+
+            // If not a binary operation, return the operator directly
+            op => Err(op),
+        };
+
+        let op: Op<'_> = match binary_op {
+            Ok(op_fn) => {
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                return vec![Directive::Instruction(op_fn(output, input1, input2))];
+            }
+            Err(op) => op,
+        };
+
+        // The remaining, non-binary operations
+        match op {
+            // Integer instructions
+            Op::I32Const { value } => {
+                let output = output.unwrap().start as usize;
+                let value_u = value as u32;
+                let imm_lo: u16 = (value_u & 0xffff) as u16;
+                let imm_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
+                vec![Directive::Instruction(ib::const_32_imm(
+                    output, imm_lo, imm_hi,
+                ))]
+            }
+            Op::I64Const { value } => {
+                let output = output.unwrap().start as usize;
+                let lower = value as u32;
+                let lower_lo: u16 = (lower & 0xffff) as u16;
+                let lower_hi: u16 = ((lower >> 16) & 0xffff) as u16;
+                let upper = (value >> 32) as u32;
+                let upper_lo: u16 = (upper & 0xffff) as u16;
+                let upper_hi: u16 = ((upper >> 16) & 0xffff) as u16;
+                vec![
+                    Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
+                    Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
+                ]
+            }
+            Op::I32Clz => todo!(),
+            Op::I32Ctz => todo!(),
+            Op::I32Popcnt => todo!(),
+            Op::I64Clz => todo!(),
+            Op::I64Ctz => todo!(),
+            Op::I64Popcnt => todo!(),
+            Op::I32WrapI64 => todo!(),
+            Op::I64ExtendI32S => todo!(),
+            Op::I64ExtendI32U => todo!(),
+            Op::I32Extend8S => todo!(),
+            Op::I32Extend16S => todo!(),
+            Op::I64Extend8S => todo!(),
+            Op::I64Extend16S => todo!(),
+            Op::I64Extend32S => todo!(),
+
+            // Parametric instruction
+            Op::Select => todo!(),
+
+            // Global instructions
+            Op::GlobalGet { global_index: _ } => todo!(),
+            Op::GlobalSet { global_index: _ } => todo!(),
+
+            // Memory instructions
+            Op::I32Load { memarg: _ } => todo!(),
+            Op::I64Load { memarg: _ } => todo!(),
+            Op::I32Load8S { memarg: _ } => todo!(),
+            Op::I32Load8U { memarg: _ } => todo!(),
+            Op::I32Load16S { memarg: _ } => todo!(),
+            Op::I32Load16U { memarg: _ } => todo!(),
+            Op::I64Load8S { memarg: _ } => todo!(),
+            Op::I64Load8U { memarg: _ } => todo!(),
+            Op::I64Load16S { memarg: _ } => todo!(),
+            Op::I64Load16U { memarg: _ } => todo!(),
+            Op::I64Load32S { memarg: _ } => todo!(),
+            Op::I64Load32U { memarg: _ } => todo!(),
+            Op::I32Store { memarg: _ } => todo!(),
+            Op::I64Store { memarg: _ } => todo!(),
+            Op::I32Store8 { memarg: _ } => todo!(),
+            Op::I32Store16 { memarg: _ } => todo!(),
+            Op::I64Store8 { memarg: _ } => todo!(),
+            Op::I64Store16 { memarg: _ } => todo!(),
+            Op::I64Store32 { memarg: _ } => todo!(),
+            Op::MemorySize { mem: _ } => todo!(),
+            Op::MemoryGrow { mem: _ } => todo!(),
+            Op::MemoryInit {
+                data_index: _,
+                mem: _,
+            } => todo!(),
+            Op::MemoryCopy {
+                dst_mem: _,
+                src_mem: _,
+            } => todo!(),
+            Op::MemoryFill { mem: _ } => todo!(),
+            Op::DataDrop { data_index: _ } => todo!(),
+
+            // Table instructions
+            Op::TableInit {
+                elem_index: _,
+                table: _,
+            } => todo!(),
+            Op::TableCopy {
+                dst_table: _,
+                src_table: _,
+            } => todo!(),
+            Op::TableFill { table: _ } => todo!(),
+            Op::TableGet { table: _ } => todo!(),
+            Op::TableSet { table: _ } => todo!(),
+            Op::TableGrow { table: _ } => todo!(),
+            Op::TableSize { table: _ } => todo!(),
+            Op::ElemDrop { elem_index: _ } => todo!(),
+
+            // Reference instructions
+            Op::RefNull { hty: _ } => todo!(),
+            Op::RefIsNull => todo!(),
+            Op::RefFunc { function_index: _ } => todo!(),
+
+            // Float instructions
+            Op::F32Load { memarg: _ } => todo!(),
+            Op::F64Load { memarg: _ } => todo!(),
+            Op::F32Store { memarg: _ } => todo!(),
+            Op::F64Store { memarg: _ } => todo!(),
+            Op::F32Const { value } => {
+                let output = output.unwrap().start as usize;
+                let value_u = value.bits();
+                let value_lo: u16 = (value_u & 0xffff) as u16;
+                let value_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
+                vec![Directive::Instruction(ib::const_32_imm(
+                    output, value_lo, value_hi,
+                ))]
+            }
+            Op::F64Const { value } => {
+                let output = output.unwrap().start as usize;
+                let value = value.bits();
+                let lower = value as u32;
+                let lower_lo: u16 = (lower & 0xffff) as u16;
+                let lower_hi: u16 = ((lower >> 16) & 0xffff) as u16;
+                let upper = (value >> 32) as u32;
+                let upper_lo: u16 = (upper & 0xffff) as u16;
+                let upper_hi: u16 = ((upper >> 16) & 0xffff) as u16;
+                vec![
+                    Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
+                    Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
+                ]
+            }
+            Op::F32Abs => todo!(),
+            Op::F32Neg => todo!(),
+            Op::F32Ceil => todo!(),
+            Op::F32Floor => todo!(),
+            Op::F32Trunc => todo!(),
+            Op::F32Nearest => todo!(),
+            Op::F32Sqrt => todo!(),
+            Op::F64Abs => todo!(),
+            Op::F64Neg => todo!(),
+            Op::F64Ceil => todo!(),
+            Op::F64Floor => todo!(),
+            Op::F64Trunc => todo!(),
+            Op::F64Nearest => todo!(),
+            Op::F64Sqrt => todo!(),
+            Op::I32TruncF32S => todo!(),
+            Op::I32TruncF32U => todo!(),
+            Op::I32TruncF64S => todo!(),
+            Op::I32TruncF64U => todo!(),
+            Op::I64TruncF32S => todo!(),
+            Op::I64TruncF32U => todo!(),
+            Op::I64TruncF64S => todo!(),
+            Op::I64TruncF64U => todo!(),
+            Op::F32ConvertI32S => todo!(),
+            Op::F32ConvertI32U => todo!(),
+            Op::F32ConvertI64S => todo!(),
+            Op::F32ConvertI64U => todo!(),
+            Op::F32DemoteF64 => todo!(),
+            Op::F64ConvertI32S => todo!(),
+            Op::F64ConvertI32U => todo!(),
+            Op::F64ConvertI64S => todo!(),
+            Op::F64ConvertI64U => todo!(),
+            Op::F64PromoteF32 => todo!(),
+            Op::I32ReinterpretF32 => todo!(),
+            Op::I64ReinterpretF64 => todo!(),
+            Op::F32ReinterpretI32 => todo!(),
+            Op::F64ReinterpretI64 => todo!(),
+            _ => todo!(),
+        }
+    }
 }
 
 impl<F: PrimeField32> Directive<F> {
@@ -282,379 +851,6 @@ impl<F: Clone> womir::linker::Directive for Directive<F> {
             })
         } else {
             None
-        }
-    }
-}
-
-fn translate_directives<F: PrimeField32>(
-    directive: womir::generic_ir::Directive,
-) -> Vec<Directive<F>> {
-    use womir::generic_ir::Directive as W;
-
-    match directive {
-        W::Label { id, frame_size } => {
-            vec![Directive::Label { id, frame_size }]
-        }
-        W::AllocateFrameI {
-            target_frame,
-            result_ptr,
-        } => vec![Directive::AllocateFrameI {
-            target_frame,
-            result_ptr,
-        }],
-        W::AllocateFrameV {
-            frame_size,
-            result_ptr,
-        } => vec![Directive::Instruction(ib::allocate_frame_reg(
-            result_ptr as usize,
-            frame_size as usize,
-        ))],
-        W::Copy {
-            src_word,
-            dest_word,
-        } => vec![Directive::Instruction(ib::addi(
-            dest_word as usize,
-            src_word as usize,
-            0,
-        ))],
-        W::CopyIntoFrame {
-            src_word,
-            dest_frame,
-            dest_word,
-        } => vec![Directive::Instruction(ib::copy_into_frame(
-            dest_word as usize,
-            src_word as usize,
-            dest_frame as usize,
-        ))],
-        W::Jump { target } => vec![Directive::Jump { target }],
-        W::JumpOffset { offset: _ } => todo!(),
-        W::JumpIf { target, condition } => vec![Directive::JumpIf {
-            target,
-            condition_reg: condition,
-        }],
-        W::JumpIfZero { target, condition } => vec![Directive::JumpIfZero {
-            target,
-            condition_reg: condition,
-        }],
-        W::JumpAndActivateFrame {
-            target,
-            new_frame_ptr,
-            saved_caller_fp,
-        } => {
-            vec![if let Some(fp) = saved_caller_fp {
-                Directive::JaafSave {
-                    target,
-                    new_frame_ptr,
-                    saved_caller_fp: fp,
-                }
-            } else {
-                Directive::Jaaf {
-                    target,
-                    new_frame_ptr,
-                }
-            }]
-        }
-        W::Return { ret_pc, ret_fp } => vec![Directive::Instruction(ib::ret(
-            ret_pc as usize,
-            ret_fp as usize,
-        ))],
-        W::Call {
-            target,
-            new_frame_ptr,
-            saved_ret_pc,
-            saved_caller_fp,
-        } => vec![Directive::Call {
-            target_pc: target,
-            new_frame_ptr,
-            saved_ret_pc,
-            saved_caller_fp,
-        }],
-        W::CallIndirect {
-            target_pc,
-            new_frame_ptr,
-            saved_ret_pc,
-            saved_caller_fp,
-        } => vec![Directive::Instruction(ib::call(
-            saved_ret_pc as usize,
-            saved_caller_fp as usize,
-            target_pc as usize,
-            new_frame_ptr as usize,
-        ))],
-        W::ImportedCall {
-            module: _,
-            function: _,
-            inputs: _,
-            outputs: _,
-        } => todo!(),
-        W::Trap { reason: _ } => todo!(),
-        W::WASMOp { op, inputs, output } => {
-            use wasmparser::Operator as Op;
-
-            type BinaryOpFn<F> = fn(usize, usize, usize) -> Instruction<F>;
-            let binary_op: Result<BinaryOpFn<F>, Op> = match op {
-                // Integer instructions
-                Op::I32Eqz => todo!(),
-                Op::I32Eq => todo!(),
-                Op::I32Ne => todo!(),
-                Op::I32LtS => Ok(ib::lt_s),
-                Op::I32LtU => Ok(ib::lt_u),
-                Op::I32GtS => Ok(ib::gt_s),
-                Op::I32GtU => Ok(ib::gt_u),
-                Op::I32LeS => todo!(),
-                Op::I32LeU => todo!(),
-                Op::I32GeS => todo!(),
-                Op::I32GeU => todo!(),
-                Op::I64Eqz => todo!(),
-                Op::I64Eq => todo!(),
-                Op::I64Ne => todo!(),
-                Op::I64LtS => todo!(),
-                Op::I64LtU => todo!(),
-                Op::I64GtS => todo!(),
-                Op::I64GtU => todo!(),
-                Op::I64LeS => todo!(),
-                Op::I64LeU => todo!(),
-                Op::I64GeS => todo!(),
-                Op::I64GeU => todo!(),
-                Op::I32Add => Ok(ib::add),
-                Op::I32Sub => Ok(ib::sub),
-                Op::I32Mul => Ok(ib::mul),
-                Op::I32DivS => Ok(ib::div),
-                Op::I32DivU => Ok(ib::divu),
-                Op::I32RemS => Ok(ib::rem),
-                Op::I32RemU => Ok(ib::remu),
-                Op::I32And => Ok(ib::and),
-                Op::I32Or => Ok(ib::or),
-                Op::I32Xor => Ok(ib::xor),
-                Op::I32Shl => Ok(ib::shl),
-                Op::I32ShrS => Ok(ib::shr_s),
-                Op::I32ShrU => Ok(ib::shr_u),
-                Op::I32Rotl => todo!("I32Rotl not implemented"),
-                Op::I32Rotr => todo!("I32Rotr not implemented"),
-                Op::I64Add => todo!(),
-                Op::I64Sub => todo!(),
-                Op::I64Mul => todo!(),
-                Op::I64DivS => todo!(),
-                Op::I64DivU => todo!(),
-                Op::I64RemS => todo!(),
-                Op::I64RemU => todo!(),
-                Op::I64And => todo!(),
-                Op::I64Or => todo!(),
-                Op::I64Xor => todo!(),
-                Op::I64Shl => todo!(),
-                Op::I64ShrS => todo!(),
-                Op::I64ShrU => todo!(),
-                Op::I64Rotl => todo!(),
-                Op::I64Rotr => todo!(),
-
-                // Float instructions
-                Op::F32Eq => todo!(),
-                Op::F32Ne => todo!(),
-                Op::F32Lt => todo!(),
-                Op::F32Gt => todo!(),
-                Op::F32Le => todo!(),
-                Op::F32Ge => todo!(),
-                Op::F64Eq => todo!(),
-                Op::F64Ne => todo!(),
-                Op::F64Lt => todo!(),
-                Op::F64Gt => todo!(),
-                Op::F64Le => todo!(),
-                Op::F64Ge => todo!(),
-                Op::F32Add => todo!(),
-                Op::F32Sub => todo!(),
-                Op::F32Mul => todo!(),
-                Op::F32Div => todo!(),
-                Op::F32Min => todo!(),
-                Op::F32Max => todo!(),
-                Op::F32Copysign => todo!(),
-                Op::F64Add => todo!(),
-                Op::F64Sub => todo!(),
-                Op::F64Mul => todo!(),
-                Op::F64Div => todo!(),
-                Op::F64Min => todo!(),
-                Op::F64Max => todo!(),
-                Op::F64Copysign => todo!(),
-
-                // If not a binary operation, return the operator directly
-                op => Err(op),
-            };
-
-            let op: Op<'_> = match binary_op {
-                Ok(op_fn) => {
-                    let input1 = inputs[0].start as usize;
-                    let input2 = inputs[1].start as usize;
-                    let output = output.unwrap().start as usize;
-                    return vec![Directive::Instruction(op_fn(output, input1, input2))];
-                }
-                Err(op) => op,
-            };
-
-            // The remaining, non-binary operations
-            match op {
-                // Integer instructions
-                Op::I32Const { value } => {
-                    let output = output.unwrap().start as usize;
-                    let value_u = value as u32;
-                    let imm_lo: u16 = (value_u & 0xffff) as u16;
-                    let imm_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
-                    vec![Directive::Instruction(ib::const_32_imm(
-                        output, imm_lo, imm_hi,
-                    ))]
-                }
-                Op::I64Const { value } => {
-                    let output = output.unwrap().start as usize;
-                    let lower = value as u32;
-                    let lower_lo: u16 = (lower & 0xffff) as u16;
-                    let lower_hi: u16 = ((lower >> 16) & 0xffff) as u16;
-                    let upper = (value >> 32) as u32;
-                    let upper_lo: u16 = (upper & 0xffff) as u16;
-                    let upper_hi: u16 = ((upper >> 16) & 0xffff) as u16;
-                    vec![
-                        Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
-                        Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
-                    ]
-                }
-                Op::I32Clz => todo!(),
-                Op::I32Ctz => todo!(),
-                Op::I32Popcnt => todo!(),
-                Op::I64Clz => todo!(),
-                Op::I64Ctz => todo!(),
-                Op::I64Popcnt => todo!(),
-                Op::I32WrapI64 => todo!(),
-                Op::I64ExtendI32S => todo!(),
-                Op::I64ExtendI32U => todo!(),
-                Op::I32Extend8S => todo!(),
-                Op::I32Extend16S => todo!(),
-                Op::I64Extend8S => todo!(),
-                Op::I64Extend16S => todo!(),
-                Op::I64Extend32S => todo!(),
-
-                // Parametric instruction
-                Op::Select => todo!(),
-
-                // Global instructions
-                Op::GlobalGet { global_index: _ } => todo!(),
-                Op::GlobalSet { global_index: _ } => todo!(),
-
-                // Memory instructions
-                Op::I32Load { memarg: _ } => todo!(),
-                Op::I64Load { memarg: _ } => todo!(),
-                Op::I32Load8S { memarg: _ } => todo!(),
-                Op::I32Load8U { memarg: _ } => todo!(),
-                Op::I32Load16S { memarg: _ } => todo!(),
-                Op::I32Load16U { memarg: _ } => todo!(),
-                Op::I64Load8S { memarg: _ } => todo!(),
-                Op::I64Load8U { memarg: _ } => todo!(),
-                Op::I64Load16S { memarg: _ } => todo!(),
-                Op::I64Load16U { memarg: _ } => todo!(),
-                Op::I64Load32S { memarg: _ } => todo!(),
-                Op::I64Load32U { memarg: _ } => todo!(),
-                Op::I32Store { memarg: _ } => todo!(),
-                Op::I64Store { memarg: _ } => todo!(),
-                Op::I32Store8 { memarg: _ } => todo!(),
-                Op::I32Store16 { memarg: _ } => todo!(),
-                Op::I64Store8 { memarg: _ } => todo!(),
-                Op::I64Store16 { memarg: _ } => todo!(),
-                Op::I64Store32 { memarg: _ } => todo!(),
-                Op::MemorySize { mem: _ } => todo!(),
-                Op::MemoryGrow { mem: _ } => todo!(),
-                Op::MemoryInit {
-                    data_index: _,
-                    mem: _,
-                } => todo!(),
-                Op::MemoryCopy {
-                    dst_mem: _,
-                    src_mem: _,
-                } => todo!(),
-                Op::MemoryFill { mem: _ } => todo!(),
-                Op::DataDrop { data_index: _ } => todo!(),
-
-                // Table instructions
-                Op::TableInit {
-                    elem_index: _,
-                    table: _,
-                } => todo!(),
-                Op::TableCopy {
-                    dst_table: _,
-                    src_table: _,
-                } => todo!(),
-                Op::TableFill { table: _ } => todo!(),
-                Op::TableGet { table: _ } => todo!(),
-                Op::TableSet { table: _ } => todo!(),
-                Op::TableGrow { table: _ } => todo!(),
-                Op::TableSize { table: _ } => todo!(),
-                Op::ElemDrop { elem_index: _ } => todo!(),
-
-                // Reference instructions
-                Op::RefNull { hty: _ } => todo!(),
-                Op::RefIsNull => todo!(),
-                Op::RefFunc { function_index: _ } => todo!(),
-
-                // Float instructions
-                Op::F32Load { memarg: _ } => todo!(),
-                Op::F64Load { memarg: _ } => todo!(),
-                Op::F32Store { memarg: _ } => todo!(),
-                Op::F64Store { memarg: _ } => todo!(),
-                Op::F32Const { value } => {
-                    let output = output.unwrap().start as usize;
-                    let value_u = value.bits();
-                    let value_lo: u16 = (value_u & 0xffff) as u16;
-                    let value_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
-                    vec![Directive::Instruction(ib::const_32_imm(
-                        output, value_lo, value_hi,
-                    ))]
-                }
-                Op::F64Const { value } => {
-                    let output = output.unwrap().start as usize;
-                    let value = value.bits();
-                    let lower = value as u32;
-                    let lower_lo: u16 = (lower & 0xffff) as u16;
-                    let lower_hi: u16 = ((lower >> 16) & 0xffff) as u16;
-                    let upper = (value >> 32) as u32;
-                    let upper_lo: u16 = (upper & 0xffff) as u16;
-                    let upper_hi: u16 = ((upper >> 16) & 0xffff) as u16;
-                    vec![
-                        Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
-                        Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
-                    ]
-                }
-                Op::F32Abs => todo!(),
-                Op::F32Neg => todo!(),
-                Op::F32Ceil => todo!(),
-                Op::F32Floor => todo!(),
-                Op::F32Trunc => todo!(),
-                Op::F32Nearest => todo!(),
-                Op::F32Sqrt => todo!(),
-                Op::F64Abs => todo!(),
-                Op::F64Neg => todo!(),
-                Op::F64Ceil => todo!(),
-                Op::F64Floor => todo!(),
-                Op::F64Trunc => todo!(),
-                Op::F64Nearest => todo!(),
-                Op::F64Sqrt => todo!(),
-                Op::I32TruncF32S => todo!(),
-                Op::I32TruncF32U => todo!(),
-                Op::I32TruncF64S => todo!(),
-                Op::I32TruncF64U => todo!(),
-                Op::I64TruncF32S => todo!(),
-                Op::I64TruncF32U => todo!(),
-                Op::I64TruncF64S => todo!(),
-                Op::I64TruncF64U => todo!(),
-                Op::F32ConvertI32S => todo!(),
-                Op::F32ConvertI32U => todo!(),
-                Op::F32ConvertI64S => todo!(),
-                Op::F32ConvertI64U => todo!(),
-                Op::F32DemoteF64 => todo!(),
-                Op::F64ConvertI32S => todo!(),
-                Op::F64ConvertI32U => todo!(),
-                Op::F64ConvertI64S => todo!(),
-                Op::F64ConvertI64U => todo!(),
-                Op::F64PromoteF32 => todo!(),
-                Op::I32ReinterpretF32 => todo!(),
-                Op::I64ReinterpretF64 => todo!(),
-                Op::F32ReinterpretI32 => todo!(),
-                Op::F64ReinterpretI64 => todo!(),
-                _ => todo!(),
-            }
         }
     }
 }
