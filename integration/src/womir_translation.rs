@@ -542,16 +542,14 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input1 = inputs[0].start as usize;
                 let input2 = inputs[1].start as usize;
                 let output = output.unwrap().start as usize;
-                let mask32 = g.r.allocate_type(ValType::I32).start as usize;
                 let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
                 let shiftl = g.r.allocate_type(ValType::I32).start as usize;
                 let const32 = g.r.allocate_type(ValType::I32).start as usize;
                 let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
                 let shiftr = g.r.allocate_type(ValType::I32).start as usize;
                 return vec![
-                    Directive::Instruction(ib::const_32_imm(mask32, 0x1f, 0x0)),
-                    // get least significant 32-bit of rotation amount
-                    Directive::Instruction(ib::and(shiftl_amount, input2, mask32)),
+                    // get least significant 32-bit for rotation amount
+                    Directive::Instruction(ib::andi(shiftl_amount, input2, 0x1f)),
                     // shift left
                     Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
                     // get right shift amount
@@ -562,21 +560,19 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // or the two results
                     Directive::Instruction(ib::or(output, shiftl, shiftr)),
                 ];
-            },
+            }
             Op::I32Rotr => {
                 let input1 = inputs[0].start as usize;
                 let input2 = inputs[1].start as usize;
                 let output = output.unwrap().start as usize;
-                let mask32 = g.r.allocate_type(ValType::I32).start as usize;
                 let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
                 let shiftl = g.r.allocate_type(ValType::I32).start as usize;
                 let const32 = g.r.allocate_type(ValType::I32).start as usize;
                 let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
                 let shiftr = g.r.allocate_type(ValType::I32).start as usize;
                 return vec![
-                    Directive::Instruction(ib::const_32_imm(mask32, 0x1f, 0x0)),
-                    // get least significant 32-bit of rotation amount
-                    Directive::Instruction(ib::and(shiftr_amount, input2, mask32)),
+                    // get least significant 32-bit for rotation amount
+                    Directive::Instruction(ib::andi(shiftr_amount, input2, 0x1f)),
                     // shift right
                     Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
                     // get left shift amount
@@ -587,7 +583,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // or the two results
                     Directive::Instruction(ib::or(output, shiftl, shiftr)),
                 ];
-            },
+            }
             Op::I64Add => todo!(),
             Op::I64Sub => todo!(),
             Op::I64Mul => todo!(),
