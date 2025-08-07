@@ -1,6 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap},
-    vec,
+    collections::{BTreeSet, HashMap}, ops::Range, vec
 };
 
 use crate::instruction_builder as ib;
@@ -11,8 +10,7 @@ use womir::{
     linker::LabelValue,
     loader::{
         flattening::{
-            settings::{ComparisonFunction, JumpCondition, LoopFrameLayout, Settings},
-            RegisterGenerator, ReturnInfo, WriteOnceASM,
+            settings::{ComparisonFunction, JumpCondition, LoopFrameLayout, Settings}, Generators, RegisterGenerator, ReturnInfo, WriteOnceASM
         },
         func_idx_to_label, CommonProgram,
     },
@@ -204,12 +202,6 @@ enum Directive<F> {
     Instruction(Instruction<F>),
 }
 
-impl<F: std::fmt::Debug> std::fmt::Display for Directive<F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
-    }
-}
-
 struct OpenVMSettings<F> {
     _phantom: std::marker::PhantomData<F>,
 }
@@ -284,7 +276,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_label(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        _g: &mut Generators<'a, '_, Self>,
         name: String,
         frame_size: Option<u32>,
     ) -> Self::Directive {
@@ -296,7 +288,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_trap(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        _g: &mut Generators<'a, '_, Self>,
         _trap: womir::loader::flattening::TrapReason,
     ) -> Self::Directive {
         todo!()
@@ -304,9 +296,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_allocate_label_frame(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        _g: &mut Generators<'a, '_, Self>,
         label: String,
-        result_ptr: std::ops::Range<u32>,
+        result_ptr: Range<u32>,
     ) -> Self::Directive {
         Directive::AllocateFrameI {
             target_frame: label,
@@ -316,9 +308,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_allocate_value_frame(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
-        frame_size_ptr: std::ops::Range<u32>,
-        result_ptr: std::ops::Range<u32>,
+        _g: &mut Generators<'a, '_, Self>,
+        frame_size_ptr: Range<u32>,
+        result_ptr: Range<u32>,
     ) -> Self::Directive {
         Directive::Instruction(ib::allocate_frame_reg(
             result_ptr.start as usize,
@@ -328,19 +320,19 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_copy(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
-        src_ptr: std::ops::Range<u32>,
-        dest_ptr: std::ops::Range<u32>,
+        _g: &mut Generators<'a, '_, Self>,
+        src_ptr: Range<u32>,
+        dest_ptr: Range<u32>,
     ) -> Self::Directive {
         Directive::Instruction(ib::addi(dest_ptr.start as usize, src_ptr.start as usize, 0))
     }
 
     fn emit_copy_into_frame(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
-        src_ptr: std::ops::Range<u32>,
-        dest_frame_ptr: std::ops::Range<u32>,
-        dest_offset: std::ops::Range<u32>,
+        _g: &mut Generators<'a, '_, Self>,
+        src_ptr: Range<u32>,
+        dest_frame_ptr: Range<u32>,
+        dest_offset: Range<u32>,
     ) -> Self::Directive {
         Directive::Instruction(ib::copy_into_frame(
             dest_offset.start as usize,
@@ -355,11 +347,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_jump_into_loop(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        _g: &mut Generators<'a, '_, Self>,
         loop_label: String,
-        loop_frame_ptr: std::ops::Range<u32>,
+        loop_frame_ptr: Range<u32>,
         ret_info_to_copy: Option<womir::loader::flattening::settings::ReturnInfosToCopy>,
-        saved_curr_fp_ptr: Option<std::ops::Range<u32>>,
+        saved_curr_fp_ptr: Option<Range<u32>>,
     ) -> Vec<Self::Directive> {
         let mut directives = if let Some(to_copy) = ret_info_to_copy {
             assert_eq!(Self::words_per_ptr(), 1);
@@ -398,10 +390,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_conditional_jump(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        _g: &mut Generators<'a, '_, Self>,
         condition_type: womir::loader::flattening::settings::JumpCondition,
         label: String,
-        condition_ptr: std::ops::Range<u32>,
+        condition_ptr: Range<u32>,
     ) -> Self::Directive {
         match condition_type {
             JumpCondition::IfNotZero => Directive::JumpIf {
@@ -417,9 +409,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_conditional_jump_cmp_immediate(
         &self,
-        g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        g: &mut Generators<'a, '_, Self>,
         cmp: womir::loader::flattening::settings::ComparisonFunction,
-        value_ptr: std::ops::Range<u32>,
+        value_ptr: Range<u32>,
         immediate: u32,
         label: String,
     ) -> Vec<Self::Directive> {
@@ -451,17 +443,17 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_relative_jump(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
-        _offset_ptr: std::ops::Range<u32>,
+        _g: &mut Generators<'a, '_, Self>,
+        _offset_ptr: Range<u32>,
     ) -> Self::Directive {
         todo!()
     }
 
     fn emit_jump_out_of_loop(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        _g: &mut Generators<'a, '_, Self>,
         target_label: String,
-        target_frame_ptr: std::ops::Range<u32>,
+        target_frame_ptr: Range<u32>,
     ) -> Self::Directive {
         Directive::Jaaf {
             target: target_label,
@@ -471,9 +463,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_return(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
-        ret_pc_ptr: std::ops::Range<u32>,
-        caller_fp_ptr: std::ops::Range<u32>,
+        _g: &mut Generators<'a, '_, Self>,
+        ret_pc_ptr: Range<u32>,
+        caller_fp_ptr: Range<u32>,
     ) -> Self::Directive {
         Directive::Instruction(ib::ret(
             ret_pc_ptr.start as usize,
@@ -483,22 +475,22 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_imported_call(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        _g: &mut Generators<'a, '_, Self>,
         _module: &'a str,
         _function: &'a str,
-        _inputs: Vec<std::ops::Range<u32>>,
-        _outputs: Vec<std::ops::Range<u32>>,
+        _inputs: Vec<Range<u32>>,
+        _outputs: Vec<Range<u32>>,
     ) -> Self::Directive {
         todo!()
     }
 
     fn emit_function_call(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        _g: &mut Generators<'a, '_, Self>,
         function_label: String,
-        function_frame_ptr: std::ops::Range<u32>,
-        saved_ret_pc_ptr: std::ops::Range<u32>,
-        saved_caller_fp_ptr: std::ops::Range<u32>,
+        function_frame_ptr: Range<u32>,
+        saved_ret_pc_ptr: Range<u32>,
+        saved_caller_fp_ptr: Range<u32>,
     ) -> Self::Directive {
         Directive::Call {
             target_pc: function_label,
@@ -510,11 +502,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_indirect_call(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
-        target_pc_ptr: std::ops::Range<u32>,
-        function_frame_ptr: std::ops::Range<u32>,
-        saved_ret_pc_ptr: std::ops::Range<u32>,
-        saved_caller_fp_ptr: std::ops::Range<u32>,
+        _g: &mut Generators<'a, '_, Self>,
+        target_pc_ptr: Range<u32>,
+        function_frame_ptr: Range<u32>,
+        saved_ret_pc_ptr: Range<u32>,
+        saved_caller_fp_ptr: Range<u32>,
     ) -> Self::Directive {
         Directive::Instruction(ib::call(
             saved_ret_pc_ptr.start as usize,
@@ -526,20 +518,20 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_table_get(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        _g: &mut Generators<'a, '_, Self>,
         _table_idx: u32,
-        _entry_idx_ptr: std::ops::Range<u32>,
-        _dest_ptr: std::ops::Range<u32>,
+        _entry_idx_ptr: Range<u32>,
+        _dest_ptr: Range<u32>,
     ) -> Self::Directive {
         todo!()
     }
 
     fn emit_wasm_op(
         &self,
-        _g: &mut womir::loader::flattening::Generators<'a, '_, Self>,
+        _g: &mut Generators<'a, '_, Self>,
         op: Op<'a>,
-        inputs: Vec<std::ops::Range<u32>>,
-        output: Option<std::ops::Range<u32>>,
+        inputs: Vec<Range<u32>>,
+        output: Option<Range<u32>>,
     ) -> Vec<Self::Directive> {
         type BinaryOpFn<F> = fn(usize, usize, usize) -> Instruction<F>;
         let binary_op: Result<BinaryOpFn<F>, Op> = match op {
