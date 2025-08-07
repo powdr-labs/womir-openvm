@@ -1,8 +1,4 @@
-use std::{
-    collections::{BTreeSet, HashMap},
-    ops::Range,
-    vec,
-};
+use std::{collections::HashMap, ops::Range, vec};
 
 use crate::instruction_builder as ib;
 use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program, riscv};
@@ -12,8 +8,8 @@ use womir::{
     linker::LabelValue,
     loader::{
         flattening::{
-            settings::{ComparisonFunction, JumpCondition, LoopFrameLayout, Settings},
-            Generators, RegisterGenerator, ReturnInfo, WriteOnceASM,
+            settings::{ComparisonFunction, JumpCondition, Settings},
+            Generators, WriteOnceASM,
         },
         func_idx_to_label, CommonProgram,
     },
@@ -235,38 +231,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn is_relative_jump_available() -> bool {
         true
-    }
-
-    fn allocate_loop_frame_slots(
-        &self,
-        need_ret_info: bool,
-        saved_fps: BTreeSet<u32>,
-    ) -> (RegisterGenerator<'a, Self>, LoopFrameLayout) {
-        let mut rgen = RegisterGenerator::new();
-
-        let ret_info = need_ret_info.then(|| {
-            // Allocate the return PC and frame pointer for the loop.
-            let ret_pc = rgen.allocate_words(Self::words_per_ptr());
-            let ret_fp = rgen.allocate_words(Self::words_per_ptr());
-            ReturnInfo { ret_pc, ret_fp }
-        });
-
-        // Allocate the slots for the saved frame pointers.
-        let saved_fps = saved_fps
-            .into_iter()
-            .map(|depth| {
-                let outer_fp = rgen.allocate_words(Self::words_per_ptr());
-                (depth, outer_fp)
-            })
-            .collect();
-
-        (
-            rgen,
-            LoopFrameLayout {
-                saved_fps,
-                ret_info,
-            },
-        )
     }
 
     fn to_plain_local_jump(directive: Self::Directive) -> Result<String, Self::Directive> {
