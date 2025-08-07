@@ -2,10 +2,8 @@ use clap::{Parser, Subcommand};
 use derive_more::From;
 use eyre::Result;
 use openvm_sdk::{Sdk, StdIn};
-use openvm_stark_backend::config::Com;
 use openvm_stark_backend::p3_field::PrimeField32;
 use serde::{Deserialize, Serialize};
-use std::env::args;
 use std::path::Path;
 use womir::generic_ir::GenericIrSetting;
 
@@ -134,7 +132,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
     let ir_program = womir::loader::load_wasm(GenericIrSetting, &wasm_bytes).unwrap();
 
-    match &cli_args.command {
+    match cli_args.command {
         Commands::PrintWom { .. } => {
             for func in &ir_program.functions {
                 println!("Function {}:", func.func_idx);
@@ -155,7 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let sdk = Sdk::new();
 
             // Create and execute program
-            let exe = womir_translation::program_from_womir::<F>(ir_program, function);
+            let exe = womir_translation::program_from_womir::<F>(ir_program, &function);
 
             let inputs = args
                 .into_iter()
@@ -1329,7 +1327,10 @@ mod tests {
 
 #[cfg(test)]
 mod wast_tests {
+    use crate::womir_translation::program_from_womir;
+
     use super::*;
+    use openvm_instructions::exe::VmExe;
     use openvm_sdk::{Sdk, StdIn};
     use openvm_stark_sdk::config::setup_tracing_with_log_level;
     use serde::Deserialize;
@@ -1491,6 +1492,12 @@ mod wast_tests {
         }
     }
 
+    fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) -> VmExe<F> {
+        let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
+        let ir_program = womir::loader::load_wasm(GenericIrSetting, &wasm_bytes).unwrap();
+        program_from_womir(ir_program, entry_point)
+    }
+
     fn run_single_wast_test(
         module_path: &str,
         function: &str,
@@ -1510,7 +1517,7 @@ mod wast_tests {
         let sdk = Sdk::new();
 
         // Load and execute the module
-        let exe = womir_translation::program_from_wasm::<F>(module_path, function);
+        let exe = program_from_wasm::<F>(module_path, function);
 
         // Prepare input
         let mut stdin = StdIn::default();
