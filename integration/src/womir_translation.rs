@@ -1,5 +1,7 @@
 use std::{
-    collections::{BTreeSet, HashMap}, ops::Range, vec
+    collections::{BTreeSet, HashMap},
+    ops::Range,
+    vec,
 };
 
 use crate::instruction_builder as ib;
@@ -10,7 +12,8 @@ use womir::{
     linker::LabelValue,
     loader::{
         flattening::{
-            settings::{ComparisonFunction, JumpCondition, LoopFrameLayout, Settings}, Generators, RegisterGenerator, ReturnInfo, WriteOnceASM
+            settings::{ComparisonFunction, JumpCondition, LoopFrameLayout, Settings},
+            Generators, RegisterGenerator, ReturnInfo, WriteOnceASM,
         },
         func_idx_to_label, CommonProgram,
     },
