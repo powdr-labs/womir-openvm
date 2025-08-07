@@ -548,7 +548,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
                 let shiftr = g.r.allocate_type(ValType::I32).start as usize;
                 return vec![
-                    // get least significant 32-bit for rotation amount
+                    // get least significant 5 bits for rotation amount
                     Directive::Instruction(ib::andi(shiftl_amount, input2, 0x1f)),
                     // shift left
                     Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
@@ -571,7 +571,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
                 let shiftr = g.r.allocate_type(ValType::I32).start as usize;
                 return vec![
-                    // get least significant 32-bit for rotation amount
+                    // get least significant 5 bits for rotation amount
                     Directive::Instruction(ib::andi(shiftr_amount, input2, 0x1f)),
                     // shift right
                     Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
