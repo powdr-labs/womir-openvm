@@ -93,7 +93,7 @@ where
         let c = &cols.c;
         let inv_marker = &cols.diff_inv_marker;
 
-        // 1 if cmp_result indicates a and b are equal, 0 otherwise
+        // 1 if cmp_result indicates b and c are equal, 0 otherwise
         let cmp_eq =
             cols.cmp_result * cols.opcode_eq_flag + not(cols.cmp_result) * cols.opcode_ne_flag;
         let mut sum = cmp_eq.clone();
