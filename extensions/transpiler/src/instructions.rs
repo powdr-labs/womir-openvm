@@ -88,6 +88,28 @@ pub enum LessThanOpcode {
     Serialize,
     Deserialize,
 )]
+#[opcode_offset = 0x120c]
+#[repr(usize)]
+pub enum EqOpcode {
+    EQ,
+    NEQ,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
 #[opcode_offset = 0x1210]
 #[repr(usize)]
 pub enum LoadStoreOpcode {

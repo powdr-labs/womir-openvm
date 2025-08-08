@@ -17,7 +17,7 @@ use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
 use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode,
+    AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode, EqOpcode,
     HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom,
     ShiftOpcode,
 };
@@ -114,6 +114,7 @@ pub enum WomirIExecutor<F: PrimeField32> {
     DivRem(WomDivRemChip<F>),
     Shift(Rv32ShiftChip<F>),
     LoadStore(Rv32LoadStoreChip<F>),
+    Eq(EqChipWom<F>),
     // LoadSignExtend(Rv32LoadSignExtendChip<F>),
     // BranchEqual(Rv32BranchEqualChip<F>),
     // BranchLessThan(Rv32BranchLessThanChip<F>),
@@ -244,6 +245,20 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             shared_fp.clone(),
         );
         inventory.add_executor(lt_chip, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let eq_chip = EqChipWom::new(
+            WomBaseAluAdapterChip::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                bitwise_lu_chip.clone(),
+            ),
+            EqCoreChip::new(EqOpcode::CLASS_OFFSET),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(eq_chip, EqOpcode::iter().map(|x| x.global_opcode()))?;
 
         let mut hintstore_chip = HintStoreChip::new(
             execution_bus,
