@@ -668,7 +668,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I32Eqz => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
-                return vec![Directive::Instruction(ib::eqi(output, input, 0x0))];
+                vec![Directive::Instruction(ib::eqi(output, input, 0x0))]
             }
             Op::I64Eqz => todo!(),
             Op::I32Clz => todo!(),
