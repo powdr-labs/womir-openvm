@@ -503,23 +503,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         // First handle single-instruction binary operations.
         type BinaryOpFn<F> = fn(usize, usize, usize) -> Instruction<F>;
         let binary_op: Result<BinaryOpFn<F>, Op> = match op {
-            // Integer instructions
+            // 32-bit integer instructions
             Op::I32Eq => Ok(ib::eq),
             Op::I32Ne => Ok(ib::neq),
             Op::I32LtS => Ok(ib::lt_s),
             Op::I32LtU => Ok(ib::lt_u),
             Op::I32GtS => Ok(ib::gt_s),
             Op::I32GtU => Ok(ib::gt_u),
-            Op::I64Eq => todo!(),
-            Op::I64Ne => todo!(),
-            Op::I64LtS => todo!(),
-            Op::I64LtU => todo!(),
-            Op::I64GtS => todo!(),
-            Op::I64GtU => todo!(),
-            Op::I64LeS => todo!(),
-            Op::I64LeU => todo!(),
-            Op::I64GeS => todo!(),
-            Op::I64GeU => todo!(),
             Op::I32Add => Ok(ib::add),
             Op::I32Sub => Ok(ib::sub),
             Op::I32Mul => Ok(ib::mul),
@@ -533,6 +523,18 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I32Shl => Ok(ib::shl),
             Op::I32ShrS => Ok(ib::shr_s),
             Op::I32ShrU => Ok(ib::shr_u),
+
+            // 64-bit integer instructions
+            Op::I64Eq => todo!(),
+            Op::I64Ne => todo!(),
+            Op::I64LtS => todo!(),
+            Op::I64LtU => todo!(),
+            Op::I64GtS => todo!(),
+            Op::I64GtU => todo!(),
+            Op::I64LeS => todo!(),
+            Op::I64LeU => todo!(),
+            Op::I64GeS => todo!(),
+            Op::I64GeU => todo!(),
             Op::I64Add => todo!(),
             Op::I64Sub => todo!(),
             Op::I64Mul => todo!(),
@@ -593,7 +595,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
         // Handle the remaining operations
         match op {
-            // Integer instructions
+            // 32-bit integer instructions
             Op::I32Const { value } => {
                 let output = output.unwrap().start as usize;
                 let value_u = value as u32;
@@ -688,18 +690,31 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let output = output.unwrap().start as usize;
                 vec![Directive::Instruction(ib::eqi(output, input, 0x0))]
             }
-            Op::I64Eqz => todo!(),
             Op::I32Clz => todo!(),
             Op::I32Ctz => todo!(),
             Op::I32Popcnt => todo!(),
+
+            Op::I32WrapI64 => {
+                // TODO: considering we are using a single address space for both i32 and i64,
+                // this instruction could be elided at womir level.
+
+                let lower_limb = inputs[0].start as usize;
+                // The higher limb is ignored.
+                let output = output.unwrap().start as usize;
+
+                // Just copy the lower limb to the output.
+                vec![Directive::Instruction(ib::addi(output, lower_limb, 0))]
+            }
+            Op::I32Extend8S => todo!(),
+            Op::I32Extend16S => todo!(),
+
+            // 64-bit integer instructions
+            Op::I64Eqz => todo!(),
             Op::I64Clz => todo!(),
             Op::I64Ctz => todo!(),
             Op::I64Popcnt => todo!(),
-            Op::I32WrapI64 => todo!(),
             Op::I64ExtendI32S => todo!(),
             Op::I64ExtendI32U => todo!(),
-            Op::I32Extend8S => todo!(),
-            Op::I32Extend16S => todo!(),
             Op::I64Extend8S => todo!(),
             Op::I64Extend16S => todo!(),
             Op::I64Extend32S => todo!(),
@@ -825,10 +840,24 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::F64ConvertI64S => todo!(),
             Op::F64ConvertI64U => todo!(),
             Op::F64PromoteF32 => todo!(),
-            Op::I32ReinterpretF32 => todo!(),
-            Op::I64ReinterpretF64 => todo!(),
-            Op::F32ReinterpretI32 => todo!(),
-            Op::F64ReinterpretI64 => todo!(),
+
+            Op::I32ReinterpretF32
+            | Op::F32ReinterpretI32
+            | Op::I64ReinterpretF64
+            | Op::F64ReinterpretI64 => {
+                // TODO: considering we are using a single address space for all types,
+                // these reinterpret instruction could be elided at womir level.
+
+                // Just copy the input to the output.
+                inputs[0]
+                    .clone()
+                    .zip(output.unwrap())
+                    .map(|(input, output)| {
+                        Directive::Instruction(ib::addi(output as usize, input as usize, 0))
+                    })
+                    .collect()
+            }
+
             _ => todo!(),
         }
     }
