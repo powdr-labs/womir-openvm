@@ -503,9 +503,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         type BinaryOpFn<F> = fn(usize, usize, usize) -> Instruction<F>;
         let binary_op: Result<BinaryOpFn<F>, Op> = match op {
             // Integer instructions
-            Op::I32Eqz => todo!(),
-            Op::I32Eq => todo!(),
-            Op::I32Ne => todo!(),
+            Op::I32Eq => Ok(ib::eq),
+            Op::I32Ne => Ok(ib::neq),
             Op::I32LtS => Ok(ib::lt_s),
             Op::I32LtU => Ok(ib::lt_u),
             Op::I32GtS => Ok(ib::gt_s),
@@ -514,7 +513,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I32LeU => todo!(),
             Op::I32GeS => todo!(),
             Op::I32GeU => todo!(),
-            Op::I64Eqz => todo!(),
             Op::I64Eq => todo!(),
             Op::I64Ne => todo!(),
             Op::I64LtS => todo!(),
@@ -667,6 +665,14 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
                 ]
             }
+            Op::I32Eqz => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+                return vec![
+                    Directive::Instruction(ib::eqi(output, input, 0x0)),
+                ];
+            }
+            Op::I64Eqz => todo!(),
             Op::I32Clz => todo!(),
             Op::I32Ctz => todo!(),
             Op::I32Popcnt => todo!(),
