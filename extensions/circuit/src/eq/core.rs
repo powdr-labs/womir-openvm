@@ -118,8 +118,8 @@ where
 
         // a == cmp_result
         builder.assert_eq(a[0], cols.cmp_result);
-        for i in 1..NUM_LIMBS {
-            builder.assert_zero(a[i]);
+        for limb in a.iter().skip(1) {
+            builder.assert_zero(*limb);
         }
 
         let expected_opcode = flags
