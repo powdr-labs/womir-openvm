@@ -101,12 +101,20 @@ pub fn shl<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(ShiftOpcode::SLL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+pub fn shl_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: usize) -> Instruction<F> {
+    instr_i(ShiftOpcode::SLL.global_opcode().as_usize(), rd, rs1, imm)
+}
+
 pub fn shr_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(ShiftOpcode::SRL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 pub fn shr_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(ShiftOpcode::SRA.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn shr_s_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: usize) -> Instruction<F> {
+    instr_i(ShiftOpcode::SRA.global_opcode().as_usize(), rd, rs1, imm)
 }
 
 pub fn lt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
