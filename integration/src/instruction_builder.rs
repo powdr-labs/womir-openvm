@@ -122,15 +122,6 @@ pub fn lt_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F
     instr_r(LessThanOpcode::SLT.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-pub fn lt_u_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: usize) -> Instruction<F> {
-    instr_i(
-        LessThanOpcode::SLTU.global_opcode().as_usize(),
-        rd,
-        rs1,
-        imm,
-    )
-}
-
 pub fn gt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     // lt_u, but swapped
     lt_u(rd, rs2, rs1)
