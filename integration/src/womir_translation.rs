@@ -495,7 +495,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_wasm_op(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        g: &mut Generators<'a, '_, Self>,
         op: Op<'a>,
         inputs: Vec<Range<u32>>,
         output: Option<Range<u32>>,
@@ -538,8 +538,52 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I32Shl => Ok(ib::shl),
             Op::I32ShrS => Ok(ib::shr_s),
             Op::I32ShrU => Ok(ib::shr_u),
-            Op::I32Rotl => todo!("I32Rotl not implemented"),
-            Op::I32Rotr => todo!("I32Rotr not implemented"),
+            Op::I32Rotl => {
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftl = g.r.allocate_type(ValType::I32).start as usize;
+                let const32 = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftr = g.r.allocate_type(ValType::I32).start as usize;
+                return vec![
+                    // get least significant 5 bits for rotation amount
+                    Directive::Instruction(ib::andi(shiftl_amount, input2, 0x1f)),
+                    // shift left
+                    Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
+                    // get right shift amount
+                    Directive::Instruction(ib::const_32_imm(const32, 0x20, 0x0)),
+                    Directive::Instruction(ib::sub(shiftr_amount, const32, shiftl_amount)),
+                    // shift right
+                    Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
+                    // or the two results
+                    Directive::Instruction(ib::or(output, shiftl, shiftr)),
+                ];
+            }
+            Op::I32Rotr => {
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftl = g.r.allocate_type(ValType::I32).start as usize;
+                let const32 = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftr = g.r.allocate_type(ValType::I32).start as usize;
+                return vec![
+                    // get least significant 5 bits for rotation amount
+                    Directive::Instruction(ib::andi(shiftr_amount, input2, 0x1f)),
+                    // shift right
+                    Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
+                    // get left shift amount
+                    Directive::Instruction(ib::const_32_imm(const32, 0x20, 0x0)),
+                    Directive::Instruction(ib::sub(shiftl_amount, const32, shiftr_amount)),
+                    // shift left
+                    Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
+                    // or the two results
+                    Directive::Instruction(ib::or(output, shiftl, shiftr)),
+                ];
+            }
             Op::I64Add => todo!(),
             Op::I64Sub => todo!(),
             Op::I64Mul => todo!(),

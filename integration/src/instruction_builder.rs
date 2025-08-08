@@ -93,6 +93,10 @@ pub fn and<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(BaseAluOpcode::AND.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+pub fn andi<F: PrimeField32>(rd: usize, rs1: usize, imm: usize) -> Instruction<F> {
+    instr_i(BaseAluOpcode::AND.global_opcode().as_usize(), rd, rs1, imm)
+}
+
 pub fn shl<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(ShiftOpcode::SLL.global_opcode().as_usize(), rd, rs1, rs2)
 }
