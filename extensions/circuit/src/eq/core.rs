@@ -7,13 +7,13 @@ use openvm_circuit::arch::{AdapterAirContext, MinimalInstruction, VmAdapterInter
 use openvm_circuit_primitives::utils::not;
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{instruction::Instruction, LocalOpcode};
-use openvm_womir_transpiler::EqOpcode;
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
+use openvm_womir_transpiler::EqOpcode;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
@@ -168,13 +168,9 @@ pub struct EqCoreChip<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
 }
 
 impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> EqCoreChip<NUM_LIMBS, LIMB_BITS> {
-    pub fn new(
-        offset: usize,
-    ) -> Self {
+    pub fn new(offset: usize) -> Self {
         Self {
-            air: EqCoreAir {
-                offset,
-            },
+            air: EqCoreAir { offset },
         }
     }
 }
