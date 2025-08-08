@@ -1,7 +1,7 @@
 use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOpcode, VmOpcode};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode,
+    AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode, EqOpcode,
     HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom,
     ShiftOpcode,
 };
@@ -139,6 +139,18 @@ pub fn gt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F
 pub fn gt_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     // lt_s, but swapped
     lt_s(rd, rs2, rs1)
+}
+
+pub fn eq<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(EqOpcode::EQ.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn eqi<F: PrimeField32>(rd: usize, rs1: usize, imm: usize) -> Instruction<F> {
+    instr_i(EqOpcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
+}
+
+pub fn neq<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(EqOpcode::NEQ.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 pub fn const_32_imm<F: PrimeField32>(
