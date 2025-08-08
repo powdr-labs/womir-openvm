@@ -9,7 +9,7 @@ use womir::{
     loader::{
         flattening::{
             settings::{ComparisonFunction, JumpCondition, Settings},
-            Generators, WriteOnceASM,
+            Generators, LabelType, WriteOnceASM,
         },
         func_idx_to_label, CommonProgram,
     },
@@ -705,8 +705,22 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 // Just copy the lower limb to the output.
                 vec![Directive::Instruction(ib::addi(output, lower_limb, 0))]
             }
-            Op::I32Extend8S => todo!(),
-            Op::I32Extend16S => todo!(),
+            Op::I32Extend8S | Op::I32Extend16S => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                let (left_shift, right_shift) = match op {
+                    Op::I32Extend8S => (24, 8),
+                    Op::I32Extend16S => (16, 16),
+                    _ => unreachable!(),
+                };
+
+                // Left shift followed by arithmetic right shift
+                vec![
+                    Directive::Instruction(ib::shl_imm(output, input, left_shift)),
+                    Directive::Instruction(ib::shr_s_imm(output, output, right_shift)),
+                ]
+            }
 
             // 64-bit integer instructions
             Op::I64Eqz => todo!(),
@@ -720,7 +734,50 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I64Extend32S => todo!(),
 
             // Parametric instruction
-            Op::Select => todo!(),
+            Op::Select => {
+                // Works like a ternary operator: if the condition (3rd input) is non-zero,
+                // select the 1st input, otherwise select the 2nd input.
+                let if_set_val = inputs[0].clone();
+                let if_zero_val = inputs[1].clone();
+                let output = output.unwrap();
+                let condition = inputs[2].start;
+
+                let if_set_label = g.new_label(LabelType::Local);
+                let continuation_label = g.new_label(LabelType::Local);
+
+                let mut directives = vec![
+                    // if condition != 0 jump to if_set_label
+                    Directive::JumpIf {
+                        target: if_set_label.clone(),
+                        condition_reg: condition,
+                    },
+                ];
+                // if jump is not taken, copy the value for "if zero"
+                directives.extend(if_zero_val.zip(output.clone()).map(|(src, dest)| {
+                    Directive::Instruction(ib::addi(dest as usize, src as usize, 0))
+                }));
+                // jump to continuation
+                directives.push(Directive::Jump {
+                    target: continuation_label.clone(),
+                });
+
+                // if jump is taken, copy the value for "if set"
+                directives.push(Directive::Label {
+                    id: if_set_label,
+                    frame_size: None,
+                });
+                directives.extend(if_set_val.zip(output).map(|(src, dest)| {
+                    Directive::Instruction(ib::addi(dest as usize, src as usize, 0))
+                }));
+
+                // continuation label
+                directives.push(Directive::Label {
+                    id: continuation_label,
+                    frame_size: None,
+                });
+
+                directives
+            }
 
             // Global instructions
             Op::GlobalGet { global_index: _ } => todo!(),
