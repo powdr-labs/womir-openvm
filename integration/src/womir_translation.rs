@@ -709,16 +709,16 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
 
-                let (left_shift, right_shift) = match op {
-                    Op::I32Extend8S => (24, 8),
-                    Op::I32Extend16S => (16, 16),
+                let shift = match op {
+                    Op::I32Extend8S => 24,
+                    Op::I32Extend16S => 16,
                     _ => unreachable!(),
                 };
 
                 // Left shift followed by arithmetic right shift
                 vec![
-                    Directive::Instruction(ib::shl_imm(output, input, left_shift)),
-                    Directive::Instruction(ib::shr_s_imm(output, output, right_shift)),
+                    Directive::Instruction(ib::shl_imm(output, input, shift)),
+                    Directive::Instruction(ib::shr_s_imm(output, output, shift)),
                 ]
             }
 
