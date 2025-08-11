@@ -500,6 +500,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         inputs: Vec<Range<u32>>,
         output: Option<Range<u32>>,
     ) -> Vec<Self::Directive> {
+        // First handle single-instruction binary operations.
         type BinaryOpFn<F> = fn(usize, usize, usize) -> Instruction<F>;
         let binary_op: Result<BinaryOpFn<F>, Op> = match op {
             // Integer instructions
@@ -509,10 +510,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I32LtU => Ok(ib::lt_u),
             Op::I32GtS => Ok(ib::gt_s),
             Op::I32GtU => Ok(ib::gt_u),
-            Op::I32LeS => todo!(),
-            Op::I32LeU => todo!(),
-            Op::I32GeS => todo!(),
-            Op::I32GeU => todo!(),
             Op::I64Eq => todo!(),
             Op::I64Ne => todo!(),
             Op::I64LtS => todo!(),
@@ -536,52 +533,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I32Shl => Ok(ib::shl),
             Op::I32ShrS => Ok(ib::shr_s),
             Op::I32ShrU => Ok(ib::shr_u),
-            Op::I32Rotl => {
-                let input1 = inputs[0].start as usize;
-                let input2 = inputs[1].start as usize;
-                let output = output.unwrap().start as usize;
-                let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftl = g.r.allocate_type(ValType::I32).start as usize;
-                let const32 = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr = g.r.allocate_type(ValType::I32).start as usize;
-                return vec![
-                    // get least significant 5 bits for rotation amount
-                    Directive::Instruction(ib::andi(shiftl_amount, input2, 0x1f)),
-                    // shift left
-                    Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
-                    // get right shift amount
-                    Directive::Instruction(ib::const_32_imm(const32, 0x20, 0x0)),
-                    Directive::Instruction(ib::sub(shiftr_amount, const32, shiftl_amount)),
-                    // shift right
-                    Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
-                    // or the two results
-                    Directive::Instruction(ib::or(output, shiftl, shiftr)),
-                ];
-            }
-            Op::I32Rotr => {
-                let input1 = inputs[0].start as usize;
-                let input2 = inputs[1].start as usize;
-                let output = output.unwrap().start as usize;
-                let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftl = g.r.allocate_type(ValType::I32).start as usize;
-                let const32 = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr = g.r.allocate_type(ValType::I32).start as usize;
-                return vec![
-                    // get least significant 5 bits for rotation amount
-                    Directive::Instruction(ib::andi(shiftr_amount, input2, 0x1f)),
-                    // shift right
-                    Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
-                    // get left shift amount
-                    Directive::Instruction(ib::const_32_imm(const32, 0x20, 0x0)),
-                    Directive::Instruction(ib::sub(shiftl_amount, const32, shiftr_amount)),
-                    // shift left
-                    Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
-                    // or the two results
-                    Directive::Instruction(ib::or(output, shiftl, shiftr)),
-                ];
-            }
             Op::I64Add => todo!(),
             Op::I64Sub => todo!(),
             Op::I64Mul => todo!(),
@@ -640,7 +591,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Err(op) => op,
         };
 
-        // The remaining, non-binary operations
+        // Handle the remaining operations
         match op {
             // Integer instructions
             Op::I32Const { value } => {
@@ -663,6 +614,73 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 vec![
                     Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
                     Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
+                ]
+            }
+            Op::I32Rotl => {
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftl = g.r.allocate_type(ValType::I32).start as usize;
+                let const32 = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftr = g.r.allocate_type(ValType::I32).start as usize;
+                vec![
+                    // get least significant 5 bits for rotation amount
+                    Directive::Instruction(ib::andi(shiftl_amount, input2, 0x1f)),
+                    // shift left
+                    Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
+                    // get right shift amount
+                    Directive::Instruction(ib::const_32_imm(const32, 0x20, 0x0)),
+                    Directive::Instruction(ib::sub(shiftr_amount, const32, shiftl_amount)),
+                    // shift right
+                    Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
+                    // or the two results
+                    Directive::Instruction(ib::or(output, shiftl, shiftr)),
+                ]
+            }
+            Op::I32Rotr => {
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftl = g.r.allocate_type(ValType::I32).start as usize;
+                let const32 = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftr = g.r.allocate_type(ValType::I32).start as usize;
+                vec![
+                    // get least significant 5 bits for rotation amount
+                    Directive::Instruction(ib::andi(shiftr_amount, input2, 0x1f)),
+                    // shift right
+                    Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
+                    // get left shift amount
+                    Directive::Instruction(ib::const_32_imm(const32, 0x20, 0x0)),
+                    Directive::Instruction(ib::sub(shiftl_amount, const32, shiftr_amount)),
+                    // shift left
+                    Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
+                    // or the two results
+                    Directive::Instruction(ib::or(output, shiftl, shiftr)),
+                ]
+            }
+            Op::I32LeS | Op::I32LeU | Op::I32GeS | Op::I32GeU => {
+                let inverse_op = match op {
+                    Op::I32LeS => ib::gt_s,
+                    Op::I32LeU => ib::gt_u,
+                    Op::I32GeS => ib::lt_s,
+                    Op::I32GeU => ib::lt_u,
+                    _ => unreachable!(),
+                };
+
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+
+                let inverse_result = g.r.allocate_type(ValType::I32).start as usize;
+
+                // Perform the inverse operation and invert the result
+                vec![
+                    Directive::Instruction(inverse_op(inverse_result, input1, input2)),
+                    Directive::Instruction(ib::eqi(output, inverse_result, 0)),
                 ]
             }
             Op::I32Eqz => {
