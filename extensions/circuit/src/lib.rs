@@ -2,6 +2,7 @@ pub mod adapters;
 
 mod allocate_frame;
 mod base_alu;
+mod base_alu_64;
 mod branch_eq;
 mod branch_lt;
 mod consts;
@@ -19,6 +20,7 @@ mod shift;
 
 pub use allocate_frame::*;
 pub use base_alu::*;
+pub use base_alu_64::*;
 pub use branch_eq::*;
 pub use branch_lt::*;
 pub use consts::*;

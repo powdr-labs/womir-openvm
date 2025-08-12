@@ -235,6 +235,19 @@ mod tests {
     }
 
     #[test]
+    fn test_basic_addi_64() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            // Write to 8 and 9
+            wom::addi_64::<F>(8, 0, 666),
+            wom::addi_64::<F>(8, 8, 1),
+            wom::reveal(8, 0),
+            wom::halt(),
+        ];
+
+        run_vm_test("Basic addi_64", instructions, 667, None)
+    }
+
+    #[test]
     fn test_basic_mul() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::addi::<F>(8, 0, 666),
@@ -1432,7 +1445,12 @@ mod wast_tests {
                                     .filter_map(|v| {
                                         if let Value::Object(obj) = v {
                                             if let Some(Value::String(val_str)) = obj.get("value") {
-                                                val_str.parse::<u32>().ok()
+                                                if let Some(Value::String(ty_str)) = obj.get("type")
+                                                {
+                                                    parse_as_vec_u32(ty_str, val_str)
+                                                } else {
+                                                    Some(vec![val_str.parse::<u32>().unwrap()])
+                                                }
                                             } else {
                                                 None
                                             }
@@ -1440,13 +1458,17 @@ mod wast_tests {
                                             None
                                         }
                                     })
+                                    .flatten()
                                     .collect();
 
                                 let expected_u32: Vec<u32> = expected
                                     .iter()
                                     .filter_map(|e| {
-                                        e.value.as_ref().and_then(|v| v.parse::<u32>().ok())
+                                        e.value
+                                            .as_ref()
+                                            .and_then(|v| parse_as_vec_u32(&e.expected_type, v))
                                     })
+                                    .flatten()
                                     .collect();
 
                                 assert_cases.push((field, args_u32, expected_u32));
@@ -1468,6 +1490,18 @@ mod wast_tests {
         let _ = fs::remove_file(&json_path);
 
         Ok(test_cases)
+    }
+
+    fn parse_as_vec_u32(ty: &str, value: &str) -> Option<Vec<u32>> {
+        if ty == "i32" {
+            let v = value.parse::<u32>().unwrap();
+            Some(vec![v])
+        } else if ty == "i64" {
+            let v = value.parse::<u64>().unwrap();
+            Some(vec![v as u32, (v >> 32) as u32])
+        } else {
+            None
+        }
     }
 
     #[allow(dead_code)]
@@ -1531,10 +1565,13 @@ mod wast_tests {
         // Verify output
         if !expected.is_empty() {
             let output_bytes: Vec<_> = output.iter().map(|n| n.as_canonical_u32() as u8).collect();
-            let output_0 = u32::from_le_bytes(output_bytes[0..4].try_into().unwrap());
+            let output: Vec<u32> = output_bytes[..expected.len() * 4]
+                .chunks(4)
+                .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+                .collect();
             assert_eq!(
-                output_0, expected[0],
-                "Test failed for {function}({args:?}): expected {expected:?}, got {output_0:?}"
+                output, expected,
+                "Test failed for {function}({args:?}): expected {expected:?}, got {output:?}"
             );
         }
 
@@ -1543,8 +1580,16 @@ mod wast_tests {
 
     #[test]
     fn test_i32() -> Result<(), Box<dyn std::error::Error>> {
-        // Load test cases
-        let test_cases = extract_wast_test_info("../wasm_tests/i32.wast")?;
+        run_wasm_test("../wasm_tests/i32.wast")
+    }
+
+    #[test]
+    fn test_i64() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/i64.wast")
+    }
+
+    fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let test_cases = extract_wast_test_info(tf)?;
 
         // Run all test cases
         for (module_path, _line, cases) in &test_cases {

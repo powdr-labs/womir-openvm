@@ -17,9 +17,9 @@ use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
 use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode, DivRemOpcode, EqOpcode,
-    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom,
-    ShiftOpcode,
+    AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
+    DivRemOpcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode,
+    LoadStoreOpcode, MulOpcode, Phantom, ShiftOpcode,
 };
 
 use serde::{Deserialize, Serialize};
@@ -103,6 +103,7 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 #[derive(ChipUsageGetter, Chip, InstructionExecutor, From, AnyEnum)]
 pub enum WomirIExecutor<F: PrimeField32> {
     BaseAlu(WomBaseAluChip<F>),
+    BaseAlu64(WomBaseAlu64Chip<F>),
     Jaaf(JaafChipWom<F>),
     Jump(JumpChipWom<F>),
     AllocateFrame(AllocateFrameChipWom<F>),
@@ -184,6 +185,23 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         inventory.add_executor(
             base_alu_chip,
             BaseAluOpcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        let base_alu_64_chip = WomBaseAlu64Chip::new(
+            WomBaseAlu64AdapterChip::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                bitwise_lu_chip.clone(),
+            ),
+            BaseAluCoreChipWom::new(bitwise_lu_chip.clone(), BaseAlu64Opcode::CLASS_OFFSET),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(
+            base_alu_64_chip,
+            BaseAlu64Opcode::iter().map(|x| x.global_opcode()),
         )?;
 
         let jaaf_chip = JaafChipWom::new(

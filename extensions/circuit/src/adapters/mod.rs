@@ -5,6 +5,7 @@ use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
 
 mod allocate_frame;
 mod alu;
+mod alu_64;
 mod branch;
 mod consts;
 mod copy_into_frame;
@@ -17,6 +18,7 @@ mod rdwrite;
 
 pub use allocate_frame::*;
 pub use alu::*;
+pub use alu_64::*;
 pub use branch::*;
 pub use consts::*;
 pub use copy_into_frame::*;
