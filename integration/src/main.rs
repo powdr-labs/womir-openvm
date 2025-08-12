@@ -1385,7 +1385,6 @@ mod wast_tests {
     #[derive(Debug, Deserialize)]
     struct Expected {
         #[serde(rename = "type")]
-        #[allow(dead_code)]
         expected_type: String,
         #[allow(dead_code)]
         lane: Option<String>,
