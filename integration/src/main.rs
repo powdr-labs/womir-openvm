@@ -1445,6 +1445,8 @@ mod wast_tests {
                                     .filter_map(|v| {
                                         if let Value::Object(obj) = v {
                                             if let Some(Value::String(val_str)) = obj.get("value") {
+                                                // In OpenVM we read the inputs as u32s, so here we
+                                                // need to parse the input as 32-bit limbs.
                                                 if let Some(Value::String(ty_str)) = obj.get("type")
                                                 {
                                                     parse_as_vec_u32(ty_str, val_str)
@@ -1464,6 +1466,8 @@ mod wast_tests {
                                 let expected_u32: Vec<u32> = expected
                                     .iter()
                                     .filter_map(|e| {
+                                        // Parse as 32-bit limbs for the same reason as
+                                        // above.
                                         e.value
                                             .as_ref()
                                             .and_then(|v| parse_as_vec_u32(&e.expected_type, v))
@@ -1564,7 +1568,9 @@ mod wast_tests {
 
         // Verify output
         if !expected.is_empty() {
+            // OpenVM returns 32 bytes as field elements.
             let output_bytes: Vec<_> = output.iter().map(|n| n.as_canonical_u32() as u8).collect();
+            // Read only as many bytes as expected by the test.
             let output: Vec<u32> = output_bytes[..expected.len() * 4]
                 .chunks(4)
                 .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
