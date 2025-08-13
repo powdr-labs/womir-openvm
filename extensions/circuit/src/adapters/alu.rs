@@ -37,7 +37,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
 
-use super::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+use super::RV32_CELL_BITS;
 
 /// Reads instructions of the form OP a, b, c, d, e where \[a:4\]_d = \[b:4\]_d op \[c:4\]_e.
 /// Operand d can only be 1, and e can be either 1 (for register reads) or 0 (when c
@@ -96,7 +96,10 @@ pub struct WomBaseAluReadRecord<F: Field> {
 
 #[repr(C)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "F: Field")]
+#[serde(bound(
+    serialize = "[F; WRITE_BYTES]: Serialize",
+    deserialize = "[F; WRITE_BYTES]: Deserialize<'de>"
+))]
 pub struct WomBaseAluWriteRecord<F: Field, const WRITE_BYTES: usize> {
     pub from_state: ExecutionState<u32>,
     pub from_frame: FrameState<u32>,
@@ -106,7 +109,7 @@ pub struct WomBaseAluWriteRecord<F: Field, const WRITE_BYTES: usize> {
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct WomBaseAluAdapterCols<T, const READS_32BIT_LIMBS: usize, const WRITE_BYTES: usize> {
+pub struct WomBaseAluAdapterCols<T, const READ_32BIT_LIMBS: usize, const WRITE_BYTES: usize> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
     pub rd_ptr: T,
@@ -115,7 +118,7 @@ pub struct WomBaseAluAdapterCols<T, const READS_32BIT_LIMBS: usize, const WRITE_
     pub rs2: T,
     /// 1 if rs2 was a read, 0 if an immediate
     pub rs2_as: T,
-    pub reads_aux: [MemoryReadAuxCols<T>; READS_32BIT_LIMBS],
+    pub reads_aux: [MemoryReadAuxCols<T>; READ_32BIT_LIMBS],
     pub writes_aux: MemoryWriteAuxCols<T, WRITE_BYTES>,
 }
 
@@ -136,7 +139,7 @@ impl<F: Field, const N: usize, const M: usize, const T: usize> BaseAir<F>
     for WomBaseAluAdapterAir<N, M, T>
 {
     fn width(&self) -> usize {
-        WomBaseAluAdapterCols::<F, N, M>::width()
+        WomBaseAluAdapterCols::<F, N, T>::width()
     }
 }
 
@@ -144,7 +147,7 @@ impl<F: Field, const N: usize, const M: usize, const T: usize> ColumnsAir<F>
     for WomBaseAluAdapterAir<N, M, T>
 {
     fn columns(&self) -> Option<Vec<String>> {
-        WomBaseAluAdapterCols::<F, N, M>::struct_reflection()
+        WomBaseAluAdapterCols::<F, N, T>::struct_reflection()
     }
 }
 
@@ -258,6 +261,8 @@ impl<
         const READ_BYTES: usize,
         const WRITE_BYTES: usize,
     > VmAdapterChipWom<F> for WomBaseAluAdapterChip<F, READ_32BIT_LIMBS, READ_BYTES, WRITE_BYTES>
+where
+    [F; WRITE_BYTES]: Serialize + for<'de> Deserialize<'de>,
 {
     type ReadRecord = WomBaseAluReadRecord<F>;
     type WriteRecord = WomBaseAluWriteRecord<F, WRITE_BYTES>;
