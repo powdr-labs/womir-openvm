@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 serde.workspace = true
 eyre.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
 derive_more.workspace = true
 openvm-womir-circuit = { workspace = true }
