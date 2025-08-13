@@ -188,7 +188,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         )?;
 
         let base_alu_64_chip = WomBaseAlu64Chip::new(
-            WomBaseAlu64AdapterChip::new(
+            WomBaseAluAdapterChip::new(
                 execution_bus,
                 program_bus,
                 frame_bus,
