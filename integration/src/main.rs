@@ -240,8 +240,8 @@ mod tests {
     fn test_basic_addi_64() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             // Write to 8 and 9
-            wom::addi_64::<F>(8, 0, 666),
-            wom::addi_64::<F>(8, 8, 1),
+            wom::addi_64::<F>(8, 0, 666.to_f()?),
+            wom::addi_64::<F>(8, 8, 1.to_f()?),
             wom::reveal(8, 0),
             wom::halt(),
         ];

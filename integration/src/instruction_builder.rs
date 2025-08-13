@@ -176,7 +176,7 @@ pub fn add_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction
 }
 
 #[allow(dead_code)]
-pub fn addi_64<F: PrimeField32>(rd: usize, rs1: usize, imm: usize) -> Instruction<F> {
+pub fn addi_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
     instr_i(
         BaseAlu64Opcode::ADD.global_opcode().as_usize(),
         rd,
