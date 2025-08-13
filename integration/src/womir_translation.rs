@@ -1,6 +1,6 @@
 use std::{collections::HashMap, ops::Range, vec};
 
-use crate::instruction_builder as ib;
+use crate::{instruction_builder as ib, to_field::ToField};
 use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
 use wasmparser::{Operator as Op, ValType};
@@ -291,7 +291,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         src_ptr: Range<u32>,
         dest_ptr: Range<u32>,
     ) -> Self::Directive {
-        Directive::Instruction(ib::addi(dest_ptr.start as usize, src_ptr.start as usize, 0))
+        Directive::Instruction(ib::addi(
+            dest_ptr.start as usize,
+            src_ptr.start as usize,
+            F::ZERO,
+        ))
     }
 
     fn emit_copy_into_frame(
@@ -629,7 +633,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let shiftr = g.r.allocate_type(ValType::I32).start as usize;
                 vec![
                     // get least significant 5 bits for rotation amount
-                    Directive::Instruction(ib::andi(shiftl_amount, input2, 0x1f)),
+                    Directive::Instruction(ib::andi(shiftl_amount, input2, 0x1f.to_f().unwrap())),
                     // shift left
                     Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
                     // get right shift amount
@@ -652,7 +656,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let shiftr = g.r.allocate_type(ValType::I32).start as usize;
                 vec![
                     // get least significant 5 bits for rotation amount
-                    Directive::Instruction(ib::andi(shiftr_amount, input2, 0x1f)),
+                    Directive::Instruction(ib::andi(shiftr_amount, input2, 0x1f.to_f().unwrap())),
                     // shift right
                     Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
                     // get left shift amount
@@ -682,13 +686,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 // Perform the inverse operation and invert the result
                 vec![
                     Directive::Instruction(inverse_op(inverse_result, input1, input2)),
-                    Directive::Instruction(ib::eqi(output, inverse_result, 0)),
+                    Directive::Instruction(ib::eqi(output, inverse_result, F::ZERO)),
                 ]
             }
             Op::I32Eqz => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
-                vec![Directive::Instruction(ib::eqi(output, input, 0x0))]
+                vec![Directive::Instruction(ib::eqi(output, input, F::ZERO))]
             }
             Op::I32Clz => todo!(),
             Op::I32Ctz => todo!(),
@@ -703,7 +707,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let output = output.unwrap().start as usize;
 
                 // Just copy the lower limb to the output.
-                vec![Directive::Instruction(ib::addi(output, lower_limb, 0))]
+                vec![Directive::Instruction(ib::addi(
+                    output,
+                    lower_limb,
+                    F::ZERO,
+                ))]
             }
             Op::I32Extend8S | Op::I32Extend16S => {
                 let input = inputs[0].start as usize;
@@ -713,7 +721,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Op::I32Extend8S => 24,
                     Op::I32Extend16S => 16,
                     _ => unreachable!(),
-                };
+                }
+                .to_f()
+                .unwrap();
 
                 // Left shift followed by arithmetic right shift
                 vec![
@@ -754,7 +764,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 ];
                 // if jump is not taken, copy the value for "if zero"
                 directives.extend(if_zero_val.zip(output.clone()).map(|(src, dest)| {
-                    Directive::Instruction(ib::addi(dest as usize, src as usize, 0))
+                    Directive::Instruction(ib::addi(dest as usize, src as usize, F::ZERO))
                 }));
                 // jump to continuation
                 directives.push(Directive::Jump {
@@ -767,7 +777,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     frame_size: None,
                 });
                 directives.extend(if_set_val.zip(output).map(|(src, dest)| {
-                    Directive::Instruction(ib::addi(dest as usize, src as usize, 0))
+                    Directive::Instruction(ib::addi(dest as usize, src as usize, F::ZERO))
                 }));
 
                 // continuation label
@@ -910,7 +920,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     .clone()
                     .zip(output.unwrap())
                     .map(|(input, output)| {
-                        Directive::Instruction(ib::addi(output as usize, input as usize, 0))
+                        Directive::Instruction(ib::addi(output as usize, input as usize, F::ZERO))
                     })
                     .collect()
             }
