@@ -6,6 +6,6 @@ pub use core::*;
 
 pub type EqChipWom<F> = VmChipWrapperWom<
     F,
-    WomBaseAluAdapterChip<F, 2, 4>,
+    WomBaseAluAdapterChip<F, 2, 4, 4>,
     EqCoreChip<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;

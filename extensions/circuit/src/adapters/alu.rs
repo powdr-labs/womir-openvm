@@ -53,8 +53,12 @@ pub struct WomBaseAluAdapterChip<
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField32, const READ_32BIT_LIMBS: usize, const WRITE_BYTES: usize>
-    WomBaseAluAdapterChip<F, READ_32BIT_LIMBS, WRITE_BYTES>
+impl<
+        F: PrimeField32,
+        const READ_32BIT_LIMBS: usize,
+        const READ_BYTES: usize,
+        const WRITE_BYTES: usize,
+    > WomBaseAluAdapterChip<F, READ_32BIT_LIMBS, READ_BYTES, WRITE_BYTES>
 {
     pub fn new(
         execution_bus: ExecutionBus,
@@ -253,7 +257,7 @@ impl<
         const READ_32BIT_LIMBS: usize,
         const READ_BYTES: usize,
         const WRITE_BYTES: usize,
-    > VmAdapterChipWom<F> for WomBaseAluAdapterChip<F, READ_32BIT_LIMBS, WRITE_BYTES>
+    > VmAdapterChipWom<F> for WomBaseAluAdapterChip<F, READ_32BIT_LIMBS, READ_BYTES, WRITE_BYTES>
 {
     type ReadRecord = WomBaseAluReadRecord<F>;
     type WriteRecord = WomBaseAluWriteRecord<F, WRITE_BYTES>;
