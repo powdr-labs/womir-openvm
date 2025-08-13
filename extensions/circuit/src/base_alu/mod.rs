@@ -6,6 +6,6 @@ pub use core::*;
 
 pub type WomBaseAluChip<F> = VmChipWrapperWom<
     F,
-    WomBaseAluAdapterChip<F>,
+    WomBaseAluAdapterChip<F, 2, 8, 4>,
     BaseAluCoreChipWom<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;

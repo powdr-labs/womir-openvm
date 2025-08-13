@@ -7,6 +7,6 @@ pub use core::*;
 
 pub type Rv32ShiftChip<F> = VmChipWrapperWom<
     F,
-    WomBaseAluAdapterChip<F>,
+    WomBaseAluAdapterChip<F, 2, 4>,
     ShiftCoreChip<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;
