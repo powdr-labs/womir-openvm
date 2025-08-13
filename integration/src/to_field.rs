@@ -1,14 +1,15 @@
-use std::num::TryFromIntError;
-
 use openvm_stark_backend::p3_field::PrimeField32;
 
 /// Convenience trait to safely convert an integer into a field element.
 pub trait ToField<F: PrimeField32> {
-    fn to_f(self) -> Result<F, ToFieldError>;
+    type Error;
+    fn to_f(self) -> Result<F, ToFieldError<Self::Error>>;
 }
 
-impl<I: TryInto<u32, Error = TryFromIntError>, F: PrimeField32> ToField<F> for I {
-    fn to_f(self) -> Result<F, ToFieldError> {
+impl<I: TryInto<u32>, F: PrimeField32> ToField<F> for I {
+    type Error = <I as TryInto<u32>>::Error;
+
+    fn to_f(self) -> Result<F, ToFieldError<Self::Error>> {
         // This is a PrimeField32, so any value greater than 32 bits won't fit.
         let self32: u32 = self.try_into()?;
         match self32 {
@@ -31,9 +32,9 @@ impl<I: TryInto<u32, Error = TryFromIntError>, F: PrimeField32> ToField<F> for I
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum ToFieldError {
+pub enum ToFieldError<E> {
     #[error("Failed to convert to u32: {0}")]
-    ToU32(#[from] TryFromIntError),
+    ToU32(#[from] E),
     #[error("Value {value} exceeds maximum allowed value {max_value}")]
     ToF { value: u32, max_value: u32 },
 }

@@ -386,30 +386,61 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         immediate: u32,
         label: String,
     ) -> Vec<Self::Directive> {
-        let cmp_insn = match cmp {
-            ComparisonFunction::Equal => todo!(), // i32eq
-            ComparisonFunction::GreaterThanOrEqualUnsigned => todo!(), // i32geu
-            ComparisonFunction::LessThanUnsigned => ib::lt_u,
-        };
-
-        let const_value = g.r.allocate_type(ValType::I32);
         let comparison = g.r.allocate_type(ValType::I32);
 
-        let imm_lo: u16 = (immediate & 0xffff) as u16;
-        let imm_hi: u16 = ((immediate >> 16) & 0xffff) as u16;
-
-        vec![
-            Directive::Instruction(ib::const_32_imm(const_value.start as usize, imm_lo, imm_hi)),
-            Directive::Instruction(cmp_insn(
+        let mut directives = if let Ok(imm_f) = immediate.to_f() {
+            // If immediate fits into field, we can save one instruction:
+            let cmp_insn = match cmp {
+                ComparisonFunction::Equal => ib::eqi::<F>,
+                ComparisonFunction::GreaterThanOrEqualUnsigned
+                | ComparisonFunction::LessThanUnsigned => ib::lt_u_imm,
+            };
+            vec![Directive::Instruction(cmp_insn(
                 comparison.start as usize,
                 value_ptr.start as usize,
-                const_value.start as usize,
-            )),
-            Directive::JumpIf {
+                imm_f,
+            ))]
+        } else {
+            // Otherwise, we need to compose the immediate into a register:
+            let cmp_insn = match cmp {
+                ComparisonFunction::Equal => ib::eq,
+                ComparisonFunction::GreaterThanOrEqualUnsigned
+                | ComparisonFunction::LessThanUnsigned => ib::lt_u,
+            };
+
+            let const_value = g.r.allocate_type(ValType::I32);
+
+            let imm_lo: u16 = (immediate & 0xffff) as u16;
+            let imm_hi: u16 = ((immediate >> 16) & 0xffff) as u16;
+
+            vec![
+                Directive::Instruction(ib::const_32_imm(
+                    const_value.start as usize,
+                    imm_lo,
+                    imm_hi,
+                )),
+                Directive::Instruction(cmp_insn(
+                    comparison.start as usize,
+                    value_ptr.start as usize,
+                    const_value.start as usize,
+                )),
+            ]
+        };
+
+        // We use "less than" to compare both "less than" and "greater than or equal",
+        // so, if it is the later, we must jump if the condition is false.
+        directives.push(match cmp {
+            ComparisonFunction::Equal | ComparisonFunction::LessThanUnsigned => Directive::JumpIf {
                 target: label,
                 condition_reg: comparison.start,
             },
-        ]
+            ComparisonFunction::GreaterThanOrEqualUnsigned => Directive::JumpIfZero {
+                target: label,
+                condition_reg: comparison.start,
+            },
+        });
+
+        directives
     }
 
     fn emit_relative_jump(
