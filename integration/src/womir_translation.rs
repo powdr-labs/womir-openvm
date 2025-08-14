@@ -15,6 +15,19 @@ use womir::{
     },
 };
 
+/// This is our convention for null function references.
+///
+/// The first value is the function type identifier, and we are reserving u32::MAX for null,
+/// so that when indirectly calling a null reference, the type check will trigger a fault.
+///
+/// The second value is the function's frame size, and doesn't interfere with the WASM
+/// instructions that handle function references.
+///
+/// The third value is the actual address of the function, and no valid function is in
+/// position 0, because the linker places the function starting at address 0x4. This
+/// value is used by instruction ref.is_null to decide if the reference is null.
+const NULL_REF: [u32; 3] = [u32::MAX, 0, 0];
+
 pub fn program_from_womir<F: PrimeField32>(
     ir_program: womir::loader::Program<OpenVMSettings<F>>,
     entry_point: &str,
@@ -27,7 +40,7 @@ pub fn program_from_womir<F: PrimeField32>(
             WriteOnceASM {
                 directives,
                 func_idx: f.func_idx,
-                _frame_size: f._frame_size,
+                frame_size: f.frame_size,
             }
         })
         .collect::<Vec<_>>();
@@ -85,6 +98,9 @@ pub fn program_from_womir<F: PrimeField32>(
                     let label = func_idx_to_label(func_idx);
                     label_map[&label].frame_size.unwrap()
                 }
+                NullFuncType => NULL_REF[0],
+                NullFuncFrameSize => NULL_REF[1],
+                NullFuncAddr => NULL_REF[2],
             };
 
             [
