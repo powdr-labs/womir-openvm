@@ -1543,10 +1543,9 @@ mod wast_tests {
         Ok(())
     }
 
-    #[test]
-    fn test_i32() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_wast(file_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Load test cases
-        let test_cases = extract_wast_test_info("../wasm_tests/i32.wast")?;
+        let test_cases = extract_wast_test_info(&format!("../wasm_tests/{file_name}"))?;
 
         // Run all test cases
         for (module_path, _line, cases) in &test_cases {
@@ -1559,5 +1558,15 @@ mod wast_tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_i32() -> Result<(), Box<dyn std::error::Error>> {
+        test_wast("i32.wast")
+    }
+
+    #[test]
+    fn test_select() -> Result<(), Box<dyn std::error::Error>> {
+        test_wast("select.wast")
     }
 }
