@@ -321,6 +321,20 @@ pub fn jump<F: PrimeField32>(to_pc_imm: usize) -> Instruction<F> {
     )
 }
 
+/// SKIP instruction: Unconditional relative jump to current PC + offset
+pub fn skip<F: PrimeField32>(offset_reg: usize) -> Instruction<F> {
+    Instruction::new(
+        JumpOpcode::SKIP.global_opcode(),
+        F::ZERO,                                                              // a: (not used)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * offset_reg), // b: register with the offset
+        F::ZERO,                                                              // c: (not used)
+        F::ZERO,                                                              // d: (not used)
+        F::ZERO,                                                              // e: (not used)
+        F::ONE,                                                               // f: enabled
+        F::ZERO,                                                              // g: imm sign
+    )
+}
+
 /// JUMP_IF instruction: Conditional jump to immediate PC if condition != 0
 pub fn jump_if<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> Instruction<F> {
     Instruction::new(
