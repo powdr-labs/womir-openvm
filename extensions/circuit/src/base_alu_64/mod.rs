@@ -5,6 +5,6 @@ use crate::base_alu::BaseAluCoreChipWom;
 
 pub type WomBaseAlu64Chip<F> = VmChipWrapperWom<
     F,
-    WomBaseAluAdapterChip<F, 4, 8, 8>,
+    WomBaseAluAdapterChip<F, 4, { RV32_REGISTER_NUM_LIMBS * 2 }, { RV32_REGISTER_NUM_LIMBS * 2 }>,
     BaseAluCoreChipWom<{ RV32_REGISTER_NUM_LIMBS * 2 }, RV32_CELL_BITS>,
 >;
