@@ -49,7 +49,7 @@ pub struct JumpCoreCols<T> {
 #[derive(Serialize, Deserialize)]
 pub struct JumpCoreRecord<F> {
     pub imm: F,
-    pub condition_data: [F; RV32_REGISTER_NUM_LIMBS],
+    pub register_data: [F; RV32_REGISTER_NUM_LIMBS],
     pub should_jump: F,
     pub to_pc_least_sig_bit: F,
     pub to_pc_limbs: [u32; 2],
@@ -190,18 +190,23 @@ where
         let local_opcode =
             JumpOpcode::from_usize(opcode.local_opcode_idx(JumpOpcode::CLASS_OFFSET));
 
-        let imm = a.as_canonical_u32();
-        let target_pc = imm; // Jump directly to immediate value
-
         let reads_array: [[F; RV32_REGISTER_NUM_LIMBS]; 1] = reads.into();
-        let condition_data = reads_array[0];
-        let condition_val = compose(condition_data);
+        let register_data = reads_array[0];
+        let register_val = compose(register_data);
+
+        let target_pc = if let SKIP = local_opcode {
+            // Skip register_val instructions
+            from_pc + (register_val + 1) * DEFAULT_PC_STEP
+        } else {
+            // Jump directly to immediate value
+            a.as_canonical_u32()
+        };
 
         // Determine if we should jump based on opcode and condition
         let should_jump = match local_opcode {
-            JUMP => true,                       // Always jump
-            JUMP_IF => condition_val != 0,      // Jump if condition != 0
-            JUMP_IF_ZERO => condition_val == 0, // Jump if condition == 0
+            JUMP | SKIP => true,               // Always jump
+            JUMP_IF => register_val != 0,      // Jump if condition != 0
+            JUMP_IF_ZERO => register_val == 0, // Jump if condition == 0
         };
 
         let final_pc = if should_jump {
@@ -211,7 +216,7 @@ where
         };
 
         let mask = (1 << 15) - 1;
-        let to_pc_least_sig_bit = imm & 1;
+        let to_pc_least_sig_bit = target_pc & 1;
         let to_pc_limbs = array::from_fn(|i| ((target_pc >> (1 + i * 15)) & mask));
 
         self.range_checker_chip.add_count(to_pc_limbs[0], 15);
@@ -228,7 +233,7 @@ where
             output,
             JumpCoreRecord {
                 imm: a,
-                condition_data,
+                register_data,
                 should_jump: F::from_canonical_u32(if should_jump { 1 } else { 0 }),
                 to_pc_least_sig_bit: F::from_canonical_u32(to_pc_least_sig_bit),
                 to_pc_limbs,
@@ -246,7 +251,7 @@ where
     fn generate_trace_row(&self, row_slice: &mut [F], record: Self::Record) {
         let core_cols: &mut JumpCoreCols<F> = row_slice.borrow_mut();
         core_cols.imm = record.imm;
-        core_cols.condition_data = record.condition_data;
+        core_cols.condition_data = record.register_data;
         core_cols.should_jump = record.should_jump;
         core_cols.to_pc_least_sig_bit = record.to_pc_least_sig_bit;
         core_cols.to_pc_limbs = record.to_pc_limbs.map(F::from_canonical_u32);

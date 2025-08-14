@@ -462,9 +462,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     fn emit_relative_jump(
         &self,
         _g: &mut Generators<'a, '_, Self>,
-        _offset_ptr: Range<u32>,
+        offset_ptr: Range<u32>,
     ) -> Self::Directive {
-        todo!()
+        Directive::Instruction(ib::skip(offset_ptr.start as usize))
     }
 
     fn emit_jump_out_of_loop(

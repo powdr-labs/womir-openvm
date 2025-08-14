@@ -240,6 +240,7 @@ pub enum JaafOpcode {
 #[allow(non_camel_case_types)]
 pub enum JumpOpcode {
     JUMP,         // unconditional jump to immediate PC
+    SKIP,         // unconditional jump to current PC + offset
     JUMP_IF,      // conditional jump to immediate PC if condition register != 0
     JUMP_IF_ZERO, // conditional jump to immediate PC if condition register == 0
 }

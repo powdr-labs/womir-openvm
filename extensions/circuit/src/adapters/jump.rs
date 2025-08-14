@@ -60,7 +60,7 @@ impl<F: PrimeField32> JumpAdapterChipWom<F> {
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JumpReadRecord {
-    pub condition: Option<RecordId>, // condition register - only for JUMP_IF and JUMP_IF_ZERO
+    pub reg_value: Option<RecordId>, // condition register for JUMP_IF and JUMP_IF_ZERO, offset for SKIP
 }
 
 #[repr(C)]
@@ -206,11 +206,11 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         let fp_f = F::from_canonical_u32(fp);
 
         // Determine which registers to read based on opcode
-        let (condition_record, condition_data) = match local_opcode {
-            JumpOpcode::JUMP_IF | JumpOpcode::JUMP_IF_ZERO => {
-                // Read condition (b field) for conditional jumps
-                let condition = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b + fp_f);
-                (Some(condition.0), condition.1)
+        let (register_record, register_data) = match local_opcode {
+            JumpOpcode::JUMP_IF | JumpOpcode::JUMP_IF_ZERO | JumpOpcode::SKIP => {
+                // Read condition (b field) for conditional jumps, or the offset for skip
+                let reg_value = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b + fp_f);
+                (Some(reg_value.0), reg_value.1)
             }
             _ => {
                 // For JUMP, we don't read condition but still need to advance timestamp
@@ -220,9 +220,9 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         };
 
         Ok((
-            [condition_data],
+            [register_data],
             JumpReadRecord {
-                condition: condition_record,
+                reg_value: register_record,
             },
         ))
     }
@@ -264,11 +264,11 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         adapter_cols.immediate = F::from_canonical_u32(write_record.immediate);
 
         // Handle condition read
-        if let Some(condition_id) = read_record.condition {
-            let condition = memory.record_by_id(condition_id);
-            adapter_cols.condition_ptr = condition.pointer;
+        if let Some(reg_value_id) = read_record.reg_value {
+            let reg_value = memory.record_by_id(reg_value_id);
+            adapter_cols.condition_ptr = reg_value.pointer;
             adapter_cols.needs_read_condition = F::ONE;
-            aux_cols_factory.generate_read_aux(condition, &mut adapter_cols.condition_aux_cols);
+            aux_cols_factory.generate_read_aux(reg_value, &mut adapter_cols.condition_aux_cols);
         }
     }
 
