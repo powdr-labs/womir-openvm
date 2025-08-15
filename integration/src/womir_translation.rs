@@ -165,7 +165,7 @@ where
     let results = entry_point_func_type.results();
     let num_output_words = womir::word_count_types::<OpenVMSettings<F>>(results);
     for i in 0..num_output_words {
-        code.push(ib::reveal_imm(ptr as usize, zero_reg, i as usize));
+        code.push(ib::reveal_imm(ptr as usize, zero_reg, (i * 4) as usize));
         ptr += 1;
     }
 
@@ -586,7 +586,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I64LeU => todo!(),
             Op::I64GeS => todo!(),
             Op::I64GeU => todo!(),
-            Op::I64Add => todo!(),
+            Op::I64Add => Ok(ib::add_64),
             Op::I64Sub => todo!(),
             Op::I64Mul => todo!(),
             Op::I64DivS => todo!(),

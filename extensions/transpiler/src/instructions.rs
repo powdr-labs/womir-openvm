@@ -43,6 +43,31 @@ pub enum BaseAluOpcode {
     Serialize,
     Deserialize,
 )]
+#[opcode_offset = 0x2200]
+#[repr(usize)]
+pub enum BaseAlu64Opcode {
+    ADD,
+    SUB,
+    XOR,
+    OR,
+    AND,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
 #[opcode_offset = 0x1205]
 #[repr(usize)]
 pub enum ShiftOpcode {
