@@ -157,15 +157,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Create and execute program
             let exe = womir_translation::program_from_womir::<F>(ir_program, &function);
 
-            let inputs = args
-                .into_iter()
-                .flat_map(|arg| {
-                    let val = arg.parse::<u32>().unwrap();
-                    val.to_le_bytes().into_iter()
-                })
-                .collect::<Vec<_>>();
-
-            let stdin = StdIn::from_bytes(&inputs);
+            let mut stdin = StdIn::default();
+            for arg in args {
+                let val = arg.parse::<u32>().unwrap();
+                stdin.write(&val);
+            }
 
             let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
             println!("output: {output:?}");
