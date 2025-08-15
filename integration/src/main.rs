@@ -287,6 +287,26 @@ mod tests {
     }
 
     #[test]
+    fn test_skip() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            // Sets to skip 5 instructions.
+            wom::const_32_imm(8, 5, 0),
+            wom::skip(8),
+            //// SKIPPED BLOCK ////
+            wom::halt(),
+            wom::const_32_imm(10, 666, 0),
+            wom::reveal(10, 0),
+            wom::halt(),
+            wom::halt(),
+            ///////////////////////
+            wom::const_32_imm(10, 42, 0),
+            wom::reveal(10, 0),
+            wom::halt(),
+        ];
+        run_vm_test("Skipping 5 instructions", instructions, 42, None)
+    }
+
+    #[test]
     fn test_mul_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::addi::<F>(8, 0, 7.to_f()?),

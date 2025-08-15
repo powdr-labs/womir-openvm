@@ -121,6 +121,15 @@ pub fn lt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F
     )
 }
 
+pub fn lt_u_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+    instr_i(
+        LessThanOpcode::SLTU.global_opcode().as_usize(),
+        rd,
+        rs1,
+        imm,
+    )
+}
+
 pub fn lt_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(LessThanOpcode::SLT.global_opcode().as_usize(), rd, rs1, rs2)
 }
@@ -337,6 +346,20 @@ pub fn jump<F: PrimeField32>(to_pc_imm: usize) -> Instruction<F> {
         F::ZERO,                            // e: (not used)
         F::ONE,                             // f: enabled
         F::ZERO,                            // g: imm sign
+    )
+}
+
+/// SKIP instruction: Unconditional relative jump to current PC + offset
+pub fn skip<F: PrimeField32>(offset_reg: usize) -> Instruction<F> {
+    Instruction::new(
+        JumpOpcode::SKIP.global_opcode(),
+        F::ZERO,                                                              // a: (not used)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * offset_reg), // b: register with the offset
+        F::ZERO,                                                              // c: (not used)
+        F::ZERO,                                                              // d: (not used)
+        F::ZERO,                                                              // e: (not used)
+        F::ONE,                                                               // f: enabled
+        F::ZERO,                                                              // g: imm sign
     )
 }
 
