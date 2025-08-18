@@ -194,6 +194,37 @@ pub fn addi_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F>
     )
 }
 
+pub fn sub_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        BaseAlu64Opcode::SUB.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
+pub fn xor_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        BaseAlu64Opcode::XOR.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
+pub fn or_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(BaseAlu64Opcode::OR.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn and_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        BaseAlu64Opcode::AND.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
 /// JAAF instruction: Jump And Activate Frame
 /// Sets PC from immediate and FP from register
 pub fn jaaf<F: PrimeField32>(to_pc_imm: usize, to_fp_reg: usize) -> Instruction<F> {
