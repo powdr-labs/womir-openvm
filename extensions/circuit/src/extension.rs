@@ -19,7 +19,7 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
     DivRemOpcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode,
-    LoadStoreOpcode, MulOpcode, Phantom, ShiftOpcode,
+    LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 
 use serde::{Deserialize, Serialize};
@@ -113,7 +113,8 @@ pub enum WomirIExecutor<F: PrimeField32> {
     HintStore(HintStoreChip<F>),
     Multiplication(WomMultiplicationChip<F>),
     DivRem(WomDivRemChip<F>),
-    Shift(Rv32ShiftChip<F>),
+    Shift(WomShiftChip<F>),
+    Shift64(WomShift64Chip<F>),
     LoadStore(Rv32LoadStoreChip<F>),
     Eq(EqChipWom<F>),
     // LoadSignExtend(Rv32LoadSignExtendChip<F>),
@@ -335,7 +336,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             DivRemOpcode::iter().map(|x| x.global_opcode()),
         )?;
 
-        let shift_chip = Rv32ShiftChip::new(
+        let shift_chip = WomShiftChip::new(
             WomBaseAluAdapterChip::new(
                 execution_bus,
                 program_bus,
@@ -352,6 +353,27 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             shared_fp.clone(),
         );
         inventory.add_executor(shift_chip, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let shift_64_chip = WomShift64Chip::new(
+            WomBaseAluAdapterChip::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                bitwise_lu_chip.clone(),
+            ),
+            ShiftCoreChip::new(
+                bitwise_lu_chip.clone(),
+                range_checker.clone(),
+                Shift64Opcode::CLASS_OFFSET,
+            ),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(
+            shift_64_chip,
+            Shift64Opcode::iter().map(|x| x.global_opcode()),
+        )?;
 
         let load_store_chip = Rv32LoadStoreChip::new(
             Rv32LoadStoreAdapterChip::new(

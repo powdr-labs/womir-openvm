@@ -3,7 +3,7 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
     DivRemOpcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode,
-    LoadStoreOpcode, MulOpcode, Phantom, ShiftOpcode,
+    LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 
 pub fn instr_r<F: PrimeField32>(
@@ -110,6 +110,28 @@ pub fn shr_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<
 
 pub fn shr_s_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
     instr_i(ShiftOpcode::SRA.global_opcode().as_usize(), rd, rs1, imm)
+}
+
+pub fn shl_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(Shift64Opcode::SLL.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+#[allow(dead_code)]
+pub fn shl_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+    instr_i(Shift64Opcode::SLL.global_opcode().as_usize(), rd, rs1, imm)
+}
+
+pub fn shr_u_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(Shift64Opcode::SRL.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn shr_s_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(Shift64Opcode::SRA.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+#[allow(dead_code)]
+pub fn shr_s_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+    instr_i(Shift64Opcode::SRA.global_opcode().as_usize(), rd, rs1, imm)
 }
 
 pub fn lt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
