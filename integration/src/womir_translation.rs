@@ -217,7 +217,7 @@ pub enum Directive<F> {
     Instruction(Instruction<F>),
 }
 
-type Ctx<'a,'b, F> = Context<'a, 'b, OpenVMSettings<F>>;
+type Ctx<'a, 'b, F> = Context<'a, 'b, OpenVMSettings<F>>;
 
 pub struct OpenVMSettings<F> {
     _phantom: std::marker::PhantomData<F>,
@@ -461,11 +461,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         directives
     }
 
-    fn emit_relative_jump(
-        &self,
-        _c: &mut Ctx<F>,
-        offset_ptr: Range<u32>,
-    ) -> Self::Directive {
+    fn emit_relative_jump(&self, _c: &mut Ctx<F>, offset_ptr: Range<u32>) -> Self::Directive {
         Directive::Instruction(ib::skip(offset_ptr.start as usize))
     }
 
