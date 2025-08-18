@@ -18,8 +18,8 @@ use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
-    DivRemOpcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode,
-    LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
+    DivRemOpcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
+    LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 
 use serde::{Deserialize, Serialize};
@@ -110,6 +110,7 @@ pub enum WomirIExecutor<F: PrimeField32> {
     CopyIntoFrame(CopyIntoFrameChipWom<F>),
     Const32(ConstsChipWom<F>),
     LessThan(LessThanChipWom<F>),
+    LessThan64(LessThan64ChipWom<F>),
     HintStore(HintStoreChip<F>),
     Multiplication(WomMultiplicationChip<F>),
     DivRem(WomDivRemChip<F>),
@@ -264,6 +265,23 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             shared_fp.clone(),
         );
         inventory.add_executor(lt_chip, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let lt_chip_64 = LessThan64ChipWom::new(
+            WomBaseAluAdapterChip::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                bitwise_lu_chip.clone(),
+            ),
+            LessThanCoreChip::new(bitwise_lu_chip.clone(), LessThan64Opcode::CLASS_OFFSET),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(
+            lt_chip_64,
+            LessThan64Opcode::iter().map(|x| x.global_opcode()),
+        )?;
 
         let eq_chip = EqChipWom::new(
             WomBaseAluAdapterChip::new(

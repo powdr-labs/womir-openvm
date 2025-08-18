@@ -47,39 +47,55 @@ pub struct LessThanCoreCols<T, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct LessThanCoreAir<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
+pub struct LessThanCoreAir<
+    const NUM_LIMBS_READ: usize,
+    const NUM_LIMBS_WRITE: usize,
+    const LIMB_BITS: usize,
+> {
     pub bus: BitwiseOperationLookupBus,
     offset: usize,
 }
 
-impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAir<F>
-    for LessThanCoreAir<NUM_LIMBS, LIMB_BITS>
+impl<
+        F: Field,
+        const NUM_LIMBS_READ: usize,
+        const NUM_LIMBS_WRITE: usize,
+        const LIMB_BITS: usize,
+    > BaseAir<F> for LessThanCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 {
     fn width(&self) -> usize {
-        LessThanCoreCols::<F, NUM_LIMBS, LIMB_BITS>::width()
+        LessThanCoreCols::<F, NUM_LIMBS_READ, LIMB_BITS>::width()
     }
 }
 
-impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> ColumnsAir<F>
-    for LessThanCoreAir<NUM_LIMBS, LIMB_BITS>
+impl<
+        F: Field,
+        const NUM_LIMBS_READ: usize,
+        const NUM_LIMBS_WRITE: usize,
+        const LIMB_BITS: usize,
+    > ColumnsAir<F> for LessThanCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 {
     fn columns(&self) -> Option<Vec<String>> {
-        LessThanCoreCols::<F, NUM_LIMBS, LIMB_BITS>::struct_reflection()
+        LessThanCoreCols::<F, NUM_LIMBS_READ, LIMB_BITS>::struct_reflection()
     }
 }
 
-impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAirWithPublicValues<F>
-    for LessThanCoreAir<NUM_LIMBS, LIMB_BITS>
+impl<
+        F: Field,
+        const NUM_LIMBS_READ: usize,
+        const NUM_LIMBS_WRITE: usize,
+        const LIMB_BITS: usize,
+    > BaseAirWithPublicValues<F> for LessThanCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 {
 }
 
-impl<AB, I, const NUM_LIMBS: usize, const LIMB_BITS: usize> VmCoreAir<AB, I>
-    for LessThanCoreAir<NUM_LIMBS, LIMB_BITS>
+impl<AB, I, const NUM_LIMBS_READ: usize, const NUM_LIMBS_WRITE: usize, const LIMB_BITS: usize>
+    VmCoreAir<AB, I> for LessThanCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 where
     AB: InteractionBuilder,
     I: VmAdapterInterface<AB::Expr>,
-    I::Reads: From<[[AB::Expr; NUM_LIMBS]; 2]>,
-    I::Writes: From<[[AB::Expr; NUM_LIMBS]; 1]>,
+    I::Reads: From<[[AB::Expr; NUM_LIMBS_READ]; 2]>,
+    I::Writes: From<[[AB::Expr; NUM_LIMBS_WRITE]; 1]>,
     I::ProcessedInstruction: From<MinimalInstruction<AB::Expr>>,
 {
     fn eval(
@@ -88,7 +104,7 @@ where
         local_core: &[AB::Var],
         _from_pc: AB::Var,
     ) -> AdapterAirContext<AB::Expr, I> {
-        let cols: &LessThanCoreCols<_, NUM_LIMBS, LIMB_BITS> = local_core.borrow();
+        let cols: &LessThanCoreCols<_, NUM_LIMBS_READ, LIMB_BITS> = local_core.borrow();
         let flags = [cols.opcode_slt_flag, cols.opcode_sltu_flag];
 
         let is_valid = flags.iter().fold(AB::Expr::ZERO, |acc, &flag| {
@@ -103,15 +119,15 @@ where
         let marker = &cols.diff_marker;
         let mut prefix_sum = AB::Expr::ZERO;
 
-        let b_diff = b[NUM_LIMBS - 1] - cols.b_msb_f;
-        let c_diff = c[NUM_LIMBS - 1] - cols.c_msb_f;
+        let b_diff = b[NUM_LIMBS_READ - 1] - cols.b_msb_f;
+        let c_diff = c[NUM_LIMBS_READ - 1] - cols.c_msb_f;
         builder
             .assert_zero(b_diff.clone() * (AB::Expr::from_canonical_u32(1 << LIMB_BITS) - b_diff));
         builder
             .assert_zero(c_diff.clone() * (AB::Expr::from_canonical_u32(1 << LIMB_BITS) - c_diff));
 
-        for i in (0..NUM_LIMBS).rev() {
-            let diff = (if i == NUM_LIMBS - 1 {
+        for i in (0..NUM_LIMBS_READ).rev() {
+            let diff = (if i == NUM_LIMBS_READ - 1 {
                 cols.c_msb_f - cols.b_msb_f
             } else {
                 c[i] - b[i]
@@ -153,7 +169,7 @@ where
                 acc + (*flag).into() * AB::Expr::from_canonical_u8(opcode as u8)
             })
             + AB::Expr::from_canonical_usize(self.offset);
-        let mut a: [AB::Expr; NUM_LIMBS] = array::from_fn(|_| AB::Expr::ZERO);
+        let mut a: [AB::Expr; NUM_LIMBS_WRITE] = array::from_fn(|_| AB::Expr::ZERO);
         a[0] = cols.cmp_result.into();
 
         AdapterAirContext {
@@ -189,12 +205,18 @@ pub struct LessThanCoreRecord<T, const NUM_LIMBS: usize, const LIMB_BITS: usize>
     pub opcode: LessThanOpcode,
 }
 
-pub struct LessThanCoreChip<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
-    pub air: LessThanCoreAir<NUM_LIMBS, LIMB_BITS>,
+pub struct LessThanCoreChip<
+    const NUM_LIMBS_READ: usize,
+    const NUM_LIMBS_WRITE: usize,
+    const LIMB_BITS: usize,
+> {
+    pub air: LessThanCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>,
     pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<LIMB_BITS>,
 }
 
-impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> LessThanCoreChip<NUM_LIMBS, LIMB_BITS> {
+impl<const NUM_LIMBS_READ: usize, const NUM_LIMBS_WRITE: usize, const LIMB_BITS: usize>
+    LessThanCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
+{
     pub fn new(
         bitwise_lookup_chip: SharedBitwiseOperationLookupChip<LIMB_BITS>,
         offset: usize,
@@ -209,14 +231,19 @@ impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> LessThanCoreChip<NUM_LIMBS,
     }
 }
 
-impl<F: PrimeField32, I: VmAdapterInterface<F>, const NUM_LIMBS: usize, const LIMB_BITS: usize>
-    VmCoreChipWom<F, I> for LessThanCoreChip<NUM_LIMBS, LIMB_BITS>
+impl<
+        F: PrimeField32,
+        I: VmAdapterInterface<F>,
+        const NUM_LIMBS_READ: usize,
+        const NUM_LIMBS_WRITE: usize,
+        const LIMB_BITS: usize,
+    > VmCoreChipWom<F, I> for LessThanCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 where
-    I::Reads: Into<[[F; NUM_LIMBS]; 2]>,
-    I::Writes: From<[[F; NUM_LIMBS]; 1]>,
+    I::Reads: Into<[[F; NUM_LIMBS_READ]; 2]>,
+    I::Writes: From<[[F; NUM_LIMBS_WRITE]; 1]>,
 {
-    type Record = LessThanCoreRecord<F, NUM_LIMBS, LIMB_BITS>;
-    type Air = LessThanCoreAir<NUM_LIMBS, LIMB_BITS>;
+    type Record = LessThanCoreRecord<F, NUM_LIMBS_READ, LIMB_BITS>;
+    type Air = LessThanCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>;
 
     #[allow(clippy::type_complexity)]
     fn execute_instruction(
@@ -229,44 +256,44 @@ where
         let Instruction { opcode, .. } = instruction;
         let less_than_opcode = LessThanOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
-        let data: [[F; NUM_LIMBS]; 2] = reads.into();
+        let data: [[F; NUM_LIMBS_READ]; 2] = reads.into();
         let b = data[0].map(|x| x.as_canonical_u32());
         let c = data[1].map(|y| y.as_canonical_u32());
         let (cmp_result, diff_idx, b_sign, c_sign) =
-            run_less_than::<NUM_LIMBS, LIMB_BITS>(less_than_opcode, &b, &c);
+            run_less_than::<NUM_LIMBS_READ, LIMB_BITS>(less_than_opcode, &b, &c);
 
         // We range check (b_msb_f + 128) and (c_msb_f + 128) if signed,
         // b_msb_f and c_msb_f if not
         let (b_msb_f, b_msb_range) = if b_sign {
             (
-                -F::from_canonical_u32((1 << LIMB_BITS) - b[NUM_LIMBS - 1]),
-                b[NUM_LIMBS - 1] - (1 << (LIMB_BITS - 1)),
+                -F::from_canonical_u32((1 << LIMB_BITS) - b[NUM_LIMBS_READ - 1]),
+                b[NUM_LIMBS_READ - 1] - (1 << (LIMB_BITS - 1)),
             )
         } else {
             (
-                F::from_canonical_u32(b[NUM_LIMBS - 1]),
-                b[NUM_LIMBS - 1]
+                F::from_canonical_u32(b[NUM_LIMBS_READ - 1]),
+                b[NUM_LIMBS_READ - 1]
                     + (((less_than_opcode == LessThanOpcode::SLT) as u32) << (LIMB_BITS - 1)),
             )
         };
         let (c_msb_f, c_msb_range) = if c_sign {
             (
-                -F::from_canonical_u32((1 << LIMB_BITS) - c[NUM_LIMBS - 1]),
-                c[NUM_LIMBS - 1] - (1 << (LIMB_BITS - 1)),
+                -F::from_canonical_u32((1 << LIMB_BITS) - c[NUM_LIMBS_READ - 1]),
+                c[NUM_LIMBS_READ - 1] - (1 << (LIMB_BITS - 1)),
             )
         } else {
             (
-                F::from_canonical_u32(c[NUM_LIMBS - 1]),
-                c[NUM_LIMBS - 1]
+                F::from_canonical_u32(c[NUM_LIMBS_READ - 1]),
+                c[NUM_LIMBS_READ - 1]
                     + (((less_than_opcode == LessThanOpcode::SLT) as u32) << (LIMB_BITS - 1)),
             )
         };
         self.bitwise_lookup_chip
             .request_range(b_msb_range, c_msb_range);
 
-        let diff_val = if diff_idx == NUM_LIMBS {
+        let diff_val = if diff_idx == NUM_LIMBS_READ {
             0
-        } else if diff_idx == (NUM_LIMBS - 1) {
+        } else if diff_idx == (NUM_LIMBS_READ - 1) {
             if cmp_result {
                 c_msb_f - b_msb_f
             } else {
@@ -279,11 +306,11 @@ where
             b[diff_idx] - c[diff_idx]
         };
 
-        if diff_idx != NUM_LIMBS {
+        if diff_idx != NUM_LIMBS_READ {
             self.bitwise_lookup_chip.request_range(diff_val - 1, 0);
         }
 
-        let mut writes = [0u32; NUM_LIMBS];
+        let mut writes = [0u32; NUM_LIMBS_WRITE];
         writes[0] = cmp_result as u32;
 
         let output = AdapterRuntimeContextWom::without_pc_fp([writes.map(F::from_canonical_u32)]);
@@ -306,7 +333,7 @@ where
     }
 
     fn generate_trace_row(&self, row_slice: &mut [F], record: Self::Record) {
-        let row_slice: &mut LessThanCoreCols<_, NUM_LIMBS, LIMB_BITS> = row_slice.borrow_mut();
+        let row_slice: &mut LessThanCoreCols<_, NUM_LIMBS_READ, LIMB_BITS> = row_slice.borrow_mut();
         row_slice.b = record.b;
         row_slice.c = record.c;
         row_slice.cmp_result = record.cmp_result;

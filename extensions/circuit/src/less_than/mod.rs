@@ -7,5 +7,5 @@ pub use core::*;
 pub type LessThanChipWom<F> = VmChipWrapperWom<
     F,
     WomBaseAluAdapterChip<F, 2, RV32_REGISTER_NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>,
-    LessThanCoreChip<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+    LessThanCoreChip<RV32_REGISTER_NUM_LIMBS, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;
