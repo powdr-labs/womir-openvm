@@ -9,7 +9,7 @@ use womir::{
     loader::{
         flattening::{
             settings::{ComparisonFunction, JumpCondition, Settings},
-            Generators, LabelType, WriteOnceASM,
+            Context, LabelType, WriteOnceASM,
         },
         func_idx_to_label, CommonProgram,
     },
@@ -217,6 +217,8 @@ pub enum Directive<F> {
     Instruction(Instruction<F>),
 }
 
+type Ctx<'a, 'b, F> = Context<'a, 'b, OpenVMSettings<F>>;
+
 pub struct OpenVMSettings<F> {
     _phantom: std::marker::PhantomData<F>,
 }
@@ -259,7 +261,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_label(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         name: String,
         frame_size: Option<u32>,
     ) -> Self::Directive {
@@ -271,7 +273,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_trap(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         _trap: womir::loader::flattening::TrapReason,
     ) -> Self::Directive {
         todo!()
@@ -279,7 +281,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_allocate_label_frame(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         label: String,
         result_ptr: Range<u32>,
     ) -> Self::Directive {
@@ -291,7 +293,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_allocate_value_frame(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         frame_size_ptr: Range<u32>,
         result_ptr: Range<u32>,
     ) -> Self::Directive {
@@ -303,7 +305,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_copy(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         src_ptr: Range<u32>,
         dest_ptr: Range<u32>,
     ) -> Self::Directive {
@@ -316,7 +318,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_copy_into_frame(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         src_ptr: Range<u32>,
         dest_frame_ptr: Range<u32>,
         dest_offset: Range<u32>,
@@ -334,7 +336,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_jump_into_loop(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         loop_label: String,
         loop_frame_ptr: Range<u32>,
         ret_info_to_copy: Option<womir::loader::flattening::settings::ReturnInfosToCopy>,
@@ -377,7 +379,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_conditional_jump(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         condition_type: womir::loader::flattening::settings::JumpCondition,
         label: String,
         condition_ptr: Range<u32>,
@@ -396,13 +398,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_conditional_jump_cmp_immediate(
         &self,
-        g: &mut Generators<'a, '_, Self>,
+        c: &mut Ctx<F>,
         cmp: womir::loader::flattening::settings::ComparisonFunction,
         value_ptr: Range<u32>,
         immediate: u32,
         label: String,
     ) -> Vec<Self::Directive> {
-        let comparison = g.r.allocate_type(ValType::I32);
+        let comparison = c.register_gen.allocate_type(ValType::I32);
 
         let mut directives = if let Ok(imm_f) = immediate.to_f() {
             // If immediate fits into field, we can save one instruction:
@@ -424,7 +426,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 | ComparisonFunction::LessThanUnsigned => ib::lt_u,
             };
 
-            let const_value = g.r.allocate_type(ValType::I32);
+            let const_value = c.register_gen.allocate_type(ValType::I32);
 
             let imm_lo: u16 = (immediate & 0xffff) as u16;
             let imm_hi: u16 = ((immediate >> 16) & 0xffff) as u16;
@@ -459,17 +461,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         directives
     }
 
-    fn emit_relative_jump(
-        &self,
-        _g: &mut Generators<'a, '_, Self>,
-        offset_ptr: Range<u32>,
-    ) -> Self::Directive {
+    fn emit_relative_jump(&self, _c: &mut Ctx<F>, offset_ptr: Range<u32>) -> Self::Directive {
         Directive::Instruction(ib::skip(offset_ptr.start as usize))
     }
 
     fn emit_jump_out_of_loop(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         target_label: String,
         target_frame_ptr: Range<u32>,
     ) -> Self::Directive {
@@ -481,7 +479,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_return(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         ret_pc_ptr: Range<u32>,
         caller_fp_ptr: Range<u32>,
     ) -> Self::Directive {
@@ -493,7 +491,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_imported_call(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         _module: &'a str,
         _function: &'a str,
         _inputs: Vec<Range<u32>>,
@@ -504,7 +502,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_function_call(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         function_label: String,
         function_frame_ptr: Range<u32>,
         saved_ret_pc_ptr: Range<u32>,
@@ -520,7 +518,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_indirect_call(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         target_pc_ptr: Range<u32>,
         function_frame_ptr: Range<u32>,
         saved_ret_pc_ptr: Range<u32>,
@@ -536,7 +534,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_table_get(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         _table_idx: u32,
         _entry_idx_ptr: Range<u32>,
         _dest_ptr: Range<u32>,
@@ -546,7 +544,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_wasm_op(
         &self,
-        g: &mut Generators<'a, '_, Self>,
+        c: &mut Ctx<F>,
         op: Op<'a>,
         inputs: Vec<Range<u32>>,
         output: Option<Range<u32>>,
@@ -673,11 +671,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input1 = inputs[0].start as usize;
                 let input2 = inputs[1].start as usize;
                 let output = output.unwrap().start as usize;
-                let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftl = g.r.allocate_type(ValType::I32).start as usize;
-                let const32 = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftl_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftl = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let const32 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftr_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftr = c.register_gen.allocate_type(ValType::I32).start as usize;
                 vec![
                     // get least significant 5 bits for rotation amount
                     Directive::Instruction(ib::andi(shiftl_amount, input2, 0x1f.to_f().unwrap())),
@@ -696,11 +694,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input1 = inputs[0].start as usize;
                 let input2 = inputs[1].start as usize;
                 let output = output.unwrap().start as usize;
-                let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftl = g.r.allocate_type(ValType::I32).start as usize;
-                let const32 = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftl_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftl = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let const32 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftr_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftr = c.register_gen.allocate_type(ValType::I32).start as usize;
                 vec![
                     // get least significant 5 bits for rotation amount
                     Directive::Instruction(ib::andi(shiftr_amount, input2, 0x1f.to_f().unwrap())),
@@ -728,7 +726,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input2 = inputs[1].start as usize;
                 let output = output.unwrap().start as usize;
 
-                let inverse_result = g.r.allocate_type(ValType::I32).start as usize;
+                let inverse_result = c.register_gen.allocate_type(ValType::I32).start as usize;
 
                 // Perform the inverse operation and invert the result
                 vec![
@@ -799,8 +797,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let output = output.unwrap();
                 let condition = inputs[2].start;
 
-                let if_set_label = g.new_label(LabelType::Local);
-                let continuation_label = g.new_label(LabelType::Local);
+                let if_set_label = c.new_label(LabelType::Local);
+                let continuation_label = c.new_label(LabelType::Local);
 
                 let mut directives = vec![
                     // if condition != 0 jump to if_set_label
