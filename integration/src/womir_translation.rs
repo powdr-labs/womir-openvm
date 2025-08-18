@@ -594,9 +594,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I64And => Ok(ib::and_64),
             Op::I64Or => Ok(ib::or_64),
             Op::I64Xor => Ok(ib::xor_64),
-            Op::I64Shl => todo!(),
-            Op::I64ShrS => todo!(),
-            Op::I64ShrU => todo!(),
+            Op::I64Shl => Ok(ib::shl_64),
+            Op::I64ShrS => Ok(ib::shr_s_64),
+            Op::I64ShrU => Ok(ib::shr_u_64),
             Op::I64Rotl => todo!(),
             Op::I64Rotr => todo!(),
 

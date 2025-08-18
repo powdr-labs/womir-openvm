@@ -91,6 +91,29 @@ pub enum ShiftOpcode {
     Serialize,
     Deserialize,
 )]
+#[opcode_offset = 0x2205]
+#[repr(usize)]
+pub enum Shift64Opcode {
+    SLL,
+    SRL,
+    SRA,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
 #[opcode_offset = 0x1208]
 #[repr(usize)]
 pub enum LessThanOpcode {

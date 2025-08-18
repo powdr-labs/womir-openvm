@@ -17,6 +17,7 @@ mod load_sign_extend;
 mod loadstore;
 mod mul;
 mod shift;
+mod shift_64;
 
 pub use allocate_frame::*;
 pub use base_alu::*;
@@ -35,6 +36,7 @@ pub use load_sign_extend::*;
 pub use loadstore::*;
 pub use mul::*;
 pub use shift::*;
+pub use shift_64::*;
 
 mod extension;
 pub use extension::*;
