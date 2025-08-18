@@ -2,8 +2,8 @@ use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOp
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
-    DivRemOpcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThanOpcode,
-    LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
+    DivRemOpcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
+    LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 
 pub fn instr_r<F: PrimeField32>(
@@ -164,6 +164,44 @@ pub fn gt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F
 pub fn gt_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     // lt_s, but swapped
     lt_s(rd, rs2, rs1)
+}
+
+pub fn lt_u_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        LessThan64Opcode::SLTU.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
+#[allow(dead_code)]
+pub fn lt_u_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+    instr_i(
+        LessThan64Opcode::SLTU.global_opcode().as_usize(),
+        rd,
+        rs1,
+        imm,
+    )
+}
+
+pub fn lt_s_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        LessThan64Opcode::SLT.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
+pub fn gt_u_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    // lt_u, but swapped
+    lt_u_64(rd, rs2, rs1)
+}
+
+pub fn gt_s_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    // lt_s, but swapped
+    lt_s_64(rd, rs2, rs1)
 }
 
 pub fn eq<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {

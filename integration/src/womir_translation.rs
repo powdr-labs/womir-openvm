@@ -576,14 +576,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             // 64-bit integer instructions
             Op::I64Eq => todo!(),
             Op::I64Ne => todo!(),
-            Op::I64LtS => todo!(),
-            Op::I64LtU => todo!(),
-            Op::I64GtS => todo!(),
-            Op::I64GtU => todo!(),
-            Op::I64LeS => todo!(),
-            Op::I64LeU => todo!(),
-            Op::I64GeS => todo!(),
-            Op::I64GeU => todo!(),
+            Op::I64LtS => Ok(ib::lt_s_64),
+            Op::I64LtU => Ok(ib::lt_u_64),
+            Op::I64GtS => Ok(ib::gt_s_64),
+            Op::I64GtU => Ok(ib::gt_u_64),
             Op::I64Add => Ok(ib::add_64),
             Op::I64Sub => Ok(ib::sub_64),
             Op::I64Mul => todo!(),
@@ -719,6 +715,27 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Op::I32LeU => ib::gt_u,
                     Op::I32GeS => ib::lt_s,
                     Op::I32GeU => ib::lt_u,
+                    _ => unreachable!(),
+                };
+
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+
+                let inverse_result = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+                // Perform the inverse operation and invert the result
+                vec![
+                    Directive::Instruction(inverse_op(inverse_result, input1, input2)),
+                    Directive::Instruction(ib::eqi(output, inverse_result, F::ZERO)),
+                ]
+            }
+            Op::I64LeS | Op::I64LeU | Op::I64GeS | Op::I64GeU => {
+                let inverse_op = match op {
+                    Op::I64LeS => ib::gt_s_64,
+                    Op::I64LeU => ib::gt_u_64,
+                    Op::I64GeS => ib::lt_s_64,
+                    Op::I64GeU => ib::lt_u_64,
                     _ => unreachable!(),
                 };
 
