@@ -279,7 +279,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         _c: &mut Ctx<F>,
         error_code: womir::loader::flattening::TrapReason,
     ) -> Self::Directive {
-        Directive::Instruction(ib::trap(trap as u32 as usize))
+        Directive::Instruction(ib::trap(error_code as u32 as usize))
     }
 
     fn emit_allocate_label_frame(
