@@ -6,6 +6,8 @@ use openvm_womir_transpiler::{
     LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 
+use crate::womir_translation::ERROR_CODE_OFFSET;
+
 pub fn instr_r<F: PrimeField32>(
     opcode: usize,
     rd: usize,
@@ -645,7 +647,7 @@ pub fn trap<F: PrimeField32>(error_code: usize) -> Instruction<F> {
         SystemOpcode::TERMINATE.global_opcode(),
         F::ZERO,
         F::ZERO,
-        F::from_canonical_usize(100 + error_code),
+        F::from_canonical_usize(ERROR_CODE_OFFSET as usize + error_code),
         F::ZERO,
         F::ZERO,
         F::ZERO,

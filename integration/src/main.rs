@@ -174,7 +174,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::to_field::ToField;
+    use crate::{to_field::ToField, womir_translation::ERROR_CODE_OFFSET};
     use instruction_builder as wom;
     use openvm_circuit::arch::ExecutionError;
     use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program};
@@ -250,8 +250,11 @@ mod tests {
         let instructions = vec![wom::trap(42), wom::trap(8), wom::halt()];
 
         let err = run_vm_test_with_result("Trap instruction", instructions, 0, None).unwrap_err();
-        println!("{err:?}");
-        assert!(matches!(err, ExecutionError::FailedWithExitCode(142)));
+        if let ExecutionError::FailedWithExitCode(code) = err {
+            assert_eq!(code, ERROR_CODE_OFFSET + 42);
+        } else {
+            panic!("Unexpected error: {err:?}");
+        }
         Ok(())
     }
 
