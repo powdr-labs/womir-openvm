@@ -119,7 +119,7 @@ pub enum WomirIExecutor<F: PrimeField32> {
     LoadStore(Rv32LoadStoreChip<F>),
     Eq(EqChipWom<F>),
     Eq64(Eq64ChipWom<F>),
-    // LoadSignExtend(Rv32LoadSignExtendChip<F>),
+    LoadSignExtend(Rv32LoadSignExtendChip<F>),
     // BranchEqual(Rv32BranchEqualChip<F>),
     // BranchLessThan(Rv32BranchLessThanChip<F>),
     // JalLui(Rv32JalLuiChip<F>),
@@ -427,22 +427,24 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 .take(LoadStoreOpcode::STOREB as usize + 1)
                 .map(|x| x.global_opcode()),
         )?;
-        //
-        // let load_sign_extend_chip = Rv32LoadSignExtendChip::new(
-        //     Rv32LoadStoreAdapterChip::new(
-        //         execution_bus,
-        //         program_bus,
-        //         memory_bridge,
-        //         pointer_max_bits,
-        //         range_checker.clone(),
-        //     ),
-        //     LoadSignExtendCoreChip::new(range_checker.clone()),
-        //     offline_memory.clone(),
-        // );
-        // inventory.add_executor(
-        //     load_sign_extend_chip,
-        //     [Rv32LoadStoreOpcode::LOADB, Rv32LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
-        // )?;
+
+        let load_sign_extend_chip = Rv32LoadSignExtendChip::new(
+            Rv32LoadStoreAdapterChip::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                _pointer_max_bits,
+                range_checker.clone(),
+            ),
+            LoadSignExtendCoreChip::new(range_checker.clone()),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(
+            load_sign_extend_chip,
+            [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
+        )?;
         //
         // let beq_chip = Rv32BranchEqualChip::new(
         //     Rv32BranchAdapterChip::new(execution_bus, program_bus, memory_bridge),

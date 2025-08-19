@@ -3,7 +3,7 @@ use std::{collections::HashMap, ops::Range, vec};
 use crate::{instruction_builder as ib, to_field::ToField};
 use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
-use wasmparser::{Operator as Op, ValType};
+use wasmparser::{MemArg, Operator as Op, ValType};
 use womir::{
     linker::LabelValue,
     loader::{
@@ -860,25 +860,112 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::GlobalSet { global_index: _ } => todo!(),
 
             // Memory instructions
-            Op::I32Load { memarg: _ } => todo!(),
-            Op::I64Load { memarg: _ } => todo!(),
-            Op::I32Load8S { memarg: _ } => todo!(),
-            Op::I32Load8U { memarg: _ } => todo!(),
-            Op::I32Load16S { memarg: _ } => todo!(),
-            Op::I32Load16U { memarg: _ } => todo!(),
-            Op::I64Load8S { memarg: _ } => todo!(),
-            Op::I64Load8U { memarg: _ } => todo!(),
-            Op::I64Load16S { memarg: _ } => todo!(),
-            Op::I64Load16U { memarg: _ } => todo!(),
-            Op::I64Load32S { memarg: _ } => todo!(),
-            Op::I64Load32U { memarg: _ } => todo!(),
-            Op::I32Store { memarg: _ } => todo!(),
-            Op::I64Store { memarg: _ } => todo!(),
-            Op::I32Store8 { memarg: _ } => todo!(),
-            Op::I32Store16 { memarg: _ } => todo!(),
-            Op::I64Store8 { memarg: _ } => todo!(),
-            Op::I64Store16 { memarg: _ } => todo!(),
-            Op::I64Store32 { memarg: _ } => todo!(),
+            Op::I32Load { memarg } | Op::I32Load8U { memarg } | Op::I32Load16U { memarg } | Op::I32Load8S { memarg } | Op::I32Load16S { memarg }  => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                let insn = match op {
+                    Op::I32Load { .. } => ib::loadw,
+                    Op::I32Load8U { .. } => ib::loadbu,
+                    Op::I32Load16U { .. } => ib::loadhu,
+                    Op::I32Load8S { .. } => ib::loadb,
+                    Op::I32Load16S { .. } => ib::loadh,
+                    _ => unreachable!(),
+                };
+
+                // TODO: range check memory access
+
+                // openvm will panic if a read is misaligned, we assume the
+                // compiler won't emit them
+                vec![Directive::Instruction(insn(output, base_addr, imm))]
+            }
+            Op::I64Load { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = (output.unwrap().start) as usize;
+
+                // TODO: range check memory access
+
+                // openvm will panic if a read is misaligned, we assume the
+                // compiler won't emit them
+                vec![Directive::Instruction(ib::loadw(output, base_addr, imm)),
+                     Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4))]
+            },
+            Op::I64Load8U { memarg } | Op::I64Load16U { memarg } | Op::I64Load32U { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = (output.unwrap().start) as usize;
+
+                let insn = match op {
+                    Op::I64Load8U { .. } => ib::loadbu,
+                    Op::I64Load16U { .. } => ib::loadhu,
+                    Op::I64Load32U { .. }  => ib::loadw,
+                    _ => unreachable!(),
+                };
+
+                // TODO: range check memory access
+
+                // openvm will panic if a read is misaligned, we assume the
+                // compiler won't emit them
+                vec![Directive::Instruction(insn(output, base_addr, imm)),
+                     Directive::Instruction(ib::const_32_imm(output + 1, 0x0, 0x0))]
+            },
+            Op::I64Load8S { memarg } | Op::I64Load16S { memarg } | Op::I64Load32S { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output32 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let output_shl = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let output = (output.unwrap().start) as usize;
+
+                let insn = match op {
+                    Op::I64Load8S { .. } => ib::loadb,
+                    Op::I64Load16S { .. } => ib::loadh,
+                    Op::I64Load32S { .. }  => ib::loadw,
+                    _ => unreachable!(),
+                };
+
+                // TODO: range check memory access
+                vec![Directive::Instruction(insn(output32, base_addr, imm)),
+                     Directive::Instruction(ib::shl_64(output_shl, output32, 32)),
+                     Directive::Instruction(ib::shr_s_64(output, output_shl, 32))]
+            },
+            Op::I32Store { memarg } | Op::I32Store8 { memarg } | Op::I32Store16 { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let value = inputs[1].start as usize;
+
+                let insn = match op {
+                    Op::I32Store { .. } => ib::storew,
+                    Op::I32Store8 { .. } => ib::storeb,
+                    Op::I32Store16 { .. } => ib::storeh,
+                    _ => unreachable!(),
+                };
+
+                vec![Directive::Instruction(insn(value, base_addr, imm))]
+            }
+            Op::I64Store { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let value = inputs[1].start as usize;
+
+                vec![Directive::Instruction(ib::storew(value, base_addr, imm)),
+                     Directive::Instruction(ib::storew(value + 1, base_addr, imm + 4))]
+            }
+            Op::I64Store8 { memarg } | Op::I64Store16 { memarg } | Op::I64Store32 { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let value = inputs[1].start as usize;
+
+                let insn = match op {
+                    Op::I64Store8 { .. } => ib::storeb,
+                    Op::I64Store16 { .. } => ib::storeh,
+                    Op::I64Store32 { .. } => ib::storew,
+                    _ => unreachable!(),
+                };
+
+                vec![Directive::Instruction(insn(value, base_addr, imm))]
+            },
             Op::MemorySize { mem: _ } => todo!(),
             Op::MemoryGrow { mem: _ } => todo!(),
             Op::MemoryInit {
@@ -1064,6 +1151,18 @@ impl<F: PrimeField32> Directive<F> {
             Directive::Instruction(i) => Some(i),
         }
     }
+}
+
+fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> i32 {
+    assert_eq!(memarg.memory, 0, "no multiple memories supported");
+    let mem_start = c
+        .program
+        .linear_memory_start()
+        .expect("no memory allocated");
+    let offset = mem_start + u32::try_from(memarg.offset).expect("offset too large");
+    // TODO: currently, memory chip immediates are {-u16::MAX .. u16::MAX}.
+    // To support larger offsets, we need to change the memory chip.
+    u16::try_from(offset).unwrap() as i32
 }
 
 impl<F: Clone> womir::linker::Directive for Directive<F> {
