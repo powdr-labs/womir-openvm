@@ -24,52 +24,73 @@ use openvm_circuit::arch::Result as ResultVm;
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct EqCoreCols<T, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
-    pub a: [T; NUM_LIMBS],
-    pub b: [T; NUM_LIMBS],
-    pub c: [T; NUM_LIMBS],
+pub struct EqCoreCols<
+    T,
+    const NUM_LIMBS_READ: usize,
+    const NUM_LIMBS_WRITE: usize,
+    const LIMB_BITS: usize,
+> {
+    pub a: [T; NUM_LIMBS_WRITE],
+    pub b: [T; NUM_LIMBS_READ],
+    pub c: [T; NUM_LIMBS_READ],
 
     pub cmp_result: T,
 
     pub opcode_eq_flag: T,
     pub opcode_ne_flag: T,
 
-    pub diff_inv_marker: [T; NUM_LIMBS],
+    pub diff_inv_marker: [T; NUM_LIMBS_READ],
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct EqCoreAir<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
+pub struct EqCoreAir<
+    const NUM_LIMBS_READ: usize,
+    const NUM_LIMBS_WRITE: usize,
+    const LIMB_BITS: usize,
+> {
     offset: usize,
 }
 
-impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAir<F>
-    for EqCoreAir<NUM_LIMBS, LIMB_BITS>
+impl<
+        F: Field,
+        const NUM_LIMBS_READ: usize,
+        const NUM_LIMBS_WRITE: usize,
+        const LIMB_BITS: usize,
+    > BaseAir<F> for EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 {
     fn width(&self) -> usize {
-        EqCoreCols::<F, NUM_LIMBS, LIMB_BITS>::width()
+        EqCoreCols::<F, NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>::width()
     }
 }
 
-impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> ColumnsAir<F>
-    for EqCoreAir<NUM_LIMBS, LIMB_BITS>
+impl<
+        F: Field,
+        const NUM_LIMBS_READ: usize,
+        const NUM_LIMBS_WRITE: usize,
+        const LIMB_BITS: usize,
+    > ColumnsAir<F> for EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 {
     fn columns(&self) -> Option<Vec<String>> {
-        EqCoreCols::<F, NUM_LIMBS, LIMB_BITS>::struct_reflection()
+        EqCoreCols::<F, NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>::struct_reflection()
     }
 }
 
-impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAirWithPublicValues<F>
-    for EqCoreAir<NUM_LIMBS, LIMB_BITS>
+impl<
+        F: Field,
+        const NUM_LIMBS_READ: usize,
+        const NUM_LIMBS_WRITE: usize,
+        const LIMB_BITS: usize,
+    > BaseAirWithPublicValues<F> for EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 {
 }
 
-impl<AB, I, const NUM_LIMBS: usize, const LIMB_BITS: usize> VmCoreAir<AB, I>
-    for EqCoreAir<NUM_LIMBS, LIMB_BITS>
+impl<AB, I, const NUM_LIMBS_READ: usize, const NUM_LIMBS_WRITE: usize, const LIMB_BITS: usize>
+    VmCoreAir<AB, I> for EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 where
     AB: InteractionBuilder,
     I: VmAdapterInterface<AB::Expr>,
-    I::Reads: From<[[AB::Expr; NUM_LIMBS]; 2]>,
-    I::Writes: From<[[AB::Expr; NUM_LIMBS]; 1]>,
+    I::Reads: From<[[AB::Expr; NUM_LIMBS_READ]; 2]>,
+    I::Writes: From<[[AB::Expr; NUM_LIMBS_WRITE]; 1]>,
     I::ProcessedInstruction: From<MinimalInstruction<AB::Expr>>,
 {
     fn eval(
@@ -78,7 +99,7 @@ where
         local: &[AB::Var],
         _from_pc: AB::Var,
     ) -> AdapterAirContext<AB::Expr, I> {
-        let cols: &EqCoreCols<_, NUM_LIMBS, LIMB_BITS> = local.borrow();
+        let cols: &EqCoreCols<_, NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS> = local.borrow();
         let flags = [cols.opcode_eq_flag, cols.opcode_ne_flag];
 
         let is_valid = flags.iter().fold(AB::Expr::ZERO, |acc, &flag| {
@@ -110,7 +131,7 @@ where
         // Note:
         // - If cmp_eq == 0, then it is impossible to have sum != 0 if b == c.
         // - If cmp_eq == 1, then it is impossible for b[i] - c[i] == 0 to pass for all i if b != c.
-        for i in 0..NUM_LIMBS {
+        for i in 0..NUM_LIMBS_READ {
             sum += (b[i] - c[i]) * inv_marker[i];
             builder.assert_zero(cmp_eq.clone() * (b[i] - c[i]));
         }
@@ -150,24 +171,35 @@ where
 #[repr(C)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "T: Serialize + DeserializeOwned")]
-pub struct EqCoreRecord<T, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
+pub struct EqCoreRecord<
+    T,
+    const NUM_LIMBS_READ: usize,
+    const NUM_LIMBS_WRITE: usize,
+    const LIMB_BITS: usize,
+> {
     #[serde(with = "BigArray")]
-    pub a: [T; NUM_LIMBS],
+    pub a: [T; NUM_LIMBS_WRITE],
     #[serde(with = "BigArray")]
-    pub b: [T; NUM_LIMBS],
+    pub b: [T; NUM_LIMBS_READ],
     #[serde(with = "BigArray")]
-    pub c: [T; NUM_LIMBS],
+    pub c: [T; NUM_LIMBS_READ],
     pub cmp_result: T,
     pub diff_inv_val: T,
     pub diff_idx: usize,
     pub opcode: EqOpcode,
 }
 
-pub struct EqCoreChip<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
-    pub air: EqCoreAir<NUM_LIMBS, LIMB_BITS>,
+pub struct EqCoreChip<
+    const NUM_LIMBS_READ: usize,
+    const NUM_LIMBS_WRITE: usize,
+    const LIMB_BITS: usize,
+> {
+    pub air: EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>,
 }
 
-impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> EqCoreChip<NUM_LIMBS, LIMB_BITS> {
+impl<const NUM_LIMBS_READ: usize, const NUM_LIMBS_WRITE: usize, const LIMB_BITS: usize>
+    EqCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
+{
     pub fn new(offset: usize) -> Self {
         Self {
             air: EqCoreAir { offset },
@@ -175,14 +207,19 @@ impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> EqCoreChip<NUM_LIMBS, LIMB_
     }
 }
 
-impl<F: PrimeField32, I: VmAdapterInterface<F>, const NUM_LIMBS: usize, const LIMB_BITS: usize>
-    VmCoreChipWom<F, I> for EqCoreChip<NUM_LIMBS, LIMB_BITS>
+impl<
+        F: PrimeField32,
+        I: VmAdapterInterface<F>,
+        const NUM_LIMBS_READ: usize,
+        const NUM_LIMBS_WRITE: usize,
+        const LIMB_BITS: usize,
+    > VmCoreChipWom<F, I> for EqCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 where
-    I::Reads: Into<[[F; NUM_LIMBS]; 2]>,
-    I::Writes: From<[[F; NUM_LIMBS]; 1]>,
+    I::Reads: Into<[[F; NUM_LIMBS_READ]; 2]>,
+    I::Writes: From<[[F; NUM_LIMBS_WRITE]; 1]>,
 {
-    type Record = EqCoreRecord<F, NUM_LIMBS, LIMB_BITS>;
-    type Air = EqCoreAir<NUM_LIMBS, LIMB_BITS>;
+    type Record = EqCoreRecord<F, NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>;
+    type Air = EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>;
 
     #[allow(clippy::type_complexity)]
     fn execute_instruction(
@@ -195,11 +232,11 @@ where
         let Instruction { opcode, .. } = instruction;
         let eq_opcode = EqOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
-        let data: [[F; NUM_LIMBS]; 2] = reads.into();
+        let data: [[F; NUM_LIMBS_READ]; 2] = reads.into();
         let b = data[0].map(|x| x.as_canonical_u32());
         let c = data[1].map(|y| y.as_canonical_u32());
-        let (cmp_result, diff_idx, diff_inv_val) = run_eq::<F, NUM_LIMBS>(eq_opcode, &b, &c);
-        let mut a: [F; NUM_LIMBS] = [F::ZERO; NUM_LIMBS];
+        let (cmp_result, diff_idx, diff_inv_val) = run_eq::<F, NUM_LIMBS_READ>(eq_opcode, &b, &c);
+        let mut a: [F; NUM_LIMBS_WRITE] = [F::ZERO; NUM_LIMBS_WRITE];
         a[0] = F::from_bool(cmp_result);
 
         let output = AdapterRuntimeContextWom {
@@ -226,7 +263,8 @@ where
     }
 
     fn generate_trace_row(&self, row_slice: &mut [F], record: Self::Record) {
-        let row_slice: &mut EqCoreCols<_, NUM_LIMBS, LIMB_BITS> = row_slice.borrow_mut();
+        let row_slice: &mut EqCoreCols<_, NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS> =
+            row_slice.borrow_mut();
         row_slice.a = record.a;
         row_slice.b = record.b;
         row_slice.c = record.c;

@@ -2,7 +2,7 @@ use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOp
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
-    DivRemOpcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
+    DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
     LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 
@@ -214,6 +214,18 @@ pub fn eqi<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
 
 pub fn neq<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(EqOpcode::NEQ.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn eq_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn eqi_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+    instr_i(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
+}
+
+pub fn neq_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(Eq64Opcode::NEQ.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 pub fn const_32_imm<F: PrimeField32>(
