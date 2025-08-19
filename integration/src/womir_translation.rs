@@ -865,20 +865,22 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let base_addr = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
 
-                let insn = match op {
-                    Op::I32Load { .. } => ib::loadw,
-                    Op::I32Load8U { .. } => ib::loadbu,
-                    Op::I32Load16U { .. } => ib::loadhu,
-                    Op::I32Load8S { .. } => ib::loadb,
-                    Op::I32Load16S { .. } => ib::loadh,
+                let aligned_insn: Option<fn(usize, usize, i32) -> Instruction<F>> = match op {
+                    Op::I32Load { .. } if memarg.align >= 2 => Some(ib::loadw),
+                    Op::I32Load16U { .. } if memarg.align >= 1 => Some(ib::loadhu),
+                    Op::I32Load8U { .. } => Some(ib::loadbu),
+                    Op::I32Load16S { .. } if memarg.align >= 1 => Some(ib::loadh),
+                    Op::I32Load8S { .. } => Some(ib::loadb),
                     _ => unreachable!(),
                 };
 
                 // TODO: range check memory access
 
-                // openvm will panic if a read is misaligned, we assume the
-                // compiler won't emit them
-                vec![Directive::Instruction(insn(output, base_addr, imm))]
+                if let Some(insn) = aligned_insn {
+                    vec![Directive::Instruction(insn(output, base_addr, imm))]
+                } else {
+                    todo!()
+                }
             }
             Op::I64Load { memarg } => {
                 let imm = mem_offset(memarg, c);
@@ -887,29 +889,33 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 // TODO: range check memory access
 
-                // openvm will panic if a read is misaligned, we assume the
-                // compiler won't emit them
-                vec![Directive::Instruction(ib::loadw(output, base_addr, imm)),
-                     Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4))]
+                if memarg.align >= 3 {
+                    vec![Directive::Instruction(ib::loadw(output, base_addr, imm)),
+                         Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4))]
+                } else {
+                    todo!("unaligned memory access")
+                }
             },
             Op::I64Load8U { memarg } | Op::I64Load16U { memarg } | Op::I64Load32U { memarg } => {
                 let imm = mem_offset(memarg, c);
                 let base_addr = inputs[0].start as usize;
                 let output = (output.unwrap().start) as usize;
 
-                let insn = match op {
-                    Op::I64Load8U { .. } => ib::loadbu,
-                    Op::I64Load16U { .. } => ib::loadhu,
-                    Op::I64Load32U { .. }  => ib::loadw,
+                let aligned_insn: Option<fn(usize, usize, i32) -> Instruction<F>> = match op {
+                    Op::I64Load32U { .. } if memarg.align >= 2 => Some(ib::loadw),
+                    Op::I64Load16U { .. } if memarg.align >= 1 => Some(ib::loadhu),
+                    Op::I64Load8U { .. } => Some(ib::loadbu),
                     _ => unreachable!(),
                 };
 
                 // TODO: range check memory access
 
-                // openvm will panic if a read is misaligned, we assume the
-                // compiler won't emit them
-                vec![Directive::Instruction(insn(output, base_addr, imm)),
-                     Directive::Instruction(ib::const_32_imm(output + 1, 0x0, 0x0))]
+                if let Some(insn) = aligned_insn {
+                    vec![Directive::Instruction(insn(output, base_addr, imm)),
+                         Directive::Instruction(ib::const_32_imm(output + 1, 0x0, 0x0))]
+                } else {
+                    todo!("unaligned memory access")
+                }
             },
             Op::I64Load8S { memarg } | Op::I64Load16S { memarg } | Op::I64Load32S { memarg } => {
                 let imm = mem_offset(memarg, c);
@@ -918,53 +924,70 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let output_shl = c.register_gen.allocate_type(ValType::I64).start as usize;
                 let output = (output.unwrap().start) as usize;
 
-                let insn = match op {
-                    Op::I64Load8S { .. } => ib::loadb,
-                    Op::I64Load16S { .. } => ib::loadh,
-                    Op::I64Load32S { .. }  => ib::loadw,
+                let aligned_insn: Option<fn(usize, usize, i32) -> Instruction<F>> = match op {
+                    Op::I64Load32S { .. } if memarg.align >= 2 => Some(ib::loadw),
+                    Op::I64Load16S { .. } if memarg.align >= 1 => Some(ib::loadh),
+                    Op::I64Load8S { .. } => Some(ib::loadb),
                     _ => unreachable!(),
                 };
 
                 // TODO: range check memory access
-                vec![Directive::Instruction(insn(output32, base_addr, imm)),
-                     Directive::Instruction(ib::shl_64(output_shl, output32, 32)),
-                     Directive::Instruction(ib::shr_s_64(output, output_shl, 32))]
+
+                if let Some(insn) = aligned_insn {
+                    vec![Directive::Instruction(insn(output32, base_addr, imm)),
+                         Directive::Instruction(ib::shl_64(output_shl, output32, 32)),
+                         Directive::Instruction(ib::shr_s_64(output, output_shl, 32))]
+                } else {
+                    todo!("unaligned memory access")
+                }
             },
             Op::I32Store { memarg } | Op::I32Store8 { memarg } | Op::I32Store16 { memarg } => {
                 let imm = mem_offset(memarg, c);
                 let base_addr = inputs[0].start as usize;
                 let value = inputs[1].start as usize;
 
-                let insn = match op {
-                    Op::I32Store { .. } => ib::storew,
-                    Op::I32Store8 { .. } => ib::storeb,
-                    Op::I32Store16 { .. } => ib::storeh,
+                let aligned_insn: Option<fn(usize, usize, i32) -> Instruction<F>> = match op {
+                    Op::I32Store { .. } if memarg.align >= 2 => Some(ib::storew),
+                    Op::I32Store16 { .. } if memarg.align >= 1 => Some(ib::storeh),
+                    Op::I32Store8 { .. } => Some(ib::storeb),
                     _ => unreachable!(),
                 };
 
-                vec![Directive::Instruction(insn(value, base_addr, imm))]
+                if let Some(insn) = aligned_insn {
+                    vec![Directive::Instruction(insn(value, base_addr, imm))]
+                } else {
+                    todo!("unaligned memory access")
+                }
             }
             Op::I64Store { memarg } => {
                 let imm = mem_offset(memarg, c);
                 let base_addr = inputs[0].start as usize;
                 let value = inputs[1].start as usize;
 
-                vec![Directive::Instruction(ib::storew(value, base_addr, imm)),
-                     Directive::Instruction(ib::storew(value + 1, base_addr, imm + 4))]
+                if memarg.align >= 3 {
+                    vec![Directive::Instruction(ib::storew(value, base_addr, imm)),
+                         Directive::Instruction(ib::storew(value + 1, base_addr, imm + 4))]
+                } else {
+                    todo!("unaligned memory access")
+                }
             }
             Op::I64Store8 { memarg } | Op::I64Store16 { memarg } | Op::I64Store32 { memarg } => {
                 let imm = mem_offset(memarg, c);
                 let base_addr = inputs[0].start as usize;
                 let value = inputs[1].start as usize;
 
-                let insn = match op {
-                    Op::I64Store8 { .. } => ib::storeb,
-                    Op::I64Store16 { .. } => ib::storeh,
-                    Op::I64Store32 { .. } => ib::storew,
+                let aligned_insn: Option<fn(usize, usize, i32) -> Instruction<F>> = match op {
+                    Op::I64Store32 { .. } if memarg.align >= 2 => Some(ib::storew),
+                    Op::I64Store16 { .. } if memarg.align >= 1 => Some(ib::storeh),
+                    Op::I64Store8 { .. } => Some(ib::storeb),
                     _ => unreachable!(),
                 };
 
-                vec![Directive::Instruction(insn(value, base_addr, imm))]
+                if let Some(insn) = aligned_insn {
+                    vec![Directive::Instruction(insn(value, base_addr, imm))]
+                } else {
+                    todo!("unaligned memory access")
+                }
             },
             Op::MemorySize { mem: _ } => todo!(),
             Op::MemoryGrow { mem: _ } => todo!(),
