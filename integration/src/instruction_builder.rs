@@ -297,6 +297,15 @@ pub fn and_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction
     )
 }
 
+pub fn andi_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+    instr_i(
+        BaseAlu64Opcode::AND.global_opcode().as_usize(),
+        rd,
+        rs1,
+        imm,
+    )
+}
+
 /// JAAF instruction: Jump And Activate Frame
 /// Sets PC from immediate and FP from register
 pub fn jaaf<F: PrimeField32>(to_pc_imm: usize, to_fp_reg: usize) -> Instruction<F> {

@@ -593,8 +593,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I64Shl => Ok(ib::shl_64),
             Op::I64ShrS => Ok(ib::shr_s_64),
             Op::I64ShrU => Ok(ib::shr_u_64),
-            Op::I64Rotl => todo!(),
-            Op::I64Rotr => todo!(),
 
             // Float instructions
             Op::F32Eq => todo!(),
@@ -707,6 +705,62 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
                     // or the two results
                     Directive::Instruction(ib::or(output, shiftl, shiftr)),
+                ]
+            }
+            Op::I64Rotl => {
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                let shiftl_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftl = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let const64 = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr = c.register_gen.allocate_type(ValType::I64).start as usize;
+                vec![
+                    // get least significant 6 bits for rotation amount
+                    Directive::Instruction(ib::andi_64(
+                        shiftl_amount,
+                        input2,
+                        0x3f.to_f().unwrap(),
+                    )),
+                    // shift left
+                    Directive::Instruction(ib::shl_64(shiftl, input1, shiftl_amount)),
+                    // get right shift amount
+                    Directive::Instruction(ib::const_32_imm(const64, 0x40, 0x0)),
+                    Directive::Instruction(ib::const_32_imm(const64 + 1, 0x0, 0x0)),
+                    Directive::Instruction(ib::sub_64(shiftr_amount, const64, shiftl_amount)),
+                    // shift right
+                    Directive::Instruction(ib::shr_u_64(shiftr, input1, shiftr_amount)),
+                    // or the two results
+                    Directive::Instruction(ib::or_64(output, shiftl, shiftr)),
+                ]
+            }
+            Op::I64Rotr => {
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                let shiftl_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftl = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let const64 = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr = c.register_gen.allocate_type(ValType::I64).start as usize;
+                vec![
+                    // get least significant 5 bits for rotation amount
+                    Directive::Instruction(ib::andi_64(
+                        shiftr_amount,
+                        input2,
+                        0x3f.to_f().unwrap(),
+                    )),
+                    // shift right
+                    Directive::Instruction(ib::shr_u_64(shiftr, input1, shiftr_amount)),
+                    // get left shift amount
+                    Directive::Instruction(ib::const_32_imm(const64, 0x40, 0x0)),
+                    Directive::Instruction(ib::const_32_imm(const64 + 1, 0x0, 0x0)),
+                    Directive::Instruction(ib::sub_64(shiftl_amount, const64, shiftr_amount)),
+                    // shift left
+                    Directive::Instruction(ib::shl_64(shiftl, input1, shiftl_amount)),
+                    // or the two results
+                    Directive::Instruction(ib::or_64(output, shiftl, shiftr)),
                 ]
             }
             Op::I32LeS | Op::I32LeU | Op::I32GeS | Op::I32GeU => {
