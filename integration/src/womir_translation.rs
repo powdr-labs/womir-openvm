@@ -492,12 +492,25 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     fn emit_imported_call(
         &self,
         _c: &mut Ctx<F>,
-        _module: &'a str,
-        _function: &'a str,
+        module: &'a str,
+        function: &'a str,
         _inputs: Vec<Range<u32>>,
-        _outputs: Vec<Range<u32>>,
-    ) -> Self::Directive {
-        todo!()
+        outputs: Vec<Range<u32>>,
+    ) -> Vec<Self::Directive> {
+        match (module, function) {
+            ("env", "read_u32") => {
+                let output = outputs[0].start as usize;
+                vec![
+                    Directive::Instruction(ib::pre_read_u32()),
+                    Directive::Instruction(ib::read_u32(output)),
+                ]
+            }
+            _ => unimplemented!(
+                "Imported function `{}` from module `{}` is not supported",
+                function,
+                module
+            ),
+        }
     }
 
     fn emit_function_call(
