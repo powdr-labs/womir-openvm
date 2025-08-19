@@ -176,6 +176,7 @@ mod tests {
     use super::*;
     use crate::to_field::ToField;
     use instruction_builder as wom;
+    use openvm_circuit::arch::ExecutionError;
     use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program};
     use openvm_sdk::{Sdk, StdIn};
     use openvm_stark_sdk::config::setup_tracing_with_log_level;
@@ -187,7 +188,7 @@ mod tests {
         instructions: Vec<Instruction<F>>,
         expected_output: u32,
         stdin: Option<StdIn>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ExecutionError> {
         setup_tracing_with_log_level(Level::WARN);
 
         // Create VM configuration
@@ -229,7 +230,18 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("Basic WOM operations", instructions, 667, None)
+        run_vm_test("Basic WOM operations", instructions, 667, None)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_trap() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![wom::trap(42), wom::trap(8), wom::halt()];
+
+        let err = run_vm_test("Trap instruction", instructions, 0, None).unwrap_err();
+        println!("{err:?}");
+        assert!(matches!(err, ExecutionError::FailedWithExitCode(142)));
+        Ok(())
     }
 
     #[test]
@@ -242,7 +254,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("Basic addi_64", instructions, 667, None)
+        run_vm_test("Basic addi_64", instructions, 667, None)?;
+        Ok(())
     }
 
     #[test]
@@ -255,7 +268,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("Basic multiplication", instructions, 666, None)
+        run_vm_test("Basic multiplication", instructions, 666, None)?;
+        Ok(())
     }
 
     #[test]
@@ -267,7 +281,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Multiplication by zero", instructions, 0, None)
+        run_vm_test("Multiplication by zero", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -279,7 +294,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Multiplication by one", instructions, 999, None)
+        run_vm_test("Multiplication by one", instructions, 999, None)?;
+        Ok(())
     }
 
     #[test]
@@ -299,7 +315,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Skipping 5 instructions", instructions, 42, None)
+        run_vm_test("Skipping 5 instructions", instructions, 42, None)?;
+        Ok(())
     }
 
     #[test]
@@ -311,7 +328,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Multiplication by power of 2", instructions, 56, None)
+        run_vm_test("Multiplication by power of 2", instructions, 56, None)?;
+        Ok(())
     }
 
     #[test]
@@ -329,7 +347,8 @@ mod tests {
             instructions,
             4294049777u32,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -343,7 +362,8 @@ mod tests {
             wom::halt(),
         ];
         // In 32-bit arithmetic: 4,295,032,832 & 0xFFFFFFFF = 65536
-        run_vm_test("Multiplication with overflow", instructions, 65536, None)
+        run_vm_test("Multiplication with overflow", instructions, 65536, None)?;
+        Ok(())
     }
 
     #[test]
@@ -357,7 +377,8 @@ mod tests {
             wom::reveal(12, 0),
             wom::halt(),
         ];
-        run_vm_test("Multiplication commutativity", instructions, 0, None)
+        run_vm_test("Multiplication commutativity", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -371,7 +392,8 @@ mod tests {
             wom::reveal(12, 0),
             wom::halt(),
         ];
-        run_vm_test("Chained multiplication", instructions, 30, None)
+        run_vm_test("Chained multiplication", instructions, 30, None)?;
+        Ok(())
     }
 
     #[test]
@@ -389,7 +411,8 @@ mod tests {
             instructions,
             0xFFFFFFFF,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -408,7 +431,8 @@ mod tests {
             instructions,
             0xFFFFFFF1,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -427,7 +451,8 @@ mod tests {
             instructions,
             0xFFFFFFE8,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -440,7 +465,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Multiplication both negative", instructions, 21, None)
+        run_vm_test("Multiplication both negative", instructions, 21, None)?;
+        Ok(())
     }
 
     #[test]
@@ -459,7 +485,8 @@ mod tests {
             instructions,
             0xFFFFFFD6,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -478,7 +505,8 @@ mod tests {
             instructions,
             0x80000000,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -490,7 +518,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Basic division", instructions, 10, None)
+        run_vm_test("Basic division", instructions, 10, None)?;
+        Ok(())
     }
 
     #[test]
@@ -502,7 +531,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division by one", instructions, 999, None)
+        run_vm_test("Division by one", instructions, 999, None)?;
+        Ok(())
     }
 
     #[test]
@@ -514,7 +544,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division of equal numbers", instructions, 1, None)
+        run_vm_test("Division of equal numbers", instructions, 1, None)?;
+        Ok(())
     }
 
     #[test]
@@ -526,7 +557,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division with remainder", instructions, 3, None)
+        run_vm_test("Division with remainder", instructions, 3, None)?;
+        Ok(())
     }
 
     #[test]
@@ -538,7 +570,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division of zero", instructions, 0, None)
+        run_vm_test("Division of zero", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -550,7 +583,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division of large numbers", instructions, 256000, None)
+        run_vm_test("Division of large numbers", instructions, 256000, None)?;
+        Ok(())
     }
 
     #[test]
@@ -562,7 +596,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division by power of 2", instructions, 16, None)
+        run_vm_test("Division by power of 2", instructions, 16, None)?;
+        Ok(())
     }
 
     #[test]
@@ -576,7 +611,8 @@ mod tests {
             wom::reveal(12, 0),
             wom::halt(),
         ];
-        run_vm_test("Chained division", instructions, 20, None)
+        run_vm_test("Chained division", instructions, 20, None)?;
+        Ok(())
     }
 
     #[test]
@@ -595,7 +631,8 @@ mod tests {
             instructions,
             0xFFFFFFFB,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -608,7 +645,8 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Signed division with both negative", instructions, 4, None)
+        run_vm_test("Signed division with both negative", instructions, 4, None)?;
+        Ok(())
     }
 
     #[test]
@@ -627,7 +665,8 @@ mod tests {
             instructions,
             98,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -645,7 +684,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("JAAF instruction", instructions, 42, None)
+        run_vm_test("JAAF instruction", instructions, 42, None)?;
+        Ok(())
     }
 
     #[test]
@@ -663,7 +703,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("JAAF_SAVE instruction", instructions, 0, None)
+        run_vm_test("JAAF_SAVE instruction", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -680,7 +721,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("RET instruction", instructions, 88, None)
+        run_vm_test("RET instruction", instructions, 88, None)?;
+        Ok(())
     }
 
     #[test]
@@ -697,7 +739,8 @@ mod tests {
             wom::halt(),        // End the test here, don't return
         ];
 
-        run_vm_test("CALL instruction", instructions, 8, None)
+        run_vm_test("CALL instruction", instructions, 8, None)?;
+        Ok(())
     }
 
     #[test]
@@ -716,7 +759,8 @@ mod tests {
             wom::halt(),            // End the test here, don't return
         ];
 
-        run_vm_test("CALL_INDIRECT instruction", instructions, 0, None)
+        run_vm_test("CALL_INDIRECT instruction", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -736,7 +780,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CALL and RETURN sequence", instructions, 75, None)
+        run_vm_test("CALL and RETURN sequence", instructions, 75, None)?;
+        Ok(())
     }
 
     #[test]
@@ -754,7 +799,8 @@ mod tests {
             wom::halt(),                      // PC=28: End
         ];
 
-        run_vm_test("JUMP instruction", instructions, 100, None)
+        run_vm_test("JUMP instruction", instructions, 100, None)?;
+        Ok(())
     }
 
     #[test]
@@ -778,7 +824,8 @@ mod tests {
             instructions,
             25,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -802,7 +849,8 @@ mod tests {
             instructions,
             50,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -826,7 +874,8 @@ mod tests {
             instructions,
             100,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -850,7 +899,8 @@ mod tests {
             instructions,
             100,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -863,7 +913,8 @@ mod tests {
         ];
 
         // We expect 4 because the register allocator starts at 4 as convention.
-        run_vm_test("ALLOCATE_FRAME instruction", instructions, 8, None)
+        run_vm_test("ALLOCATE_FRAME instruction", instructions, 8, None)?;
+        Ok(())
     }
 
     #[test]
@@ -882,7 +933,8 @@ mod tests {
             wom::halt(),        // PC=24: End
         ];
 
-        run_vm_test("COPY_INTO_FRAME instruction", instructions, 42, None)
+        run_vm_test("COPY_INTO_FRAME instruction", instructions, 42, None)?;
+        Ok(())
     }
 
     #[test]
@@ -906,7 +958,8 @@ mod tests {
             instructions,
             123,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -917,7 +970,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CONST32 simple test", instructions, 0x56781234, None)
+        run_vm_test("CONST32 simple test", instructions, 0x56781234, None)?;
+        Ok(())
     }
 
     #[test]
@@ -928,7 +982,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CONST32 zero test", instructions, 0, None)
+        run_vm_test("CONST32 zero test", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -939,7 +994,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CONST32 max value test", instructions, 0xFFFFFFFF, None)
+        run_vm_test("CONST32 max value test", instructions, 0xFFFFFFFF, None)?;
+        Ok(())
     }
 
     #[test]
@@ -952,7 +1008,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CONST32 multiple registers test", instructions, 300, None)
+        run_vm_test("CONST32 multiple registers test", instructions, 300, None)?;
+        Ok(())
     }
 
     #[test]
@@ -967,7 +1024,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CONST32 with arithmetic test", instructions, 1200, None)
+        run_vm_test("CONST32 with arithmetic test", instructions, 1200, None)?;
+        Ok(())
     }
 
     #[test]
@@ -980,7 +1038,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLTU true test", instructions, 1, None)
+        run_vm_test("SLTU true test", instructions, 1, None)?;
+        Ok(())
     }
 
     #[test]
@@ -993,7 +1052,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLTU false test", instructions, 0, None)
+        run_vm_test("SLTU false test", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1006,7 +1066,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLTU equal test", instructions, 0, None)
+        run_vm_test("SLTU equal test", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1019,7 +1080,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLT positive numbers test", instructions, 1, None)
+        run_vm_test("SLT positive numbers test", instructions, 1, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1032,7 +1094,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLT negative vs positive test", instructions, 1, None)
+        run_vm_test("SLT negative vs positive test", instructions, 1, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1045,7 +1108,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLT both negative test", instructions, 0, None)
+        run_vm_test("SLT both negative test", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1061,7 +1125,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("Less than comparison chain test", instructions, 1, None)
+        run_vm_test("Less than comparison chain test", instructions, 1, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1074,7 +1139,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_U true test", instructions, 1, None)
+        run_vm_test("GT_U true test", instructions, 1, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1087,7 +1153,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_U false test", instructions, 0, None)
+        run_vm_test("GT_U false test", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1100,7 +1167,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_U equal test", instructions, 0, None)
+        run_vm_test("GT_U equal test", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1113,7 +1181,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_S positive numbers test", instructions, 1, None)
+        run_vm_test("GT_S positive numbers test", instructions, 1, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1126,7 +1195,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_S positive vs negative test", instructions, 1, None)
+        run_vm_test("GT_S positive vs negative test", instructions, 1, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1139,7 +1209,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_S both negative test", instructions, 1, None)
+        run_vm_test("GT_S both negative test", instructions, 1, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1159,7 +1230,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT edge cases test", instructions, 1, None)
+        run_vm_test("GT edge cases test", instructions, 1, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1176,7 +1248,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("Comparison equivalence test", instructions, 0, None)
+        run_vm_test("Comparison equivalence test", instructions, 0, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1199,7 +1272,8 @@ mod tests {
             instructions,
             1,
             None,
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -1213,7 +1287,8 @@ mod tests {
         let mut stdin = StdIn::default();
         stdin.write(&42u32);
 
-        run_vm_test("Input hint", instructions, 42, Some(stdin))
+        run_vm_test("Input hint", instructions, 42, Some(stdin))?;
+        Ok(())
     }
 
     #[test]
@@ -1246,7 +1321,8 @@ mod tests {
             instructions,
             102,
             Some(stdin),
-        )
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -1262,7 +1338,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("LOADW basic test", instructions, 42, None)
+        run_vm_test("LOADW basic test", instructions, 42, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1284,7 +1361,8 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("STOREW with offset test", instructions, 333, None)
+        run_vm_test("STOREW with offset test", instructions, 333, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1299,7 +1377,8 @@ mod tests {
             wom::reveal(10, 0),                 // Reveal x10 (should be 255)
             wom::halt(),
         ];
-        run_vm_test("LOADBU basic test", instructions, 255, None)
+        run_vm_test("LOADBU basic test", instructions, 255, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1314,7 +1393,8 @@ mod tests {
             wom::reveal(10, 0),                   // Reveal x10 (should be 0xABCD = 43981)
             wom::halt(),
         ];
-        run_vm_test("LOADHU basic test", instructions, 0xABCD, None)
+        run_vm_test("LOADHU basic test", instructions, 0xABCD, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1333,7 +1413,8 @@ mod tests {
             wom::reveal(12, 0),                   // Reveal x12 (should be 104)
             wom::halt(),
         ];
-        run_vm_test("STOREB with offset test", instructions, 104, None)
+        run_vm_test("STOREB with offset test", instructions, 104, None)?;
+        Ok(())
     }
 
     #[test]
@@ -1353,7 +1434,8 @@ mod tests {
             wom::reveal(13, 0),                    // Reveal x13 (should be 13107)
             wom::halt(),
         ];
-        run_vm_test("STOREH with offset test", instructions, 13107, None)
+        run_vm_test("STOREH with offset test", instructions, 13107, None)?;
+        Ok(())
     }
 }
 
