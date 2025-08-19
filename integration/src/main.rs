@@ -174,20 +174,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::to_field::ToField;
+    use crate::{to_field::ToField, womir_translation::ERROR_CODE_OFFSET};
     use instruction_builder as wom;
+    use openvm_circuit::arch::ExecutionError;
     use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program};
     use openvm_sdk::{Sdk, StdIn};
     use openvm_stark_sdk::config::setup_tracing_with_log_level;
     use tracing::Level;
 
-    /// Helper function to run a VM test with given instructions and verify the output
-    fn run_vm_test(
+    /// Helper function to run a VM test with given instructions and return the error or
+    /// verify the output on success.
+    fn run_vm_test_with_result(
         test_name: &str,
         instructions: Vec<Instruction<F>>,
         expected_output: u32,
         stdin: Option<StdIn>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ExecutionError> {
         setup_tracing_with_log_level(Level::WARN);
 
         // Create VM configuration
@@ -219,6 +221,17 @@ mod tests {
         Ok(())
     }
 
+    /// Helper function to run a VM test with given instructions and verify the output
+    fn run_vm_test(
+        test_name: &str,
+        instructions: Vec<Instruction<F>>,
+        expected_output: u32,
+        stdin: Option<StdIn>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        run_vm_test_with_result(test_name, instructions, expected_output, stdin)?;
+        Ok(())
+    }
+
     #[test]
     fn test_basic_wom_operations() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
@@ -230,6 +243,19 @@ mod tests {
         ];
 
         run_vm_test("Basic WOM operations", instructions, 667, None)
+    }
+
+    #[test]
+    fn test_trap() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![wom::trap(42), wom::trap(8), wom::halt()];
+
+        let err = run_vm_test_with_result("Trap instruction", instructions, 0, None).unwrap_err();
+        if let ExecutionError::FailedWithExitCode(code) = err {
+            assert_eq!(code, ERROR_CODE_OFFSET + 42);
+        } else {
+            panic!("Unexpected error: {err:?}");
+        }
+        Ok(())
     }
 
     #[test]

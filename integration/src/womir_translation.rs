@@ -28,6 +28,9 @@ use womir::{
 /// value is used by instruction ref.is_null to decide if the reference is null.
 const NULL_REF: [u32; 3] = [u32::MAX, 0, 0];
 
+/// Traps from Womir will terminate with its error code plus this offset.
+pub const ERROR_CODE_OFFSET: u32 = 100;
+
 pub fn program_from_womir<F: PrimeField32>(
     ir_program: womir::loader::Program<OpenVMSettings<F>>,
     entry_point: &str,
@@ -274,9 +277,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     fn emit_trap(
         &self,
         _c: &mut Ctx<F>,
-        _trap: womir::loader::flattening::TrapReason,
+        error_code: womir::loader::flattening::TrapReason,
     ) -> Self::Directive {
-        todo!()
+        Directive::Instruction(ib::trap(error_code as u32 as usize))
     }
 
     fn emit_allocate_label_frame(
