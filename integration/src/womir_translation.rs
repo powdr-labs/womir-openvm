@@ -574,8 +574,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I32ShrU => Ok(ib::shr_u),
 
             // 64-bit integer instructions
-            Op::I64Eq => todo!(),
-            Op::I64Ne => todo!(),
+            Op::I64Eq => Ok(ib::eq_64),
+            Op::I64Ne => Ok(ib::neq_64),
             Op::I64LtS => Ok(ib::lt_s_64),
             Op::I64LtU => Ok(ib::lt_u_64),
             Op::I64GtS => Ok(ib::gt_s_64),
@@ -756,6 +756,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let output = output.unwrap().start as usize;
                 vec![Directive::Instruction(ib::eqi(output, input, F::ZERO))]
             }
+            Op::I64Eqz => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+                vec![Directive::Instruction(ib::eqi_64(output, input, F::ZERO))]
+            }
             Op::I32Clz => todo!(),
             Op::I32Ctz => todo!(),
             Op::I32Popcnt => todo!(),
@@ -795,7 +800,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             }
 
             // 64-bit integer instructions
-            Op::I64Eqz => todo!(),
             Op::I64Clz => todo!(),
             Op::I64Ctz => todo!(),
             Op::I64Popcnt => todo!(),

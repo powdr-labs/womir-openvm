@@ -180,6 +180,28 @@ pub enum EqOpcode {
     Serialize,
     Deserialize,
 )]
+#[opcode_offset = 0x220c]
+#[repr(usize)]
+pub enum Eq64Opcode {
+    EQ,
+    NEQ,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
 #[opcode_offset = 0x1210]
 #[repr(usize)]
 pub enum LoadStoreOpcode {
