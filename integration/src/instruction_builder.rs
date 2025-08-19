@@ -2,8 +2,9 @@ use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOp
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
-    DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
-    LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
+    DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode,
+    LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom,
+    Shift64Opcode, ShiftOpcode,
 };
 
 pub fn instr_r<F: PrimeField32>(
@@ -51,29 +52,54 @@ pub fn sub<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(BaseAluOpcode::SUB.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-#[allow(dead_code)]
 pub fn mul<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(MulOpcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-#[allow(dead_code)]
+pub fn mul_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(Mul64Opcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
 pub fn div<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(DivRemOpcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-#[allow(dead_code)]
 pub fn divu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(DivRemOpcode::DIVU.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-#[allow(dead_code)]
 pub fn rem<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(DivRemOpcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-#[allow(dead_code)]
 pub fn remu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(DivRemOpcode::REMU.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn div_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(DivRem64Opcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn divu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        DivRem64Opcode::DIVU.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
+pub fn rem_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(DivRem64Opcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn remu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        DivRem64Opcode::REMU.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
 }
 
 pub fn xor<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {

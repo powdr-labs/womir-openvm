@@ -358,6 +358,16 @@ pub enum MulOpcode {
 }
 
 #[derive(
+    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
+)]
+#[opcode_offset = 0x2250]
+#[repr(usize)]
+#[allow(non_camel_case_types)]
+pub enum Mul64Opcode {
+    MUL,
+}
+
+#[derive(
     Copy,
     Clone,
     Debug,
@@ -376,6 +386,31 @@ pub enum MulOpcode {
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum DivRemOpcode {
+    DIV,
+    DIVU,
+    REM,
+    REMU,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
+#[opcode_offset = 0x2254]
+#[repr(usize)]
+#[allow(non_camel_case_types)]
+pub enum DivRem64Opcode {
     DIV,
     DIVU,
     REM,
