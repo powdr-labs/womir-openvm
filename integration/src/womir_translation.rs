@@ -277,7 +277,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     fn emit_trap(
         &self,
         _c: &mut Ctx<F>,
-        trap: womir::loader::flattening::TrapReason,
+        error_code: womir::loader::flattening::TrapReason,
     ) -> Self::Directive {
         Directive::Instruction(ib::trap(trap as u32 as usize))
     }
