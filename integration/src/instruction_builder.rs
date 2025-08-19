@@ -640,6 +640,19 @@ pub fn reveal_imm<F: PrimeField32>(
     )
 }
 
+pub fn trap<F: PrimeField32>(error_code: usize) -> Instruction<F> {
+    Instruction::new(
+        SystemOpcode::TERMINATE.global_opcode(),
+        F::ZERO,
+        F::ZERO,
+        F::from_canonical_usize(100 + error_code),
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+    )
+}
+
 #[allow(dead_code)]
 pub fn halt<F: PrimeField32>() -> Instruction<F> {
     Instruction::new(

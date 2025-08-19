@@ -274,9 +274,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     fn emit_trap(
         &self,
         _c: &mut Ctx<F>,
-        _trap: womir::loader::flattening::TrapReason,
+        trap: womir::loader::flattening::TrapReason,
     ) -> Self::Directive {
-        todo!()
+        Directive::Instruction(ib::trap(trap as u32 as usize))
     }
 
     fn emit_allocate_label_frame(
