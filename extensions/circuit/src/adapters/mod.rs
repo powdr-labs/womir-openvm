@@ -12,7 +12,6 @@ mod jaaf;
 mod jalr;
 mod jump;
 mod loadstore;
-mod mul;
 mod rdwrite;
 
 pub use allocate_frame::*;
@@ -24,7 +23,6 @@ pub use jaaf::*;
 pub use jalr::*;
 pub use jump::*;
 pub use loadstore::*;
-pub use mul::*;
 pub use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 pub use rdwrite::*;
 
