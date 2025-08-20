@@ -868,6 +868,25 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::shr_s_imm(output, output, shift)),
                 ]
             }
+            Op::I64Extend8S | Op::I64Extend16S | Op::I64Extend32S => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                let shift = match op {
+                    Op::I64Extend8S => 56,
+                    Op::I64Extend16S => 48,
+                    Op::I64Extend32S => 32,
+                    _ => unreachable!(),
+                }
+                .to_f()
+                .unwrap();
+
+                // Left shift followed by arithmetic right shift
+                vec![
+                    Directive::Instruction(ib::shl_imm_64(output, input, shift)),
+                    Directive::Instruction(ib::shr_s_imm_64(output, output, shift)),
+                ]
+            }
 
             // 64-bit integer instructions
             Op::I64Clz => todo!(),
@@ -875,9 +894,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I64Popcnt => todo!(),
             Op::I64ExtendI32S => todo!(),
             Op::I64ExtendI32U => todo!(),
-            Op::I64Extend8S => todo!(),
-            Op::I64Extend16S => todo!(),
-            Op::I64Extend32S => todo!(),
 
             // Parametric instruction
             Op::Select => {
