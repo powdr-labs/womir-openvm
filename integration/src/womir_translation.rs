@@ -854,6 +854,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
 
+                let tmp = c.register_gen.allocate_type(ValType::I32).start as usize;
+
                 let shift = match op {
                     Op::I32Extend8S => 24,
                     Op::I32Extend16S => 16,
@@ -864,13 +866,15 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 // Left shift followed by arithmetic right shift
                 vec![
-                    Directive::Instruction(ib::shl_imm(output, input, shift)),
-                    Directive::Instruction(ib::shr_s_imm(output, output, shift)),
+                    Directive::Instruction(ib::shl_imm(tmp, input, shift)),
+                    Directive::Instruction(ib::shr_s_imm(output, tmp, shift)),
                 ]
             }
             Op::I64Extend8S | Op::I64Extend16S | Op::I64Extend32S => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
+
+                let tmp = c.register_gen.allocate_type(ValType::I64).start as usize;
 
                 let shift = match op {
                     Op::I64Extend8S => 56,
@@ -883,8 +887,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 // Left shift followed by arithmetic right shift
                 vec![
-                    Directive::Instruction(ib::shl_imm_64(output, input, shift)),
-                    Directive::Instruction(ib::shr_s_imm_64(output, output, shift)),
+                    Directive::Instruction(ib::shl_imm_64(tmp, input, shift)),
+                    Directive::Instruction(ib::shr_s_imm_64(output, tmp, shift)),
                 ]
             }
 
