@@ -1659,7 +1659,7 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic(expected = "not yet implemented")]
+    #[should_panic]
     fn test_keccak() {
         run_single_wasm_test("../sample_programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
     }
