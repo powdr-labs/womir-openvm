@@ -1634,6 +1634,7 @@ fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> i32 {
         .linear_memory_start()
         .expect("no memory allocated");
     let offset = mem_start + u32::try_from(memarg.offset).expect("offset too large");
+    // RISC-V requires offset immediates to have 16 bits, but for WASM we changed it to 24 bits.
     assert!(offset < (1 << 24));
     offset as i32
 }
