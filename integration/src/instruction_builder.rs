@@ -104,6 +104,10 @@ pub fn shr_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<
     instr_r(ShiftOpcode::SRL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+pub fn shr_u_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+    instr_i(ShiftOpcode::SRL.global_opcode().as_usize(), rd, rs1, imm)
+}
+
 pub fn shr_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(ShiftOpcode::SRA.global_opcode().as_usize(), rd, rs1, rs2)
 }
@@ -496,7 +500,6 @@ pub fn jump_if_zero<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> 
 
 /// LOADW instruction: Load word from memory
 /// rd = MEM[rs1 + imm]
-#[allow(dead_code)]
 pub fn loadw<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
     let imm_unsigned = (imm & 0xFFFF) as usize;
     let imm_sign = if imm < 0 { 1 } else { 0 };
@@ -515,7 +518,6 @@ pub fn loadw<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F>
 
 /// STOREW instruction: Store word to memory
 /// MEM[rs1 + imm] = rs2
-#[allow(dead_code)]
 pub fn storew<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<F> {
     let imm_unsigned = (imm & 0xFFFF) as usize;
     let imm_sign = if imm < 0 { 1 } else { 0 };
@@ -552,7 +554,6 @@ pub fn loadb<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F>
 
 /// LOADBU instruction: Load byte unsigned from memory
 /// rd = MEM[rs1 + imm] (zero-extended)
-#[allow(dead_code)]
 pub fn loadbu<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
     let imm_unsigned = (imm & 0xFFFF) as usize;
     let imm_sign = if imm < 0 { 1 } else { 0 };
@@ -571,7 +572,6 @@ pub fn loadbu<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F
 
 /// LOADB: load halfword from memory
 /// rd = MEM[rs1 + imm] (sign-extended)
-#[allow(dead_code)]
 pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
     let imm_unsigned = (imm & 0xFFFF) as usize;
     let imm_sign = if imm < 0 { 1 } else { 0 };
@@ -590,7 +590,6 @@ pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F>
 
 /// LOADHU instruction: Load halfword unsigned from memory
 /// rd = MEM[rs1 + imm] (zero-extended)
-#[allow(dead_code)]
 pub fn loadhu<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
     let imm_unsigned = (imm & 0xFFFF) as usize;
     let imm_sign = if imm < 0 { 1 } else { 0 };
@@ -609,7 +608,6 @@ pub fn loadhu<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F
 
 /// STOREB instruction: Store byte to memory
 /// MEM[rs1 + imm] = rs2 (lowest byte)
-#[allow(dead_code)]
 pub fn storeb<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<F> {
     let imm_unsigned = (imm & 0xFFFF) as usize;
     let imm_sign = if imm < 0 { 1 } else { 0 };
@@ -628,7 +626,6 @@ pub fn storeb<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<
 
 /// STOREH instruction: Store halfword to memory
 /// MEM[rs1 + imm] = rs2 (lowest halfword)
-#[allow(dead_code)]
 pub fn storeh<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<F> {
     let imm_unsigned = (imm & 0xFFFF) as usize;
     let imm_sign = if imm < 0 { 1 } else { 0 };
