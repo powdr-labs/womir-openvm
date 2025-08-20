@@ -29,7 +29,7 @@ use strum::IntoEnumIterator;
 use crate::allocate_frame::AllocateFrameCoreChipWom;
 use crate::consts::ConstsCoreChipWom;
 use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
-use crate::loadstore::{LoadStoreCoreChip, Rv32LoadStoreChip};
+use crate::loadstore::{LoadStoreChip, LoadStoreCoreChip};
 use crate::{adapters::*, wom_traits::*, *};
 
 const DEFAULT_INIT_FP: u32 = 0;
@@ -119,10 +119,10 @@ pub enum WomirIExecutor<F: PrimeField32> {
     DivRem64(WomDivRem64Chip<F>),
     Shift(WomShiftChip<F>),
     Shift64(WomShift64Chip<F>),
-    LoadStore(Rv32LoadStoreChip<F>),
+    LoadStore(LoadStoreChip<F>),
     Eq(EqChipWom<F>),
     Eq64(Eq64ChipWom<F>),
-    // LoadSignExtend(Rv32LoadSignExtendChip<F>),
+    LoadSignExtend(LoadSignExtendChip<F>),
     // BranchEqual(Rv32BranchEqualChip<F>),
     // BranchLessThan(Rv32BranchLessThanChip<F>),
     // JalLui(Rv32JalLuiChip<F>),
@@ -160,7 +160,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
 
         let range_checker = builder.system_base().range_checker_chip.clone();
         let offline_memory = builder.system_base().offline_memory();
-        let _pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
+        let pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
 
         let shared_fp = Arc::new(Mutex::new(DEFAULT_INIT_FP));
 
@@ -458,13 +458,13 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             Shift64Opcode::iter().map(|x| x.global_opcode()),
         )?;
 
-        let load_store_chip = Rv32LoadStoreChip::new(
+        let load_store_chip = LoadStoreChip::new(
             Rv32LoadStoreAdapterChip::new(
                 execution_bus,
                 program_bus,
                 frame_bus,
                 memory_bridge,
-                _pointer_max_bits,
+                pointer_max_bits,
                 range_checker.clone(),
             ),
             LoadStoreCoreChip::new(LoadStoreOpcode::CLASS_OFFSET),
@@ -477,22 +477,24 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 .take(LoadStoreOpcode::STOREB as usize + 1)
                 .map(|x| x.global_opcode()),
         )?;
-        //
-        // let load_sign_extend_chip = Rv32LoadSignExtendChip::new(
-        //     Rv32LoadStoreAdapterChip::new(
-        //         execution_bus,
-        //         program_bus,
-        //         memory_bridge,
-        //         pointer_max_bits,
-        //         range_checker.clone(),
-        //     ),
-        //     LoadSignExtendCoreChip::new(range_checker.clone()),
-        //     offline_memory.clone(),
-        // );
-        // inventory.add_executor(
-        //     load_sign_extend_chip,
-        //     [Rv32LoadStoreOpcode::LOADB, Rv32LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
-        // )?;
+
+        let load_sign_extend_chip = LoadSignExtendChip::new(
+            Rv32LoadStoreAdapterChip::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                pointer_max_bits,
+                range_checker.clone(),
+            ),
+            LoadSignExtendCoreChip::new(range_checker.clone()),
+            offline_memory.clone(),
+            shared_fp.clone(),
+        );
+        inventory.add_executor(
+            load_sign_extend_chip,
+            [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
+        )?;
         //
         // let beq_chip = Rv32BranchEqualChip::new(
         //     Rv32BranchAdapterChip::new(execution_bus, program_bus, memory_bridge),
