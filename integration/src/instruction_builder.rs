@@ -2,9 +2,12 @@ use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOp
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
-    DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
-    LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
+    DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode,
+    LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom,
+    Shift64Opcode, ShiftOpcode,
 };
+
+use crate::womir_translation::{ERROR_ABORT_CODE, ERROR_CODE_OFFSET};
 
 pub fn instr_r<F: PrimeField32>(
     opcode: usize,
@@ -51,29 +54,54 @@ pub fn sub<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(BaseAluOpcode::SUB.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-#[allow(dead_code)]
 pub fn mul<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(MulOpcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-#[allow(dead_code)]
+pub fn mul_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(Mul64Opcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
 pub fn div<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(DivRemOpcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-#[allow(dead_code)]
 pub fn divu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(DivRemOpcode::DIVU.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-#[allow(dead_code)]
 pub fn rem<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(DivRemOpcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-#[allow(dead_code)]
 pub fn remu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(DivRemOpcode::REMU.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn div_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(DivRem64Opcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn divu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        DivRem64Opcode::DIVU.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
+}
+
+pub fn rem_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(DivRem64Opcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn remu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(
+        DivRem64Opcode::REMU.global_opcode().as_usize(),
+        rd,
+        rs1,
+        rs2,
+    )
 }
 
 pub fn xor<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
@@ -294,6 +322,15 @@ pub fn and_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction
         rd,
         rs1,
         rs2,
+    )
+}
+
+pub fn andi_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+    instr_i(
+        BaseAlu64Opcode::AND.global_opcode().as_usize(),
+        rd,
+        rs1,
+        imm,
     )
 }
 
@@ -677,6 +714,32 @@ pub fn reveal_imm<F: PrimeField32>(
     )
 }
 
+pub fn trap<F: PrimeField32>(error_code: usize) -> Instruction<F> {
+    Instruction::new(
+        SystemOpcode::TERMINATE.global_opcode(),
+        F::ZERO,
+        F::ZERO,
+        F::from_canonical_usize(ERROR_CODE_OFFSET as usize + error_code),
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+    )
+}
+
+pub fn abort<F: PrimeField32>() -> Instruction<F> {
+    Instruction::new(
+        SystemOpcode::TERMINATE.global_opcode(),
+        F::ZERO,
+        F::ZERO,
+        F::from_canonical_usize(ERROR_ABORT_CODE as usize),
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+    )
+}
+
 #[allow(dead_code)]
 pub fn halt<F: PrimeField32>() -> Instruction<F> {
     Instruction::new(
@@ -691,7 +754,6 @@ pub fn halt<F: PrimeField32>() -> Instruction<F> {
     )
 }
 
-#[allow(dead_code)]
 pub fn pre_read_u32<F: PrimeField32>() -> Instruction<F> {
     Instruction::new(
         SystemOpcode::PHANTOM.global_opcode(),
@@ -705,7 +767,6 @@ pub fn pre_read_u32<F: PrimeField32>() -> Instruction<F> {
     )
 }
 
-#[allow(dead_code)]
 pub fn read_u32<F: PrimeField32>(rd: usize) -> Instruction<F> {
     Instruction::from_isize(
         HintStoreOpcode::HINT_STOREW.global_opcode(),
