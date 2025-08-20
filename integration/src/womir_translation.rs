@@ -859,87 +859,191 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::GlobalGet { global_index: _ } => todo!(),
             Op::GlobalSet { global_index: _ } => todo!(),
 
-            // Memory instructions
-            Op::I32Load { memarg } | Op::I32Load8U { memarg } | Op::I32Load16U { memarg } | Op::I32Load8S { memarg } | Op::I32Load16S { memarg }  => {
+            Op::I32Load { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+                match memarg.align {
+                    0 => {
+                        // read four bytes
+                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
+                            Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
+                            Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
+                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, F::from_canonical_u8(8))),
+                            Directive::Instruction(ib::shl_imm(b2_shifted, b2, F::from_canonical_u8(16))),
+                            Directive::Instruction(ib::shl_imm(b3_shifted, b3, F::from_canonical_u8(24))),
+                            Directive::Instruction(ib::or(lo, b0, b1_shifted)),
+                            Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
+                            Directive::Instruction(ib::or(output, lo, hi)),
+                        ]
+                    }
+                    1 => {
+                        // read two half words
+                        let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let hi_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            Directive::Instruction(ib::loadhu(lo, base_addr, imm)),
+                            Directive::Instruction(ib::loadhu(hi, base_addr, imm + 2)),
+                            Directive::Instruction(ib::shl_imm(hi_shifted, hi, F::from_canonical_u8(16))),
+                            Directive::Instruction(ib::or(output, lo, hi_shifted)),
+                        ]
+                    }
+                    2 => {
+                        vec![Directive::Instruction(ib::loadw(output, base_addr, imm))]
+                    }
+                    _ => unreachable!(),
+                }
+            }
+
+            Op::I32Load16U { memarg } | Op::I32Load16S { memarg } => {
                 let imm = mem_offset(memarg, c);
                 let base_addr = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
 
-                let aligned_insn: Option<fn(usize, usize, i32) -> Instruction<F>> = match op {
-                    Op::I32Load { .. } if memarg.align >= 2 => Some(ib::loadw),
-                    Op::I32Load16U { .. } if memarg.align >= 1 => Some(ib::loadhu),
-                    Op::I32Load8U { .. } => Some(ib::loadbu),
-                    Op::I32Load16S { .. } if memarg.align >= 1 => Some(ib::loadh),
-                    Op::I32Load8S { .. } => Some(ib::loadb),
-                    _ => None,
-                };
-
-                // TODO: range check memory access
-
-                if let Some(insn) = aligned_insn {
-                    vec![Directive::Instruction(insn(output, base_addr, imm))]
-                } else {
-                    todo!("unaligned memory access")
+                match memarg.align {
+                    0 => {
+                        // read four bytes
+                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                            if let Op::I32Load16S { .. } = op {
+                                Directive::Instruction(ib::loadb(b1, base_addr, imm + 1))
+                            } else {
+                                Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
+                            },
+                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, F::from_canonical_u8(8))),
+                            Directive::Instruction(ib::or(output, b0, b1)),
+                        ]
+                    }
+                    1 => {
+                        vec![Directive::Instruction(ib::loadw(output, base_addr, imm))]
+                    }
+                    _ => unreachable!(),
                 }
+            }
+            Op::I32Load8U { memarg }  => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                vec![Directive::Instruction(ib::loadbu(output, base_addr, imm))]
+            }
+            Op::I32Load8S { memarg }  => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                vec![Directive::Instruction(ib::loadb(output, base_addr, imm))]
             }
             Op::I64Load { memarg } => {
                 let imm = mem_offset(memarg, c);
                 let base_addr = inputs[0].start as usize;
                 let output = (output.unwrap().start) as usize;
 
-                // TODO: range check memory access
+                match memarg.align {
+                    0 => {
+                        // read byte by byte
+                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b4 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b5 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b6 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b7 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b5_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b6_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b7_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
 
-                if memarg.align >= 3 {
-                    vec![Directive::Instruction(ib::loadw(output, base_addr, imm)),
-                         Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4))]
-                } else {
-                    todo!("unaligned memory access")
+                        let hi0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let hi1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let lo0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let lo1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+                        vec![
+                            // load each byte
+                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
+                            Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
+                            Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
+                            Directive::Instruction(ib::loadbu(b4, base_addr, imm + 4)),
+                            Directive::Instruction(ib::loadbu(b5, base_addr, imm + 5)),
+                            Directive::Instruction(ib::loadbu(b6, base_addr, imm + 6)),
+                            Directive::Instruction(ib::loadbu(b7, base_addr, imm + 7)),
+                            // build hi 32 bits
+                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, F::from_canonical_u8(8))),
+                            Directive::Instruction(ib::shl_imm(b2_shifted, b2, F::from_canonical_u8(16))),
+                            Directive::Instruction(ib::shl_imm(b3_shifted, b3, F::from_canonical_u8(24))),
+                            Directive::Instruction(ib::or(lo0, b0, b1_shifted)),
+                            Directive::Instruction(ib::or(lo1, b2_shifted, b3_shifted)),
+                            Directive::Instruction(ib::or(output, lo0, lo1)),
+                            // build lo 32 bits
+                            Directive::Instruction(ib::shl_imm(b5_shifted, b5, F::from_canonical_u8(8))),
+                            Directive::Instruction(ib::shl_imm(b6_shifted, b6, F::from_canonical_u8(16))),
+                            Directive::Instruction(ib::shl_imm(b7_shifted, b7, F::from_canonical_u8(24))),
+                            Directive::Instruction(ib::or(hi0, b4, b5_shifted)),
+                            Directive::Instruction(ib::or(hi1, b6_shifted, b7_shifted)),
+                            Directive::Instruction(ib::or(output + 1, hi0, hi1)),
+                        ]
+                    }
+                    1 => {
+                        // read four halfwords
+                        let h0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+                        vec![
+                            Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
+                            Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
+                            Directive::Instruction(ib::loadhu(h2, base_addr, imm + 4)),
+                            Directive::Instruction(ib::loadhu(h3, base_addr, imm + 6)),
+                            Directive::Instruction(ib::shl_imm(h1_shifted, h1, F::from_canonical_u8(16))),
+                            Directive::Instruction(ib::shl_imm(h3_shifted, h3, F::from_canonical_u8(16))),
+                            Directive::Instruction(ib::or(output, h0, h1_shifted)),
+                            Directive::Instruction(ib::or(output + 1, h2, h3_shifted)),
+                        ]
+                    }
+                    2 | 3 => {
+                        // read two words
+                        vec![Directive::Instruction(ib::loadw(output, base_addr, imm)),
+                             Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4))]
+                    }
+                    _  => unreachable!(),
                 }
             },
             Op::I64Load8U { memarg } | Op::I64Load16U { memarg } | Op::I64Load32U { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let output = (output.unwrap().start) as usize;
+                let _imm = mem_offset(memarg, c);
+                let _base_addr = inputs[0].start as usize;
+                let _output = (output.unwrap().start) as usize;
 
-                let aligned_insn: Option<fn(usize, usize, i32) -> Instruction<F>> = match op {
-                    Op::I64Load32U { .. } if memarg.align >= 2 => Some(ib::loadw),
-                    Op::I64Load16U { .. } if memarg.align >= 1 => Some(ib::loadhu),
-                    Op::I64Load8U { .. } => Some(ib::loadbu),
-                    _ => None,
-                };
-
-                // TODO: range check memory access
-
-                if let Some(insn) = aligned_insn {
-                    vec![Directive::Instruction(insn(output, base_addr, imm)),
-                         Directive::Instruction(ib::const_32_imm(output + 1, 0x0, 0x0))]
-                } else {
-                    todo!("unaligned memory access")
-                }
+                unimplemented!()
             },
             Op::I64Load8S { memarg } | Op::I64Load16S { memarg } | Op::I64Load32S { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let output32 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let output_shl = c.register_gen.allocate_type(ValType::I64).start as usize;
-                let output = (output.unwrap().start) as usize;
+                let _imm = mem_offset(memarg, c);
+                let _base_addr = inputs[0].start as usize;
+                let _output = (output.unwrap().start) as usize;
 
-                let aligned_insn: Option<fn(usize, usize, i32) -> Instruction<F>> = match op {
-                    Op::I64Load32S { .. } if memarg.align >= 2 => Some(ib::loadw),
-                    Op::I64Load16S { .. } if memarg.align >= 1 => Some(ib::loadh),
-                    Op::I64Load8S { .. } => Some(ib::loadb),
-                    _ => None,
-                };
-
-                // TODO: range check memory access
-
-                if let Some(insn) = aligned_insn {
-                    vec![Directive::Instruction(insn(output32, base_addr, imm)),
-                         Directive::Instruction(ib::shl_64(output_shl, output32, 32)),
-                         Directive::Instruction(ib::shr_s_64(output, output_shl, 32))]
-                } else {
-                    todo!("unaligned memory access")
-                }
+                unimplemented!()
             },
             Op::I32Store { memarg } | Op::I32Store8 { memarg } | Op::I32Store16 { memarg } => {
                 let imm = mem_offset(memarg, c);

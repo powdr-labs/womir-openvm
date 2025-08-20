@@ -571,6 +571,7 @@ pub fn loadbu<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F
 
 /// LOADB: load halfword from memory
 /// rd = MEM[rs1 + imm] (sign-extended)
+#[allow(dead_code)]
 pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
     let imm_unsigned = (imm & 0xFFFF) as usize;
     let imm_sign = if imm < 0 { 1 } else { 0 };
