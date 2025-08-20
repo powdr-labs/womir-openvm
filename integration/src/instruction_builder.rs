@@ -569,6 +569,24 @@ pub fn storew<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<
     )
 }
 
+/// LOADB: load byte from memory
+/// rd = MEM[rs1 + imm] (sign-extended)
+pub fn loadb<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
+    let imm_unsigned = (imm & 0xFFFF) as usize;
+    let imm_sign = if imm < 0 { 1 } else { 0 };
+
+    Instruction::new(
+        LoadStoreOpcode::LOADB.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: rd
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1
+        F::from_canonical_usize(imm_unsigned),                        // c: imm (lower 16 bits)
+        F::ONE,                                                       // d: register address space
+        F::from_canonical_usize(2), // e: memory address space (2 for byte, same as word)
+        F::ONE,                     // f: enabled
+        F::from_canonical_usize(imm_sign), // g: imm sign
+    )
+}
+
 /// LOADBU instruction: Load byte unsigned from memory
 /// rd = MEM[rs1 + imm] (zero-extended)
 #[allow(dead_code)]
@@ -578,6 +596,25 @@ pub fn loadbu<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F
 
     Instruction::new(
         LoadStoreOpcode::LOADBU.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: rd
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1
+        F::from_canonical_usize(imm_unsigned),                        // c: imm (lower 16 bits)
+        F::ONE,                                                       // d: register address space
+        F::from_canonical_usize(2), // e: memory address space (2 for byte, same as word)
+        F::ONE,                     // f: enabled
+        F::from_canonical_usize(imm_sign), // g: imm sign
+    )
+}
+
+/// LOADB: load halfword from memory
+/// rd = MEM[rs1 + imm] (sign-extended)
+#[allow(dead_code)]
+pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
+    let imm_unsigned = (imm & 0xFFFF) as usize;
+    let imm_sign = if imm < 0 { 1 } else { 0 };
+
+    Instruction::new(
+        LoadStoreOpcode::LOADH.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: rd
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1
         F::from_canonical_usize(imm_unsigned),                        // c: imm (lower 16 bits)
