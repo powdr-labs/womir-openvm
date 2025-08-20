@@ -1064,10 +1064,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::or(output, lo, hi_shifted)),
                         ]
                     }
-                    2 => {
+                    2.. => {
                         vec![Directive::Instruction(ib::loadw(output, base_addr, imm))]
                     }
-                    _ => unreachable!(),
                 }
             }
 
@@ -1097,10 +1096,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::or(output, b0, b1)),
                         ]
                     }
-                    1 => {
+                    1.. => {
                         vec![Directive::Instruction(ib::loadw(output, base_addr, imm))]
                     }
-                    _ => unreachable!(),
                 }
             }
             Op::I32Load8U { memarg } => {
@@ -1223,14 +1221,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::or(output + 1, h2, h3_shifted)),
                         ]
                     }
-                    2 | 3 => {
+                    2.. => {
                         // read two words
                         vec![
                             Directive::Instruction(ib::loadw(output, base_addr, imm)),
                             Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4)),
                         ]
                     }
-                    _ => unreachable!(),
                 }
             }
             Op::I64Load8U { memarg } | Op::I64Load16U { memarg } | Op::I64Load32U { memarg } => {
@@ -1247,19 +1244,190 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 unimplemented!()
             }
-            Op::I32Store { memarg } | Op::I32Store8 { memarg } | Op::I32Store16 { memarg } => {
-                let _imm = mem_offset(memarg, c);
-                let _base_addr = inputs[0].start as usize;
-                let _value = inputs[1].start as usize;
+            Op::I32Store { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let value = inputs[1].start as usize;
 
-                unimplemented!()
+                match memarg.align {
+                    0 => {
+                        // write byte by byte
+                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            // store byte 0
+                            Directive::Instruction(ib::storeb(value, base_addr, imm)),
+                            // shift and store byte 1
+                            Directive::Instruction(ib::shr_u_imm(
+                                b1,
+                                value,
+                                F::from_canonical_u8(8),
+                            )),
+                            Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
+                            // shift and store byte 2
+                            Directive::Instruction(ib::shr_u_imm(
+                                b2,
+                                value,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
+                            // shift and store byte 3
+                            Directive::Instruction(ib::shr_u_imm(
+                                b3,
+                                value,
+                                F::from_canonical_u8(24),
+                            )),
+                            Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
+                        ]
+                    }
+                    1 => {
+                        let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            // store halfword 0
+                            Directive::Instruction(ib::storeh(value, base_addr, imm)),
+                            // shift and store halfword 1
+                            Directive::Instruction(ib::shr_u_imm(
+                                h1,
+                                value,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
+                        ]
+                    }
+                    2.. => {
+                        vec![Directive::Instruction(ib::storew(value, base_addr, imm))]
+                    }
+                }
+            }
+            Op::I32Store8 { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let value = inputs[1].start as usize;
+
+                vec![Directive::Instruction(ib::storeb(value, base_addr, imm))]
+            }
+            Op::I32Store16 { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let value = inputs[1].start as usize;
+
+                match memarg.align {
+                    0 => {
+                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            // store byte 0
+                            Directive::Instruction(ib::storeb(value, base_addr, imm)),
+                            // shift and store byte 1
+                            Directive::Instruction(ib::shr_u_imm(
+                                b1,
+                                value,
+                                F::from_canonical_u8(8),
+                            )),
+                            Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
+                        ]
+                    }
+                    1.. => {
+                        vec![Directive::Instruction(ib::storeh(value, base_addr, imm))]
+                    }
+                }
             }
             Op::I64Store { memarg } => {
-                let _imm = mem_offset(memarg, c);
-                let _base_addr = inputs[0].start as usize;
-                let _value = inputs[1].start as usize;
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let value_lo = inputs[1].start as usize;
+                let value_hi = (inputs[1].start + 1) as usize;
 
-                unimplemented!()
+                match memarg.align {
+                    0 => {
+                        // write byte by byte
+                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b5 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b6 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b7 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            // store byte 0
+                            Directive::Instruction(ib::storeb(value_lo, base_addr, imm)),
+                            // shift and store byte 1
+                            Directive::Instruction(ib::shr_u_imm(
+                                b1,
+                                value_lo,
+                                F::from_canonical_u8(8),
+                            )),
+                            Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
+                            // shift and store byte 2
+                            Directive::Instruction(ib::shr_u_imm(
+                                b2,
+                                value_lo,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
+                            // shift and store byte 3
+                            Directive::Instruction(ib::shr_u_imm(
+                                b3,
+                                value_lo,
+                                F::from_canonical_u8(24),
+                            )),
+                            Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
+                            // store byte 4
+                            Directive::Instruction(ib::storeb(value_hi, base_addr, imm + 4)),
+                            // shift and store byte 5
+                            Directive::Instruction(ib::shr_u_imm(
+                                b5,
+                                value_hi,
+                                F::from_canonical_u8(8),
+                            )),
+                            Directive::Instruction(ib::storeb(b5, base_addr, imm + 5)),
+                            // shift and store byte 6
+                            Directive::Instruction(ib::shr_u_imm(
+                                b6,
+                                value_hi,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::storeb(b6, base_addr, imm + 6)),
+                            // shift and store byte 7
+                            Directive::Instruction(ib::shr_u_imm(
+                                b7,
+                                value_hi,
+                                F::from_canonical_u8(24),
+                            )),
+                            Directive::Instruction(ib::storeb(b7, base_addr, imm + 7)),
+                        ]
+                    }
+                    1 => {
+                        // write by halfwords
+                        let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            // store halfword 0
+                            Directive::Instruction(ib::storeh(value_lo, base_addr, imm)),
+                            // shift and store halfword 1
+                            Directive::Instruction(ib::shr_u_imm(
+                                h1,
+                                value_lo,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
+                            // store halfword 2
+                            Directive::Instruction(ib::storeh(value_hi, base_addr, imm + 4)),
+                            // shift and store halfword 3
+                            Directive::Instruction(ib::shr_u_imm(
+                                h3,
+                                value_hi,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::storeh(h3, base_addr, imm + 6)),
+                        ]
+                    }
+                    2.. => {
+                        vec![
+                            Directive::Instruction(ib::storew(value_lo, base_addr, imm)),
+                            Directive::Instruction(ib::storew(value_hi, base_addr, imm + 4)),
+                        ]
+                    }
+                }
             }
             Op::I64Store8 { memarg } | Op::I64Store16 { memarg } | Op::I64Store32 { memarg } => {
                 let _imm = mem_offset(memarg, c);
@@ -1269,7 +1437,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 unimplemented!()
             }
             Op::MemorySize { mem: _ } => todo!(),
-            Op::MemoryGrow { mem: _ } => todo!(),
+            Op::MemoryGrow { mem: _ } => {
+                // TODO: we currently don't check memory access bounds
+                vec![]
+            }
             Op::MemoryInit {
                 data_index: _,
                 mem: _,
