@@ -157,15 +157,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Create and execute program
             let exe = womir_translation::program_from_womir::<F>(ir_program, &function);
 
-            let inputs = args
-                .into_iter()
-                .flat_map(|arg| {
-                    let val = arg.parse::<u32>().unwrap();
-                    val.to_le_bytes().into_iter()
-                })
-                .collect::<Vec<_>>();
-
-            let stdin = StdIn::from_bytes(&inputs);
+            let mut stdin = StdIn::default();
+            for arg in args {
+                let val = arg.parse::<u32>().unwrap();
+                stdin.write(&val);
+            }
 
             let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
             println!("output: {output:?}");
@@ -178,20 +174,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::to_field::ToField;
+    use crate::{to_field::ToField, womir_translation::ERROR_CODE_OFFSET};
     use instruction_builder as wom;
+    use openvm_circuit::arch::ExecutionError;
     use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program};
     use openvm_sdk::{Sdk, StdIn};
     use openvm_stark_sdk::config::setup_tracing_with_log_level;
     use tracing::Level;
 
-    /// Helper function to run a VM test with given instructions and verify the output
-    fn run_vm_test(
+    /// Helper function to run a VM test with given instructions and return the error or
+    /// verify the output on success.
+    fn run_vm_test_with_result(
         test_name: &str,
         instructions: Vec<Instruction<F>>,
         expected_output: u32,
         stdin: Option<StdIn>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ExecutionError> {
         setup_tracing_with_log_level(Level::WARN);
 
         // Create VM configuration
@@ -223,6 +221,17 @@ mod tests {
         Ok(())
     }
 
+    /// Helper function to run a VM test with given instructions and verify the output
+    fn run_vm_test(
+        test_name: &str,
+        instructions: Vec<Instruction<F>>,
+        expected_output: u32,
+        stdin: Option<StdIn>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        run_vm_test_with_result(test_name, instructions, expected_output, stdin)?;
+        Ok(())
+    }
+
     #[test]
     fn test_basic_wom_operations() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
@@ -234,6 +243,32 @@ mod tests {
         ];
 
         run_vm_test("Basic WOM operations", instructions, 667, None)
+    }
+
+    #[test]
+    fn test_trap() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![wom::trap(42), wom::trap(8), wom::halt()];
+
+        let err = run_vm_test_with_result("Trap instruction", instructions, 0, None).unwrap_err();
+        if let ExecutionError::FailedWithExitCode(code) = err {
+            assert_eq!(code, ERROR_CODE_OFFSET + 42);
+        } else {
+            panic!("Unexpected error: {err:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_basic_addi_64() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            // Write to 8 and 9
+            wom::addi_64::<F>(8, 0, 666.to_f()?),
+            wom::addi_64::<F>(8, 8, 1.to_f()?),
+            wom::reveal(8, 0),
+            wom::halt(),
+        ];
+
+        run_vm_test("Basic addi_64", instructions, 667, None)
     }
 
     #[test]
@@ -271,6 +306,26 @@ mod tests {
             wom::halt(),
         ];
         run_vm_test("Multiplication by one", instructions, 999, None)
+    }
+
+    #[test]
+    fn test_skip() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            // Sets to skip 5 instructions.
+            wom::const_32_imm(8, 5, 0),
+            wom::skip(8),
+            //// SKIPPED BLOCK ////
+            wom::halt(),
+            wom::const_32_imm(10, 666, 0),
+            wom::reveal(10, 0),
+            wom::halt(),
+            wom::halt(),
+            ///////////////////////
+            wom::const_32_imm(10, 42, 0),
+            wom::reveal(10, 0),
+            wom::halt(),
+        ];
+        run_vm_test("Skipping 5 instructions", instructions, 42, None)
     }
 
     #[test]
@@ -1374,7 +1429,6 @@ mod wast_tests {
     #[derive(Debug, Deserialize)]
     struct Expected {
         #[serde(rename = "type")]
-        #[allow(dead_code)]
         expected_type: String,
         #[allow(dead_code)]
         lane: Option<String>,
@@ -1434,7 +1488,14 @@ mod wast_tests {
                                     .filter_map(|v| {
                                         if let Value::Object(obj) = v {
                                             if let Some(Value::String(val_str)) = obj.get("value") {
-                                                val_str.parse::<u32>().ok()
+                                                // In OpenVM we read the inputs as u32s, so here we
+                                                // need to parse the input as 32-bit limbs.
+                                                if let Some(Value::String(ty_str)) = obj.get("type")
+                                                {
+                                                    parse_as_vec_u32(ty_str, val_str)
+                                                } else {
+                                                    Some(vec![val_str.parse::<u32>().unwrap()])
+                                                }
                                             } else {
                                                 None
                                             }
@@ -1442,13 +1503,19 @@ mod wast_tests {
                                             None
                                         }
                                     })
+                                    .flatten()
                                     .collect();
 
                                 let expected_u32: Vec<u32> = expected
                                     .iter()
                                     .filter_map(|e| {
-                                        e.value.as_ref().and_then(|v| v.parse::<u32>().ok())
+                                        // Parse as 32-bit limbs for the same reason as
+                                        // above.
+                                        e.value
+                                            .as_ref()
+                                            .and_then(|v| parse_as_vec_u32(&e.expected_type, v))
                                     })
+                                    .flatten()
                                     .collect();
 
                                 assert_cases.push((field, args_u32, expected_u32));
@@ -1470,6 +1537,18 @@ mod wast_tests {
         let _ = fs::remove_file(&json_path);
 
         Ok(test_cases)
+    }
+
+    fn parse_as_vec_u32(ty: &str, value: &str) -> Option<Vec<u32>> {
+        if ty == "i32" {
+            let v = value.parse::<u32>().unwrap();
+            Some(vec![v])
+        } else if ty == "i64" {
+            let v = value.parse::<u64>().unwrap();
+            Some(vec![v as u32, (v >> 32) as u32])
+        } else {
+            None
+        }
     }
 
     #[allow(dead_code)]
@@ -1501,7 +1580,7 @@ mod wast_tests {
         program_from_womir(ir_program, entry_point)
     }
 
-    fn run_single_wast_test(
+    fn run_single_wasm_test(
         module_path: &str,
         function: &str,
         args: &[u32],
@@ -1532,29 +1611,17 @@ mod wast_tests {
 
         // Verify output
         if !expected.is_empty() {
+            // OpenVM returns 32 bytes as field elements.
             let output_bytes: Vec<_> = output.iter().map(|n| n.as_canonical_u32() as u8).collect();
-            let output_0 = u32::from_le_bytes(output_bytes[0..4].try_into().unwrap());
+            // Read only as many bytes as expected by the test.
+            let output: Vec<u32> = output_bytes[..expected.len() * 4]
+                .chunks(4)
+                .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+                .collect();
             assert_eq!(
-                output_0, expected[0],
-                "Test failed for {function}({args:?}): expected {expected:?}, got {output_0:?}"
+                output, expected,
+                "Test failed for {function}({args:?}): expected {expected:?}, got {output:?}"
             );
-        }
-
-        Ok(())
-    }
-
-    fn test_wast(file_name: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // Load test cases
-        let test_cases = extract_wast_test_info(&format!("../wasm_tests/{file_name}"))?;
-
-        // Run all test cases
-        for (module_path, _line, cases) in &test_cases {
-            // Prepend ../ to the module path since we're running from integration directory
-            let full_module_path = format!("../wasm_tests/{module_path}");
-
-            for (function, args, expected) in cases {
-                run_single_wast_test(&full_module_path, function, args, expected)?;
-            }
         }
 
         Ok(())
@@ -1562,11 +1629,43 @@ mod wast_tests {
 
     #[test]
     fn test_i32() -> Result<(), Box<dyn std::error::Error>> {
-        test_wast("i32.wast")
+        run_wasm_test("../wasm_tests/i32.wast")
+    }
+
+    #[test]
+    fn test_i64() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/i64.wast")
     }
 
     #[test]
     fn test_select() -> Result<(), Box<dyn std::error::Error>> {
-        test_wast("select.wast")
+        run_wasm_test("../wasm_tests/select.wast")
+    }
+
+    fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let test_cases = extract_wast_test_info(tf)?;
+
+        // Run all test cases
+        for (module_path, _line, cases) in &test_cases {
+            // Prepend ../ to the module path since we're running from integration directory
+            let full_module_path = format!("../wasm_tests/{module_path}");
+
+            for (function, args, expected) in cases {
+                run_single_wasm_test(&full_module_path, function, args, expected)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_fib() {
+        run_single_wasm_test("../sample_programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
+    }
+
+    #[test]
+    #[should_panic(expected = "not yet implemented")]
+    fn test_keccak() {
+        run_single_wasm_test("../sample_programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
     }
 }

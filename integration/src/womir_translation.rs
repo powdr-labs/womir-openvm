@@ -3,13 +3,13 @@ use std::{collections::HashMap, ops::Range, vec};
 use crate::{instruction_builder as ib, to_field::ToField};
 use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
-use wasmparser::{Operator as Op, ValType};
+use wasmparser::{MemArg, Operator as Op, ValType};
 use womir::{
     linker::LabelValue,
     loader::{
         flattening::{
             settings::{ComparisonFunction, JumpCondition, Settings},
-            Generators, LabelType, WriteOnceASM,
+            Context, LabelType, WriteOnceASM,
         },
         func_idx_to_label, CommonProgram,
     },
@@ -27,6 +27,9 @@ use womir::{
 /// position 0, because the linker places the function starting at address 0x4. This
 /// value is used by instruction ref.is_null to decide if the reference is null.
 const NULL_REF: [u32; 3] = [u32::MAX, 0, 0];
+
+/// Traps from Womir will terminate with its error code plus this offset.
+pub const ERROR_CODE_OFFSET: u32 = 100;
 
 pub fn program_from_womir<F: PrimeField32>(
     ir_program: womir::loader::Program<OpenVMSettings<F>>,
@@ -165,7 +168,7 @@ where
     let results = entry_point_func_type.results();
     let num_output_words = womir::word_count_types::<OpenVMSettings<F>>(results);
     for i in 0..num_output_words {
-        code.push(ib::reveal_imm(ptr as usize, zero_reg, i as usize));
+        code.push(ib::reveal_imm(ptr as usize, zero_reg, (i * 4) as usize));
         ptr += 1;
     }
 
@@ -217,6 +220,8 @@ pub enum Directive<F> {
     Instruction(Instruction<F>),
 }
 
+type Ctx<'a, 'b, F> = Context<'a, 'b, OpenVMSettings<F>>;
+
 pub struct OpenVMSettings<F> {
     _phantom: std::marker::PhantomData<F>,
 }
@@ -259,7 +264,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_label(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         name: String,
         frame_size: Option<u32>,
     ) -> Self::Directive {
@@ -271,15 +276,15 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_trap(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
-        _trap: womir::loader::flattening::TrapReason,
+        _c: &mut Ctx<F>,
+        error_code: womir::loader::flattening::TrapReason,
     ) -> Self::Directive {
-        todo!()
+        Directive::Instruction(ib::trap(error_code as u32 as usize))
     }
 
     fn emit_allocate_label_frame(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         label: String,
         result_ptr: Range<u32>,
     ) -> Self::Directive {
@@ -291,7 +296,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_allocate_value_frame(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         frame_size_ptr: Range<u32>,
         result_ptr: Range<u32>,
     ) -> Self::Directive {
@@ -303,7 +308,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_copy(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         src_ptr: Range<u32>,
         dest_ptr: Range<u32>,
     ) -> Self::Directive {
@@ -316,7 +321,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_copy_into_frame(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         src_ptr: Range<u32>,
         dest_frame_ptr: Range<u32>,
         dest_offset: Range<u32>,
@@ -334,7 +339,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_jump_into_loop(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         loop_label: String,
         loop_frame_ptr: Range<u32>,
         ret_info_to_copy: Option<womir::loader::flattening::settings::ReturnInfosToCopy>,
@@ -377,7 +382,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_conditional_jump(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         condition_type: womir::loader::flattening::settings::JumpCondition,
         label: String,
         condition_ptr: Range<u32>,
@@ -396,13 +401,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_conditional_jump_cmp_immediate(
         &self,
-        g: &mut Generators<'a, '_, Self>,
+        c: &mut Ctx<F>,
         cmp: womir::loader::flattening::settings::ComparisonFunction,
         value_ptr: Range<u32>,
         immediate: u32,
         label: String,
     ) -> Vec<Self::Directive> {
-        let comparison = g.r.allocate_type(ValType::I32);
+        let comparison = c.register_gen.allocate_type(ValType::I32);
 
         let mut directives = if let Ok(imm_f) = immediate.to_f() {
             // If immediate fits into field, we can save one instruction:
@@ -424,7 +429,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 | ComparisonFunction::LessThanUnsigned => ib::lt_u,
             };
 
-            let const_value = g.r.allocate_type(ValType::I32);
+            let const_value = c.register_gen.allocate_type(ValType::I32);
 
             let imm_lo: u16 = (immediate & 0xffff) as u16;
             let imm_hi: u16 = ((immediate >> 16) & 0xffff) as u16;
@@ -459,17 +464,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         directives
     }
 
-    fn emit_relative_jump(
-        &self,
-        _g: &mut Generators<'a, '_, Self>,
-        _offset_ptr: Range<u32>,
-    ) -> Self::Directive {
-        todo!()
+    fn emit_relative_jump(&self, _c: &mut Ctx<F>, offset_ptr: Range<u32>) -> Self::Directive {
+        Directive::Instruction(ib::skip(offset_ptr.start as usize))
     }
 
     fn emit_jump_out_of_loop(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         target_label: String,
         target_frame_ptr: Range<u32>,
     ) -> Self::Directive {
@@ -481,7 +482,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_return(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         ret_pc_ptr: Range<u32>,
         caller_fp_ptr: Range<u32>,
     ) -> Self::Directive {
@@ -493,18 +494,31 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_imported_call(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
-        _module: &'a str,
-        _function: &'a str,
+        _c: &mut Ctx<F>,
+        module: &'a str,
+        function: &'a str,
         _inputs: Vec<Range<u32>>,
-        _outputs: Vec<Range<u32>>,
-    ) -> Self::Directive {
-        todo!()
+        outputs: Vec<Range<u32>>,
+    ) -> Vec<Self::Directive> {
+        match (module, function) {
+            ("env", "read_u32") => {
+                let output = outputs[0].start as usize;
+                vec![
+                    Directive::Instruction(ib::pre_read_u32()),
+                    Directive::Instruction(ib::read_u32(output)),
+                ]
+            }
+            _ => unimplemented!(
+                "Imported function `{}` from module `{}` is not supported",
+                function,
+                module
+            ),
+        }
     }
 
     fn emit_function_call(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         function_label: String,
         function_frame_ptr: Range<u32>,
         saved_ret_pc_ptr: Range<u32>,
@@ -520,7 +534,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_indirect_call(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
+        _c: &mut Ctx<F>,
         target_pc_ptr: Range<u32>,
         function_frame_ptr: Range<u32>,
         saved_ret_pc_ptr: Range<u32>,
@@ -536,17 +550,38 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_table_get(
         &self,
-        _g: &mut Generators<'a, '_, Self>,
-        _table_idx: u32,
-        _entry_idx_ptr: Range<u32>,
-        _dest_ptr: Range<u32>,
-    ) -> Self::Directive {
-        todo!()
+        c: &mut Ctx<F>,
+        table_idx: u32,
+        entry_idx_ptr: Range<u32>,
+        dest_ptr: Range<u32>,
+    ) -> Vec<Self::Directive> {
+        let table_segment = c.program.tables[table_idx as usize];
+        let base_addr = table_segment.start + 8 + entry_idx_ptr.start * 12;
+
+        let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
+        let mut directives = vec![Directive::Instruction(ib::const_32_imm(
+            base_addr_reg.start as usize,
+            base_addr as u16,
+            (base_addr >> 16) as u16,
+        ))];
+
+        // Read the 3 words of the reference into contiguous registers
+        assert_eq!(dest_ptr.len(), 3);
+        directives.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
+            let offset = i as i32 * 4;
+            Directive::Instruction(ib::loadw(
+                dest_reg as usize,
+                base_addr_reg.start as usize,
+                offset,
+            ))
+        }));
+
+        directives
     }
 
     fn emit_wasm_op(
         &self,
-        g: &mut Generators<'a, '_, Self>,
+        c: &mut Ctx<F>,
         op: Op<'a>,
         inputs: Vec<Range<u32>>,
         output: Option<Range<u32>>,
@@ -576,31 +611,25 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I32ShrU => Ok(ib::shr_u),
 
             // 64-bit integer instructions
-            Op::I64Eq => todo!(),
-            Op::I64Ne => todo!(),
-            Op::I64LtS => todo!(),
-            Op::I64LtU => todo!(),
-            Op::I64GtS => todo!(),
-            Op::I64GtU => todo!(),
-            Op::I64LeS => todo!(),
-            Op::I64LeU => todo!(),
-            Op::I64GeS => todo!(),
-            Op::I64GeU => todo!(),
-            Op::I64Add => todo!(),
-            Op::I64Sub => todo!(),
-            Op::I64Mul => todo!(),
-            Op::I64DivS => todo!(),
-            Op::I64DivU => todo!(),
-            Op::I64RemS => todo!(),
-            Op::I64RemU => todo!(),
-            Op::I64And => todo!(),
-            Op::I64Or => todo!(),
-            Op::I64Xor => todo!(),
-            Op::I64Shl => todo!(),
-            Op::I64ShrS => todo!(),
-            Op::I64ShrU => todo!(),
-            Op::I64Rotl => todo!(),
-            Op::I64Rotr => todo!(),
+            Op::I64Eq => Ok(ib::eq_64),
+            Op::I64Ne => Ok(ib::neq_64),
+            Op::I64LtS => Ok(ib::lt_s_64),
+            Op::I64LtU => Ok(ib::lt_u_64),
+            Op::I64GtS => Ok(ib::gt_s_64),
+            Op::I64GtU => Ok(ib::gt_u_64),
+            Op::I64Add => Ok(ib::add_64),
+            Op::I64Sub => Ok(ib::sub_64),
+            Op::I64Mul => Ok(ib::mul_64),
+            Op::I64DivS => Ok(ib::div_64),
+            Op::I64DivU => Ok(ib::divu_64),
+            Op::I64RemS => Ok(ib::rem_64),
+            Op::I64RemU => Ok(ib::remu_64),
+            Op::I64And => Ok(ib::and_64),
+            Op::I64Or => Ok(ib::or_64),
+            Op::I64Xor => Ok(ib::xor_64),
+            Op::I64Shl => Ok(ib::shl_64),
+            Op::I64ShrS => Ok(ib::shr_s_64),
+            Op::I64ShrU => Ok(ib::shr_u_64),
 
             // Float instructions
             Op::F32Eq => todo!(),
@@ -673,11 +702,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input1 = inputs[0].start as usize;
                 let input2 = inputs[1].start as usize;
                 let output = output.unwrap().start as usize;
-                let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftl = g.r.allocate_type(ValType::I32).start as usize;
-                let const32 = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftl_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftl = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let const32 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftr_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftr = c.register_gen.allocate_type(ValType::I32).start as usize;
                 vec![
                     // get least significant 5 bits for rotation amount
                     Directive::Instruction(ib::andi(shiftl_amount, input2, 0x1f.to_f().unwrap())),
@@ -696,11 +725,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input1 = inputs[0].start as usize;
                 let input2 = inputs[1].start as usize;
                 let output = output.unwrap().start as usize;
-                let shiftl_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftl = g.r.allocate_type(ValType::I32).start as usize;
-                let const32 = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr_amount = g.r.allocate_type(ValType::I32).start as usize;
-                let shiftr = g.r.allocate_type(ValType::I32).start as usize;
+                let shiftl_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftl = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let const32 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftr_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let shiftr = c.register_gen.allocate_type(ValType::I32).start as usize;
                 vec![
                     // get least significant 5 bits for rotation amount
                     Directive::Instruction(ib::andi(shiftr_amount, input2, 0x1f.to_f().unwrap())),
@@ -713,6 +742,62 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
                     // or the two results
                     Directive::Instruction(ib::or(output, shiftl, shiftr)),
+                ]
+            }
+            Op::I64Rotl => {
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                let shiftl_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftl = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let const64 = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr = c.register_gen.allocate_type(ValType::I64).start as usize;
+                vec![
+                    // get least significant 6 bits for rotation amount
+                    Directive::Instruction(ib::andi_64(
+                        shiftl_amount,
+                        input2,
+                        0x3f.to_f().unwrap(),
+                    )),
+                    // shift left
+                    Directive::Instruction(ib::shl_64(shiftl, input1, shiftl_amount)),
+                    // get right shift amount
+                    Directive::Instruction(ib::const_32_imm(const64, 0x40, 0x0)),
+                    Directive::Instruction(ib::const_32_imm(const64 + 1, 0x0, 0x0)),
+                    Directive::Instruction(ib::sub_64(shiftr_amount, const64, shiftl_amount)),
+                    // shift right
+                    Directive::Instruction(ib::shr_u_64(shiftr, input1, shiftr_amount)),
+                    // or the two results
+                    Directive::Instruction(ib::or_64(output, shiftl, shiftr)),
+                ]
+            }
+            Op::I64Rotr => {
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                let shiftl_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftl = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let const64 = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr = c.register_gen.allocate_type(ValType::I64).start as usize;
+                vec![
+                    // get least significant 5 bits for rotation amount
+                    Directive::Instruction(ib::andi_64(
+                        shiftr_amount,
+                        input2,
+                        0x3f.to_f().unwrap(),
+                    )),
+                    // shift right
+                    Directive::Instruction(ib::shr_u_64(shiftr, input1, shiftr_amount)),
+                    // get left shift amount
+                    Directive::Instruction(ib::const_32_imm(const64, 0x40, 0x0)),
+                    Directive::Instruction(ib::const_32_imm(const64 + 1, 0x0, 0x0)),
+                    Directive::Instruction(ib::sub_64(shiftl_amount, const64, shiftr_amount)),
+                    // shift left
+                    Directive::Instruction(ib::shl_64(shiftl, input1, shiftl_amount)),
+                    // or the two results
+                    Directive::Instruction(ib::or_64(output, shiftl, shiftr)),
                 ]
             }
             Op::I32LeS | Op::I32LeU | Op::I32GeS | Op::I32GeU => {
@@ -728,7 +813,28 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input2 = inputs[1].start as usize;
                 let output = output.unwrap().start as usize;
 
-                let inverse_result = g.r.allocate_type(ValType::I32).start as usize;
+                let inverse_result = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+                // Perform the inverse operation and invert the result
+                vec![
+                    Directive::Instruction(inverse_op(inverse_result, input1, input2)),
+                    Directive::Instruction(ib::eqi(output, inverse_result, F::ZERO)),
+                ]
+            }
+            Op::I64LeS | Op::I64LeU | Op::I64GeS | Op::I64GeU => {
+                let inverse_op = match op {
+                    Op::I64LeS => ib::gt_s_64,
+                    Op::I64LeU => ib::gt_u_64,
+                    Op::I64GeS => ib::lt_s_64,
+                    Op::I64GeU => ib::lt_u_64,
+                    _ => unreachable!(),
+                };
+
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+
+                let inverse_result = c.register_gen.allocate_type(ValType::I32).start as usize;
 
                 // Perform the inverse operation and invert the result
                 vec![
@@ -740,6 +846,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
                 vec![Directive::Instruction(ib::eqi(output, input, F::ZERO))]
+            }
+            Op::I64Eqz => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+                vec![Directive::Instruction(ib::eqi_64(output, input, F::ZERO))]
             }
             Op::I32Clz => todo!(),
             Op::I32Ctz => todo!(),
@@ -778,17 +889,32 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::shr_s_imm(output, output, shift)),
                 ]
             }
+            Op::I64Extend8S | Op::I64Extend16S | Op::I64Extend32S => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                let shift = match op {
+                    Op::I64Extend8S => 56,
+                    Op::I64Extend16S => 48,
+                    Op::I64Extend32S => 32,
+                    _ => unreachable!(),
+                }
+                .to_f()
+                .unwrap();
+
+                // Left shift followed by arithmetic right shift
+                vec![
+                    Directive::Instruction(ib::shl_imm_64(output, input, shift)),
+                    Directive::Instruction(ib::shr_s_imm_64(output, output, shift)),
+                ]
+            }
 
             // 64-bit integer instructions
-            Op::I64Eqz => todo!(),
             Op::I64Clz => todo!(),
             Op::I64Ctz => todo!(),
             Op::I64Popcnt => todo!(),
             Op::I64ExtendI32S => todo!(),
             Op::I64ExtendI32U => todo!(),
-            Op::I64Extend8S => todo!(),
-            Op::I64Extend16S => todo!(),
-            Op::I64Extend32S => todo!(),
 
             // Parametric instruction
             Op::Select | Op::TypedSelect { .. } => {
@@ -799,8 +925,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let output = output.unwrap();
                 let condition = inputs[2].start;
 
-                let if_set_label = g.new_label(LabelType::Local);
-                let continuation_label = g.new_label(LabelType::Local);
+                let if_set_label = c.new_label(LabelType::Local);
+                let continuation_label = c.new_label(LabelType::Local);
 
                 let mut directives = vec![
                     // if condition != 0 jump to if_set_label
@@ -840,26 +966,267 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::GlobalGet { global_index: _ } => todo!(),
             Op::GlobalSet { global_index: _ } => todo!(),
 
-            // Memory instructions
-            Op::I32Load { memarg: _ } => todo!(),
-            Op::I64Load { memarg: _ } => todo!(),
-            Op::I32Load8S { memarg: _ } => todo!(),
-            Op::I32Load8U { memarg: _ } => todo!(),
-            Op::I32Load16S { memarg: _ } => todo!(),
-            Op::I32Load16U { memarg: _ } => todo!(),
-            Op::I64Load8S { memarg: _ } => todo!(),
-            Op::I64Load8U { memarg: _ } => todo!(),
-            Op::I64Load16S { memarg: _ } => todo!(),
-            Op::I64Load16U { memarg: _ } => todo!(),
-            Op::I64Load32S { memarg: _ } => todo!(),
-            Op::I64Load32U { memarg: _ } => todo!(),
-            Op::I32Store { memarg: _ } => todo!(),
-            Op::I64Store { memarg: _ } => todo!(),
-            Op::I32Store8 { memarg: _ } => todo!(),
-            Op::I32Store16 { memarg: _ } => todo!(),
-            Op::I64Store8 { memarg: _ } => todo!(),
-            Op::I64Store16 { memarg: _ } => todo!(),
-            Op::I64Store32 { memarg: _ } => todo!(),
+            Op::I32Load { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+                match memarg.align {
+                    0 => {
+                        // read four bytes
+                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
+                            Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
+                            Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
+                            Directive::Instruction(ib::shl_imm(
+                                b1_shifted,
+                                b1,
+                                F::from_canonical_u8(8),
+                            )),
+                            Directive::Instruction(ib::shl_imm(
+                                b2_shifted,
+                                b2,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::shl_imm(
+                                b3_shifted,
+                                b3,
+                                F::from_canonical_u8(24),
+                            )),
+                            Directive::Instruction(ib::or(lo, b0, b1_shifted)),
+                            Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
+                            Directive::Instruction(ib::or(output, lo, hi)),
+                        ]
+                    }
+                    1 => {
+                        // read two half words
+                        let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let hi_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            Directive::Instruction(ib::loadhu(lo, base_addr, imm)),
+                            Directive::Instruction(ib::loadhu(hi, base_addr, imm + 2)),
+                            Directive::Instruction(ib::shl_imm(
+                                hi_shifted,
+                                hi,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::or(output, lo, hi_shifted)),
+                        ]
+                    }
+                    2 => {
+                        vec![Directive::Instruction(ib::loadw(output, base_addr, imm))]
+                    }
+                    _ => unreachable!(),
+                }
+            }
+
+            Op::I32Load16U { memarg } | Op::I32Load16S { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                match memarg.align {
+                    0 => {
+                        // read four bytes
+                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                            if let Op::I32Load16S { .. } = op {
+                                Directive::Instruction(ib::loadb(b1, base_addr, imm + 1))
+                            } else {
+                                Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
+                            },
+                            Directive::Instruction(ib::shl_imm(
+                                b1_shifted,
+                                b1,
+                                F::from_canonical_u8(8),
+                            )),
+                            Directive::Instruction(ib::or(output, b0, b1)),
+                        ]
+                    }
+                    1 => {
+                        vec![Directive::Instruction(ib::loadw(output, base_addr, imm))]
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            Op::I32Load8U { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                vec![Directive::Instruction(ib::loadbu(output, base_addr, imm))]
+            }
+            Op::I32Load8S { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                vec![Directive::Instruction(ib::loadb(output, base_addr, imm))]
+            }
+            Op::I64Load { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = (output.unwrap().start) as usize;
+
+                match memarg.align {
+                    0 => {
+                        // read byte by byte
+                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b4 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b5 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b6 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b7 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b5_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b6_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b7_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+                        let hi0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let hi1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let lo0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let lo1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+                        vec![
+                            // load each byte
+                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
+                            Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
+                            Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
+                            Directive::Instruction(ib::loadbu(b4, base_addr, imm + 4)),
+                            Directive::Instruction(ib::loadbu(b5, base_addr, imm + 5)),
+                            Directive::Instruction(ib::loadbu(b6, base_addr, imm + 6)),
+                            Directive::Instruction(ib::loadbu(b7, base_addr, imm + 7)),
+                            // build hi 32 bits
+                            Directive::Instruction(ib::shl_imm(
+                                b1_shifted,
+                                b1,
+                                F::from_canonical_u8(8),
+                            )),
+                            Directive::Instruction(ib::shl_imm(
+                                b2_shifted,
+                                b2,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::shl_imm(
+                                b3_shifted,
+                                b3,
+                                F::from_canonical_u8(24),
+                            )),
+                            Directive::Instruction(ib::or(lo0, b0, b1_shifted)),
+                            Directive::Instruction(ib::or(lo1, b2_shifted, b3_shifted)),
+                            Directive::Instruction(ib::or(output, lo0, lo1)),
+                            // build lo 32 bits
+                            Directive::Instruction(ib::shl_imm(
+                                b5_shifted,
+                                b5,
+                                F::from_canonical_u8(8),
+                            )),
+                            Directive::Instruction(ib::shl_imm(
+                                b6_shifted,
+                                b6,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::shl_imm(
+                                b7_shifted,
+                                b7,
+                                F::from_canonical_u8(24),
+                            )),
+                            Directive::Instruction(ib::or(hi0, b4, b5_shifted)),
+                            Directive::Instruction(ib::or(hi1, b6_shifted, b7_shifted)),
+                            Directive::Instruction(ib::or(output + 1, hi0, hi1)),
+                        ]
+                    }
+                    1 => {
+                        // read four halfwords
+                        let h0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+                        vec![
+                            Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
+                            Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
+                            Directive::Instruction(ib::loadhu(h2, base_addr, imm + 4)),
+                            Directive::Instruction(ib::loadhu(h3, base_addr, imm + 6)),
+                            Directive::Instruction(ib::shl_imm(
+                                h1_shifted,
+                                h1,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::shl_imm(
+                                h3_shifted,
+                                h3,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::or(output, h0, h1_shifted)),
+                            Directive::Instruction(ib::or(output + 1, h2, h3_shifted)),
+                        ]
+                    }
+                    2 | 3 => {
+                        // read two words
+                        vec![
+                            Directive::Instruction(ib::loadw(output, base_addr, imm)),
+                            Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4)),
+                        ]
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            Op::I64Load8U { memarg } | Op::I64Load16U { memarg } | Op::I64Load32U { memarg } => {
+                let _imm = mem_offset(memarg, c);
+                let _base_addr = inputs[0].start as usize;
+                let _output = (output.unwrap().start) as usize;
+
+                unimplemented!()
+            }
+            Op::I64Load8S { memarg } | Op::I64Load16S { memarg } | Op::I64Load32S { memarg } => {
+                let _imm = mem_offset(memarg, c);
+                let _base_addr = inputs[0].start as usize;
+                let _output = (output.unwrap().start) as usize;
+
+                unimplemented!()
+            }
+            Op::I32Store { memarg } | Op::I32Store8 { memarg } | Op::I32Store16 { memarg } => {
+                let _imm = mem_offset(memarg, c);
+                let _base_addr = inputs[0].start as usize;
+                let _value = inputs[1].start as usize;
+
+                unimplemented!()
+            }
+            Op::I64Store { memarg } => {
+                let _imm = mem_offset(memarg, c);
+                let _base_addr = inputs[0].start as usize;
+                let _value = inputs[1].start as usize;
+
+                unimplemented!()
+            }
+            Op::I64Store8 { memarg } | Op::I64Store16 { memarg } | Op::I64Store32 { memarg } => {
+                let _imm = mem_offset(memarg, c);
+                let _base_addr = inputs[0].start as usize;
+                let _value = inputs[1].start as usize;
+
+                unimplemented!()
+            }
             Op::MemorySize { mem: _ } => todo!(),
             Op::MemoryGrow { mem: _ } => todo!(),
             Op::MemoryInit {
@@ -1045,6 +1412,18 @@ impl<F: PrimeField32> Directive<F> {
             Directive::Instruction(i) => Some(i),
         }
     }
+}
+
+fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> i32 {
+    assert_eq!(memarg.memory, 0, "no multiple memories supported");
+    let mem_start = c
+        .program
+        .linear_memory_start()
+        .expect("no memory allocated");
+    let offset = mem_start + u32::try_from(memarg.offset).expect("offset too large");
+    // TODO: currently, memory chip immediates are {-u16::MAX .. u16::MAX}.
+    // To support larger offsets, we need to change the memory chip.
+    u16::try_from(offset).unwrap() as i32
 }
 
 impl<F: Clone> womir::linker::Directive for Directive<F> {

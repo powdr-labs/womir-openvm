@@ -43,9 +43,57 @@ pub enum BaseAluOpcode {
     Serialize,
     Deserialize,
 )]
+#[opcode_offset = 0x2200]
+#[repr(usize)]
+pub enum BaseAlu64Opcode {
+    ADD,
+    SUB,
+    XOR,
+    OR,
+    AND,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
 #[opcode_offset = 0x1205]
 #[repr(usize)]
 pub enum ShiftOpcode {
+    SLL,
+    SRL,
+    SRA,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
+#[opcode_offset = 0x2205]
+#[repr(usize)]
+pub enum Shift64Opcode {
     SLL,
     SRL,
     SRA,
@@ -88,9 +136,53 @@ pub enum LessThanOpcode {
     Serialize,
     Deserialize,
 )]
+#[opcode_offset = 0x2208]
+#[repr(usize)]
+pub enum LessThan64Opcode {
+    SLT,
+    SLTU,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
 #[opcode_offset = 0x120c]
 #[repr(usize)]
 pub enum EqOpcode {
+    EQ,
+    NEQ,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
+#[opcode_offset = 0x220c]
+#[repr(usize)]
+pub enum Eq64Opcode {
     EQ,
     NEQ,
 }
@@ -240,6 +332,7 @@ pub enum JaafOpcode {
 #[allow(non_camel_case_types)]
 pub enum JumpOpcode {
     JUMP,         // unconditional jump to immediate PC
+    SKIP,         // unconditional jump to current PC + offset
     JUMP_IF,      // conditional jump to immediate PC if condition register != 0
     JUMP_IF_ZERO, // conditional jump to immediate PC if condition register == 0
 }
@@ -265,6 +358,16 @@ pub enum MulOpcode {
 }
 
 #[derive(
+    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
+)]
+#[opcode_offset = 0x2250]
+#[repr(usize)]
+#[allow(non_camel_case_types)]
+pub enum Mul64Opcode {
+    MUL,
+}
+
+#[derive(
     Copy,
     Clone,
     Debug,
@@ -283,6 +386,31 @@ pub enum MulOpcode {
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum DivRemOpcode {
+    DIV,
+    DIVU,
+    REM,
+    REMU,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
+)]
+#[opcode_offset = 0x2254]
+#[repr(usize)]
+#[allow(non_camel_case_types)]
+pub enum DivRem64Opcode {
     DIV,
     DIVU,
     REM,
