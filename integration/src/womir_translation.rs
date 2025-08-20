@@ -545,7 +545,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         saved_ret_pc_ptr: Range<u32>,
         saved_caller_fp_ptr: Range<u32>,
     ) -> Self::Directive {
-        Directive::Instruction(ib::call(
+        Directive::Instruction(ib::call_indirect(
             saved_ret_pc_ptr.start as usize,
             saved_caller_fp_ptr.start as usize,
             target_pc_ptr.start as usize,
@@ -555,12 +555,38 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_table_get(
         &self,
-        _c: &mut Ctx<F>,
-        _table_idx: u32,
-        _entry_idx_ptr: Range<u32>,
-        _dest_ptr: Range<u32>,
-    ) -> Self::Directive {
-        todo!()
+        c: &mut Ctx<F>,
+        table_idx: u32,
+        entry_idx_ptr: Range<u32>,
+        dest_ptr: Range<u32>,
+    ) -> Vec<Self::Directive> {
+        const TABLE_ENTRY_SIZE: u32 = 12;
+        const TABLE_SEGMENT_HEADER_SIZE: u32 = 8;
+
+        let table_segment = c.program.tables[table_idx as usize];
+        let base_addr = table_segment.start
+            + TABLE_SEGMENT_HEADER_SIZE
+            + entry_idx_ptr.start * TABLE_ENTRY_SIZE;
+
+        let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
+        let mut directives = vec![Directive::Instruction(ib::const_32_imm(
+            base_addr_reg.start as usize,
+            base_addr as u16,
+            (base_addr >> 16) as u16,
+        ))];
+
+        // Read the 3 words of the reference into contiguous registers
+        assert_eq!(dest_ptr.len(), 3);
+        directives.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
+            let offset = i as i32 * 4;
+            Directive::Instruction(ib::loadw(
+                dest_reg as usize,
+                base_addr_reg.start as usize,
+                offset,
+            ))
+        }));
+
+        directives
     }
 
     fn emit_wasm_op(
@@ -1265,7 +1291,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 src_table: _,
             } => todo!(),
             Op::TableFill { table: _ } => todo!(),
-            Op::TableGet { table: _ } => todo!(),
+            Op::TableGet { table } => {
+                self.emit_table_get(c, table, inputs[0].clone(), output.unwrap())
+            }
             Op::TableSet { table: _ } => todo!(),
             Op::TableGrow { table: _ } => todo!(),
             Op::TableSize { table: _ } => todo!(),
