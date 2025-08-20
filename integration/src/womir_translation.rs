@@ -28,6 +28,11 @@ use womir::{
 /// value is used by instruction ref.is_null to decide if the reference is null.
 const NULL_REF: [u32; 3] = [u32::MAX, 0, 0];
 
+/// Traps from Womir will terminate with its error code plus this offset.
+pub const ERROR_CODE_OFFSET: u32 = 100;
+
+pub const ERROR_ABORT_CODE: u32 = 200;
+
 pub fn program_from_womir<F: PrimeField32>(
     ir_program: womir::loader::Program<OpenVMSettings<F>>,
     entry_point: &str,
@@ -274,9 +279,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     fn emit_trap(
         &self,
         _c: &mut Ctx<F>,
-        _trap: womir::loader::flattening::TrapReason,
+        error_code: womir::loader::flattening::TrapReason,
     ) -> Self::Directive {
-        todo!()
+        Directive::Instruction(ib::trap(error_code as u32 as usize))
     }
 
     fn emit_allocate_label_frame(
@@ -492,12 +497,28 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     fn emit_imported_call(
         &self,
         _c: &mut Ctx<F>,
-        _module: &'a str,
-        _function: &'a str,
+        module: &'a str,
+        function: &'a str,
         _inputs: Vec<Range<u32>>,
-        _outputs: Vec<Range<u32>>,
-    ) -> Self::Directive {
-        todo!()
+        outputs: Vec<Range<u32>>,
+    ) -> Vec<Self::Directive> {
+        match (module, function) {
+            ("env", "read_u32") => {
+                let output = outputs[0].start as usize;
+                vec![
+                    Directive::Instruction(ib::pre_read_u32()),
+                    Directive::Instruction(ib::read_u32(output)),
+                ]
+            }
+            ("env", "abort") => {
+                vec![Directive::Instruction(ib::abort())]
+            }
+            _ => unimplemented!(
+                "Imported function `{}` from module `{}` is not supported",
+                function,
+                module
+            ),
+        }
     }
 
     fn emit_function_call(
@@ -582,19 +603,17 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I64GtU => Ok(ib::gt_u_64),
             Op::I64Add => Ok(ib::add_64),
             Op::I64Sub => Ok(ib::sub_64),
-            Op::I64Mul => todo!(),
-            Op::I64DivS => todo!(),
-            Op::I64DivU => todo!(),
-            Op::I64RemS => todo!(),
-            Op::I64RemU => todo!(),
+            Op::I64Mul => Ok(ib::mul_64),
+            Op::I64DivS => Ok(ib::div_64),
+            Op::I64DivU => Ok(ib::divu_64),
+            Op::I64RemS => Ok(ib::rem_64),
+            Op::I64RemU => Ok(ib::remu_64),
             Op::I64And => Ok(ib::and_64),
             Op::I64Or => Ok(ib::or_64),
             Op::I64Xor => Ok(ib::xor_64),
             Op::I64Shl => Ok(ib::shl_64),
             Op::I64ShrS => Ok(ib::shr_s_64),
             Op::I64ShrU => Ok(ib::shr_u_64),
-            Op::I64Rotl => todo!(),
-            Op::I64Rotr => todo!(),
 
             // Float instructions
             Op::F32Eq => todo!(),
@@ -709,6 +728,62 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::or(output, shiftl, shiftr)),
                 ]
             }
+            Op::I64Rotl => {
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                let shiftl_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftl = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let const64 = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr = c.register_gen.allocate_type(ValType::I64).start as usize;
+                vec![
+                    // get least significant 6 bits for rotation amount
+                    Directive::Instruction(ib::andi_64(
+                        shiftl_amount,
+                        input2,
+                        0x3f.to_f().unwrap(),
+                    )),
+                    // shift left
+                    Directive::Instruction(ib::shl_64(shiftl, input1, shiftl_amount)),
+                    // get right shift amount
+                    Directive::Instruction(ib::const_32_imm(const64, 0x40, 0x0)),
+                    Directive::Instruction(ib::const_32_imm(const64 + 1, 0x0, 0x0)),
+                    Directive::Instruction(ib::sub_64(shiftr_amount, const64, shiftl_amount)),
+                    // shift right
+                    Directive::Instruction(ib::shr_u_64(shiftr, input1, shiftr_amount)),
+                    // or the two results
+                    Directive::Instruction(ib::or_64(output, shiftl, shiftr)),
+                ]
+            }
+            Op::I64Rotr => {
+                let input1 = inputs[0].start as usize;
+                let input2 = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                let shiftl_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftl = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let const64 = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let shiftr = c.register_gen.allocate_type(ValType::I64).start as usize;
+                vec![
+                    // get least significant 5 bits for rotation amount
+                    Directive::Instruction(ib::andi_64(
+                        shiftr_amount,
+                        input2,
+                        0x3f.to_f().unwrap(),
+                    )),
+                    // shift right
+                    Directive::Instruction(ib::shr_u_64(shiftr, input1, shiftr_amount)),
+                    // get left shift amount
+                    Directive::Instruction(ib::const_32_imm(const64, 0x40, 0x0)),
+                    Directive::Instruction(ib::const_32_imm(const64 + 1, 0x0, 0x0)),
+                    Directive::Instruction(ib::sub_64(shiftl_amount, const64, shiftr_amount)),
+                    // shift left
+                    Directive::Instruction(ib::shl_64(shiftl, input1, shiftl_amount)),
+                    // or the two results
+                    Directive::Instruction(ib::or_64(output, shiftl, shiftr)),
+                ]
+            }
             Op::I32LeS | Op::I32LeU | Op::I32GeS | Op::I32GeU => {
                 let inverse_op = match op {
                     Op::I32LeS => ib::gt_s,
@@ -784,6 +859,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
 
+                let tmp = c.register_gen.allocate_type(ValType::I32).start as usize;
+
                 let shift = match op {
                     Op::I32Extend8S => 24,
                     Op::I32Extend16S => 16,
@@ -794,8 +871,29 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 // Left shift followed by arithmetic right shift
                 vec![
-                    Directive::Instruction(ib::shl_imm(output, input, shift)),
-                    Directive::Instruction(ib::shr_s_imm(output, output, shift)),
+                    Directive::Instruction(ib::shl_imm(tmp, input, shift)),
+                    Directive::Instruction(ib::shr_s_imm(output, tmp, shift)),
+                ]
+            }
+            Op::I64Extend8S | Op::I64Extend16S | Op::I64Extend32S => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                let tmp = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+                let shift = match op {
+                    Op::I64Extend8S => 56,
+                    Op::I64Extend16S => 48,
+                    Op::I64Extend32S => 32,
+                    _ => unreachable!(),
+                }
+                .to_f()
+                .unwrap();
+
+                // Left shift followed by arithmetic right shift
+                vec![
+                    Directive::Instruction(ib::shl_imm_64(tmp, input, shift)),
+                    Directive::Instruction(ib::shr_s_imm_64(output, tmp, shift)),
                 ]
             }
 
@@ -803,11 +901,35 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I64Clz => todo!(),
             Op::I64Ctz => todo!(),
             Op::I64Popcnt => todo!(),
-            Op::I64ExtendI32S => todo!(),
-            Op::I64ExtendI32U => todo!(),
-            Op::I64Extend8S => todo!(),
-            Op::I64Extend16S => todo!(),
-            Op::I64Extend32S => todo!(),
+            Op::I64ExtendI32S => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                let high_shifted = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+                vec![
+                    // Copy the 32 bit values to the high 32 bits of the temporary value.
+                    // Leave the low bits undefined.
+                    Directive::Instruction(ib::addi(high_shifted + 1, input, F::ZERO)),
+                    // Arithmetic shift right to fill the high bits with the sign bit.
+                    Directive::Instruction(ib::shr_s_imm_64(
+                        output,
+                        high_shifted,
+                        32.to_f().unwrap(),
+                    )),
+                ]
+            }
+            Op::I64ExtendI32U => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                vec![
+                    // Copy the 32 bit value to the low 32 bits of the output.
+                    Directive::Instruction(ib::addi(output, input, F::ZERO)),
+                    // Zero the high 32 bits.
+                    Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)),
+                ]
+            }
 
             // Parametric instruction
             Op::Select => {
