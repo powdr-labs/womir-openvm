@@ -1100,54 +1100,25 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 unimplemented!()
             }
             Op::I32Store { memarg } | Op::I32Store8 { memarg } | Op::I32Store16 { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let value = inputs[1].start as usize;
+                let _imm = mem_offset(memarg, c);
+                let _base_addr = inputs[0].start as usize;
+                let _value = inputs[1].start as usize;
 
-                let aligned_insn: Option<fn(usize, usize, i32) -> Instruction<F>> = match op {
-                    Op::I32Store { .. } if memarg.align >= 2 => Some(ib::storew),
-                    Op::I32Store16 { .. } if memarg.align >= 1 => Some(ib::storeh),
-                    Op::I32Store8 { .. } => Some(ib::storeb),
-                    _ => None,
-                };
-
-                if let Some(insn) = aligned_insn {
-                    vec![Directive::Instruction(insn(value, base_addr, imm))]
-                } else {
-                    todo!("unaligned memory access")
-                }
+                unimplemented!()
             }
             Op::I64Store { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let value = inputs[1].start as usize;
+                let _imm = mem_offset(memarg, c);
+                let _base_addr = inputs[0].start as usize;
+                let _value = inputs[1].start as usize;
 
-                if memarg.align >= 3 {
-                    vec![
-                        Directive::Instruction(ib::storew(value, base_addr, imm)),
-                        Directive::Instruction(ib::storew(value + 1, base_addr, imm + 4)),
-                    ]
-                } else {
-                    todo!("unaligned memory access")
-                }
+                unimplemented!()
             }
             Op::I64Store8 { memarg } | Op::I64Store16 { memarg } | Op::I64Store32 { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let value = inputs[1].start as usize;
+                let _imm = mem_offset(memarg, c);
+                let _base_addr = inputs[0].start as usize;
+                let _value = inputs[1].start as usize;
 
-                let aligned_insn: Option<fn(usize, usize, i32) -> Instruction<F>> = match op {
-                    Op::I64Store32 { .. } if memarg.align >= 2 => Some(ib::storew),
-                    Op::I64Store16 { .. } if memarg.align >= 1 => Some(ib::storeh),
-                    Op::I64Store8 { .. } => Some(ib::storeb),
-                    _ => None,
-                };
-
-                if let Some(insn) = aligned_insn {
-                    vec![Directive::Instruction(insn(value, base_addr, imm))]
-                } else {
-                    todo!("unaligned memory access")
-                }
+                unimplemented!()
             }
             Op::MemorySize { mem: _ } => todo!(),
             Op::MemoryGrow { mem: _ } => todo!(),
