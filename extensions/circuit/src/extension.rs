@@ -96,7 +96,8 @@ impl Default for WomirI {
 }
 
 fn default_range_tuple_checker_sizes() -> [u32; 2] {
-    [1 << 8, 8 * (1 << 8)]
+    // doubled from original openvm sizes to allow 64bit
+    [1 << 8, 16 * (1 << 8)]
 }
 
 // ============ Executor and Periphery Enums for Extension ============
