@@ -28,7 +28,7 @@ use strum::IntoEnumIterator;
 use crate::allocate_frame::AllocateFrameCoreChipWom;
 use crate::consts::ConstsCoreChipWom;
 use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
-use crate::loadstore::{LoadStoreCoreChip, LoadStoreChip};
+use crate::loadstore::{LoadStoreChip, LoadStoreCoreChip};
 use crate::{adapters::*, wom_traits::*, *};
 
 const DEFAULT_INIT_FP: u32 = 0;
