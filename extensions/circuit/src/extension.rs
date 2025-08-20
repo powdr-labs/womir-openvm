@@ -434,7 +434,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
-                _pointer_max_bits,
+                pointer_max_bits,
                 range_checker.clone(),
             ),
             LoadSignExtendCoreChip::new(range_checker.clone()),
