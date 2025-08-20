@@ -942,7 +942,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             }
 
             // Parametric instruction
-            Op::Select => {
+            Op::Select | Op::TypedSelect { .. } => {
                 // Works like a ternary operator: if the condition (3rd input) is non-zero,
                 // select the 1st input, otherwise select the 2nd input.
                 let if_set_val = inputs[0].clone();
