@@ -871,7 +871,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Op::I32Load8U { .. } => Some(ib::loadbu),
                     Op::I32Load16S { .. } if memarg.align >= 1 => Some(ib::loadh),
                     Op::I32Load8S { .. } => Some(ib::loadb),
-                    _ => unreachable!(),
+                    _ => None,
                 };
 
                 // TODO: range check memory access
@@ -879,7 +879,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 if let Some(insn) = aligned_insn {
                     vec![Directive::Instruction(insn(output, base_addr, imm))]
                 } else {
-                    todo!()
+                    todo!("unaligned memory access")
                 }
             }
             Op::I64Load { memarg } => {
@@ -905,7 +905,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Op::I64Load32U { .. } if memarg.align >= 2 => Some(ib::loadw),
                     Op::I64Load16U { .. } if memarg.align >= 1 => Some(ib::loadhu),
                     Op::I64Load8U { .. } => Some(ib::loadbu),
-                    _ => unreachable!(),
+                    _ => None,
                 };
 
                 // TODO: range check memory access
@@ -928,7 +928,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Op::I64Load32S { .. } if memarg.align >= 2 => Some(ib::loadw),
                     Op::I64Load16S { .. } if memarg.align >= 1 => Some(ib::loadh),
                     Op::I64Load8S { .. } => Some(ib::loadb),
-                    _ => unreachable!(),
+                    _ => None,
                 };
 
                 // TODO: range check memory access
@@ -950,7 +950,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Op::I32Store { .. } if memarg.align >= 2 => Some(ib::storew),
                     Op::I32Store16 { .. } if memarg.align >= 1 => Some(ib::storeh),
                     Op::I32Store8 { .. } => Some(ib::storeb),
-                    _ => unreachable!(),
+                    _ => None,
                 };
 
                 if let Some(insn) = aligned_insn {
@@ -980,7 +980,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Op::I64Store32 { .. } if memarg.align >= 2 => Some(ib::storew),
                     Op::I64Store16 { .. } if memarg.align >= 1 => Some(ib::storeh),
                     Op::I64Store8 { .. } => Some(ib::storeb),
-                    _ => unreachable!(),
+                    _ => None,
                 };
 
                 if let Some(insn) = aligned_insn {
