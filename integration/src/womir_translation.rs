@@ -900,10 +900,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::or(output, lo, hi_shifted)),
                         ]
                     }
-                    2 => {
+                    2 .. => {
                         vec![Directive::Instruction(ib::loadw(output, base_addr, imm))]
                     }
-                    _ => unreachable!(),
                 }
             }
 
@@ -929,10 +928,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::or(output, b0, b1)),
                         ]
                     }
-                    1 => {
+                    1 .. => {
                         vec![Directive::Instruction(ib::loadw(output, base_addr, imm))]
                     }
-                    _ => unreachable!(),
                 }
             }
             Op::I32Load8U { memarg }  => {
@@ -1023,12 +1021,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::or(output + 1, h2, h3_shifted)),
                         ]
                     }
-                    2 | 3 => {
+                    2 .. => {
                         // read two words
                         vec![Directive::Instruction(ib::loadw(output, base_addr, imm)),
                              Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4))]
                     }
-                    _  => unreachable!(),
                 }
             },
             Op::I64Load8U { memarg } | Op::I64Load16U { memarg } | Op::I64Load32U { memarg } => {
