@@ -556,7 +556,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         dest_ptr: Range<u32>,
     ) -> Vec<Self::Directive> {
         let table_segment = c.program.tables[table_idx as usize];
-        let base_addr = table_segment.start + 8 + entry_idx_ptr.start as u32 * 12;
+        let base_addr = table_segment.start + 8 + entry_idx_ptr.start * 12;
 
         let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
         let mut directives = vec![Directive::Instruction(ib::const_32_imm(
@@ -568,8 +568,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         // Read the 3 words of the reference into contiguous registers
         assert_eq!(dest_ptr.len(), 3);
         directives.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
-            let offset: u32 = i as u32 * 4;
-            Directive::Instruction(ib::load32(
+            let offset = i as i32 * 4;
+            Directive::Instruction(ib::loadw(
                 dest_reg as usize,
                 base_addr_reg.start as usize,
                 offset,
