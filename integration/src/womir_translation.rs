@@ -1634,9 +1634,8 @@ fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> i32 {
         .linear_memory_start()
         .expect("no memory allocated");
     let offset = mem_start + u32::try_from(memarg.offset).expect("offset too large");
-    // TODO: currently, memory chip immediates are {-u16::MAX .. u16::MAX}.
-    // To support larger offsets, we need to change the memory chip.
-    u16::try_from(offset).unwrap() as i32
+    assert!(offset < (1 << 24));
+    offset as i32
 }
 
 fn load_from_const_addr<F: PrimeField32>(
