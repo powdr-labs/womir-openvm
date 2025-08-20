@@ -1005,7 +1005,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::loadbu(b5, base_addr, imm + 5)),
                             Directive::Instruction(ib::loadbu(b6, base_addr, imm + 6)),
                             Directive::Instruction(ib::loadbu(b7, base_addr, imm + 7)),
-                            // build hi 32 bits
+                            // build lo 32 bits
                             Directive::Instruction(ib::shl_imm(
                                 b1_shifted,
                                 b1,
@@ -1024,7 +1024,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::or(lo0, b0, b1_shifted)),
                             Directive::Instruction(ib::or(lo1, b2_shifted, b3_shifted)),
                             Directive::Instruction(ib::or(output, lo0, lo1)),
-                            // build lo 32 bits
+                            // build hi 32 bits
                             Directive::Instruction(ib::shl_imm(
                                 b5_shifted,
                                 b5,
@@ -1285,6 +1285,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let _imm = mem_offset(memarg, c);
                 let _base_addr = inputs[0].start as usize;
                 let _value = inputs[1].start as usize;
+
                 unimplemented!()
             }
             Op::MemorySize { mem: _ } => todo!(),
