@@ -901,8 +901,35 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I64Clz => todo!(),
             Op::I64Ctz => todo!(),
             Op::I64Popcnt => todo!(),
-            Op::I64ExtendI32S => todo!(),
-            Op::I64ExtendI32U => todo!(),
+            Op::I64ExtendI32S => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                let high_shifted = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+                vec![
+                    // Copy the 32 bit values to the high 32 bits of the temporary value.
+                    // Leave the low bits undefined.
+                    Directive::Instruction(ib::addi(high_shifted + 1, input, F::ZERO)),
+                    // Arithmetic shift right to fill the high bits with the sign bit.
+                    Directive::Instruction(ib::shr_s_imm_64(
+                        output,
+                        high_shifted,
+                        32.to_f().unwrap(),
+                    )),
+                ]
+            }
+            Op::I64ExtendI32U => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                vec![
+                    // Copy the 32 bit value to the low 32 bits of the output.
+                    Directive::Instruction(ib::addi(output, input, F::ZERO)),
+                    // Zero the high 32 bits.
+                    Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)),
+                ]
+            }
 
             // Parametric instruction
             Op::Select => {
