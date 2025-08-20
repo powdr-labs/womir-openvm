@@ -560,8 +560,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         entry_idx_ptr: Range<u32>,
         dest_ptr: Range<u32>,
     ) -> Vec<Self::Directive> {
+        const TABLE_ENTRY_SIZE: u32 = 12;
+        const TABLE_SEGMENT_HEADER_SIZE: u32 = 8;
+
         let table_segment = c.program.tables[table_idx as usize];
-        let base_addr = table_segment.start + 8 + entry_idx_ptr.start * 12;
+        let base_addr = table_segment.start
+            + TABLE_SEGMENT_HEADER_SIZE
+            + entry_idx_ptr.start * TABLE_ENTRY_SIZE;
 
         let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
         let mut directives = vec![Directive::Instruction(ib::const_32_imm(
@@ -1286,7 +1291,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 src_table: _,
             } => todo!(),
             Op::TableFill { table: _ } => todo!(),
-            Op::TableGet { table: _ } => todo!(),
+            Op::TableGet { table } => {
+                self.emit_table_get(c, table, inputs[0].clone(), output.unwrap())
+            }
             Op::TableSet { table: _ } => todo!(),
             Op::TableGrow { table: _ } => todo!(),
             Op::TableSize { table: _ } => todo!(),
