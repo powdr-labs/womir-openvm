@@ -31,6 +31,8 @@ const NULL_REF: [u32; 3] = [u32::MAX, 0, 0];
 /// Traps from Womir will terminate with its error code plus this offset.
 pub const ERROR_CODE_OFFSET: u32 = 100;
 
+pub const ERROR_ABORT_CODE: u32 = 200;
+
 pub fn program_from_womir<F: PrimeField32>(
     ir_program: womir::loader::Program<OpenVMSettings<F>>,
     entry_point: &str,
@@ -507,6 +509,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::pre_read_u32()),
                     Directive::Instruction(ib::read_u32(output)),
                 ]
+            }
+            ("env", "abort") => {
+                vec![Directive::Instruction(ib::abort())]
             }
             _ => unimplemented!(
                 "Imported function `{}` from module `{}` is not supported",

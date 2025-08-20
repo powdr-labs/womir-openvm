@@ -1580,7 +1580,7 @@ mod wast_tests {
         program_from_womir(ir_program, entry_point)
     }
 
-    fn run_single_wast_test(
+    fn run_single_wasm_test(
         module_path: &str,
         function: &str,
         args: &[u32],
@@ -1646,10 +1646,21 @@ mod wast_tests {
             let full_module_path = format!("../wasm_tests/{module_path}");
 
             for (function, args, expected) in cases {
-                run_single_wast_test(&full_module_path, function, args, expected)?;
+                run_single_wasm_test(&full_module_path, function, args, expected)?;
             }
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_fib() {
+        run_single_wasm_test("../sample_programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
+    }
+
+    #[test]
+    #[should_panic(expected = "not yet implemented")]
+    fn test_keccak() {
+        run_single_wasm_test("../sample_programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
     }
 }
