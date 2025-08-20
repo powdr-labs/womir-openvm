@@ -540,7 +540,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         saved_ret_pc_ptr: Range<u32>,
         saved_caller_fp_ptr: Range<u32>,
     ) -> Self::Directive {
-        Directive::Instruction(ib::call(
+        Directive::Instruction(ib::call_indirect(
             saved_ret_pc_ptr.start as usize,
             saved_caller_fp_ptr.start as usize,
             target_pc_ptr.start as usize,
