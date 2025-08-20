@@ -11,7 +11,7 @@ use womir::{
             settings::{ComparisonFunction, JumpCondition, Settings},
             Context, LabelType, WriteOnceASM,
         },
-        func_idx_to_label, CommonProgram,
+        func_idx_to_label, CommonProgram, Global,
     },
 };
 
@@ -568,25 +568,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             + TABLE_SEGMENT_HEADER_SIZE
             + entry_idx_ptr.start * TABLE_ENTRY_SIZE;
 
-        let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
-        let mut directives = vec![Directive::Instruction(ib::const_32_imm(
-            base_addr_reg.start as usize,
-            base_addr as u16,
-            (base_addr >> 16) as u16,
-        ))];
-
         // Read the 3 words of the reference into contiguous registers
         assert_eq!(dest_ptr.len(), 3);
-        directives.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
-            let offset = i as i32 * 4;
-            Directive::Instruction(ib::loadw(
-                dest_reg as usize,
-                base_addr_reg.start as usize,
-                offset,
-            ))
-        }));
-
-        directives
+        load_from_const_addr(c, base_addr, dest_ptr)
     }
 
     fn emit_wasm_op(
@@ -1004,8 +988,23 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             }
 
             // Global instructions
-            Op::GlobalGet { global_index: _ } => todo!(),
-            Op::GlobalSet { global_index: _ } => todo!(),
+            Op::GlobalSet { global_index } => {
+                let Global::Mutable(allocated_var) = &c.program.globals[global_index as usize]
+                else {
+                    unreachable!()
+                };
+
+                store_to_const_addr(c, allocated_var.address, inputs[0].clone())
+            }
+            Op::GlobalGet { global_index } => {
+                let global = &c.program.globals[global_index as usize];
+                match global {
+                    Global::Mutable(allocated_var) => {
+                        load_from_const_addr(c, allocated_var.address, output.unwrap())
+                    }
+                    Global::Immutable(op) => self.emit_wasm_op(c, op.clone(), inputs, output),
+                }
+            }
 
             Op::I32Load { memarg } => {
                 let imm = mem_offset(memarg, c);
@@ -1638,6 +1637,52 @@ fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> i32 {
     // TODO: currently, memory chip immediates are {-u16::MAX .. u16::MAX}.
     // To support larger offsets, we need to change the memory chip.
     u16::try_from(offset).unwrap() as i32
+}
+
+fn load_from_const_addr<F: PrimeField32>(
+    c: &mut Ctx<F>,
+    base_addr: u32,
+    output: Range<u32>,
+) -> Vec<Directive<F>> {
+    let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
+    let mut directives = vec![Directive::Instruction(ib::const_32_imm(
+        base_addr_reg.start as usize,
+        base_addr as u16,
+        (base_addr >> 16) as u16,
+    ))];
+
+    directives.extend(output.enumerate().map(|(i, dest_reg)| {
+        Directive::Instruction(ib::loadw(
+            dest_reg as usize,
+            base_addr_reg.start as usize,
+            i as i32 * 4,
+        ))
+    }));
+
+    directives
+}
+
+fn store_to_const_addr<F: PrimeField32>(
+    c: &mut Ctx<F>,
+    base_addr: u32,
+    input: Range<u32>,
+) -> Vec<Directive<F>> {
+    let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
+    let mut directives = vec![Directive::Instruction(ib::const_32_imm(
+        base_addr_reg.start as usize,
+        base_addr as u16,
+        (base_addr >> 16) as u16,
+    ))];
+
+    directives.extend(input.enumerate().map(|(i, input_reg)| {
+        Directive::Instruction(ib::storew(
+            input_reg as usize,
+            base_addr_reg.start as usize,
+            i as i32 * 4,
+        ))
+    }));
+
+    directives
 }
 
 impl<F: Clone> womir::linker::Directive for Directive<F> {

@@ -555,18 +555,18 @@ pub fn loadw<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F>
 
 /// STOREW instruction: Store word to memory
 /// MEM[rs1 + imm] = rs2
-pub fn storew<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<F> {
+pub fn storew<F: PrimeField32>(value: usize, base_address: usize, imm: i32) -> Instruction<F> {
     let imm_unsigned = (imm & 0xFFFF) as usize;
     let imm_sign = if imm < 0 { 1 } else { 0 };
 
     Instruction::new(
         LoadStoreOpcode::STOREW.global_opcode(),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs2), // a: rs2 (data to store)
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1 (base address)
-        F::from_canonical_usize(imm_unsigned),                         // c: imm (offset)
-        F::ONE,                                                        // d: register address space
-        F::from_canonical_usize(2), // e: memory address space (2 for word, same as LOADW)
-        F::ONE,                     // f: enabled
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * value), // a: rs2 (data to store)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * base_address), // b: rs1 (base address)
+        F::from_canonical_usize(imm_unsigned),                                  // c: imm (offset)
+        F::ONE,                            // d: register address space
+        F::from_canonical_usize(2),        // e: memory address space (2 for word, same as LOADW)
+        F::ONE,                            // f: enabled
         F::from_canonical_usize(imm_sign), // g: imm sign
     )
 }
