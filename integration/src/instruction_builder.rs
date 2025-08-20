@@ -7,7 +7,7 @@ use openvm_womir_transpiler::{
     Shift64Opcode, ShiftOpcode,
 };
 
-use crate::womir_translation::ERROR_CODE_OFFSET;
+use crate::womir_translation::{ERROR_ABORT_CODE, ERROR_CODE_OFFSET};
 
 pub fn instr_r<F: PrimeField32>(
     opcode: usize,
@@ -606,7 +606,7 @@ pub fn loadbu<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F
     )
 }
 
-/// LOADB: load halfword from memory
+/// LOADH: load halfword from memory
 /// rd = MEM[rs1 + imm] (sign-extended)
 #[allow(dead_code)]
 pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
@@ -720,6 +720,19 @@ pub fn trap<F: PrimeField32>(error_code: usize) -> Instruction<F> {
         F::ZERO,
         F::ZERO,
         F::from_canonical_usize(ERROR_CODE_OFFSET as usize + error_code),
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+        F::ZERO,
+    )
+}
+
+pub fn abort<F: PrimeField32>() -> Instruction<F> {
+    Instruction::new(
+        SystemOpcode::TERMINATE.global_opcode(),
+        F::ZERO,
+        F::ZERO,
+        F::from_canonical_usize(ERROR_ABORT_CODE as usize),
         F::ZERO,
         F::ZERO,
         F::ZERO,

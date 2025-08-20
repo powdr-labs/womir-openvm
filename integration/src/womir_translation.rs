@@ -31,6 +31,8 @@ const NULL_REF: [u32; 3] = [u32::MAX, 0, 0];
 /// Traps from Womir will terminate with its error code plus this offset.
 pub const ERROR_CODE_OFFSET: u32 = 100;
 
+pub const ERROR_ABORT_CODE: u32 = 200;
+
 pub fn program_from_womir<F: PrimeField32>(
     ir_program: womir::loader::Program<OpenVMSettings<F>>,
     entry_point: &str,
@@ -508,6 +510,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::read_u32(output)),
                 ]
             }
+            ("env", "abort") => {
+                vec![Directive::Instruction(ib::abort())]
+            }
             _ => unimplemented!(
                 "Imported function `{}` from module `{}` is not supported",
                 function,
@@ -540,7 +545,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         saved_ret_pc_ptr: Range<u32>,
         saved_caller_fp_ptr: Range<u32>,
     ) -> Self::Directive {
-        Directive::Instruction(ib::call(
+        Directive::Instruction(ib::call_indirect(
             saved_ret_pc_ptr.start as usize,
             saved_caller_fp_ptr.start as usize,
             target_pc_ptr.start as usize,
@@ -555,8 +560,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         entry_idx_ptr: Range<u32>,
         dest_ptr: Range<u32>,
     ) -> Vec<Self::Directive> {
+        const TABLE_ENTRY_SIZE: u32 = 12;
+        const TABLE_SEGMENT_HEADER_SIZE: u32 = 8;
+
         let table_segment = c.program.tables[table_idx as usize];
-        let base_addr = table_segment.start + 8 + entry_idx_ptr.start * 12;
+        let base_addr = table_segment.start
+            + TABLE_SEGMENT_HEADER_SIZE
+            + entry_idx_ptr.start * TABLE_ENTRY_SIZE;
 
         let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
         let mut directives = vec![Directive::Instruction(ib::const_32_imm(
@@ -875,6 +885,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
 
+                let tmp = c.register_gen.allocate_type(ValType::I32).start as usize;
+
                 let shift = match op {
                     Op::I32Extend8S => 24,
                     Op::I32Extend16S => 16,
@@ -885,13 +897,15 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 // Left shift followed by arithmetic right shift
                 vec![
-                    Directive::Instruction(ib::shl_imm(output, input, shift)),
-                    Directive::Instruction(ib::shr_s_imm(output, output, shift)),
+                    Directive::Instruction(ib::shl_imm(tmp, input, shift)),
+                    Directive::Instruction(ib::shr_s_imm(output, tmp, shift)),
                 ]
             }
             Op::I64Extend8S | Op::I64Extend16S | Op::I64Extend32S => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
+
+                let tmp = c.register_gen.allocate_type(ValType::I64).start as usize;
 
                 let shift = match op {
                     Op::I64Extend8S => 56,
@@ -904,8 +918,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 // Left shift followed by arithmetic right shift
                 vec![
-                    Directive::Instruction(ib::shl_imm_64(output, input, shift)),
-                    Directive::Instruction(ib::shr_s_imm_64(output, output, shift)),
+                    Directive::Instruction(ib::shl_imm_64(tmp, input, shift)),
+                    Directive::Instruction(ib::shr_s_imm_64(output, tmp, shift)),
                 ]
             }
 
@@ -913,8 +927,35 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I64Clz => todo!(),
             Op::I64Ctz => todo!(),
             Op::I64Popcnt => todo!(),
-            Op::I64ExtendI32S => todo!(),
-            Op::I64ExtendI32U => todo!(),
+            Op::I64ExtendI32S => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                let high_shifted = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+                vec![
+                    // Copy the 32 bit values to the high 32 bits of the temporary value.
+                    // Leave the low bits undefined.
+                    Directive::Instruction(ib::addi(high_shifted + 1, input, F::ZERO)),
+                    // Arithmetic shift right to fill the high bits with the sign bit.
+                    Directive::Instruction(ib::shr_s_imm_64(
+                        output,
+                        high_shifted,
+                        32.to_f().unwrap(),
+                    )),
+                ]
+            }
+            Op::I64ExtendI32U => {
+                let input = inputs[0].start as usize;
+                let output = output.unwrap().start as usize;
+
+                vec![
+                    // Copy the 32 bit value to the low 32 bits of the output.
+                    Directive::Instruction(ib::addi(output, input, F::ZERO)),
+                    // Zero the high 32 bits.
+                    Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)),
+                ]
+            }
 
             // Parametric instruction
             Op::Select | Op::TypedSelect { .. } => {
@@ -1114,7 +1155,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::loadbu(b5, base_addr, imm + 5)),
                             Directive::Instruction(ib::loadbu(b6, base_addr, imm + 6)),
                             Directive::Instruction(ib::loadbu(b7, base_addr, imm + 7)),
-                            // build hi 32 bits
+                            // build lo 32 bits
                             Directive::Instruction(ib::shl_imm(
                                 b1_shifted,
                                 b1,
@@ -1133,7 +1174,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::or(lo0, b0, b1_shifted)),
                             Directive::Instruction(ib::or(lo1, b2_shifted, b3_shifted)),
                             Directive::Instruction(ib::or(output, lo0, lo1)),
-                            // build lo 32 bits
+                            // build hi 32 bits
                             Directive::Instruction(ib::shl_imm(
                                 b5_shifted,
                                 b5,
@@ -1250,7 +1291,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 src_table: _,
             } => todo!(),
             Op::TableFill { table: _ } => todo!(),
-            Op::TableGet { table: _ } => todo!(),
+            Op::TableGet { table } => {
+                self.emit_table_get(c, table, inputs[0].clone(), output.unwrap())
+            }
             Op::TableSet { table: _ } => todo!(),
             Op::TableGrow { table: _ } => todo!(),
             Op::TableSize { table: _ } => todo!(),
