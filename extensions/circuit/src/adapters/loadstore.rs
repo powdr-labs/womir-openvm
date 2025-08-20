@@ -433,7 +433,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         let rs1_val = compose(rs1_record.1);
         let imm = c.as_canonical_u32();
         let imm_sign = g.as_canonical_u32();
-        let imm_extended = imm + imm_sign * 0xffff0000;
+        let imm_extended = imm + imm_sign * 0xff000000;
 
         let ptr_val = rs1_val.wrapping_add(imm_extended);
         let shift_amount = ptr_val % 4;
