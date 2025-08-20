@@ -3,9 +3,7 @@ use std::{
     borrow::{Borrow, BorrowMut},
 };
 
-use openvm_circuit::arch::{
-    AdapterAirContext, Result, VmAdapterInterface, VmCoreAir,
-};
+use openvm_circuit::arch::{AdapterAirContext, Result, VmAdapterInterface, VmCoreAir};
 use openvm_circuit_primitives::{
     utils::select,
     var_range::{SharedVariableRangeCheckerChip, VariableRangeCheckerBus},
