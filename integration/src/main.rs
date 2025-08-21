@@ -17,6 +17,8 @@ use openvm_circuit::arch::{
 use openvm_circuit::circuit_derive::{Chip, ChipUsageGetter};
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
 use openvm_sdk::config::{SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery};
+use openvm_stark_sdk::config::setup_tracing_with_log_level;
+use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use openvm_womir_circuit::{self, WomirI, WomirIExecutor, WomirIPeriphery};
@@ -126,6 +128,8 @@ impl Commands {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_tracing_with_log_level(Level::WARN);
+
     // Parse command line arguments
     let cli_args = CliArgs::parse();
     let wasm_path = cli_args.command.get_program_path();

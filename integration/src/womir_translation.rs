@@ -127,6 +127,8 @@ pub fn program_from_womir<F: PrimeField32>(
         })
         .collect();
 
+    println!("memory image:\n{memory_image:#?}");
+
     VmExe::new(program)
         .with_pc_start((start_offset * riscv::RV32_REGISTER_NUM_LIMBS) as u32)
         .with_init_memory(memory_image)
@@ -170,6 +172,7 @@ where
     let results = entry_point_func_type.results();
     let num_output_words = womir::word_count_types::<OpenVMSettings<F>>(results);
     for i in 0..num_output_words {
+        println!("Reveal?");
         code.push(ib::reveal_imm(ptr as usize, zero_reg, (i * 4) as usize));
         ptr += 1;
     }
@@ -564,13 +567,37 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         const TABLE_SEGMENT_HEADER_SIZE: u32 = 8;
 
         let table_segment = c.program.tables[table_idx as usize];
-        let base_addr = table_segment.start
-            + TABLE_SEGMENT_HEADER_SIZE
-            + entry_idx_ptr.start * TABLE_ENTRY_SIZE;
+
+        let table_entry_size_reg = c.register_gen.allocate_type(ValType::I32).start as usize;
+        let mul_result = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+        let mv_table_entry_size_instr = Directive::Instruction(ib::const_32_imm::<F>(
+            table_entry_size_reg,
+            TABLE_ENTRY_SIZE as u16,
+            0,
+        ));
+        let mul_instr = Directive::Instruction(ib::mul::<F>(
+            mul_result,
+            entry_idx_ptr.start as usize,
+            table_entry_size_reg,
+        ));
+
+        let base_addr = table_segment.start + TABLE_SEGMENT_HEADER_SIZE;
+
+        println!("emit_table_get: table_idx={table_idx}, entry_idx_ptr={entry_idx_ptr:?}, dest_ptr={dest_ptr:?}, base_addr: {base_addr}");
 
         // Read the 3 words of the reference into contiguous registers
         assert_eq!(dest_ptr.len(), 3);
-        load_from_const_addr(c, base_addr, dest_ptr)
+
+        let mut res = vec![mv_table_entry_size_instr, mul_instr];
+        res.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
+            Directive::Instruction(ib::loadw(
+                dest_reg as usize,
+                mul_result,
+                base_addr as i32 + (i as i32) * 4,
+            ))
+        }));
+        res
     }
 
     fn emit_wasm_op(
@@ -1829,7 +1856,7 @@ fn load_from_const_addr<F: PrimeField32>(
         Directive::Instruction(ib::loadw(
             dest_reg as usize,
             base_addr_reg.start as usize,
-            i as i32 * 4,
+            (i as i32) * 4,
         ))
     }));
 
