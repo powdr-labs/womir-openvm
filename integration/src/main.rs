@@ -17,6 +17,8 @@ use openvm_circuit::arch::{
 use openvm_circuit::circuit_derive::{Chip, ChipUsageGetter};
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
 use openvm_sdk::config::{SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery};
+use openvm_stark_sdk::config::setup_tracing_with_log_level;
+use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use openvm_womir_circuit::{self, WomirI, WomirIExecutor, WomirIPeriphery};
@@ -126,6 +128,8 @@ impl Commands {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_tracing_with_log_level(Level::WARN);
+
     // Parse command line arguments
     let cli_args = CliArgs::parse();
     let wasm_path = cli_args.command.get_program_path();
@@ -1661,6 +1665,25 @@ mod wast_tests {
     #[test]
     fn test_fib() {
         run_single_wasm_test("../sample_programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
+    }
+
+    #[test]
+    fn test_call_indirect_wasm() {
+        run_single_wasm_test("../sample_programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
+        run_single_wasm_test(
+            "../sample_programs/call_indirect.wasm",
+            "call_op",
+            &[0, 10, 20],
+            &[30],
+        )
+        .unwrap();
+        run_single_wasm_test(
+            "../sample_programs/call_indirect.wasm",
+            "call_op",
+            &[1, 10, 3],
+            &[7],
+        )
+        .unwrap();
     }
 
     #[test]

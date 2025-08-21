@@ -17,13 +17,14 @@ use openvm_circuit::{
     },
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP};
+use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
     p3_field::{Field, PrimeField32},
     rap::ColumnsAir,
 };
+use openvm_womir_transpiler::CopyIntoFrameOpcode;
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
@@ -146,18 +147,36 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
-        let Instruction { b, c, .. } = *instruction;
+        let Instruction { b, c, opcode, .. } = *instruction;
 
         // COPY_INTO_FRAME: target_reg (a), src_reg (b), target_fp (c)
+        // COPY_FROM_FRAME: target_reg (a), src_reg (b), src_fp (c)
+
         let fp_f = F::from_canonical_u32(fp);
-        let value_to_copy = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b + fp_f);
-        let future_fp = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, c + fp_f);
+
+        let local_opcode = CopyIntoFrameOpcode::from_usize(
+            opcode.local_opcode_idx(CopyIntoFrameOpcode::CLASS_OFFSET),
+        );
+
+        let other_fp = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, c + fp_f);
+
+        let other_fp_u32 = compose(other_fp.1);
+        let other_fp_f = F::from_canonical_u32(other_fp_u32);
+
+        let value_to_copy = match local_opcode {
+            CopyIntoFrameOpcode::COPY_INTO_FRAME => {
+                memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b + fp_f)
+            }
+            CopyIntoFrameOpcode::COPY_FROM_FRAME => {
+                memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b + other_fp_f)
+            }
+        };
 
         Ok((
-            [value_to_copy.1, future_fp.1],
+            [value_to_copy.1, other_fp.1],
             CopyIntoFrameReadRecord {
                 rs1: Some((value_to_copy.0, compose(value_to_copy.1))),
-                rs2: Some((future_fp.0, compose(future_fp.1))),
+                rs2: Some((other_fp.0, compose(other_fp.1))),
             },
         ))
     }
@@ -171,15 +190,34 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
         _output: AdapterRuntimeContextWom<F, Self::Interface>,
         read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
-        let Instruction { a, f: enabled, .. } = *instruction;
+        let Instruction {
+            a,
+            f: enabled,
+            opcode,
+            ..
+        } = *instruction;
 
         let mut destination_id = None;
 
+        let local_opcode = CopyIntoFrameOpcode::from_usize(
+            opcode.local_opcode_idx(CopyIntoFrameOpcode::CLASS_OFFSET),
+        );
+
+        let fp_f = F::from_canonical_u32(from_frame.fp);
+
         if enabled != F::ZERO {
             let value = read_record.rs1.unwrap().1;
-            let future_fp = read_record.rs2.unwrap().1;
-            let future_fp_f = F::from_canonical_u32(future_fp);
-            let write_result = memory.write(F::ONE, a + future_fp_f, decompose(value));
+            let other_fp = read_record.rs2.unwrap().1;
+            let other_fp_f = F::from_canonical_u32(other_fp);
+
+            let write_result = match local_opcode {
+                CopyIntoFrameOpcode::COPY_INTO_FRAME => {
+                    memory.write(F::ONE, a + other_fp_f, decompose(value))
+                }
+                CopyIntoFrameOpcode::COPY_FROM_FRAME => {
+                    memory.write(F::ONE, a + fp_f, decompose(value))
+                }
+            };
             destination_id = Some(write_result.0);
         }
 
