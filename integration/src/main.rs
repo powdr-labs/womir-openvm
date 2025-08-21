@@ -1637,6 +1637,11 @@ mod wast_tests {
         run_wasm_test("../wasm_tests/i64.wast")
     }
 
+    #[test]
+    fn test_address() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/address.wast")
+    }
+
     fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         let test_cases = extract_wast_test_info(tf)?;
 

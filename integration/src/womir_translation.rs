@@ -1092,11 +1092,15 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                                 b1,
                                 F::from_canonical_u8(8),
                             )),
-                            Directive::Instruction(ib::or(output, b0, b1)),
+                            Directive::Instruction(ib::or(output, b0, b1_shifted)),
                         ]
                     }
                     1.. => {
-                        vec![Directive::Instruction(ib::loadw(output, base_addr, imm))]
+                        if let Op::I32Load16S { .. } = op {
+                            vec![Directive::Instruction(ib::loadh(output, base_addr, imm))]
+                        } else {
+                            vec![Directive::Instruction(ib::loadhu(output, base_addr, imm))]
+                        }
                     }
                 }
             }
