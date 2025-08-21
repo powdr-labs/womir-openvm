@@ -474,6 +474,7 @@ pub enum AllocateFrameOpcode {
 #[allow(non_camel_case_types)]
 pub enum CopyIntoFrameOpcode {
     COPY_INTO_FRAME, // copy value into frame-relative address
+    COPY_FROM_FRAME, // copy value from another frame into the current frame
 }
 
 #[derive(

@@ -482,6 +482,27 @@ pub fn copy_into_frame<F: PrimeField32>(
     )
 }
 
+/// COPY_FROM_FRAME instruction: Copy value from frame-relative address.
+/// src_fp is the frame pointer, src_value is the value to copy.
+/// Writes [src_fp + src_value] content to [fp + target_reg].
+pub fn copy_from_frame<F: PrimeField32>(
+    target_reg: usize,
+    src_reg: usize,
+    src_fp: usize,
+) -> Instruction<F> {
+    Instruction::new(
+        CopyIntoFrameOpcode::COPY_INTO_FRAME.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * src_reg),    // b: register
+        // containing value to copy
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * src_fp), // c: other future fp to be used as reference for src_reg
+        F::ZERO,                                                          // d: (not used)
+        F::ZERO,                                                          // e: (not used)
+        F::ONE,                                                           // f: enabled
+        F::ZERO,                                                          // g: (not used)
+    )
+}
+
 /// JUMP instruction: Unconditional jump to immediate PC
 pub fn jump<F: PrimeField32>(to_pc_imm: usize) -> Instruction<F> {
     Instruction::new(

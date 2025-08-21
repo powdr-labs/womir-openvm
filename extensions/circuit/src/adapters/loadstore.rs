@@ -510,6 +510,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
                 STOREW | STOREH | STOREB => {
                     let ptr = read_record.mem_ptr_limbs[0]
                         + read_record.mem_ptr_limbs[1] * (1 << (RV32_CELL_BITS * 2));
+                    println!("STOREW {ptr} =  {:?}", output.writes[0]);
                     memory.write(e, F::from_canonical_u32(ptr & 0xfffffffc), output.writes[0])
                 }
                 LOADW | LOADB | LOADH | LOADBU | LOADHU => {
