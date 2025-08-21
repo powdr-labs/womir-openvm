@@ -1,7 +1,16 @@
 use std::{collections::HashMap, ops::Range, vec};
 
 use crate::{instruction_builder as ib, to_field::ToField};
-use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program, riscv};
+use openvm_circuit::{
+    arch::{ExecutionError, Streams, VmConfig, VmExecutor},
+    system::memory::tree::public_values::extract_public_values,
+};
+use openvm_instructions::{
+    exe::{MemoryImage, VmExe},
+    instruction::Instruction,
+    program::{Program, DEFAULT_PC_STEP},
+    riscv,
+};
 use openvm_stark_backend::p3_field::PrimeField32;
 use wasmparser::{MemArg, Operator as Op, ValType};
 use womir::{
@@ -33,103 +42,148 @@ pub const ERROR_CODE_OFFSET: u32 = 100;
 
 pub const ERROR_ABORT_CODE: u32 = 200;
 
-pub fn program_from_womir<F: PrimeField32>(
-    ir_program: womir::loader::Program<OpenVMSettings<F>>,
-    entry_point: &str,
-) -> VmExe<F> {
-    let functions = ir_program
-        .functions
-        .into_iter()
-        .map(|f| {
-            let directives = f.directives.into_iter().collect();
-            WriteOnceASM {
-                directives,
-                func_idx: f.func_idx,
-                frame_size: f.frame_size,
-            }
-        })
-        .collect::<Vec<_>>();
+pub struct LinkedProgram<'a, F: PrimeField32> {
+    program: CommonProgram<'a>,
+    label_map: HashMap<String, LabelValue>,
+    /// Linked instructions without the startup code:
+    linked_instructions: Vec<Instruction<F>>,
+    memory_image: MemoryImage<F>,
+}
 
-    let (linked_program, mut label_map) = womir::linker::link(&functions, 1);
-    drop(functions);
-
-    for v in label_map.values_mut() {
-        v.pc *= riscv::RV32_REGISTER_NUM_LIMBS as u32;
-    }
-
-    // Now we need a little bit of startup code to call the entry point function.
-    // We assume the initial frame has space for at least one word: the frame pointer
-    // to the entry point function.
-    let start_offset = linked_program.len();
-
-    let mut linked_program = linked_program
-        .into_iter()
-        // Remove `nop` added by the linker to avoid pc=0 being a valid instruction.
-        .skip(1)
-        .map(|d| {
-            if let Some(i) = d.into_instruction(&label_map) {
-                i
-            } else {
-                unreachable!("All remaining directives should be instructions")
-            }
-        })
-        .collect::<Vec<_>>();
-
-    // We assume that the loop above removes a single `nop` introduced by the linker.
-    assert_eq!(linked_program.len(), start_offset - 1);
-
-    // Create the startup code to call the entry point function.
-    let entry_point = &label_map[entry_point];
-    linked_program.extend(create_startup_code(&ir_program.c, entry_point));
-
-    // TODO: make womir read and carry debug info
-    // Skip the first instruction, which is a nop inserted by the linker, and adjust pc_base accordingly.
-    let program = Program::new_without_debug_infos(&linked_program, 4, 4);
-    drop(linked_program);
-
-    let memory_image = ir_program
-        .c
-        .initial_memory
-        .into_iter()
-        .flat_map(|(addr, value)| {
-            use womir::loader::MemoryEntry::*;
-            let v = match value {
-                Value(v) => v,
-                FuncAddr(idx) => {
-                    let label = func_idx_to_label(idx);
-                    label_map[&label].pc
-                }
-                FuncFrameSize(func_idx) => {
-                    let label = func_idx_to_label(func_idx);
-                    label_map[&label].frame_size.unwrap()
-                }
-                NullFuncType => NULL_REF[0],
-                NullFuncFrameSize => NULL_REF[1],
-                NullFuncAddr => NULL_REF[2],
-            };
-
-            [
-                v & 0xff,
-                (v >> 8) & 0xff,
-                (v >> 16) & 0xff,
-                (v >> 24) & 0xff,
-            ]
+impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
+    pub fn new(mut ir_program: womir::loader::Program<'a, OpenVMSettings<F>>) -> Self {
+        let functions = ir_program
+            .functions
             .into_iter()
-            .enumerate()
-            .filter_map(move |(i, byte)| {
-                const ROM_ID: u32 = 2;
-                if byte != 0 {
-                    Some(((ROM_ID, addr + i as u32), F::from_canonical_u32(byte)))
-                } else {
-                    None
+            .map(|f| {
+                let directives = f.directives.into_iter().collect();
+                WriteOnceASM {
+                    directives,
+                    func_idx: f.func_idx,
+                    frame_size: f.frame_size,
                 }
             })
-        })
-        .collect();
+            .collect::<Vec<_>>();
 
-    VmExe::new(program)
-        .with_pc_start((start_offset * riscv::RV32_REGISTER_NUM_LIMBS) as u32)
-        .with_init_memory(memory_image)
+        let (linked_program, mut label_map) = womir::linker::link(&functions, 1);
+        drop(functions);
+
+        for v in label_map.values_mut() {
+            v.pc *= riscv::RV32_REGISTER_NUM_LIMBS as u32;
+        }
+
+        // Now we need a little bit of startup code to call the entry point function.
+        // We assume the initial frame has space for at least one word: the frame pointer
+        // to the entry point function.
+        let start_offset = linked_program.len();
+
+        let linked_instructions = linked_program
+            .into_iter()
+            // Remove `nop` added by the linker to avoid pc=0 being a valid instruction.
+            .skip(1)
+            .map(|d| {
+                if let Some(i) = d.into_instruction(&label_map) {
+                    i
+                } else {
+                    unreachable!("All remaining directives should be instructions")
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // We assume that the loop above removes a single `nop` introduced by the linker.
+        assert_eq!(linked_instructions.len(), start_offset - 1);
+
+        let memory_image = std::mem::take(&mut ir_program.c.initial_memory)
+            .into_iter()
+            .flat_map(|(addr, value)| {
+                use womir::loader::MemoryEntry::*;
+                let v = match value {
+                    Value(v) => v,
+                    FuncAddr(idx) => {
+                        let label = func_idx_to_label(idx);
+                        label_map[&label].pc
+                    }
+                    FuncFrameSize(func_idx) => {
+                        let label = func_idx_to_label(func_idx);
+                        label_map[&label].frame_size.unwrap()
+                    }
+                    NullFuncType => NULL_REF[0],
+                    NullFuncFrameSize => NULL_REF[1],
+                    NullFuncAddr => NULL_REF[2],
+                };
+
+                [
+                    v & 0xff,
+                    (v >> 8) & 0xff,
+                    (v >> 16) & 0xff,
+                    (v >> 24) & 0xff,
+                ]
+                .into_iter()
+                .enumerate()
+                .filter_map(move |(i, byte)| {
+                    const ROM_ID: u32 = 2;
+                    if byte != 0 {
+                        Some(((ROM_ID, addr + i as u32), F::from_canonical_u32(byte)))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+
+        Self {
+            program: ir_program.c,
+            label_map,
+            linked_instructions,
+            memory_image,
+        }
+    }
+
+    pub fn execute(
+        &mut self,
+        vm_config: impl VmConfig<F>,
+        entry_point: &str,
+        inputs: impl Into<Streams<F>>,
+    ) -> Result<Vec<F>, ExecutionError> {
+        // Create the startup code to call the entry point function.
+        let entry_point = &self.label_map[entry_point];
+        let entry_point_start = self.linked_instructions.len();
+        self.linked_instructions
+            .extend(create_startup_code(&self.program, entry_point));
+
+        // TODO: make womir read and carry debug info
+        // The first instruction was removed, which was a nop inserted by the linker, so we need to set pc_base accordingly.
+        let program = Program::new_without_debug_infos(
+            &self.linked_instructions,
+            DEFAULT_PC_STEP,
+            DEFAULT_PC_STEP,
+        );
+
+        // Remove the startup code, for this to be reused in the next call.
+        self.linked_instructions.truncate(entry_point_start);
+
+        // Create the executor using the current memory image.
+        let exe = VmExe::new(program)
+            .with_pc_start(((1 + entry_point_start) * riscv::RV32_REGISTER_NUM_LIMBS) as u32)
+            .with_init_memory(std::mem::take(&mut self.memory_image));
+
+        let vm = VmExecutor::new(vm_config);
+        let final_memory = vm.execute(exe, inputs)?.unwrap();
+        let public_values = extract_public_values(
+            &vm.config.system().memory_config.memory_dimensions(),
+            vm.config.system().num_public_values,
+            &final_memory,
+        );
+
+        // TODO: extract_public_values() already converts the final_memory to a MemoryImage<F>,
+        // and this is a kinda expensive redundant work. Find a way to do it only once.
+        self.memory_image = final_memory
+            .items()
+            .filter_map(|(addr, v)| (!v.is_zero()).then_some((addr, v)))
+            .collect();
+
+        Ok(public_values)
+    }
 }
 
 fn create_startup_code<F>(ctx: &CommonProgram, entry_point: &LabelValue) -> Vec<Instruction<F>>
@@ -570,7 +624,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
         // Read the 3 words of the reference into contiguous registers
         assert_eq!(dest_ptr.len(), 3);
-        load_from_const_addr(c, base_addr, dest_ptr)
+        load_from_const_addr(c, base_addr, dest_ptr).0
     }
 
     fn emit_wasm_op(
@@ -1000,7 +1054,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let global = &c.program.globals[global_index as usize];
                 match global {
                     Global::Mutable(allocated_var) => {
-                        load_from_const_addr(c, allocated_var.address, output.unwrap())
+                        load_from_const_addr(c, allocated_var.address, output.unwrap()).0
                     }
                     Global::Immutable(op) => self.emit_wasm_op(c, op.clone(), inputs, output),
                 }
@@ -1607,12 +1661,73 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     }
                 }
             }
-            Op::MemorySize { mem: _ } => {
-                load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap())
+
+            Op::MemorySize { mem } => {
+                assert_eq!(mem, 0, "Only a single linear memory is supported");
+                load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap()).0
             }
-            Op::MemoryGrow { mem: _ } => {
-                // TODO: we currently don't check memory access bounds
-                vec![]
+            Op::MemoryGrow { mem } => {
+                assert_eq!(mem, 0, "Only a single linear memory is supported");
+                let header_addr = c.program.memory.unwrap().start;
+
+                let output = output.unwrap().start as usize;
+
+                let header_regs = c.register_gen.allocate_type(ValType::I64);
+                let size_reg = header_regs.start as usize;
+                let max_size_reg = (header_regs.start + 1) as usize;
+
+                let new_size = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let is_gt_max = c.register_gen.allocate_type(ValType::I32).start;
+                let is_lt_curr = c.register_gen.allocate_type(ValType::I32).start;
+
+                let error_label = c.new_label(LabelType::Local);
+                let continuation_label = c.new_label(LabelType::Local);
+
+                // Load the current size and max size.
+                let (mut directives, header_addr_reg) =
+                    load_from_const_addr(c, header_addr, header_regs);
+
+                directives.extend([
+                    // Calculate the new size:
+                    Directive::Instruction(ib::add(new_size, size_reg, inputs[0].start as usize)),
+                    // Check if the new size is greater than the max size.
+                    Directive::Instruction(ib::gt_u(is_gt_max as usize, new_size, max_size_reg)),
+                    // If the new size is greater than the max size, branch to the error label.
+                    Directive::JumpIf {
+                        target: error_label.clone(),
+                        condition_reg: is_gt_max,
+                    },
+                    // Check if the new size is less than to the current size (which means an overflow occurred),
+                    // which means the requested size is too large.
+                    Directive::Instruction(ib::lt_u::<F>(is_lt_curr as usize, new_size, size_reg)),
+                    // If the requested size overflows, branch to the error label.
+                    Directive::JumpIf {
+                        target: error_label.clone(),
+                        condition_reg: is_lt_curr,
+                    },
+                    // Success case:
+                    // - write new size to header.
+                    Directive::Instruction(ib::storew(new_size, header_addr_reg.start as usize, 0)),
+                    // - write old size to output.
+                    Directive::Instruction(ib::addi(output, size_reg, F::ZERO)),
+                    // - jump to continuation label.
+                    Directive::Jump {
+                        target: continuation_label.clone(),
+                    },
+                    // Error case: write 0xFFFFFFFF to output.
+                    Directive::Label {
+                        id: error_label,
+                        frame_size: None,
+                    },
+                    Directive::Instruction(ib::const_32_imm(output, 0xFFFF, 0xFFFF)),
+                    // Continue:
+                    Directive::Label {
+                        id: continuation_label,
+                        frame_size: None,
+                    },
+                ]);
+
+                directives
             }
             Op::MemoryInit {
                 data_index: _,
@@ -1817,7 +1932,7 @@ fn load_from_const_addr<F: PrimeField32>(
     c: &mut Ctx<F>,
     base_addr: u32,
     output: Range<u32>,
-) -> Vec<Directive<F>> {
+) -> (Vec<Directive<F>>, Range<u32>) {
     let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
     let mut directives = vec![Directive::Instruction(ib::const_32_imm(
         base_addr_reg.start as usize,
@@ -1833,7 +1948,7 @@ fn load_from_const_addr<F: PrimeField32>(
         ))
     }));
 
-    directives
+    (directives, base_addr_reg)
 }
 
 fn store_to_const_addr<F: PrimeField32>(
