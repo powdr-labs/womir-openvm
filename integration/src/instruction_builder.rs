@@ -161,9 +161,12 @@ pub fn shr_s_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instructi
     instr_r(Shift64Opcode::SRA.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-#[allow(dead_code)]
 pub fn shr_s_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
     instr_i(Shift64Opcode::SRA.global_opcode().as_usize(), rd, rs1, imm)
+}
+
+pub fn shr_u_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+    instr_i(Shift64Opcode::SRL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
 pub fn lt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {

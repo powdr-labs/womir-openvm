@@ -1233,21 +1233,196 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     }
                 }
             }
-            Op::I64Load8U { memarg } | Op::I64Load16U { memarg } | Op::I64Load32U { memarg } => {
-                let _imm = mem_offset(memarg, c);
-                let _base_addr = inputs[0].start as usize;
-                let _output = (output.unwrap().start) as usize;
+            Op::I64Load8U { memarg } | Op::I64Load8S { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = (output.unwrap().start) as usize;
+                let val = c.register_gen.allocate_type(ValType::I64).start as usize;
 
-                unimplemented!()
+                vec![
+                    // load signed or unsigned byte as i32 hi part
+                    if let Op::I32Load8S { .. } = op {
+                        Directive::Instruction(ib::loadb(val + 1, base_addr, imm))
+                    } else {
+                        Directive::Instruction(ib::loadbu(val + 1, base_addr, imm))
+                    },
+                    // shift i64 val right, keeping the sign
+                    Directive::Instruction(ib::shr_s_imm_64(output, val, F::from_canonical_u8(32))),
+                ]
             }
-            Op::I64Load8S { memarg } | Op::I64Load16S { memarg } | Op::I64Load32S { memarg } => {
-                let _imm = mem_offset(memarg, c);
-                let _base_addr = inputs[0].start as usize;
-                let _output = (output.unwrap().start) as usize;
+            Op::I64Load16U { memarg } | Op::I64Load16S { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = (output.unwrap().start) as usize;
+                let val = c.register_gen.allocate_type(ValType::I64).start as usize;
 
-                unimplemented!()
+                match memarg.align {
+                    0 => {
+                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            // load b1 signed/unsigned
+                            if let Op::I32Load16S { .. } = op {
+                                Directive::Instruction(ib::loadb(b1, base_addr, imm + 1))
+                            } else {
+                                Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
+                            },
+                            // shift b1
+                            Directive::Instruction(ib::shl_imm(
+                                b1_shifted,
+                                b1,
+                                F::from_canonical_u8(8),
+                            )),
+                            // load b0
+                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                            // combine b0 and b1
+                            Directive::Instruction(ib::or(val + 1, b0, b1_shifted)),
+                            // shift i64 val right, keeping the sign
+                            Directive::Instruction(ib::shr_s_imm_64(
+                                output,
+                                val,
+                                F::from_canonical_u8(32),
+                            )),
+                        ]
+                    }
+                    1.. => {
+                        if let Op::I32Load16S { .. } = op {
+                            vec![
+                                // load signed halfword as i32 on the hi part of the i64 val
+                                Directive::Instruction(ib::loadh(val + 1, base_addr, imm)),
+                                // shift i64 val right, keeping the sign
+                                Directive::Instruction(ib::shr_s_imm_64(
+                                    output,
+                                    val,
+                                    F::from_canonical_u8(32),
+                                )),
+                            ]
+                        } else {
+                            vec![
+                                // load unsigned lo i32
+                                Directive::Instruction(ib::loadhu(output, base_addr, imm)),
+                                // zero out hi i32
+                                Directive::Instruction(ib::const_32_imm(output + 1, 0x0, 0x0)),
+                            ]
+                        }
+                    }
+                }
             }
-            Op::I32Store { memarg } => {
+            Op::I64Load32U { memarg } | Op::I64Load32S { memarg } => {
+                let imm = mem_offset(memarg, c);
+                let base_addr = inputs[0].start as usize;
+                let output = (output.unwrap().start) as usize;
+                let val = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+                match memarg.align {
+                    0 => {
+                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
+                            Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
+                            Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
+                            // shifts
+                            Directive::Instruction(ib::shl_imm(
+                                b1_shifted,
+                                b1,
+                                F::from_canonical_u8(8),
+                            )),
+                            Directive::Instruction(ib::shl_imm(
+                                b2_shifted,
+                                b2,
+                                F::from_canonical_u8(16),
+                            )),
+                            Directive::Instruction(ib::shl_imm(
+                                b3_shifted,
+                                b3,
+                                F::from_canonical_u8(24),
+                            )),
+                            // build hi and lo
+                            Directive::Instruction(ib::or(lo, b0, b1_shifted)),
+                            Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
+                            // build hi i32 in val
+                            Directive::Instruction(ib::or(val + 1, lo, hi)),
+                            // shift signed/unsigned
+                            if let Op::I64Load32S { .. } = op {
+                                Directive::Instruction(ib::shr_s_imm_64(
+                                    output,
+                                    val,
+                                    F::from_canonical_u8(32),
+                                ))
+                            } else {
+                                Directive::Instruction(ib::shr_u_imm_64(
+                                    output,
+                                    val,
+                                    F::from_canonical_u8(32),
+                                ))
+                            },
+                        ]
+                    }
+                    1 => {
+                        let h0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        let h1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                        vec![
+                            // load h0, h1
+                            Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
+                            Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
+                            // shift h1
+                            Directive::Instruction(ib::shl_imm(
+                                h1_shifted,
+                                h1,
+                                F::from_canonical_u8(16),
+                            )),
+                            // combine h0 and h1
+                            Directive::Instruction(ib::or(val + 1, h0, h1_shifted)),
+                            // shift signed/unsigned
+                            if let Op::I64Load32S { .. } = op {
+                                Directive::Instruction(ib::shr_s_imm_64(
+                                    output,
+                                    val,
+                                    F::from_canonical_u8(32),
+                                ))
+                            } else {
+                                Directive::Instruction(ib::shr_u_imm_64(
+                                    output,
+                                    val,
+                                    F::from_canonical_u8(32),
+                                ))
+                            },
+                        ]
+                    }
+                    2.. => {
+                        vec![
+                            // load word
+                            Directive::Instruction(ib::loadw(val + 1, base_addr, imm)),
+                            // shift signed/unsigned
+                            if let Op::I64Load32S { .. } = op {
+                                Directive::Instruction(ib::shr_s_imm_64(
+                                    output,
+                                    val,
+                                    F::from_canonical_u8(32),
+                                ))
+                            } else {
+                                Directive::Instruction(ib::shr_u_imm_64(
+                                    output,
+                                    val,
+                                    F::from_canonical_u8(32),
+                                ))
+                            },
+                        ]
+                    }
+                }
+            }
+            Op::I32Store { memarg } | Op::I64Store32 { memarg } => {
                 let imm = mem_offset(memarg, c);
                 let base_addr = inputs[0].start as usize;
                 let value = inputs[1].start as usize;
@@ -1303,14 +1478,14 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     }
                 }
             }
-            Op::I32Store8 { memarg } => {
+            Op::I32Store8 { memarg } | Op::I64Store8 { memarg } => {
                 let imm = mem_offset(memarg, c);
                 let base_addr = inputs[0].start as usize;
                 let value = inputs[1].start as usize;
 
                 vec![Directive::Instruction(ib::storeb(value, base_addr, imm))]
             }
-            Op::I32Store16 { memarg } => {
+            Op::I32Store16 { memarg } | Op::I64Store16 { memarg } => {
                 let imm = mem_offset(memarg, c);
                 let base_addr = inputs[0].start as usize;
                 let value = inputs[1].start as usize;
@@ -1431,13 +1606,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         ]
                     }
                 }
-            }
-            Op::I64Store8 { memarg } | Op::I64Store16 { memarg } | Op::I64Store32 { memarg } => {
-                let _imm = mem_offset(memarg, c);
-                let _base_addr = inputs[0].start as usize;
-                let _value = inputs[1].start as usize;
-
-                unimplemented!()
             }
             Op::MemorySize { mem: _ } => {
                 load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap())
