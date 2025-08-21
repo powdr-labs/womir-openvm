@@ -1668,6 +1668,25 @@ mod wast_tests {
     }
 
     #[test]
+    fn test_call_indirect_wasm() {
+        run_single_wasm_test("../sample_programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
+        run_single_wasm_test(
+            "../sample_programs/call_indirect.wasm",
+            "call_op",
+            &[0, 10, 20],
+            &[30],
+        )
+        .unwrap();
+        run_single_wasm_test(
+            "../sample_programs/call_indirect.wasm",
+            "call_op",
+            &[1, 10, 3],
+            &[7],
+        )
+        .unwrap();
+    }
+
+    #[test]
     #[should_panic]
     fn test_keccak() {
         run_single_wasm_test("../sample_programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
