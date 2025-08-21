@@ -5,7 +5,7 @@ mod womir_translation;
 use clap::{Parser, Subcommand};
 use derive_more::From;
 use eyre::Result;
-use openvm_sdk::{Sdk, StdIn};
+use openvm_sdk::StdIn;
 use openvm_stark_backend::p3_field::PrimeField32;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -21,7 +21,7 @@ type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use openvm_womir_circuit::{self, WomirI, WomirIExecutor, WomirIPeriphery};
 
-use crate::womir_translation::OpenVMSettings;
+use crate::womir_translation::{LinkedProgram, OpenVMSettings};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SpecializedConfig {
@@ -152,18 +152,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .io(Default::default())
                 .build();
             let vm_config = SpecializedConfig::new(vm_config);
-            let sdk = Sdk::new();
 
             // Create and execute program
-            let exe = womir_translation::program_from_womir::<F>(ir_program, &function);
+            let mut linked_program = LinkedProgram::new(ir_program);
 
             let mut stdin = StdIn::default();
             for arg in args {
                 let val = arg.parse::<u32>().unwrap();
                 stdin.write(&val);
             }
+            let output = linked_program.execute(vm_config, &function, stdin)?;
 
-            let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
             println!("output: {output:?}");
         }
     }
@@ -1385,11 +1384,8 @@ mod tests {
 
 #[cfg(test)]
 mod wast_tests {
-    use crate::womir_translation::program_from_womir;
-
     use super::*;
-    use openvm_instructions::exe::VmExe;
-    use openvm_sdk::{Sdk, StdIn};
+    use openvm_sdk::StdIn;
     use openvm_stark_sdk::config::setup_tracing_with_log_level;
     use serde::Deserialize;
     use serde_json::Value;
@@ -1574,14 +1570,21 @@ mod wast_tests {
         }
     }
 
-    fn program_from_wasm<F: PrimeField32>(wasm_path: &str, entry_point: &str) -> VmExe<F> {
-        let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-        let ir_program = womir::loader::load_wasm(OpenVMSettings::new(), &wasm_bytes).unwrap();
-        program_from_womir(ir_program, entry_point)
-    }
-
     fn run_single_wasm_test(
         module_path: &str,
+        function: &str,
+        args: &[u32],
+        expected: &[u32],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let wasm_bytes = std::fs::read(module_path).expect("Failed to read WASM file");
+        let ir_program = womir::loader::load_wasm(OpenVMSettings::<F>::new(), &wasm_bytes).unwrap();
+        let mut module = LinkedProgram::new(ir_program);
+
+        run_wasm_test_function(&mut module, function, args, expected)
+    }
+
+    fn run_wasm_test_function(
+        module: &mut LinkedProgram<F>,
         function: &str,
         args: &[u32],
         expected: &[u32],
@@ -1596,10 +1599,6 @@ mod wast_tests {
             .io(Default::default())
             .build();
         let vm_config = SpecializedConfig::new(vm_config);
-        let sdk = Sdk::new();
-
-        // Load and execute the module
-        let exe = program_from_wasm::<F>(module_path, function);
 
         // Prepare input
         let mut stdin = StdIn::default();
@@ -1607,7 +1606,7 @@ mod wast_tests {
             stdin.write(&arg);
         }
 
-        let output = sdk.execute(exe.clone(), vm_config.clone(), stdin.clone())?;
+        let output = module.execute(vm_config, function, stdin)?;
 
         // Verify output
         if !expected.is_empty() {
@@ -1642,6 +1641,11 @@ mod wast_tests {
         run_wasm_test("../wasm_tests/address.wast")
     }
 
+    #[test]
+    fn test_memory_grow() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/memory_grow.wast")
+    }
+
     fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         let test_cases = extract_wast_test_info(tf)?;
 
@@ -1650,8 +1654,15 @@ mod wast_tests {
             // Prepend ../ to the module path since we're running from integration directory
             let full_module_path = format!("../wasm_tests/{module_path}");
 
+            // Load the module to be executed multiple times.
+            let wasm_bytes = std::fs::read(full_module_path).expect("Failed to read WASM file");
+            let ir_program =
+                womir::loader::load_wasm(OpenVMSettings::<F>::new(), &wasm_bytes).unwrap();
+            let mut module = LinkedProgram::new(ir_program);
+
             for (function, args, expected) in cases {
-                run_single_wasm_test(&full_module_path, function, args, expected)?;
+                println!("Test case: {function}({args:?}) = {expected:?}");
+                run_wasm_test_function(&mut module, function, args, expected)?;
             }
         }
 
