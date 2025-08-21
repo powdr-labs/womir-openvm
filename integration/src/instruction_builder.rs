@@ -491,7 +491,7 @@ pub fn copy_from_frame<F: PrimeField32>(
     src_fp: usize,
 ) -> Instruction<F> {
     Instruction::new(
-        CopyIntoFrameOpcode::COPY_INTO_FRAME.global_opcode(),
+        CopyIntoFrameOpcode::COPY_FROM_FRAME.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * src_reg),    // b: register
         // containing value to copy

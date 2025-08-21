@@ -215,7 +215,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
                     memory.write(F::ONE, a + other_fp_f, decompose(value))
                 }
                 CopyIntoFrameOpcode::COPY_FROM_FRAME => {
-                    memory.write(F::ZERO, a + fp_f, decompose(value))
+                    memory.write(F::ONE, a + fp_f, decompose(value))
                 }
             };
             destination_id = Some(write_result.0);

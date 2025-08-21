@@ -267,6 +267,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         }
     }
 
+    fn use_non_deterministic_function_outputs() -> bool {
+        false
+    }
+
     fn emit_label(
         &self,
         _c: &mut Ctx<F>,
@@ -335,6 +339,20 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             dest_offset.start as usize,
             src_ptr.start as usize,
             dest_frame_ptr.start as usize,
+        ))
+    }
+
+    fn emit_copy_from_frame(
+        &self,
+        _c: &mut Context<'a, '_, Self>,
+        source_frame_ptr: Range<u32>,
+        source_offset: Range<u32>,
+        dest_ptr: Range<u32>,
+    ) -> Self::Directive {
+        Directive::Instruction(ib::copy_from_frame(
+            dest_ptr.start as usize,
+            source_offset.start as usize,
+            source_frame_ptr.start as usize,
         ))
     }
 
