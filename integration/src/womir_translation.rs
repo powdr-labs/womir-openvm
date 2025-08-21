@@ -1435,7 +1435,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 unimplemented!()
             }
-            Op::MemorySize { mem: _ } => todo!(),
+            Op::MemorySize { mem: _ } => {
+                load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap())
+            }
             Op::MemoryGrow { mem: _ } => {
                 // TODO: we currently don't check memory access bounds
                 vec![]
