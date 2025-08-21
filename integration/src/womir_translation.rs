@@ -127,8 +127,6 @@ pub fn program_from_womir<F: PrimeField32>(
         })
         .collect();
 
-    println!("memory image:\n{memory_image:#?}");
-
     VmExe::new(program)
         .with_pc_start((start_offset * riscv::RV32_REGISTER_NUM_LIMBS) as u32)
         .with_init_memory(memory_image)
@@ -172,7 +170,6 @@ where
     let results = entry_point_func_type.results();
     let num_output_words = womir::word_count_types::<OpenVMSettings<F>>(results);
     for i in 0..num_output_words {
-        println!("Reveal?");
         code.push(ib::reveal_imm(ptr as usize, zero_reg, (i * 4) as usize));
         ptr += 1;
     }
@@ -601,8 +598,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         ));
 
         let base_addr = table_segment.start + TABLE_SEGMENT_HEADER_SIZE;
-
-        println!("emit_table_get: table_idx={table_idx}, entry_idx_ptr={entry_idx_ptr:?}, dest_ptr={dest_ptr:?}, base_addr: {base_addr}");
 
         // Read the 3 words of the reference into contiguous registers
         assert_eq!(dest_ptr.len(), 3);

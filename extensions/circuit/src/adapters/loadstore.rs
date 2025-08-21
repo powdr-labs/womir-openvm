@@ -448,7 +448,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         let ptr_val = ptr_val - shift_amount;
         let read_record = match local_opcode {
             LOADW | LOADB | LOADH | LOADBU | LOADHU => {
-                println!("Read address {ptr_val}");
                 memory.read::<RV32_REGISTER_NUM_LIMBS>(e, F::from_canonical_u32(ptr_val))
             }
             STOREW | STOREH | STOREB => memory.read::<RV32_REGISTER_NUM_LIMBS>(d, a + fp_f),
@@ -510,12 +509,9 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
                 STOREW | STOREH | STOREB => {
                     let ptr = read_record.mem_ptr_limbs[0]
                         + read_record.mem_ptr_limbs[1] * (1 << (RV32_CELL_BITS * 2));
-                    println!("STOREW {ptr} =  {:?}", output.writes[0]);
                     memory.write(e, F::from_canonical_u32(ptr & 0xfffffffc), output.writes[0])
                 }
                 LOADW | LOADB | LOADH | LOADBU | LOADHU => {
-                    let v = compose(output.writes[0]);
-                    println!("loaded value: {v}");
                     memory.write(d, a + fp_f, output.writes[0])
                 }
             };

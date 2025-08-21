@@ -288,7 +288,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
             JaafOpcode::RET | JaafOpcode::CALL_INDIRECT => {
                 // Read pc_source (c field) for target PC
                 let pc_source = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, c + fp_f);
-                println!("pc_source: {:?}", pc_source);
                 (Some(pc_source.0), pc_source.1)
             }
             _ => {
@@ -327,7 +326,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
             opcode,
             ..
         } = *instruction;
-        println!("Instruction: {:?}", instruction);
 
         let to_fp = output.to_fp.unwrap();
 
