@@ -586,31 +586,33 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         let table_entry_size_reg = c.register_gen.allocate_type(ValType::I32).start as usize;
         let mul_result = c.register_gen.allocate_type(ValType::I32).start as usize;
 
-        let mv_table_entry_size_instr = Directive::Instruction(ib::const_32_imm::<F>(
-            table_entry_size_reg,
-            TABLE_ENTRY_SIZE as u16,
-            0,
-        ));
-        let mul_instr = Directive::Instruction(ib::mul::<F>(
-            mul_result,
-            entry_idx_ptr.start as usize,
-            table_entry_size_reg,
-        ));
-
         let base_addr = table_segment.start + TABLE_SEGMENT_HEADER_SIZE;
 
         // Read the 3 words of the reference into contiguous registers
         assert_eq!(dest_ptr.len(), 3);
 
-        let mut res = vec![mv_table_entry_size_instr, mul_instr];
-        res.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
+        let mut instrs = vec![
+            Directive::Instruction(ib::const_32_imm::<F>(
+                table_entry_size_reg,
+                TABLE_ENTRY_SIZE as u16,
+                0,
+            )),
+            Directive::Instruction(ib::mul::<F>(
+                mul_result,
+                entry_idx_ptr.start as usize,
+                table_entry_size_reg,
+            )),
+        ];
+
+        instrs.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
             Directive::Instruction(ib::loadw(
                 dest_reg as usize,
                 mul_result,
                 base_addr as i32 + (i as i32) * 4,
             ))
         }));
-        res
+
+        instrs
     }
 
     fn emit_wasm_op(
