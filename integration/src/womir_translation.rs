@@ -1622,10 +1622,10 @@ impl<F: PrimeField32> Directive<F> {
             } => {
                 let pc = label_map.get(&target_pc)?.pc;
                 Some(ib::call(
-                    pc as usize,
-                    new_frame_ptr as usize,
                     saved_ret_pc as usize,
                     saved_caller_fp as usize,
+                    pc as usize,
+                    new_frame_ptr as usize,
                 ))
             }
             Directive::Instruction(i) => Some(i),
