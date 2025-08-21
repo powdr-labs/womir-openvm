@@ -942,7 +942,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             }
 
             // Parametric instruction
-            Op::Select => {
+            Op::Select | Op::TypedSelect { .. } => {
                 // Works like a ternary operator: if the condition (3rd input) is non-zero,
                 // select the 1st input, otherwise select the 2nd input.
                 let if_set_val = inputs[0].clone();
@@ -1603,7 +1603,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     }
                 }
             }
-            Op::MemorySize { mem: _ } => todo!(),
+            Op::MemorySize { mem: _ } => {
+                load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap())
+            }
             Op::MemoryGrow { mem: _ } => {
                 // TODO: we currently don't check memory access bounds
                 vec![]
@@ -1802,9 +1804,9 @@ fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> i32 {
         .linear_memory_start()
         .expect("no memory allocated");
     let offset = mem_start + u32::try_from(memarg.offset).expect("offset too large");
-    // TODO: currently, memory chip immediates are {-u16::MAX .. u16::MAX}.
-    // To support larger offsets, we need to change the memory chip.
-    u16::try_from(offset).unwrap() as i32
+    // RISC-V requires offset immediates to have 16 bits, but for WASM we changed it to 24 bits.
+    assert!(offset < (1 << 24));
+    offset as i32
 }
 
 fn load_from_const_addr<F: PrimeField32>(
