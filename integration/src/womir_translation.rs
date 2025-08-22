@@ -583,7 +583,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
         let table_segment = c.program.tables[table_idx as usize];
 
-        let table_entry_size_reg = c.register_gen.allocate_type(ValType::I32).start as usize;
         let mul_result = c.register_gen.allocate_type(ValType::I32).start as usize;
 
         let base_addr = table_segment.start + TABLE_SEGMENT_HEADER_SIZE;
@@ -591,18 +590,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         // Read the 3 words of the reference into contiguous registers
         assert_eq!(dest_ptr.len(), 3);
 
-        let mut instrs = vec![
-            Directive::Instruction(ib::const_32_imm::<F>(
-                table_entry_size_reg,
-                TABLE_ENTRY_SIZE as u16,
-                0,
-            )),
-            Directive::Instruction(ib::mul::<F>(
-                mul_result,
-                entry_idx_ptr.start as usize,
-                table_entry_size_reg,
-            )),
-        ];
+        let mut instrs = vec![Directive::Instruction(ib::muli::<F>(
+            mul_result,
+            entry_idx_ptr.start as usize,
+            TABLE_ENTRY_SIZE.to_f().unwrap(),
+        ))];
 
         instrs.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
             Directive::Instruction(ib::loadw(

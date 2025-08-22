@@ -58,6 +58,10 @@ pub fn mul<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(MulOpcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+pub fn muli<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+    instr_i(MulOpcode::MUL.global_opcode().as_usize(), rd, rs1, imm)
+}
+
 pub fn mul_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(Mul64Opcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
 }
