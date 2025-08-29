@@ -1275,7 +1275,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 vec![
                     // load signed or unsigned byte as i32 hi part
-                    if let Op::I32Load8S { .. } = op {
+                    if let Op::I64Load8S { .. } = op {
                         Directive::Instruction(ib::loadb(val + 1, base_addr, imm))
                     } else {
                         Directive::Instruction(ib::loadbu(val + 1, base_addr, imm))
@@ -1297,7 +1297,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
                         vec![
                             // load b1 signed/unsigned
-                            if let Op::I32Load16S { .. } = op {
+                            if let Op::I64Load16S { .. } = op {
                                 Directive::Instruction(ib::loadb(b1, base_addr, imm + 1))
                             } else {
                                 Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
@@ -1321,7 +1321,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         ]
                     }
                     1.. => {
-                        if let Op::I32Load16S { .. } = op {
+                        if let Op::I64Load16S { .. } = op {
                             vec![
                                 // load signed halfword as i32 on the hi part of the i64 val
                                 Directive::Instruction(ib::loadh(val + 1, base_addr, imm)),
