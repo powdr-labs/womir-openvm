@@ -1760,7 +1760,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     .collect()
             }
 
-            _ => todo!(),
+            Op::Nop => vec![Directive::Instruction(ib::addi(0, 0, F::ZERO))],
+            _ => todo!("{op:?}"),
         }
     }
 }
