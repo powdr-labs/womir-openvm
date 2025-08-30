@@ -145,7 +145,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
-        _fp: u32,
+        fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
@@ -164,7 +164,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
             amount_imm.as_canonical_u32()
         } else {
             // Otherwise, we read the value from the register
-            let reg_value = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, amount_reg);
+            let fp_f = F::from_canonical_u32(fp);
+            let reg_value = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, amount_reg + fp_f);
             compose(reg_value.1)
         };
         let amount_bytes = RV32_REGISTER_NUM_LIMBS as u32 * amount;
