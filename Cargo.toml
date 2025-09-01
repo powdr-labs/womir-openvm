@@ -11,17 +11,17 @@ resolver = "2"
 openvm-womir-circuit = { path = "extensions/circuit" }
 openvm-womir-transpiler = { path = "extensions/transpiler" }
 
-openvm-stark-sdk = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "37c22d2", default-features = false }
-openvm-stark-backend = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "37c22d2", default-features = false }
+openvm-stark-sdk = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "ee4e22b", default-features = false }
+openvm-stark-backend = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "ee4e22b", default-features = false }
 
-openvm-sdk = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
-openvm-circuit-primitives = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
-openvm-circuit-primitives-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
-openvm-circuit = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
-openvm-circuit-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
-openvm-instructions = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
-openvm-instructions-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
-openvm-rv32im-transpiler = { git = "https://github.com/powdr-labs/openvm.git", rev = "815b3cc", default-features = false }
+openvm-sdk = { git = "https://github.com/powdr-labs/openvm.git", rev = "dcf8ee6", default-features = false }
+openvm-circuit-primitives = { git = "https://github.com/powdr-labs/openvm.git", rev = "dcf8ee6", default-features = false }
+openvm-circuit-primitives-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "dcf8ee6", default-features = false }
+openvm-circuit = { git = "https://github.com/powdr-labs/openvm.git", rev = "dcf8ee6", default-features = false }
+openvm-circuit-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "dcf8ee6", default-features = false }
+openvm-instructions = { git = "https://github.com/powdr-labs/openvm.git", rev = "dcf8ee6", default-features = false }
+openvm-instructions-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "dcf8ee6", default-features = false }
+openvm-rv32im-transpiler = { git = "https://github.com/powdr-labs/openvm.git", rev = "dcf8ee6", default-features = false }
 
 thiserror = "1.0.65"
 strum_macros = "0.26.4"
@@ -43,7 +43,7 @@ rustc-hash = "2.0.0"
 rrs-lib = "0.1.0"
 tracing = "0.1.40"
 
-womir = { git = "https://github.com/powdr-labs/womir.git", rev = "bda63a1" }
+womir = { git = "https://github.com/powdr-labs/womir.git", rev = "73bf8c7" }
 wasmparser = { version = "0.235", default-features = false }
 
 # [patch."https://github.com/powdr-labs/openvm.git"]
