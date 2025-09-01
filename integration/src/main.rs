@@ -1593,6 +1593,8 @@ mod wast_tests {
         setup_tracing_with_log_level(Level::WARN);
         println!("Running wasm test: {module_path}, function: {function}, args: {args:?}, expected: {expected:?}");
 
+        println!("Running WASM test with {function}({args:?}): expected {expected:?}");
+
         // Create VM configuration
         let vm_config = SdkVmConfig::builder()
             .system(Default::default())
@@ -1650,6 +1652,16 @@ mod wast_tests {
     #[test]
     fn test_call_indirect() -> Result<(), Box<dyn std::error::Error>> {
         run_wasm_test("../wasm_tests/call_indirect.wast")
+    }
+
+    #[test]
+    fn test_func() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/func.wast")
+    }
+
+    #[test]
+    fn test_call() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/call.wast")
     }
 
     #[test]
