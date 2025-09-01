@@ -1760,7 +1760,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     .collect()
             }
 
-            _ => todo!(),
+            _ => todo!("{op:?}"),
         }
     }
 }

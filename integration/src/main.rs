@@ -1658,6 +1658,21 @@ mod wast_tests {
         run_wasm_test("../wasm_tests/call.wast")
     }
 
+    #[test]
+    fn test_br_if() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/br_if.wast")
+    }
+
+    #[test]
+    fn test_return() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/return.wast")
+    }
+
+    #[test]
+    fn test_loop() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/loop.wast")
+    }
+
     fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         let test_cases = extract_wast_test_info(tf)?;
 
@@ -1699,7 +1714,6 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_keccak() {
         run_single_wasm_test("../sample_programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
     }
