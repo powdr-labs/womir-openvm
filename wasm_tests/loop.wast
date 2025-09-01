@@ -11,7 +11,7 @@
   )
 
   (func (export "singular") (result i32)
-    (loop (nop))
+    (loop )
     (loop (result i32) (i32.const 7))
   )
 
@@ -29,7 +29,7 @@
 
   (func (export "nested") (result i32)
     (loop (result i32)
-      (loop (call $dummy) (block) (nop))
+      (loop (call $dummy) (block) )
       (loop (result i32) (call $dummy) (i32.const 9))
     )
   )
