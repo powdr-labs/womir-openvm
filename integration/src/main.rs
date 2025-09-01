@@ -1591,6 +1591,7 @@ mod wast_tests {
         expected: &[u32],
     ) -> Result<(), Box<dyn std::error::Error>> {
         setup_tracing_with_log_level(Level::WARN);
+        println!("Running wasm test: {module_path}, function: {function}, args: {args:?}, expected: {expected:?}");
 
         println!("Running WASM test with {function}({args:?}): expected {expected:?}");
 
@@ -1646,6 +1647,11 @@ mod wast_tests {
     #[test]
     fn test_address() -> Result<(), Box<dyn std::error::Error>> {
         run_wasm_test("../wasm_tests/address.wast")
+    }
+
+    #[test]
+    fn test_call_indirect() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/call_indirect.wast")
     }
 
     #[test]
