@@ -318,6 +318,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         }
     }
 
+    fn use_non_deterministic_function_outputs() -> bool {
+        false
+    }
+
     fn emit_label(
         &self,
         _c: &mut Ctx<F>,
@@ -386,6 +390,20 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             dest_offset.start as usize,
             src_ptr.start as usize,
             dest_frame_ptr.start as usize,
+        ))
+    }
+
+    fn emit_copy_from_frame(
+        &self,
+        _c: &mut Context<'a, '_, Self>,
+        source_frame_ptr: Range<u32>,
+        source_offset: Range<u32>,
+        dest_ptr: Range<u32>,
+    ) -> Self::Directive {
+        Directive::Instruction(ib::copy_from_frame(
+            dest_ptr.start as usize,
+            source_offset.start as usize,
+            source_frame_ptr.start as usize,
         ))
     }
 
@@ -618,13 +636,29 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         const TABLE_SEGMENT_HEADER_SIZE: u32 = 8;
 
         let table_segment = c.program.tables[table_idx as usize];
-        let base_addr = table_segment.start
-            + TABLE_SEGMENT_HEADER_SIZE
-            + entry_idx_ptr.start * TABLE_ENTRY_SIZE;
+
+        let mul_result = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+        let base_addr = table_segment.start + TABLE_SEGMENT_HEADER_SIZE;
 
         // Read the 3 words of the reference into contiguous registers
         assert_eq!(dest_ptr.len(), 3);
-        load_from_const_addr(c, base_addr, dest_ptr).0
+
+        let mut instrs = vec![Directive::Instruction(ib::muli::<F>(
+            mul_result,
+            entry_idx_ptr.start as usize,
+            TABLE_ENTRY_SIZE.to_f().unwrap(),
+        ))];
+
+        instrs.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
+            Directive::Instruction(ib::loadw(
+                dest_reg as usize,
+                mul_result,
+                base_addr as i32 + (i as i32) * 4,
+            ))
+        }));
+
+        instrs
     }
 
     fn emit_wasm_op(
@@ -1295,7 +1329,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 vec![
                     // load signed or unsigned byte as i32 hi part
-                    if let Op::I32Load8S { .. } = op {
+                    if let Op::I64Load8S { .. } = op {
                         Directive::Instruction(ib::loadb(val + 1, base_addr, imm))
                     } else {
                         Directive::Instruction(ib::loadbu(val + 1, base_addr, imm))
@@ -1317,7 +1351,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
                         vec![
                             // load b1 signed/unsigned
-                            if let Op::I32Load16S { .. } = op {
+                            if let Op::I64Load16S { .. } = op {
                                 Directive::Instruction(ib::loadb(b1, base_addr, imm + 1))
                             } else {
                                 Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
@@ -1341,7 +1375,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         ]
                     }
                     1.. => {
-                        if let Op::I32Load16S { .. } = op {
+                        if let Op::I64Load16S { .. } = op {
                             vec![
                                 // load signed halfword as i32 on the hi part of the i64 val
                                 Directive::Instruction(ib::loadh(val + 1, base_addr, imm)),
@@ -1841,7 +1875,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     .collect()
             }
 
-            _ => todo!(),
+            _ => todo!("{op:?}"),
         }
     }
 }
@@ -1944,7 +1978,7 @@ fn load_from_const_addr<F: PrimeField32>(
         Directive::Instruction(ib::loadw(
             dest_reg as usize,
             base_addr_reg.start as usize,
-            i as i32 * 4,
+            (i as i32) * 4,
         ))
     }));
 

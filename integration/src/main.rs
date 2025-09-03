@@ -17,6 +17,8 @@ use openvm_circuit::arch::{
 use openvm_circuit::circuit_derive::{Chip, ChipUsageGetter};
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
 use openvm_sdk::config::{SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery};
+use openvm_stark_sdk::config::setup_tracing_with_log_level;
+use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use openvm_womir_circuit::{self, WomirI, WomirIExecutor, WomirIPeriphery};
@@ -126,6 +128,8 @@ impl Commands {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_tracing_with_log_level(Level::WARN);
+
     // Parse command line arguments
     let cli_args = CliArgs::parse();
     let wasm_path = cli_args.command.get_program_path();
@@ -1590,6 +1594,7 @@ mod wast_tests {
         expected: &[u32],
     ) -> Result<(), Box<dyn std::error::Error>> {
         setup_tracing_with_log_level(Level::WARN);
+        println!("Running WASM test with {function}({args:?}): expected {expected:?}");
 
         // Create VM configuration
         let vm_config = SdkVmConfig::builder()
@@ -1646,6 +1651,36 @@ mod wast_tests {
         run_wasm_test("../wasm_tests/memory_grow.wast")
     }
 
+    #[test]
+    fn test_call_indirect() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/call_indirect.wast")
+    }
+
+    #[test]
+    fn test_func() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/func.wast")
+    }
+
+    #[test]
+    fn test_call() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/call.wast")
+    }
+
+    #[test]
+    fn test_br_if() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/br_if.wast")
+    }
+
+    #[test]
+    fn test_return() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/return.wast")
+    }
+
+    #[test]
+    fn test_loop() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/loop.wast")
+    }
+
     fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         let test_cases = extract_wast_test_info(tf)?;
 
@@ -1675,7 +1710,25 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
+    fn test_call_indirect_wasm() {
+        run_single_wasm_test("../sample_programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
+        run_single_wasm_test(
+            "../sample_programs/call_indirect.wasm",
+            "call_op",
+            &[0, 10, 20],
+            &[30],
+        )
+        .unwrap();
+        run_single_wasm_test(
+            "../sample_programs/call_indirect.wasm",
+            "call_op",
+            &[1, 10, 3],
+            &[7],
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn test_keccak() {
         run_single_wasm_test("../sample_programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
     }
