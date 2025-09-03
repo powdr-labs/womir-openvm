@@ -1690,13 +1690,13 @@ mod wast_tests {
             let full_module_path = format!("../wasm_tests/{module_path}");
 
             // Load the module to be executed multiple times.
+            println!("Loading test module: {module_path}");
             let wasm_bytes = std::fs::read(full_module_path).expect("Failed to read WASM file");
             let ir_program =
                 womir::loader::load_wasm(OpenVMSettings::<F>::new(), &wasm_bytes).unwrap();
             let mut module = LinkedProgram::new(ir_program);
 
             for (function, args, expected) in cases {
-                println!("Test case: {function}({args:?}) = {expected:?}");
                 run_wasm_test_function(&mut module, function, args, expected)?;
             }
         }
