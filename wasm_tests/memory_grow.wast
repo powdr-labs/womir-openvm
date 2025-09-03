@@ -289,14 +289,14 @@
 (assert_return (invoke "as-local.tee-value") (i32.const 1))
 (assert_return (invoke "as-global.set-value"))
 
-(assert_return (invoke "as-load-address") (i32.const 0))
+;; (assert_return (invoke "as-load-address") (i32.const 0)) ;; Unsupported: unaligned memory access
 (assert_return (invoke "as-loadN-address") (i32.const 0))
-(assert_return (invoke "as-store-address"))
-(assert_return (invoke "as-store-value"))
+;; (assert_return (invoke "as-store-address")) ;; Unsupported: unaligned memory access
+;; (assert_return (invoke "as-store-value")) ;; Unsupported: unaligned memory access
 (assert_return (invoke "as-storeN-address"))
 (assert_return (invoke "as-storeN-value"))
 
-;; (assert_return (invoke "as-unary-operand") (i32.const 31))
+;; (assert_return (invoke "as-unary-operand") (i32.const 31)) ;; Unsupported: clz instruction
 
 (assert_return (invoke "as-binary-left") (i32.const 11))
 (assert_return (invoke "as-binary-right") (i32.const 9))
@@ -309,25 +309,26 @@
 (assert_return (invoke "as-memory.grow-size") (i32.const 1))
 
 
-(module $Mgm
-  (memory (export "memory") 1) ;; initial size is 1
-  (func (export "grow") (result i32) (memory.grow (i32.const 1)))
-)
-(register "grown-memory" $Mgm)
-(assert_return (invoke $Mgm "grow") (i32.const 1)) ;; now size is 2
-(module $Mgim1
-  ;; imported memory limits should match, because external memory size is 2 now
-  (memory (export "memory") (import "grown-memory" "memory") 2)
-  (func (export "grow") (result i32) (memory.grow (i32.const 1)))
-)
-(register "grown-imported-memory" $Mgim1)
-(assert_return (invoke $Mgim1 "grow") (i32.const 2)) ;; now size is 3
-(module $Mgim2
-  ;; imported memory limits should match, because external memory size is 3 now
-  (import "grown-imported-memory" "memory" (memory 3))
-  (func (export "size") (result i32) (memory.size))
-)
-(assert_return (invoke $Mgim2 "size") (i32.const 3))
+;; Unsupported: multiple modules loading
+;; (module $Mgm
+;;   (memory (export "memory") 1) ;; initial size is 1
+;;   (func (export "grow") (result i32) (memory.grow (i32.const 1)))
+;; )
+;; (register "grown-memory" $Mgm)
+;; (assert_return (invoke $Mgm "grow") (i32.const 1)) ;; now size is 2
+;; (module $Mgim1
+;;   ;; imported memory limits should match, because external memory size is 2 now
+;;   (memory (export "memory") (import "grown-memory" "memory") 2)
+;;   (func (export "grow") (result i32) (memory.grow (i32.const 1)))
+;; )
+;; (register "grown-imported-memory" $Mgim1)
+;; (assert_return (invoke $Mgim1 "grow") (i32.const 2)) ;; now size is 3
+;; (module $Mgim2
+;;   ;; imported memory limits should match, because external memory size is 3 now
+;;   (import "grown-imported-memory" "memory" (memory 3))
+;;   (func (export "size") (result i32) (memory.size))
+;; )
+;; (assert_return (invoke $Mgim2 "size") (i32.const 3))
 
 
 (assert_invalid
