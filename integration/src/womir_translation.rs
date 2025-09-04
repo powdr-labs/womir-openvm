@@ -264,6 +264,14 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         }
     }
 
+    fn is_label(directive: &Self::Directive) -> Option<&str> {
+        if let Directive::Label { id, .. } = directive {
+            Some(id)
+        } else {
+            None
+        }
+    }
+
     fn use_non_deterministic_function_outputs() -> bool {
         false
     }
