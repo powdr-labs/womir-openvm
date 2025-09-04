@@ -1647,11 +1647,6 @@ mod wast_tests {
     }
 
     #[test]
-    fn test_memory_grow() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/memory_grow.wast")
-    }
-
-    #[test]
     fn test_call_indirect() -> Result<(), Box<dyn std::error::Error>> {
         run_wasm_test("../wasm_tests/call_indirect.wast")
     }

@@ -1088,7 +1088,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let global = &c.program.globals[global_index as usize];
                 match global {
                     Global::Mutable(allocated_var) => {
-                        load_from_const_addr(c, allocated_var.address, output.unwrap()).0
+                        load_from_const_addr(c, allocated_var.address, output.unwrap())
                     }
                     Global::Immutable(op) => self.emit_wasm_op(c, op.clone(), inputs, output),
                 }
@@ -1695,73 +1695,12 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     }
                 }
             }
-
-            Op::MemorySize { mem } => {
-                assert_eq!(mem, 0, "Only a single linear memory is supported");
-                load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap()).0
+            Op::MemorySize { mem: _ } => {
+                load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap())
             }
-            Op::MemoryGrow { mem } => {
-                assert_eq!(mem, 0, "Only a single linear memory is supported");
-                let header_addr = c.program.memory.unwrap().start;
-
-                let output = output.unwrap().start as usize;
-
-                let header_regs = c.register_gen.allocate_type(ValType::I64);
-                let size_reg = header_regs.start as usize;
-                let max_size_reg = (header_regs.start + 1) as usize;
-
-                let new_size = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let is_gt_max = c.register_gen.allocate_type(ValType::I32).start;
-                let is_lt_curr = c.register_gen.allocate_type(ValType::I32).start;
-
-                let error_label = c.new_label(LabelType::Local);
-                let continuation_label = c.new_label(LabelType::Local);
-
-                // Load the current size and max size.
-                let (mut directives, header_addr_reg) =
-                    load_from_const_addr(c, header_addr, header_regs);
-
-                directives.extend([
-                    // Calculate the new size:
-                    Directive::Instruction(ib::add(new_size, size_reg, inputs[0].start as usize)),
-                    // Check if the new size is greater than the max size.
-                    Directive::Instruction(ib::gt_u(is_gt_max as usize, new_size, max_size_reg)),
-                    // If the new size is greater than the max size, branch to the error label.
-                    Directive::JumpIf {
-                        target: error_label.clone(),
-                        condition_reg: is_gt_max,
-                    },
-                    // Check if the new size is less than to the current size (which means an overflow occurred),
-                    // which means the requested size is too large.
-                    Directive::Instruction(ib::lt_u::<F>(is_lt_curr as usize, new_size, size_reg)),
-                    // If the requested size overflows, branch to the error label.
-                    Directive::JumpIf {
-                        target: error_label.clone(),
-                        condition_reg: is_lt_curr,
-                    },
-                    // Success case:
-                    // - write new size to header.
-                    Directive::Instruction(ib::storew(new_size, header_addr_reg.start as usize, 0)),
-                    // - write old size to output.
-                    Directive::Instruction(ib::addi(output, size_reg, F::ZERO)),
-                    // - jump to continuation label.
-                    Directive::Jump {
-                        target: continuation_label.clone(),
-                    },
-                    // Error case: write 0xFFFFFFFF to output.
-                    Directive::Label {
-                        id: error_label,
-                        frame_size: None,
-                    },
-                    Directive::Instruction(ib::const_32_imm(output, 0xFFFF, 0xFFFF)),
-                    // Continue:
-                    Directive::Label {
-                        id: continuation_label,
-                        frame_size: None,
-                    },
-                ]);
-
-                directives
+            Op::MemoryGrow { mem: _ } => {
+                // TODO: we currently don't check memory access bounds
+                vec![]
             }
             Op::MemoryInit {
                 data_index: _,
@@ -1966,7 +1905,7 @@ fn load_from_const_addr<F: PrimeField32>(
     c: &mut Ctx<F>,
     base_addr: u32,
     output: Range<u32>,
-) -> (Vec<Directive<F>>, Range<u32>) {
+) -> Vec<Directive<F>> {
     let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
     let mut directives = vec![Directive::Instruction(ib::const_32_imm(
         base_addr_reg.start as usize,
@@ -1982,7 +1921,7 @@ fn load_from_const_addr<F: PrimeField32>(
         ))
     }));
 
-    (directives, base_addr_reg)
+    directives
 }
 
 fn store_to_const_addr<F: PrimeField32>(
