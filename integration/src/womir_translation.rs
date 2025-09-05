@@ -72,9 +72,6 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
             v.pc *= riscv::RV32_REGISTER_NUM_LIMBS as u32;
         }
 
-        // Now we need a little bit of startup code to call the entry point function.
-        // We assume the initial frame has space for at least one word: the frame pointer
-        // to the entry point function.
         let start_offset = linked_program.len();
 
         let linked_instructions = linked_program
@@ -152,7 +149,8 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
             .extend(create_startup_code(&self.program, entry_point));
 
         // TODO: make womir read and carry debug info
-        // The first instruction was removed, which was a nop inserted by the linker, so we need to set pc_base accordingly.
+        // The first instruction was removed, which was a nop inserted by the linker,
+        // so we need to set PC base to DEFAULT_PC_STEP, skipping position 0.
         let program = Program::new_without_debug_infos(
             &self.linked_instructions,
             DEFAULT_PC_STEP,
