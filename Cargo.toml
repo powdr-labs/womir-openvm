@@ -46,19 +46,19 @@ tracing = "0.1.40"
 womir = { git = "https://github.com/powdr-labs/womir.git", rev = "f12ea50e74a872" }
 wasmparser = { version = "0.235", default-features = false }
 
-[patch."https://github.com/powdr-labs/openvm.git"]
-openvm-sdk = { path = "../openvm/crates/sdk" }
-openvm-circuit-primitives = { path = "../openvm/crates/circuits/primitives" }
-openvm-circuit-primitives-derive = { path = "../openvm/crates/circuits/primitives/derive" }
-openvm-circuit = { path = "../openvm/crates/vm" }
-openvm-circuit-derive = { path = "../openvm/crates/vm/derive" }
-openvm-instructions = { path = "../openvm/crates/toolchain/instructions" }
-openvm-instructions-derive = { path = "../openvm/crates/toolchain/instructions/derive" }
-openvm-rv32im-transpiler = { path = "../openvm/extensions/rv32im/transpiler" }
-
-[patch."https://github.com/powdr-labs/stark-backend.git"]
-openvm-stark-sdk = { path = "../stark-backend/crates/stark-sdk/", default-features = false }
-openvm-stark-backend = { path = "../stark-backend/crates/stark-backend/", default-features = false }
+# [patch."https://github.com/powdr-labs/openvm.git"]
+# openvm-sdk = { path = "../openvm/crates/sdk" }
+# openvm-circuit-primitives = { path = "../openvm/crates/circuits/primitives" }
+# openvm-circuit-primitives-derive = { path = "../openvm/crates/circuits/primitives/derive" }
+# openvm-circuit = { path = "../openvm/crates/vm" }
+# openvm-circuit-derive = { path = "../openvm/crates/vm/derive" }
+# openvm-instructions = { path = "../openvm/crates/toolchain/instructions" }
+# openvm-instructions-derive = { path = "../openvm/crates/toolchain/instructions/derive" }
+# openvm-rv32im-transpiler = { path = "../openvm/extensions/rv32im/transpiler" }
+#
+# [patch."https://github.com/powdr-labs/stark-backend.git"]
+# openvm-stark-sdk = { path = "../stark-backend/crates/stark-sdk/", default-features = false }
+# openvm-stark-backend = { path = "../stark-backend/crates/stark-backend/", default-features = false }
 #
 # [patch."https://github.com/powdr-labs/womir.git"]
 # womir = { path = "../womir" }
