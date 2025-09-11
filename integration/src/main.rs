@@ -14,10 +14,12 @@ use std::sync::Arc;
 use openvm_circuit::arch::{
     InitFileGenerator, SystemConfig, VmChipComplex, VmConfig, VmInventoryError,
 };
-
 use openvm_circuit::circuit_derive::{Chip, ChipUsageGetter};
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
-use openvm_sdk::config::{AppConfig, SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery, DEFAULT_APP_LOG_BLOWUP};
+use openvm_sdk::config::{
+    AppConfig, SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery, DEFAULT_APP_LOG_BLOWUP,
+};
+use openvm_sdk::Sdk;
 use openvm_stark_sdk::config::{setup_tracing_with_log_level, FriParameters};
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
@@ -189,10 +191,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .io(Default::default())
                 .build();
             let vm_config = SpecializedConfig::new(vm_config);
+
             let sdk = Sdk::new();
 
-            // Create and execute program
-            let exe = womir_translation::program_from_womir::<F>(ir_program, &function);
+            // Create program
+            let linked_program = LinkedProgram::new(ir_program);
+            let exe = linked_program.program_with_entry_point(&function);
 
             let mut stdin = StdIn::default();
             for arg in args {

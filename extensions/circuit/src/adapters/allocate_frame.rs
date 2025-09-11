@@ -116,11 +116,12 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
 
     fn eval(
         &self,
-        _builder: &mut AB,
-        _local: &[AB::Var],
+        builder: &mut AB,
+        local: &[AB::Var],
         _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        // Empty eval function as requested
+        // Need at least one constraint otherwise stark-backend complains.
+        builder.assert_bool(local[0]);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

@@ -104,10 +104,11 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
 
     fn eval(
         &self,
-        _builder: &mut AB,
-        _local: &[AB::Var],
+        builder: &mut AB,
+        local: &[AB::Var],
         _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
+        builder.assert_bool(local[0]);
         // Empty eval function as requested
     }
 

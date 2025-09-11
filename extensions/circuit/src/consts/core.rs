@@ -51,11 +51,14 @@ where
 {
     fn eval(
         &self,
-        _builder: &mut AB,
+        builder: &mut AB,
         local_core: &[AB::Var],
         _from_pc: AB::Var,
     ) -> AdapterAirContext<AB::Expr, I> {
         let core_cols: &ConstsCoreCols<_> = local_core.borrow();
+
+        // Need at least one constraint otherwise stark-backend complains.
+        builder.assert_bool(core_cols.is_valid);
 
         let opcode = VmCoreAir::<AB, I>::expr_to_global_expr(
             self,
