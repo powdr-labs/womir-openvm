@@ -221,7 +221,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
 
         let jump_chip = JumpChipWom::new(
             JumpAdapterChipWom::new(execution_bus, program_bus, memory_bridge),
-            JumpCoreChipWom::new(bitwise_lu_chip.clone(), range_checker.clone()),
+            JumpCoreChipWom::new(),
             offline_memory.clone(),
             shared_fp.clone(),
         );
