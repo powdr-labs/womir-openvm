@@ -213,7 +213,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
 
         let jaaf_chip = JaafChipWom::new(
             JaafAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge),
-            JaafCoreChipWom::new(bitwise_lu_chip.clone(), range_checker.clone()),
+            JaafCoreChipWom::new(),
             offline_memory.clone(),
             shared_fp.clone(),
         );
