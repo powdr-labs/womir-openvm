@@ -109,7 +109,6 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
         _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
         builder.assert_bool(local[0]);
-        // Empty eval function as requested
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
