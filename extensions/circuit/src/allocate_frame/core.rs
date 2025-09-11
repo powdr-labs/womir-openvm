@@ -24,7 +24,7 @@ pub struct AllocateFrameCoreCols<T> {
     pub is_valid: T,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct AllocateFrameCoreAir {}
 
 impl<F: Field> BaseAir<F> for AllocateFrameCoreAir {
@@ -80,16 +80,9 @@ where
     }
 }
 
+#[derive(Default)]
 pub struct AllocateFrameCoreChipWom {
     pub air: AllocateFrameCoreAir,
-}
-
-impl AllocateFrameCoreChipWom {
-    pub fn new() -> Self {
-        Self {
-            air: AllocateFrameCoreAir {},
-        }
-    }
 }
 
 impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChipWom<F, I> for AllocateFrameCoreChipWom

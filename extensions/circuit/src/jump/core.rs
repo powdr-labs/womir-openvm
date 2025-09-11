@@ -24,7 +24,7 @@ pub struct JumpCoreCols<T> {
     pub is_valid: T,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct JumpCoreAir {}
 
 impl<F: Field> BaseAir<F> for JumpCoreAir {
@@ -79,16 +79,9 @@ where
     }
 }
 
+#[derive(Default)]
 pub struct JumpCoreChipWom {
     pub air: JumpCoreAir,
-}
-
-impl JumpCoreChipWom {
-    pub fn new() -> Self {
-        Self {
-            air: JumpCoreAir {},
-        }
-    }
 }
 
 impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChipWom<F, I> for JumpCoreChipWom

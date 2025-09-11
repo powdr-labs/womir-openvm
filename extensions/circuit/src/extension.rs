@@ -213,7 +213,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
 
         let jaaf_chip = JaafChipWom::new(
             JaafAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge),
-            JaafCoreChipWom::new(),
+            JaafCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),
         );
@@ -221,7 +221,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
 
         let jump_chip = JumpChipWom::new(
             JumpAdapterChipWom::new(execution_bus, program_bus, memory_bridge),
-            JumpCoreChipWom::new(),
+            JumpCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),
         );
@@ -229,7 +229,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
 
         let allocate_frame_chip = AllocateFrameChipWom::new(
             AllocateFrameAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge),
-            AllocateFrameCoreChipWom::new(),
+            AllocateFrameCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),
         );

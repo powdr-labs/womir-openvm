@@ -24,7 +24,7 @@ pub struct JaafCoreCols<T> {
     pub is_valid: T,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct JaafCoreAir {}
 
 impl<F: Field> BaseAir<F> for JaafCoreAir {
@@ -87,16 +87,9 @@ where
     }
 }
 
+#[derive(Default)]
 pub struct JaafCoreChipWom {
     pub air: JaafCoreAir,
-}
-
-impl JaafCoreChipWom {
-    pub fn new() -> Self {
-        Self {
-            air: JaafCoreAir {},
-        }
-    }
 }
 
 impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChipWom<F, I> for JaafCoreChipWom
