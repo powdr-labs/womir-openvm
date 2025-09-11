@@ -4083,7 +4083,6 @@ dependencies = [
  "clap",
  "derive_more 1.0.0",
  "eyre",
- "itertools 0.14.0",
  "openvm-circuit",
  "openvm-circuit-derive",
  "openvm-instructions",
