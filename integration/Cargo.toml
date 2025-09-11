@@ -22,3 +22,9 @@ wasmparser = { workspace = true }
 womir = { workspace = true }
 serde_json = { workspace = true }
 clap = { version = "4.5.43", features = ["derive"] }
+
+tracing-subscriber = { version = "0.3.17", features = ["std", "env-filter"] }
+tracing-forest = "0.1"
+metrics = "0.23.0"
+metrics-tracing-context = "0.16.0"
+metrics-util = "0.17.0"
