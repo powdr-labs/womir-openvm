@@ -136,34 +136,35 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         }
     }
 
+    pub fn program_with_entry_point(&self, entry_point: &str) -> VmExe<F> {
+        // Create the startup code to call the entry point function.
+        let entry_point = &self.label_map[entry_point];
+        let entry_point_start = self.linked_instructions.len();
+        let mut linked_instructions = self.linked_instructions.clone();
+        linked_instructions.extend(create_startup_code(&self.program, entry_point));
+
+        // TODO: make womir read and carry debug info
+        // The first instruction was removed, which was a nop inserted by the linker,
+        // so we need to set PC base to DEFAULT_PC_STEP, skipping position 0.
+        let program = Program::new_without_debug_infos(
+            &linked_instructions,
+            DEFAULT_PC_STEP,
+            DEFAULT_PC_STEP,
+        );
+
+        // Create the executor using the current memory image.
+        VmExe::new(program)
+            .with_pc_start(((1 + entry_point_start) * riscv::RV32_REGISTER_NUM_LIMBS) as u32)
+            .with_init_memory(self.memory_image.clone())
+    }
+
     pub fn execute(
         &mut self,
         vm_config: impl VmConfig<F>,
         entry_point: &str,
         inputs: impl Into<Streams<F>>,
     ) -> Result<Vec<F>, ExecutionError> {
-        // Create the startup code to call the entry point function.
-        let entry_point = &self.label_map[entry_point];
-        let entry_point_start = self.linked_instructions.len();
-        self.linked_instructions
-            .extend(create_startup_code(&self.program, entry_point));
-
-        // TODO: make womir read and carry debug info
-        // The first instruction was removed, which was a nop inserted by the linker,
-        // so we need to set PC base to DEFAULT_PC_STEP, skipping position 0.
-        let program = Program::new_without_debug_infos(
-            &self.linked_instructions,
-            DEFAULT_PC_STEP,
-            DEFAULT_PC_STEP,
-        );
-
-        // Remove the startup code, for this to be reused in the next call.
-        self.linked_instructions.truncate(entry_point_start);
-
-        // Create the executor using the current memory image.
-        let exe = VmExe::new(program)
-            .with_pc_start(((1 + entry_point_start) * riscv::RV32_REGISTER_NUM_LIMBS) as u32)
-            .with_init_memory(std::mem::take(&mut self.memory_image));
+        let exe = self.program_with_entry_point(entry_point);
 
         let vm = VmExecutor::new(vm_config);
         let final_memory = vm.execute(exe, inputs)?.unwrap();

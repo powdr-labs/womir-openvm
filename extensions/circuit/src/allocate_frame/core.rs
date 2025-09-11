@@ -70,11 +70,15 @@ where
 {
     fn eval(
         &self,
-        _builder: &mut AB,
+        builder: &mut AB,
         local_core: &[AB::Var],
         _from_pc: AB::Var,
     ) -> AdapterAirContext<AB::Expr, I> {
         let core_cols: &AllocateFrameCoreCols<_> = local_core.borrow();
+
+        // Need at least one constraint otherwise stark-backend complains.
+        builder.assert_bool(core_cols.is_valid);
+
         let allocated_ptr: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
             core_cols.allocated_ptr.map(|x| x.into());
 

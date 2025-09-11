@@ -56,5 +56,9 @@ wasmparser = { version = "0.235", default-features = false }
 # openvm-instructions-derive = { path = "../openvm/crates/toolchain/instructions/derive" }
 # openvm-rv32im-transpiler = { path = "../openvm/extensions/rv32im/transpiler" }
 #
+# [patch."https://github.com/powdr-labs/stark-backend.git"]
+# openvm-stark-sdk = { path = "../stark-backend/crates/stark-sdk/", default-features = false }
+# openvm-stark-backend = { path = "../stark-backend/crates/stark-backend/", default-features = false }
+#
 # [patch."https://github.com/powdr-labs/womir.git"]
 # womir = { path = "../womir" }
