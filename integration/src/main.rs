@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing_forest::ForestLayer;
+use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
 use openvm_circuit::arch::{
@@ -265,11 +266,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 pub fn setup_tracing_with_log_level(level: Level) {
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(format!("{level},p3_=warn")));
-    let subscriber = Registry::default()
+    let _ = Registry::default()
         .with(env_filter)
         .with(ForestLayer::default())
-        .with(MetricsLayer::new());
-    tracing::subscriber::set_global_default(subscriber).unwrap();
+        .with(MetricsLayer::new())
+        .try_init();
 }
 
 /// export stark-backend metrics to the given file
@@ -1500,7 +1501,6 @@ mod tests {
 mod wast_tests {
     use super::*;
     use openvm_sdk::StdIn;
-    use openvm_stark_sdk::config::setup_tracing_with_log_level;
     use serde::Deserialize;
     use serde_json::Value;
     use std::fs;
