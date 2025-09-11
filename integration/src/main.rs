@@ -9,6 +9,7 @@ use openvm_sdk::StdIn;
 use openvm_stark_backend::p3_field::PrimeField32;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::Arc;
 
 use openvm_circuit::arch::{
     InitFileGenerator, SystemConfig, VmChipComplex, VmConfig, VmInventoryError,
@@ -16,8 +17,8 @@ use openvm_circuit::arch::{
 
 use openvm_circuit::circuit_derive::{Chip, ChipUsageGetter};
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
-use openvm_sdk::config::{SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery};
-use openvm_stark_sdk::config::setup_tracing_with_log_level;
+use openvm_sdk::config::{AppConfig, SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery, DEFAULT_APP_LOG_BLOWUP};
+use openvm_stark_sdk::config::{setup_tracing_with_log_level, FriParameters};
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -116,6 +117,15 @@ enum Commands {
         /// Arguments to pass to the function
         args: Vec<String>,
     },
+    /// Proves execution of a function from the program with the given arguments
+    Prove {
+        /// Path to the WASM program
+        program: String,
+        /// Function name
+        function: String,
+        /// Arguments to pass to the function
+        args: Vec<String>,
+    },
 }
 
 impl Commands {
@@ -123,6 +133,7 @@ impl Commands {
         match self {
             Commands::PrintWom { program } => program,
             Commands::Run { program, .. } => program,
+            Commands::Prove { program, .. } => program,
         }
     }
 }
@@ -168,6 +179,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let output = linked_program.execute(vm_config, &function, stdin)?;
 
             println!("output: {output:?}");
+        }
+        Commands::Prove { function, args, .. } => {
+            // Create VM configuration
+            let vm_config = SdkVmConfig::builder()
+                .system(Default::default())
+                .rv32i(Default::default())
+                .rv32m(Default::default())
+                .io(Default::default())
+                .build();
+            let vm_config = SpecializedConfig::new(vm_config);
+            let sdk = Sdk::new();
+
+            // Create and execute program
+            let exe = womir_translation::program_from_womir::<F>(ir_program, &function);
+
+            let mut stdin = StdIn::default();
+            for arg in args {
+                let val = arg.parse::<u32>().unwrap();
+                stdin.write(&val);
+            }
+
+            // Set app configuration
+            let app_fri_params =
+                FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+            let app_config = AppConfig::new(app_fri_params, vm_config.clone());
+
+            // Commit the exe
+            let app_committed_exe = sdk.commit_app_exe(app_fri_params, exe.clone())?;
+
+            // Generate an AppProvingKey
+            let app_pk = Arc::new(sdk.app_keygen(app_config)?);
+
+            // Generate a proof
+            tracing::info!("Generating app proof...");
+            let start = std::time::Instant::now();
+            let app_proof =
+                sdk.generate_app_proof(app_pk.clone(), app_committed_exe.clone(), stdin.clone())?;
+            tracing::info!("App proof took {:?}", start.elapsed());
+
+            tracing::info!(
+                "Public values: {:?}",
+                app_proof.user_public_values.public_values
+            );
         }
     }
 
