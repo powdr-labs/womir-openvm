@@ -229,7 +229,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
 
         let allocate_frame_chip = AllocateFrameChipWom::new(
             AllocateFrameAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge),
-            AllocateFrameCoreChipWom::new(bitwise_lu_chip.clone(), range_checker.clone()),
+            AllocateFrameCoreChipWom::new(),
             offline_memory.clone(),
             shared_fp.clone(),
         );

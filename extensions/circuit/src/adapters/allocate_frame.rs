@@ -59,7 +59,7 @@ impl AllocateFrameAdapterChipWom {
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AllocateFrameReadRecord {
-    // No reads needed for allocate_frame
+    pub allocated_ptr: u32,
 }
 
 #[repr(C)]
@@ -171,11 +171,17 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
         };
         let amount_bytes = RV32_REGISTER_NUM_LIMBS as u32 * amount;
 
-        let allocated_ptr = decompose(self.next_fp);
+        let allocated_ptr = self.next_fp;
+
         self.next_fp += amount_bytes;
+
+        let allocated_ptr_f = decompose(self.next_fp);
         let amount_bytes = decompose(amount_bytes);
 
-        Ok(([allocated_ptr, amount_bytes], AllocateFrameReadRecord {}))
+        Ok((
+            [allocated_ptr_f, amount_bytes],
+            AllocateFrameReadRecord { allocated_ptr },
+        ))
     }
 
     fn postprocess(
@@ -184,38 +190,37 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        output: AdapterRuntimeContextWom<F, Self::Interface>,
-        _read_record: &Self::ReadRecord,
+        _output: AdapterRuntimeContextWom<F, Self::Interface>,
+        read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction {
-            a, b, f: enabled, ..
+            a: target_reg,
+            b,
+            f: enabled,
+            ..
         } = *instruction;
 
         let mut target_reg_id = None;
 
         if enabled != F::ZERO {
-            // Write the allocated pointer to target register
-            // For simplicity in the mock, we use absolute addressing for the write
-            if let Some(allocated_ptr) = output.writes.first() {
-                let write_result = memory.write(
-                    F::ONE,
-                    a + F::from_canonical_u32(from_frame.fp),
-                    *allocated_ptr,
-                );
-                target_reg_id = Some(write_result.0);
-            }
+            let write_result = memory.write(
+                F::ONE,
+                target_reg + F::from_canonical_u32(from_frame.fp),
+                decompose(read_record.allocated_ptr),
+            );
+            target_reg_id = Some(write_result.0);
         }
 
         Ok((
             ExecutionState {
-                pc: output.to_pc.unwrap_or(from_state.pc + DEFAULT_PC_STEP),
+                pc: from_state.pc + DEFAULT_PC_STEP,
                 timestamp: memory.timestamp(),
             },
-            output.to_fp.unwrap_or(from_frame.fp),
+            from_frame.fp,
             Self::WriteRecord {
                 from_state,
                 from_frame,
-                target_reg: a.as_canonical_u32(),
+                target_reg: target_reg.as_canonical_u32(),
                 amount_imm: b.as_canonical_u32(),
                 rd_id: target_reg_id,
             },
