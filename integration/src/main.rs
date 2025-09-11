@@ -5,11 +5,17 @@ mod womir_translation;
 use clap::{Parser, Subcommand};
 use derive_more::From;
 use eyre::Result;
+use metrics_tracing_context::{MetricsLayer, TracingContextLayer};
+use metrics_util::{debugging::DebuggingRecorder, layers::Layer};
 use openvm_sdk::StdIn;
 use openvm_stark_backend::p3_field::PrimeField32;
+use openvm_stark_sdk::bench::serialize_metric_snapshot;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tracing_forest::ForestLayer;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
 use openvm_circuit::arch::{
     InitFileGenerator, SystemConfig, VmChipComplex, VmConfig, VmInventoryError,
@@ -20,7 +26,7 @@ use openvm_sdk::config::{
     AppConfig, SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery, DEFAULT_APP_LOG_BLOWUP,
 };
 use openvm_sdk::Sdk;
-use openvm_stark_sdk::config::{setup_tracing_with_log_level, FriParameters};
+use openvm_stark_sdk::config::FriParameters;
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -127,6 +133,9 @@ enum Commands {
         function: String,
         /// Arguments to pass to the function
         args: Vec<String>,
+        /// Path to output metrics JSON file
+        #[arg(long)]
+        metrics: Option<PathBuf>,
     },
 }
 
@@ -141,7 +150,7 @@ impl Commands {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    setup_tracing_with_log_level(Level::WARN);
+    setup_tracing_with_log_level(Level::INFO);
 
     // Parse command line arguments
     let cli_args = CliArgs::parse();
@@ -182,54 +191,99 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("output: {output:?}");
         }
-        Commands::Prove { function, args, .. } => {
-            // Create VM configuration
-            let vm_config = SdkVmConfig::builder()
-                .system(Default::default())
-                .rv32i(Default::default())
-                .rv32m(Default::default())
-                .io(Default::default())
-                .build();
-            let vm_config = SpecializedConfig::new(vm_config);
-
-            let sdk = Sdk::new();
-
+        Commands::Prove {
+            function,
+            args,
+            metrics,
+            ..
+        } => {
             // Create program
             let linked_program = LinkedProgram::new(ir_program);
             let exe = linked_program.program_with_entry_point(&function);
 
-            let mut stdin = StdIn::default();
-            for arg in args {
-                let val = arg.parse::<u32>().unwrap();
-                stdin.write(&val);
+            let prove = || -> Result<()> {
+                // Create VM configuration
+                let vm_config = SdkVmConfig::builder()
+                    .system(Default::default())
+                    .rv32i(Default::default())
+                    .rv32m(Default::default())
+                    .io(Default::default())
+                    .build();
+                let vm_config = SpecializedConfig::new(vm_config);
+
+                let sdk = Sdk::new();
+
+                // Set app configuration
+                let app_fri_params = FriParameters::standard_with_100_bits_conjectured_security(
+                    DEFAULT_APP_LOG_BLOWUP,
+                );
+                let app_config = AppConfig::new(app_fri_params, vm_config.clone());
+
+                // Commit the exe
+                let app_committed_exe = sdk.commit_app_exe(app_fri_params, exe.clone())?;
+
+                // Generate an AppProvingKey
+                let app_pk = Arc::new(sdk.app_keygen(app_config)?);
+
+                // Setup input
+                let mut stdin = StdIn::default();
+                for arg in args {
+                    let val = arg.parse::<u32>().unwrap();
+                    stdin.write(&val);
+                }
+
+                // Generate a proof
+                tracing::info!("Generating app proof...");
+                let start = std::time::Instant::now();
+                let app_proof = sdk.generate_app_proof(
+                    app_pk.clone(),
+                    app_committed_exe.clone(),
+                    stdin.clone(),
+                )?;
+                tracing::info!("App proof took {:?}", start.elapsed());
+
+                tracing::info!(
+                    "Public values: {:?}",
+                    app_proof.user_public_values.public_values
+                );
+
+                Ok(())
+            };
+            if let Some(metrics_path) = metrics {
+                run_with_metric_collection_to_file(
+                    std::fs::File::create(metrics_path).expect("Failed to create metrics file"),
+                    prove,
+                )?;
+            } else {
+                prove()?
             }
-
-            // Set app configuration
-            let app_fri_params =
-                FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
-            let app_config = AppConfig::new(app_fri_params, vm_config.clone());
-
-            // Commit the exe
-            let app_committed_exe = sdk.commit_app_exe(app_fri_params, exe.clone())?;
-
-            // Generate an AppProvingKey
-            let app_pk = Arc::new(sdk.app_keygen(app_config)?);
-
-            // Generate a proof
-            tracing::info!("Generating app proof...");
-            let start = std::time::Instant::now();
-            let app_proof =
-                sdk.generate_app_proof(app_pk.clone(), app_committed_exe.clone(), stdin.clone())?;
-            tracing::info!("App proof took {:?}", start.elapsed());
-
-            tracing::info!(
-                "Public values: {:?}",
-                app_proof.user_public_values.public_values
-            );
         }
     }
 
     Ok(())
+}
+
+pub fn setup_tracing_with_log_level(level: Level) {
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(format!("{level},p3_=warn")));
+    let _ = Registry::default()
+        .with(env_filter)
+        .with(ForestLayer::default())
+        .with(MetricsLayer::new())
+        .try_init();
+}
+
+/// export stark-backend metrics to the given file
+fn run_with_metric_collection_to_file<R>(file: std::fs::File, f: impl FnOnce() -> R) -> R {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+    let recorder = TracingContextLayer::all().layer(recorder);
+    metrics::set_global_recorder(recorder).unwrap();
+    let res = f();
+
+    serde_json::to_writer_pretty(&file, &serialize_metric_snapshot(snapshotter.snapshot()))
+        .unwrap();
+    res
 }
 
 #[cfg(test)]
@@ -240,7 +294,6 @@ mod tests {
     use openvm_circuit::arch::ExecutionError;
     use openvm_instructions::{exe::VmExe, instruction::Instruction, program::Program};
     use openvm_sdk::{Sdk, StdIn};
-    use openvm_stark_sdk::config::setup_tracing_with_log_level;
     use tracing::Level;
 
     /// Helper function to run a VM test with given instructions and return the error or
@@ -1448,7 +1501,6 @@ mod tests {
 mod wast_tests {
     use super::*;
     use openvm_sdk::StdIn;
-    use openvm_stark_sdk::config::setup_tracing_with_log_level;
     use serde::Deserialize;
     use serde_json::Value;
     use std::fs;
