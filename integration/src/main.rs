@@ -11,10 +11,10 @@ use openvm_sdk::StdIn;
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
 use serde::{Deserialize, Serialize};
-use tracing_forest::ForestLayer;
-use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tracing_forest::ForestLayer;
+use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
 use openvm_circuit::arch::{
     InitFileGenerator, SystemConfig, VmChipComplex, VmConfig, VmInventoryError,
@@ -190,7 +190,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("output: {output:?}");
         }
-        Commands::Prove { function, args, metrics, .. } => {
+        Commands::Prove {
+            function,
+            args,
+            metrics,
+            ..
+        } => {
             // Create program
             let linked_program = LinkedProgram::new(ir_program);
             let exe = linked_program.program_with_entry_point(&function);
@@ -208,8 +213,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let sdk = Sdk::new();
 
                 // Set app configuration
-                let app_fri_params =
-                    FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+                let app_fri_params = FriParameters::standard_with_100_bits_conjectured_security(
+                    DEFAULT_APP_LOG_BLOWUP,
+                );
                 let app_config = AppConfig::new(app_fri_params, vm_config.clone());
 
                 // Commit the exe
@@ -228,8 +234,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Generate a proof
                 tracing::info!("Generating app proof...");
                 let start = std::time::Instant::now();
-                let app_proof =
-                    sdk.generate_app_proof(app_pk.clone(), app_committed_exe.clone(), stdin.clone())?;
+                let app_proof = sdk.generate_app_proof(
+                    app_pk.clone(),
+                    app_committed_exe.clone(),
+                    stdin.clone(),
+                )?;
                 tracing::info!("App proof took {:?}", start.elapsed());
 
                 tracing::info!(
@@ -247,7 +256,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 prove()?
             }
-
         }
     }
 
