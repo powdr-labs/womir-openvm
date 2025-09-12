@@ -27,13 +27,13 @@ use openvm_stark_backend::{
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
-use openvm_womir_transpiler::JumpOpcode;
+use openvm_womir_transpiler::JumpOpcode::{self, *};
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{AdapterRuntimeContextWom, VmAdapterChipWom};
 
-use super::RV32_REGISTER_NUM_LIMBS;
+use super::{compose, RV32_REGISTER_NUM_LIMBS};
 
 #[derive(Debug)]
 pub struct JumpAdapterChipWom<F: Field> {
@@ -59,8 +59,9 @@ impl<F: PrimeField32> JumpAdapterChipWom<F> {
 
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JumpReadRecord {
+pub struct JumpReadRecord<T> {
     pub reg_value: Option<RecordId>, // condition register for JUMP_IF and JUMP_IF_ZERO, offset for SKIP
+    pub reg_data: [T; 4],
 }
 
 #[repr(C)]
@@ -107,7 +108,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAirWom {
         1,
         0,
         RV32_REGISTER_NUM_LIMBS,
-        RV32_REGISTER_NUM_LIMBS,
+        0,
     >;
 
     fn eval(
@@ -177,7 +178,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAirWom {
 }
 
 impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
-    type ReadRecord = JumpReadRecord;
+    type ReadRecord = JumpReadRecord<F>;
     type WriteRecord = JumpWriteRecord;
     type Air = JumpAdapterAirWom;
     type Interface = BasicAdapterInterface<
@@ -206,7 +207,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         let fp_f = F::from_canonical_u32(fp);
 
         // Determine which registers to read based on opcode
-        let (register_record, register_data) = match local_opcode {
+        let (reg_value, reg_data) = match local_opcode {
             JumpOpcode::JUMP_IF | JumpOpcode::JUMP_IF_ZERO | JumpOpcode::SKIP => {
                 // Read condition (b field) for conditional jumps, or the offset for skip
                 let reg_value = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b + fp_f);
@@ -220,9 +221,10 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         };
 
         Ok((
-            [register_data],
+            [reg_data],
             JumpReadRecord {
-                reg_value: register_record,
+                reg_value,
+                reg_data,
             },
         ))
     }
@@ -233,14 +235,44 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         _from_frame: crate::FrameState<u32>,
-        output: AdapterRuntimeContextWom<F, Self::Interface>,
-        _read_record: &Self::ReadRecord,
+        _output: AdapterRuntimeContextWom<F, Self::Interface>,
+        read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
-        let Instruction { a: immediate, .. } = *instruction;
+        let Instruction {
+            opcode,
+            a: immediate,
+            ..
+        } = *instruction;
+
+        let local_opcode =
+            JumpOpcode::from_usize(opcode.local_opcode_idx(JumpOpcode::CLASS_OFFSET));
+
+        let register_val = compose(read_record.reg_data);
+
+        let target_pc = if let SKIP = local_opcode {
+            // Skip register_val instructions
+            from_state.pc + (register_val + 1) * DEFAULT_PC_STEP
+        } else {
+            // Jump directly to immediate value
+            immediate.as_canonical_u32()
+        };
+
+        // Determine if we should jump based on opcode and condition
+        let should_jump = match local_opcode {
+            JUMP | SKIP => true,               // Always jump
+            JUMP_IF => register_val != 0,      // Jump if condition != 0
+            JUMP_IF_ZERO => register_val == 0, // Jump if condition == 0
+        };
+
+        let final_pc = if should_jump {
+            target_pc
+        } else {
+            from_state.pc + DEFAULT_PC_STEP
+        };
 
         Ok((
             ExecutionState {
-                pc: output.to_pc.unwrap_or(from_state.pc + DEFAULT_PC_STEP),
+                pc: final_pc,
                 timestamp: memory.timestamp(),
             },
             _from_frame.fp, // FP unchanged for jump instructions
