@@ -1,4 +1,5 @@
 use std::borrow::{Borrow, BorrowMut};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use openvm_circuit::{
     arch::{
@@ -31,10 +32,24 @@ use crate::{
 
 use super::RV32_REGISTER_NUM_LIMBS;
 
+// TODO: When OpenVM creates a new segment, the `build` function in `extension.rs` is called again, resetting
+// all chips. This causes `next_fp` here to be reset to 8 again at the beginning of the new segment.
+// Ideally, the allocator needs to know the frame callstack in order to re-use addresses in the
+// new segment without overlapping with the active callstack at the end of the previous segment.
+// However, for now we keep bumping allocation in all segments to simplify the implementation,
+// using a static variable here.
+static NEXT_FP: OnceLock<Arc<Mutex<u32>>> = OnceLock::new();
+
+// Start from 8 because 0 and 4 are used by the startup code.
+const DEFAULT_NEXT_FP: u32 = 8;
+
+fn get_next_fp() -> &'static Arc<Mutex<u32>> {
+    NEXT_FP.get_or_init(|| Arc::new(Mutex::new(DEFAULT_NEXT_FP)))
+}
+
 #[derive(Debug)]
 pub struct AllocateFrameAdapterChipWom {
     pub air: AllocateFrameAdapterAirWom,
-    next_fp: u32,
 }
 
 impl AllocateFrameAdapterChipWom {
@@ -50,8 +65,6 @@ impl AllocateFrameAdapterChipWom {
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
             },
-            // Start from 8 because 0 and 4 are used by the startup code.
-            next_fp: 8,
         }
     }
 }
@@ -171,11 +184,12 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
         };
         let amount_bytes = RV32_REGISTER_NUM_LIMBS as u32 * amount;
 
-        let allocated_ptr = self.next_fp;
+        let mut next_fp = get_next_fp().lock().unwrap();
+        let allocated_ptr = *next_fp;
+        let allocated_ptr_f = decompose(*next_fp);
 
-        self.next_fp += amount_bytes;
+        *next_fp += amount_bytes;
 
-        let allocated_ptr_f = decompose(self.next_fp);
         let amount_bytes = decompose(amount_bytes);
 
         Ok((

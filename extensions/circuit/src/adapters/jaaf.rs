@@ -485,8 +485,8 @@ pub(super) fn run_jalr(
         }
         RET | CALL_INDIRECT => {
             // Use pc_source for PC directly (no offset)
-            let to_pc = pc_source;
-            to_pc - (to_pc & 1)
+            assert_eq!(pc_source % 4, 0);
+            pc_source
         }
     };
     assert!(to_pc < (1 << PC_BITS));
