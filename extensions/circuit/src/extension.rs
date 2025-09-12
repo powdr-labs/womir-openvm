@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use derive_more::derive::From;
 use openvm_circuit::{
@@ -33,6 +33,16 @@ use crate::loadstore::{LoadStoreChip, LoadStoreCoreChip};
 use crate::{adapters::*, wom_traits::*, *};
 
 const DEFAULT_INIT_FP: u32 = 0;
+
+// TODO: When OpenVM creates a new segment, the `build` function below is called again, resetting
+// all chips and shared_fp. This causes the frame pointer to be 0 again at the beginning of the new segment.
+// However, we need the frame pointer to persist segmentation, which ideally should be done
+// inside OpenVM. For now, in order to minimize changes to OpenVM, we use a static variable here.
+static SHARED_FP: OnceLock<Arc<Mutex<u32>>> = OnceLock::new();
+
+fn get_shared_fp() -> &'static Arc<Mutex<u32>> {
+    SHARED_FP.get_or_init(|| Arc::new(Mutex::new(DEFAULT_INIT_FP)))
+}
 
 /// Config for a VM with base extension and IO extension
 #[derive(Clone, Debug, VmConfig, derive_new::new, Serialize, Deserialize)]
@@ -163,7 +173,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         let offline_memory = builder.system_base().offline_memory();
         let pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
 
-        let shared_fp = Arc::new(Mutex::new(DEFAULT_INIT_FP));
+        let shared_fp = get_shared_fp().clone();
 
         let bitwise_lu_chip = if let Some(&chip) = builder
             .find_chip::<SharedBitwiseOperationLookupChip<8>>()

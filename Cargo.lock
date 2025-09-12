@@ -3367,7 +3367,7 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 [[package]]
 name = "struct-reflection"
 version = "0.1.0"
-source = "git+https://github.com/gzanitti/struct-reflection-rs.git#e9743fbb4aace944bc7a5cf2ee32f1c02719d9cc"
+source = "git+https://github.com/gzanitti/struct-reflection-rs.git#69628d17bf35d1f09afd8cd93ba124de44789dff"
 dependencies = [
  "struct-reflection-derive",
 ]
@@ -3375,7 +3375,7 @@ dependencies = [
 [[package]]
 name = "struct-reflection-derive"
 version = "0.1.0"
-source = "git+https://github.com/gzanitti/struct-reflection-rs.git#e9743fbb4aace944bc7a5cf2ee32f1c02719d9cc"
+source = "git+https://github.com/gzanitti/struct-reflection-rs.git#69628d17bf35d1f09afd8cd93ba124de44789dff"
 dependencies = [
  "proc-macro2",
  "quote",
