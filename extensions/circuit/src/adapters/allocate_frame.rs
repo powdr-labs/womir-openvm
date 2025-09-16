@@ -77,12 +77,11 @@ pub struct AllocateFrameWriteRecord {
 pub struct AllocateFrameAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
-    pub target_reg_offset: T, // target_reg field from instruction (a)
-    pub allocation_size: T,   // amount_imm field from instruction (b)
-    pub target_reg_ptr: T,    // Pointer to target register
-    pub target_reg_aux_cols: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
-    /// 1 if we need to write to target register
-    pub needs_write: T,
+    pub target_reg_ptr: T,  // Pointer to target register
+    pub allocation_size: T, // amount_imm field from instruction (b)
+    pub src_reg_ptr: T,     // if reading from register
+    pub result: T,
+    pub read_imm_or_reg: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
@@ -229,29 +228,11 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
 
     fn generate_trace_row(
         &self,
-        row_slice: &mut [F],
+        _row_slice: &mut [F],
         _read_record: Self::ReadRecord,
-        write_record: Self::WriteRecord,
-        memory: &OfflineMemory<F>,
+        _write_record: Self::WriteRecord,
+        _memory: &OfflineMemory<F>,
     ) {
-        let aux_cols_factory = memory.aux_cols_factory();
-        let adapter_cols: &mut AllocateFrameAdapterColsWom<_> = row_slice.borrow_mut();
-
-        adapter_cols.from_state = write_record.from_state.map(F::from_canonical_u32);
-        adapter_cols.from_frame = write_record.from_frame.map(F::from_canonical_u32);
-        adapter_cols.target_reg_offset = F::from_canonical_u32(write_record.target_reg);
-        adapter_cols.allocation_size = F::from_canonical_u32(write_record.amount_imm);
-
-        // Handle target register write
-        if let Some(target_id) = write_record.rd_id {
-            let target_record = memory.record_by_id(target_id);
-            adapter_cols.target_reg_ptr = target_record.pointer;
-            adapter_cols.needs_write = F::ONE;
-            aux_cols_factory
-                .generate_write_aux(target_record, &mut adapter_cols.target_reg_aux_cols);
-        } else {
-            adapter_cols.needs_write = F::ZERO;
-        }
     }
 
     fn air(&self) -> &Self::Air {

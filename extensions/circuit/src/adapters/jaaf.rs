@@ -90,23 +90,15 @@ pub struct JaafAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
     pub rs1_ptr: T,
-    pub rs1_aux_cols: MemoryReadAuxCols<T>,
+    pub rs1_aux_cols: [T; 2],
+    pub pc_imm: T,
     pub rs2_ptr: T,
-    pub rs2_aux_cols: MemoryReadAuxCols<T>,
+    pub rs2_aux_cols: T,
     pub rd1_ptr: T,
-    pub rd1_aux_cols: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
     pub rd2_ptr: T,
-    pub rd2_aux_cols: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
-    /// Only writes rd1 if `needs_write_rd1`
-    pub needs_write_rd1: T,
-    /// Only writes rd2 if `needs_write_rd2`
-    pub needs_write_rd2: T,
-    /// 1 if we need to read rs1 (for ret and call_indirect)
-    pub needs_read_rs1: T,
-    /// 1 if we need to read rs2 (for all opcodes)
-    pub needs_read_rs2: T,
-    /// Immediate value from instruction
-    pub imm: T,
+    pub needs_save_pc: T,
+    pub needs_save_fp: T,
+    pub src_pc_imm_or_reg: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
@@ -153,108 +145,9 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
             timestamp + AB::Expr::from_canonical_usize(timestamp_delta - 1)
         };
 
-        let write_count_rd1 = local_cols.needs_write_rd1;
-        let write_count_rd2 = local_cols.needs_write_rd2;
-        let read_count_rs1 = local_cols.needs_read_rs1;
-        let read_count_rs2 = local_cols.needs_read_rs2;
+        let needs_save_pc = local_cols.needs_save_pc;
 
-        builder.assert_bool(write_count_rd1);
-        builder.assert_bool(write_count_rd2);
-        builder.assert_bool(read_count_rs1);
-        builder.assert_bool(read_count_rs2);
-        builder
-            .when::<AB::Expr>(not(ctx.instruction.is_valid.clone()))
-            .assert_zero(write_count_rd1);
-        builder
-            .when::<AB::Expr>(not(ctx.instruction.is_valid.clone()))
-            .assert_zero(write_count_rd2);
-
-        self.memory_bridge
-            .read(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.rs1_ptr,
-                ),
-                ctx.reads[0].clone(),
-                timestamp_pp(),
-                &local_cols.rs1_aux_cols,
-            )
-            .eval(builder, read_count_rs1);
-
-        self.memory_bridge
-            .read(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.rs2_ptr,
-                ),
-                ctx.reads[1].clone(),
-                timestamp_pp(),
-                &local_cols.rs2_aux_cols,
-            )
-            .eval(builder, read_count_rs2);
-
-        self.memory_bridge
-            .write(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.rd1_ptr,
-                ),
-                ctx.writes[0].clone(),
-                timestamp_pp(),
-                &local_cols.rd1_aux_cols,
-            )
-            .eval(builder, write_count_rd1);
-
-        self.memory_bridge
-            .write(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.rd2_ptr,
-                ),
-                ctx.writes[1].clone(),
-                timestamp_pp(),
-                &local_cols.rd2_aux_cols,
-            )
-            .eval(builder, write_count_rd2);
-
-        let to_pc = ctx
-            .to_pc
-            .unwrap_or(local_cols.from_state.pc + AB::F::from_canonical_u32(DEFAULT_PC_STEP));
-        // The adapter will handle to_fp from reads[1] (rs2)
-        // rs2 contains the target fp value
-        let to_fp = abstract_compose(ctx.reads[1].clone());
-
-        // Update the frame bridge
-        self.frame_bridge.frame_bus.execute(
-            builder,
-            ctx.instruction.is_valid.clone(),
-            local_cols.from_frame,
-            FrameState {
-                pc: to_pc.clone(),
-                fp: to_fp,
-            },
-        );
-
-        // regardless of `needs_write`, must always execute instruction when `is_valid`.
-        self.execution_bridge
-            .execute(
-                ctx.instruction.opcode,
-                [
-                    local_cols.rd1_ptr.into(),
-                    local_cols.rd2_ptr.into(),
-                    local_cols.rs1_ptr.into(),
-                    local_cols.imm.into(),
-                    local_cols.rs2_ptr.into(),
-                    write_count_rd1.into(),
-                    AB::Expr::ZERO,
-                ],
-                local_cols.from_state,
-                ExecutionState {
-                    pc: to_pc,
-                    timestamp: timestamp + AB::F::from_canonical_usize(timestamp_delta),
-                },
-            )
-            .eval(builder, ctx.instruction.is_valid);
+        builder.assert_bool(needs_save_pc);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -425,46 +318,11 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
 
     fn generate_trace_row(
         &self,
-        row_slice: &mut [F],
-        read_record: Self::ReadRecord,
-        write_record: Self::WriteRecord,
-        memory: &OfflineMemory<F>,
+        _row_slice: &mut [F],
+        _read_record: Self::ReadRecord,
+        _write_record: Self::WriteRecord,
+        _memory: &OfflineMemory<F>,
     ) {
-        let aux_cols_factory = memory.aux_cols_factory();
-        let adapter_cols: &mut JaafAdapterColsWom<_> = row_slice.borrow_mut();
-        adapter_cols.from_state = write_record.from_state.map(F::from_canonical_u32);
-        adapter_cols.from_frame = write_record.from_frame.map(F::from_canonical_u32);
-        adapter_cols.imm = F::from_canonical_u32(write_record.imm);
-
-        // Handle rs1 read
-        if let Some(rs1_id) = read_record.rs1 {
-            let rs1 = memory.record_by_id(rs1_id);
-            adapter_cols.rs1_ptr = rs1.pointer;
-            adapter_cols.needs_read_rs1 = F::ONE;
-            aux_cols_factory.generate_read_aux(rs1, &mut adapter_cols.rs1_aux_cols);
-        }
-
-        // Handle rs2 read (always present since FP is always needed)
-        let rs2 = memory.record_by_id(read_record.rs2);
-        adapter_cols.rs2_ptr = rs2.pointer;
-        adapter_cols.needs_read_rs2 = F::ONE;
-        aux_cols_factory.generate_read_aux(rs2, &mut adapter_cols.rs2_aux_cols);
-
-        // Handle rd1 write
-        if let Some(id) = write_record.rd1_id {
-            let rd = memory.record_by_id(id);
-            adapter_cols.rd1_ptr = rd.pointer;
-            adapter_cols.needs_write_rd1 = F::ONE;
-            aux_cols_factory.generate_write_aux(rd, &mut adapter_cols.rd1_aux_cols);
-        }
-
-        // Handle rd2 write
-        if let Some(id) = write_record.rd2_id {
-            let rd = memory.record_by_id(id);
-            adapter_cols.rd2_ptr = rd.pointer;
-            adapter_cols.needs_write_rd2 = F::ONE;
-            aux_cols_factory.generate_write_aux(rd, &mut adapter_cols.rd2_aux_cols);
-        }
     }
 
     fn air(&self) -> &Self::Air {

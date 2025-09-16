@@ -69,15 +69,10 @@ pub struct ConstsWriteRecord {
 pub struct ConstsAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
-    pub offset_within_frame: T, // rd - the offset within the frame
-    pub value_reg_ptr: T,       // rs1 pointer (register containing value to copy)
-    pub value_reg_aux_cols: MemoryReadAuxCols<T>,
-    pub frame_ptr_reg_ptr: T, // rs2 pointer (register containing frame pointer)
-    pub frame_ptr_reg_aux_cols: MemoryReadAuxCols<T>,
-    pub destination_ptr: T, // Where we write: frame_pointer + offset
-    pub destination_aux_cols: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
-    /// 1 if we need to write to destination
-    pub needs_write: T,
+    pub value_reg_ptr: T,
+    pub lo: T,
+    pub hi: T,
+    pub write_mult: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
@@ -191,28 +186,11 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
 
     fn generate_trace_row(
         &self,
-        row_slice: &mut [F],
+        _row_slice: &mut [F],
         _read_record: Self::ReadRecord,
-        write_record: Self::WriteRecord,
-        memory: &OfflineMemory<F>,
+        _write_record: Self::WriteRecord,
+        _memory: &OfflineMemory<F>,
     ) {
-        let aux_cols_factory = memory.aux_cols_factory();
-        let adapter_cols: &mut ConstsAdapterColsWom<_> = row_slice.borrow_mut();
-
-        adapter_cols.from_state = write_record.from_state.map(F::from_canonical_u32);
-        adapter_cols.from_frame = write_record.from_frame.map(F::from_canonical_u32);
-        adapter_cols.offset_within_frame = F::from_canonical_u32(write_record.rd);
-
-        // Handle destination write
-        if let Some(dest_id) = write_record.rd_id {
-            let dest_record = memory.record_by_id(dest_id);
-            adapter_cols.destination_ptr = dest_record.pointer;
-            adapter_cols.needs_write = F::ONE;
-            aux_cols_factory
-                .generate_write_aux(dest_record, &mut adapter_cols.destination_aux_cols);
-        } else {
-            adapter_cols.needs_write = F::ZERO;
-        }
     }
 
     fn air(&self) -> &Self::Air {

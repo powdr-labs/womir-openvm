@@ -75,12 +75,13 @@ pub struct JumpWriteRecord {
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
 pub struct JumpAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
-    pub condition_ptr: T,
-    pub condition_aux_cols: MemoryReadAuxCols<T>,
-    /// 1 if we need to read condition (for JUMP_IF and JUMP_IF_ZERO)
-    pub needs_read_condition: T,
-    /// Immediate value from instruction
+    pub condition_or_skip_offset_ptr: T,
+    pub condition_or_skip_offset_aux_cols: T,
     pub immediate: T,
+    pub opcode_jump: T,
+    pub opcode_jump_if_zero: T,
+    pub opcode_jump_if: T,
+    pub opcode_skip: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
@@ -126,49 +127,9 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAirWom {
             timestamp + AB::Expr::from_canonical_usize(timestamp_delta - 1)
         };
 
-        let read_count_condition = local_cols.needs_read_condition;
+        let opcode_skip = local_cols.opcode_skip;
 
-        builder.assert_bool(read_count_condition);
-        builder
-            .when::<AB::Expr>(not(ctx.instruction.is_valid.clone()))
-            .assert_zero(read_count_condition);
-
-        self.memory_bridge
-            .read(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.condition_ptr,
-                ),
-                ctx.reads[0].clone(),
-                timestamp_pp(),
-                &local_cols.condition_aux_cols,
-            )
-            .eval(builder, read_count_condition);
-
-        let to_pc = ctx
-            .to_pc
-            .unwrap_or(local_cols.from_state.pc + AB::F::from_canonical_u32(DEFAULT_PC_STEP));
-
-        // Execute the instruction
-        self.execution_bridge
-            .execute(
-                ctx.instruction.opcode,
-                [
-                    local_cols.immediate.into(),     // a: immediate
-                    local_cols.condition_ptr.into(), // b: condition register
-                    AB::Expr::ZERO,                  // c: (not used)
-                    AB::Expr::ZERO,                  // d: (not used)
-                    AB::Expr::ZERO,                  // e: (not used)
-                    AB::Expr::ONE,                   // f: enabled
-                    AB::Expr::ZERO,                  // g: imm sign
-                ],
-                local_cols.from_state,
-                ExecutionState {
-                    pc: to_pc,
-                    timestamp: timestamp + AB::F::from_canonical_usize(timestamp_delta),
-                },
-            )
-            .eval(builder, ctx.instruction.is_valid);
+        builder.assert_bool(opcode_skip);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -285,23 +246,11 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
 
     fn generate_trace_row(
         &self,
-        row_slice: &mut [F],
-        read_record: Self::ReadRecord,
-        write_record: Self::WriteRecord,
-        memory: &OfflineMemory<F>,
+        _row_slice: &mut [F],
+        _read_record: Self::ReadRecord,
+        _write_record: Self::WriteRecord,
+        _memory: &OfflineMemory<F>,
     ) {
-        let aux_cols_factory = memory.aux_cols_factory();
-        let adapter_cols: &mut JumpAdapterColsWom<_> = row_slice.borrow_mut();
-        adapter_cols.from_state = write_record.from_state.map(F::from_canonical_u32);
-        adapter_cols.immediate = F::from_canonical_u32(write_record.immediate);
-
-        // Handle condition read
-        if let Some(reg_value_id) = read_record.reg_value {
-            let reg_value = memory.record_by_id(reg_value_id);
-            adapter_cols.condition_ptr = reg_value.pointer;
-            adapter_cols.needs_read_condition = F::ONE;
-            aux_cols_factory.generate_read_aux(reg_value, &mut adapter_cols.condition_aux_cols);
-        }
     }
 
     fn air(&self) -> &Self::Air {
