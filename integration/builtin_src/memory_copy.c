@@ -1,6 +1,6 @@
 // Adapted from musl's memmove.c
 
-_Static_assert(sizeof(int) == 4,   "int must be 4 bytes");
+_Static_assert(sizeof(unsigned int) == 4,   "int must be 4 bytes");
 _Static_assert(sizeof(void*) == 4, "pointer must be 4 bytes");
 
 typedef unsigned int uintptr_t;

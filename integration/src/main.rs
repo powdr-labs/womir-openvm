@@ -1839,6 +1839,11 @@ mod wast_tests {
         run_wasm_test("../wasm_tests/loop.wast")
     }
 
+    #[test]
+    fn test_memory_fill() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/memory_fill.wast")
+    }
+
     fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         let test_cases = extract_wast_test_info(tf)?;
 
