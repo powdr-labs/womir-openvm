@@ -18,9 +18,9 @@ use womir::{
     loader::{
         flattening::{
             settings::{ComparisonFunction, JumpCondition, Settings},
-            Context, LabelType, WriteOnceASM,
+            Context, LabelType, WriteOnceAsm,
         },
-        func_idx_to_label, CommonProgram, Global,
+        func_idx_to_label, Global, Module,
     },
 };
 
@@ -43,7 +43,7 @@ pub const ERROR_CODE_OFFSET: u32 = 100;
 pub const ERROR_ABORT_CODE: u32 = 200;
 
 pub struct LinkedProgram<'a, F: PrimeField32> {
-    program: CommonProgram<'a>,
+    module: Module<'a>,
     label_map: HashMap<String, LabelValue>,
     /// Linked instructions without the startup code:
     linked_instructions: Vec<Instruction<F>>,
@@ -51,13 +51,12 @@ pub struct LinkedProgram<'a, F: PrimeField32> {
 }
 
 impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
-    pub fn new(mut ir_program: womir::loader::Program<'a, OpenVMSettings<F>>) -> Self {
-        let functions = ir_program
-            .functions
+    pub fn new(mut module: Module<'a>, functions: Vec<WriteOnceAsm<Directive<F>>>) -> Self {
+        let functions = functions
             .into_iter()
             .map(|f| {
                 let directives = f.directives.into_iter().collect();
-                WriteOnceASM {
+                WriteOnceAsm {
                     directives,
                     func_idx: f.func_idx,
                     frame_size: f.frame_size,
@@ -90,7 +89,7 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         // We assume that the loop above removes a single `nop` introduced by the linker.
         assert_eq!(linked_instructions.len(), start_offset - 1);
 
-        let memory_image = std::mem::take(&mut ir_program.c.initial_memory)
+        let memory_image = std::mem::take(&mut module.initial_memory)
             .into_iter()
             .flat_map(|(addr, value)| {
                 use womir::loader::MemoryEntry::*;
@@ -129,7 +128,7 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
             .collect();
 
         Self {
-            program: ir_program.c,
+            module,
             label_map,
             linked_instructions,
             memory_image,
@@ -141,7 +140,7 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         let entry_point = &self.label_map[entry_point];
         let entry_point_start = self.linked_instructions.len();
         let mut linked_instructions = self.linked_instructions.clone();
-        linked_instructions.extend(create_startup_code(&self.program, entry_point));
+        linked_instructions.extend(create_startup_code(&self.module, entry_point));
 
         // TODO: make womir read and carry debug info
         // The first instruction was removed, which was a nop inserted by the linker,
@@ -185,7 +184,7 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
     }
 }
 
-fn create_startup_code<F>(ctx: &CommonProgram, entry_point: &LabelValue) -> Vec<Instruction<F>>
+fn create_startup_code<F>(ctx: &Module, entry_point: &LabelValue) -> Vec<Instruction<F>>
 where
     F: PrimeField32,
 {
@@ -277,6 +276,7 @@ pub enum Directive<F> {
 
 type Ctx<'a, 'b, F> = Context<'a, 'b, OpenVMSettings<F>>;
 
+#[derive(Debug)]
 pub struct OpenVMSettings<F> {
     _phantom: std::marker::PhantomData<F>,
 }
