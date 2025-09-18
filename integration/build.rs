@@ -11,11 +11,7 @@ fn compile_wat_to_wasm(out_dir: &Path, name: &str) {
 
     // Compile the WAT file to WASM
     let status = Command::new("wat2wasm")
-        .args([
-            &src_path,
-            "-o",
-            wasm_output.to_str().unwrap(),
-        ])
+        .args([&src_path, "-o", wasm_output.to_str().unwrap()])
         .status()
         .expect("Failed to execute wat2wasm");
 
