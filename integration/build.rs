@@ -66,4 +66,6 @@ fn main() {
     compile_c_to_wasm(&out_dir, "memory_fill");
     compile_wat_to_wasm(&out_dir, "i32_popcnt");
     compile_wat_to_wasm(&out_dir, "i64_popcnt");
+    compile_wat_to_wasm(&out_dir, "i32_ctz");
+    compile_wat_to_wasm(&out_dir, "i64_ctz");
 }

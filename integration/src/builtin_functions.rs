@@ -43,7 +43,19 @@ const I64_POPCNT_WASM: BuiltinDefinition = BuiltinDefinition {
     results: &[ValType::I64],
 };
 
-const NUM_BUILTINS: usize = 4;
+const I32_CTZ_WASM: BuiltinDefinition = BuiltinDefinition {
+    wasm_bytes: include_bytes!(env!("I32_CTZ_WASM_PATH")),
+    params: &[ValType::I32],
+    results: &[ValType::I32],
+};
+
+const I64_CTZ_WASM: BuiltinDefinition = BuiltinDefinition {
+    wasm_bytes: include_bytes!(env!("I64_CTZ_WASM_PATH")),
+    params: &[ValType::I64],
+    results: &[ValType::I64],
+};
+
+const NUM_BUILTINS: usize = 6;
 
 struct BuiltinFunction<F: PrimeField32> {
     function_index: u32,
@@ -88,6 +100,8 @@ impl<F: PrimeField32> Tracker<F> {
                         }
                         Operator::I32Popcnt => &I32_POPCNT_WASM,
                         Operator::I64Popcnt => &I64_POPCNT_WASM,
+                        Operator::I32Ctz => &I32_CTZ_WASM,
+                        Operator::I64Ctz => &I64_CTZ_WASM,
                         // TODO: Add more built-in functions here as needed.
                         _ => continue,
                     };
