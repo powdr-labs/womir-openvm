@@ -18,7 +18,7 @@
   (func (export "rotr") (param $x i64) (param $y i64) (result i64) (i64.rotr (local.get $x) (local.get $y)))
   (; (func (export "clz") (param $x i64) (result i64) (i64.clz (local.get $x))) ;)
   (; (func (export "ctz") (param $x i64) (result i64) (i64.ctz (local.get $x))) ;)
-  (func (export "popcnt") (param $x i64) (result i64) (i64.popcnt (local.get $x))) ;)
+  (func (export "popcnt") (param $x i64) (result i64) (i64.popcnt (local.get $x)))
   (func (export "extend8_s") (param $x i64) (result i64) (i64.extend8_s (local.get $x)))
   (func (export "extend16_s") (param $x i64) (result i64) (i64.extend16_s (local.get $x)))
   (func (export "extend32_s") (param $x i64) (result i64) (i64.extend32_s (local.get $x)))
