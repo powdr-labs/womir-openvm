@@ -24,14 +24,14 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install -y wabt
+
       - name: Build project
         run: cargo build --release
 
       - name: Install Rust deps
         run: rustup install nightly-2025-05-14 && rustup component add rust-src --toolchain nightly-2025-05-14
-
-      - name: Install test dependencies
-        run: sudo apt-get update && sudo apt-get install -y wabt
 
       - name: Install WebAssembly target
         run: rustup target add wasm32-unknown-unknown
@@ -46,6 +46,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install -y wabt
 
       - name: Install Rust deps
         run: rustup install nightly-2025-05-14 && rustup component add clippy --toolchain nightly-2025-05-14
