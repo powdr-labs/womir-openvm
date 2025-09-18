@@ -1,3 +1,4 @@
+mod builtin_functions;
 mod instruction_builder;
 mod to_field;
 mod womir_translation;
@@ -5,6 +6,7 @@ mod womir_translation;
 use clap::{Parser, Subcommand};
 use derive_more::From;
 use eyre::Result;
+use itertools::Itertools;
 use metrics_tracing_context::{MetricsLayer, TracingContextLayer};
 use metrics_util::{debugging::DebuggingRecorder, layers::Layer};
 use openvm_sdk::StdIn;
@@ -16,6 +18,8 @@ use std::sync::Arc;
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+use womir::loader::flattening::WriteOnceAsm;
+use womir::loader::{FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics};
 
 use openvm_circuit::arch::{
     InitFileGenerator, SystemConfig, VmChipComplex, VmConfig, VmInventoryError,
@@ -32,7 +36,7 @@ type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use openvm_womir_circuit::{self, WomirI, WomirIExecutor, WomirIPeriphery};
 
-use crate::womir_translation::{LinkedProgram, OpenVMSettings};
+use crate::womir_translation::{Directive, LinkedProgram, OpenVMSettings};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SpecializedConfig {
@@ -156,13 +160,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli_args = CliArgs::parse();
     let wasm_path = cli_args.command.get_program_path();
 
-    // Load the program
+    // Load the module
     let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-    let ir_program = womir::loader::load_wasm(OpenVMSettings::<F>::new(), &wasm_bytes).unwrap();
+    let (module, functions) = load_wasm(&wasm_bytes);
 
     match cli_args.command {
         Commands::PrintWom { .. } => {
-            for func in &ir_program.functions {
+            for func in &functions {
                 println!("Function {}:", func.func_idx);
                 for directive in &func.directives {
                     println!("  {directive:?}");
@@ -180,7 +184,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let vm_config = SpecializedConfig::new(vm_config);
 
             // Create and execute program
-            let mut linked_program = LinkedProgram::new(ir_program);
+            let mut linked_program = LinkedProgram::new(module, functions);
 
             let mut stdin = StdIn::default();
             for arg in args {
@@ -198,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..
         } => {
             // Create program
-            let linked_program = LinkedProgram::new(ir_program);
+            let linked_program = LinkedProgram::new(module, functions);
             let exe = linked_program.program_with_entry_point(&function);
 
             let prove = || -> Result<()> {
@@ -261,6 +265,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn load_wasm(wasm_bytes: &[u8]) -> (Module, Vec<WriteOnceAsm<Directive<F>>>) {
+    let PartiallyParsedProgram {
+        s: settings,
+        m: mut module,
+        functions,
+    } = womir::loader::load_wasm(OpenVMSettings::<F>::new(), wasm_bytes).unwrap();
+
+    // Compile the functions.
+    let mut label_gen = 0..;
+    let mut stats = Statistics::default();
+    let mut tracker = builtin_functions::Tracker::new();
+    let mut functions = functions
+        .into_iter()
+        .enumerate()
+        .map(|(idx, mut func)| {
+            let idx = idx as u32;
+
+            // Advance to BlocklessDag stage
+            let dag = loop {
+                if let FunctionProcessingStage::BlocklessDag(dag) = &mut func {
+                    break dag;
+                }
+                func = func
+                    .advance_stage(&settings, &module, idx, &mut label_gen, Some(&mut stats))
+                    .unwrap();
+            };
+
+            // In the BlocklessDag stage, we need to find instructions we don't implement and replace
+            // them with function calls to built-in functions.
+            tracker.replace_with_builtins(&mut module, &mut label_gen, dag);
+
+            // Advance to final stage
+            func.advance_all_stages(&settings, &module, idx, &mut label_gen, Some(&mut stats))
+                .unwrap()
+        })
+        .collect_vec();
+
+    functions.extend(tracker.into_used_builtins());
+
+    println!("WOMIR loading statistics: {stats}");
+
+    (module, functions)
 }
 
 pub fn setup_tracing_with_log_level(level: Level) {
@@ -1589,7 +1637,7 @@ mod wast_tests {
                     current_module = cmd.filename;
                     current_line = cmd.line.unwrap_or(0);
                 }
-                "assert_return" => {
+                "action" | "assert_return" => {
                     if let (Some(action), Some(expected)) = (cmd.action, cmd.expected) {
                         if action.action_type == "invoke" {
                             if let (Some(field), Some(args)) = (action.field, action.args) {
@@ -1691,8 +1739,8 @@ mod wast_tests {
         expected: &[u32],
     ) -> Result<(), Box<dyn std::error::Error>> {
         let wasm_bytes = std::fs::read(module_path).expect("Failed to read WASM file");
-        let ir_program = womir::loader::load_wasm(OpenVMSettings::<F>::new(), &wasm_bytes).unwrap();
-        let mut module = LinkedProgram::new(ir_program);
+        let (module, functions) = load_wasm(&wasm_bytes);
+        let mut module = LinkedProgram::new(module, functions);
 
         run_wasm_test_function(&mut module, function, args, expected)
     }
@@ -1791,6 +1839,11 @@ mod wast_tests {
         run_wasm_test("../wasm_tests/loop.wast")
     }
 
+    #[test]
+    fn test_memory_fill() -> Result<(), Box<dyn std::error::Error>> {
+        run_wasm_test("../wasm_tests/memory_fill.wast")
+    }
+
     fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         let test_cases = extract_wast_test_info(tf)?;
 
@@ -1802,9 +1855,8 @@ mod wast_tests {
             // Load the module to be executed multiple times.
             println!("Loading test module: {module_path}");
             let wasm_bytes = std::fs::read(full_module_path).expect("Failed to read WASM file");
-            let ir_program =
-                womir::loader::load_wasm(OpenVMSettings::<F>::new(), &wasm_bytes).unwrap();
-            let mut module = LinkedProgram::new(ir_program);
+            let (module, functions) = load_wasm(&wasm_bytes);
+            let mut module = LinkedProgram::new(module, functions);
 
             for (function, args, expected) in cases {
                 run_wasm_test_function(&mut module, function, args, expected)?;
