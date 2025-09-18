@@ -31,6 +31,20 @@ const MEMORY_FILL_WASM: BuiltinDefinition = BuiltinDefinition {
     results: &[],
 };
 
+const I32_POPCNT_WASM: BuiltinDefinition = BuiltinDefinition {
+    wasm_bytes: include_bytes!(env!("I32_POPCNT_WASM_PATH")),
+    params: &[ValType::I32],
+    results: &[ValType::I32],
+};
+
+const I64_POPCNT_WASM: BuiltinDefinition = BuiltinDefinition {
+    wasm_bytes: include_bytes!(env!("I64_POPCNT_WASM_PATH")),
+    params: &[ValType::I64],
+    results: &[ValType::I64],
+};
+
+const NUM_BUILTINS: usize = 4;
+
 struct BuiltinFunction<F: PrimeField32> {
     function_index: u32,
     function_definition: WriteOnceAsm<Directive<F>>,
@@ -72,6 +86,8 @@ impl<F: PrimeField32> Tracker<F> {
                             assert_eq!(*mem, 0);
                             &MEMORY_FILL_WASM
                         }
+                        Operator::I32Popcnt => &I32_POPCNT_WASM,
+                        Operator::I64Popcnt => &I64_POPCNT_WASM,
                         // TODO: Add more built-in functions here as needed.
                         _ => continue,
                     };
@@ -95,7 +111,7 @@ impl<F: PrimeField32> Tracker<F> {
     /// Sorted by function index.
     pub fn into_used_builtins(self) -> impl Iterator<Item = WriteOnceAsm<Directive<F>>> {
         // We only support one built-in function for now.
-        assert!(self.used_builtins.len() <= 2);
+        assert!(self.used_builtins.len() <= NUM_BUILTINS);
 
         self.used_builtins
             .into_values()

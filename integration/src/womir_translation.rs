@@ -943,7 +943,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             }
             Op::I32Clz => todo!(),
             Op::I32Ctz => todo!(),
-            Op::I32Popcnt => todo!(),
 
             Op::I32WrapI64 => {
                 // TODO: considering we are using a single address space for both i32 and i64,
@@ -1005,7 +1004,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             // 64-bit integer instructions
             Op::I64Clz => todo!(),
             Op::I64Ctz => todo!(),
-            Op::I64Popcnt => todo!(),
             Op::I64ExtendI32S => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
@@ -1774,11 +1772,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 data_index: _,
                 mem: _,
             } => todo!(),
-            Op::MemoryCopy {
-                dst_mem: _,
-                src_mem: _,
-            } => todo!(),
-            Op::MemoryFill { mem: _ } => todo!(),
             Op::DataDrop { data_index: _ } => todo!(),
 
             // Table instructions
@@ -1882,6 +1875,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     .collect()
             }
 
+            // Instructions that are implemented as function calls
+            Op::MemoryCopy { .. } | Op::MemoryFill { .. } | Op::I32Popcnt | Op::I64Popcnt => {
+                unreachable!("These ops should have been replaced with function calls")
+            }
             _ => todo!("{op:?}"),
         }
     }

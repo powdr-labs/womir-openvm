@@ -10,6 +10,7 @@ typedef __attribute__((__may_alias__)) unsigned int WT;
 #define WS (sizeof(WT))
 #endif
 
+__attribute__((export_name("memory_copy")))
 void memory_copy(void *dest, const void *src, unsigned int n)
 {
 	char *d = dest;

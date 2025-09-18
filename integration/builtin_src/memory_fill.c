@@ -7,6 +7,7 @@ _Static_assert(sizeof(void*) == 4, "pointer must be 4 bytes");
 typedef unsigned int size_t;
 typedef unsigned int uintptr_t;
 
+__attribute__((export_name("memory_fill")))
 void memory_fill(void *dest, int c, size_t n)
 {
 	unsigned char *s = dest;
