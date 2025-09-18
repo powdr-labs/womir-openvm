@@ -110,7 +110,8 @@ impl<F: PrimeField32> Tracker<F> {
     /// Returns an iterator over the used built-in functions to be added to the final program.
     /// Sorted by function index.
     pub fn into_used_builtins(self) -> impl Iterator<Item = WriteOnceAsm<Directive<F>>> {
-        // We only support one built-in function for now.
+        // There can't be more used built-ins than we have defined. Otherwise some built-in
+        // function would have been added more than once.
         assert!(self.used_builtins.len() <= NUM_BUILTINS);
 
         self.used_builtins
