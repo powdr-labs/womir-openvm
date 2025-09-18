@@ -1637,7 +1637,7 @@ mod wast_tests {
                     current_module = cmd.filename;
                     current_line = cmd.line.unwrap_or(0);
                 }
-                "assert_return" => {
+                "action" | "assert_return" => {
                     if let (Some(action), Some(expected)) = (cmd.action, cmd.expected) {
                         if action.action_type == "invoke" {
                             if let (Some(field), Some(args)) = (action.field, action.args) {
