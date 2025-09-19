@@ -1597,16 +1597,19 @@ mod wast_tests {
         wast_file: &str,
     ) -> Result<Vec<TestModule>, Box<dyn std::error::Error>> {
         // Convert .wast to .json using wast2json
-        let wast_path = Path::new(wast_file);
-        let json_path = wast_path.with_extension("json");
-        let _output_dir = wast_path.parent().unwrap_or(Path::new("."));
+        let target_dir =
+            PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("../wast_target");
+        fs::create_dir_all(&target_dir).unwrap();
+        let wast_path = Path::new(wast_file).canonicalize()?;
+        let json_path =
+            target_dir.join(Path::new(wast_path.file_stem().unwrap()).with_extension("json"));
 
         let output = Command::new("wast2json")
             .arg(wast_file)
-            .arg("-o")
-            .arg(&json_path)
             .arg("--debug-names")
-            .output()?;
+            .current_dir(&target_dir)
+            .output()
+            .unwrap();
 
         if !output.status.success() {
             return Err(format!(
@@ -1690,9 +1693,6 @@ mod wast_tests {
                 test_cases.push((module, current_line, assert_cases));
             }
         }
-
-        // Clean up JSON file
-        let _ = fs::remove_file(&json_path);
 
         Ok(test_cases)
     }
