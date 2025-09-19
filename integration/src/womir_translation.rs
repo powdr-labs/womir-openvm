@@ -941,7 +941,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let output = output.unwrap().start as usize;
                 vec![Directive::Instruction(ib::eqi_64(output, input, F::ZERO))]
             }
-            Op::I32Ctz => todo!(),
 
             Op::I32WrapI64 => {
                 // TODO: considering we are using a single address space for both i32 and i64,
@@ -1001,7 +1000,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             }
 
             // 64-bit integer instructions
-            Op::I64Ctz => todo!(),
             Op::I64ExtendI32S => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
@@ -1878,6 +1876,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             | Op::MemoryFill { .. }
             | Op::I32Popcnt
             | Op::I64Popcnt
+            | Op::I32Ctz
+            | Op::I64Ctz
             | Op::I32Clz
             | Op::I64Clz => {
                 unreachable!("These ops should have been replaced with function calls")
