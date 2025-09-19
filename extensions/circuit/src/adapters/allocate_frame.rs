@@ -1,4 +1,4 @@
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 
 use openvm_circuit::{
     arch::{
@@ -6,10 +6,7 @@ use openvm_circuit::{
         MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{
-            offline_checker::{MemoryBridge, MemoryWriteAuxCols},
-            MemoryController, OfflineMemory, RecordId,
-        },
+        memory::{offline_checker::MemoryBridge, MemoryController, OfflineMemory, RecordId},
         program::ProgramBus,
     },
 };

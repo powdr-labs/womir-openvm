@@ -1,8 +1,4 @@
-use std::{
-    array,
-    borrow::{Borrow, BorrowMut},
-    marker::PhantomData,
-};
+use std::{array, borrow::Borrow, marker::PhantomData};
 
 use openvm_circuit::{
     arch::{
@@ -10,25 +6,21 @@ use openvm_circuit::{
         MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{
-            offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols},
-            MemoryAddress, MemoryController, OfflineMemory, RecordId,
-        },
+        memory::{offline_checker::MemoryBridge, MemoryController, OfflineMemory, RecordId},
         program::ProgramBus,
     },
 };
-use openvm_circuit_primitives::utils::not;
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
     instruction::Instruction,
     program::{DEFAULT_PC_STEP, PC_BITS},
-    riscv::{RV32_CELL_BITS, RV32_REGISTER_AS},
+    riscv::RV32_CELL_BITS,
     LocalOpcode,
 };
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
-    p3_air::{AirBuilder, BaseAir},
-    p3_field::{Field, FieldAlgebra, PrimeField32},
+    p3_air::BaseAir,
+    p3_field::{Field, PrimeField32},
     rap::ColumnsAir,
 };
 use openvm_womir_transpiler::JaafOpcode::{self, *};
@@ -37,7 +29,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
 
-use super::{abstract_compose, compose, decompose, RV32_REGISTER_NUM_LIMBS};
+use super::{compose, decompose, RV32_REGISTER_NUM_LIMBS};
 
 const RV32_LIMB_MAX: u32 = (1 << RV32_CELL_BITS) - 1;
 
@@ -57,9 +49,9 @@ impl<F: PrimeField32> JaafAdapterChipWom<F> {
     ) -> Self {
         Self {
             air: JaafAdapterAirWom {
-                execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
-                frame_bridge: FrameBridge::new(frame_bus),
-                memory_bridge,
+                _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                _frame_bridge: FrameBridge::new(frame_bus),
+                _memory_bridge: memory_bridge,
             },
             _marker: PhantomData,
         }
@@ -103,9 +95,9 @@ pub struct JaafAdapterColsWom<T> {
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct JaafAdapterAirWom {
-    pub(super) memory_bridge: MemoryBridge,
-    pub(super) execution_bridge: ExecutionBridge,
-    pub(super) frame_bridge: FrameBridge,
+    pub(super) _memory_bridge: MemoryBridge,
+    pub(super) _execution_bridge: ExecutionBridge,
+    pub(super) _frame_bridge: FrameBridge,
 }
 
 impl<F: Field> BaseAir<F> for JaafAdapterAirWom {
@@ -134,17 +126,9 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
         let local_cols: &JaafAdapterColsWom<AB::Var> = local.borrow();
-
-        let timestamp: AB::Var = local_cols.from_state.timestamp;
-        let mut timestamp_delta: usize = 0;
-        let mut timestamp_pp = || {
-            timestamp_delta += 1;
-            timestamp + AB::Expr::from_canonical_usize(timestamp_delta - 1)
-        };
-
         let needs_save_pc = local_cols.needs_save_pc;
 
         builder.assert_bool(needs_save_pc);

@@ -1,7 +1,4 @@
-use std::{
-    borrow::{Borrow, BorrowMut},
-    marker::PhantomData,
-};
+use std::{borrow::Borrow, marker::PhantomData};
 
 use openvm_circuit::{
     arch::{
@@ -9,22 +6,16 @@ use openvm_circuit::{
         MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{
-            offline_checker::{MemoryBridge, MemoryReadAuxCols},
-            MemoryAddress, MemoryController, OfflineMemory, RecordId,
-        },
+        memory::{offline_checker::MemoryBridge, MemoryController, OfflineMemory, RecordId},
         program::ProgramBus,
     },
 };
-use openvm_circuit_primitives::utils::not;
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{
-    instruction::Instruction, program::DEFAULT_PC_STEP, riscv::RV32_REGISTER_AS, LocalOpcode,
-};
+use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
-    p3_air::{AirBuilder, BaseAir},
-    p3_field::{Field, FieldAlgebra, PrimeField32},
+    p3_air::BaseAir,
+    p3_field::{Field, PrimeField32},
     rap::ColumnsAir,
 };
 use openvm_womir_transpiler::JumpOpcode::{self, *};
@@ -49,8 +40,8 @@ impl<F: PrimeField32> JumpAdapterChipWom<F> {
     ) -> Self {
         Self {
             air: JumpAdapterAirWom {
-                execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
-                memory_bridge,
+                _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                _memory_bridge: memory_bridge,
             },
             _marker: PhantomData,
         }
@@ -86,8 +77,8 @@ pub struct JumpAdapterColsWom<T> {
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct JumpAdapterAirWom {
-    pub(super) memory_bridge: MemoryBridge,
-    pub(super) execution_bridge: ExecutionBridge,
+    pub(super) _memory_bridge: MemoryBridge,
+    pub(super) _execution_bridge: ExecutionBridge,
 }
 
 impl<F: Field> BaseAir<F> for JumpAdapterAirWom {
@@ -116,17 +107,9 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAirWom {
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
         let local_cols: &JumpAdapterColsWom<AB::Var> = local.borrow();
-
-        let timestamp: AB::Var = local_cols.from_state.timestamp;
-        let mut timestamp_delta: usize = 0;
-        let mut timestamp_pp = || {
-            timestamp_delta += 1;
-            timestamp + AB::Expr::from_canonical_usize(timestamp_delta - 1)
-        };
-
         let opcode_skip = local_cols.opcode_skip;
 
         builder.assert_bool(opcode_skip);

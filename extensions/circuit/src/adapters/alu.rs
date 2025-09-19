@@ -1,7 +1,4 @@
-use std::{
-    borrow::{Borrow, BorrowMut},
-    marker::PhantomData,
-};
+use std::{borrow::Borrow, marker::PhantomData};
 
 use openvm_circuit::{
     arch::{
@@ -9,16 +6,12 @@ use openvm_circuit::{
         MinimalInstruction, Result as ResultVm, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{
-            offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols},
-            MemoryAddress, MemoryController, OfflineMemory, RecordId,
-        },
+        memory::{offline_checker::MemoryBridge, MemoryController, OfflineMemory, RecordId},
         program::ProgramBus,
     },
 };
-use openvm_circuit_primitives::{
-    bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
-    utils::not,
+use openvm_circuit_primitives::bitwise_op_lookup::{
+    BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip,
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
@@ -28,8 +21,8 @@ use openvm_instructions::{
 };
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
-    p3_air::{AirBuilder, BaseAir},
-    p3_field::{Field, FieldAlgebra, PrimeField32},
+    p3_air::BaseAir,
+    p3_field::{Field, PrimeField32},
     rap::ColumnsAir,
 };
 use serde::{Deserialize, Serialize};
@@ -52,7 +45,7 @@ pub struct WomBaseAluAdapterChip<
     const WRITE_BYTES: usize,
 > {
     pub air: WomBaseAluAdapterAir<READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>,
-    bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
+    _bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
     _marker: PhantomData<F>,
 }
 
@@ -77,7 +70,7 @@ impl<
                 memory_bridge,
                 bitwise_lookup_bus: bitwise_lookup_chip.bus(),
             },
-            bitwise_lookup_chip,
+            _bitwise_lookup_chip: bitwise_lookup_chip,
             _marker: PhantomData,
         }
     }
@@ -174,15 +167,9 @@ impl<
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
         let local: &WomBaseAluAdapterCols<_, READ_32BIT_WORDS, WRITE_BYTES> = local.borrow();
-        let timestamp = local.from_state.timestamp;
-        let mut timestamp_delta: usize = 0;
-        let mut timestamp_pp = || {
-            timestamp_delta += 1;
-            timestamp + AB::F::from_canonical_usize(timestamp_delta - 1)
-        };
 
         builder.assert_bool(local.rs2_as);
     }
