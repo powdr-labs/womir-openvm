@@ -1849,7 +1849,6 @@ mod wast_tests {
 
         // Run all test cases
         for (module_path, _line, cases) in &test_cases {
-            // Prepend ../ to the module path since we're running from integration directory
             let full_module_path = target_dir.join(module_path);
 
             // Load the module to be executed multiple times.
