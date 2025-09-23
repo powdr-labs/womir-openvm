@@ -2,9 +2,8 @@ use openvm_instructions::{LocalOpcode, SystemOpcode, VmOpcode, instruction::Inst
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
-    DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode,
-    LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom,
-    Shift64Opcode, ShiftOpcode,
+    Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
+    LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 
 use crate::womir_translation::{ERROR_ABORT_CODE, ERROR_CODE_OFFSET};
@@ -53,6 +52,7 @@ pub fn sub<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(BaseAluOpcode::SUB.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+#[cfg(test)]
 pub fn mul<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(MulOpcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
 }
@@ -61,52 +61,13 @@ pub fn muli<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
     instr_i(MulOpcode::MUL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
-pub fn mul_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(Mul64Opcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
-}
-
+#[cfg(test)]
 pub fn div<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    use openvm_womir_transpiler::DivRemOpcode;
     instr_r(DivRemOpcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-pub fn divu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(DivRemOpcode::DIVU.global_opcode().as_usize(), rd, rs1, rs2)
-}
-
-pub fn rem<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(DivRemOpcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
-}
-
-pub fn remu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(DivRemOpcode::REMU.global_opcode().as_usize(), rd, rs1, rs2)
-}
-
-pub fn div_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(DivRem64Opcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
-}
-
-pub fn divu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(
-        DivRem64Opcode::DIVU.global_opcode().as_usize(),
-        rd,
-        rs1,
-        rs2,
-    )
-}
-
-pub fn rem_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(DivRem64Opcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
-}
-
-pub fn remu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(
-        DivRem64Opcode::REMU.global_opcode().as_usize(),
-        rd,
-        rs1,
-        rs2,
-    )
-}
-
+#[cfg(test)]
 pub fn xor<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(BaseAluOpcode::XOR.global_opcode().as_usize(), rd, rs1, rs2)
 }
@@ -115,6 +76,7 @@ pub fn or<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> 
     instr_r(BaseAluOpcode::OR.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+#[cfg(test)]
 pub fn and<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(BaseAluOpcode::AND.global_opcode().as_usize(), rd, rs1, rs2)
 }
@@ -139,10 +101,6 @@ pub fn shr_u_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<
     instr_i(ShiftOpcode::SRL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
-pub fn shr_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(ShiftOpcode::SRA.global_opcode().as_usize(), rd, rs1, rs2)
-}
-
 pub fn shr_s_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
     instr_i(ShiftOpcode::SRA.global_opcode().as_usize(), rd, rs1, imm)
 }
@@ -158,10 +116,6 @@ pub fn shl_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction
 
 pub fn shr_u_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(Shift64Opcode::SRL.global_opcode().as_usize(), rd, rs1, rs2)
-}
-
-pub fn shr_s_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(Shift64Opcode::SRA.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 pub fn shr_s_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
@@ -250,20 +204,8 @@ pub fn eqi<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
     instr_i(EqOpcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
 }
 
-pub fn neq<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(EqOpcode::NEQ.global_opcode().as_usize(), rd, rs1, rs2)
-}
-
-pub fn eq_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, rs2)
-}
-
 pub fn eqi_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
     instr_i(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
-}
-
-pub fn neq_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(Eq64Opcode::NEQ.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 pub fn const_32_imm<F: PrimeField32>(
@@ -282,15 +224,6 @@ pub fn const_32_imm<F: PrimeField32>(
         F::ZERO, // e: (not used)
         F::ONE,  // f: enabled
         F::ZERO, // g: (not used)
-    )
-}
-
-pub fn add_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(
-        BaseAlu64Opcode::ADD.global_opcode().as_usize(),
-        rd,
-        rs1,
-        rs2,
     )
 }
 
@@ -313,26 +246,8 @@ pub fn sub_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction
     )
 }
 
-pub fn xor_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(
-        BaseAlu64Opcode::XOR.global_opcode().as_usize(),
-        rd,
-        rs1,
-        rs2,
-    )
-}
-
 pub fn or_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(BaseAlu64Opcode::OR.global_opcode().as_usize(), rd, rs1, rs2)
-}
-
-pub fn and_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    instr_r(
-        BaseAlu64Opcode::AND.global_opcode().as_usize(),
-        rd,
-        rs1,
-        rs2,
-    )
 }
 
 pub fn andi_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
