@@ -1,6 +1,7 @@
 use std::{collections::HashMap, ops::Range, vec};
 
 use crate::{instruction_builder as ib, to_field::ToField};
+use itertools::Itertools;
 use openvm_circuit::{
     arch::{ExecutionError, Streams, VmConfig, VmExecutor},
     system::memory::tree::public_values::extract_public_values,
@@ -21,6 +22,7 @@ use womir::{
     linker::LabelValue,
     loader::{
         Global, Module,
+        dag::WasmValue,
         flattening::{Context, LabelType, WriteOnceAsm},
         func_idx_to_label,
         settings::{
@@ -756,15 +758,44 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
         let op: Op<'_> = match binary_op {
             Ok(op) => {
-                let input1 = inputs[0].start as usize;
-                let input2 = inputs[1].start as usize;
+                let op = op.as_usize();
                 let output = output.unwrap().start as usize;
-                return vec![Directive::Instruction(ib::instr_r(
-                    op.as_usize(),
-                    output,
-                    input1,
-                    input2,
-                ))];
+                match inputs.as_slice() {
+                    [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
+                        // Case of two register inputs
+                        return vec![Directive::Instruction(ib::instr_r(
+                            op,
+                            output,
+                            input1.start as usize,
+                            input2.start as usize,
+                        ))];
+                    }
+                    [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
+                    | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
+                        // Case of one register input and one constant input.
+                        //
+                        // Doesn't matter the order, because only commutative operations will
+                        // have the constant operand on the left side, as const folding ensures.
+
+                        // The constant has already been validated to be in i16 range during
+                        // const folding, now we need to sign-extend it to 24-bits and then
+                        // convert to field element.
+                        let c: i16 = match c {
+                            WasmValue::I32(v) => *v as i16,
+                            WasmValue::I64(v) => *v as i16,
+                            _ => unreachable!("Other types are not used as binary op inputs"),
+                        };
+                        let c = F::from_canonical_u32((c as i32 as u32) & 0xff_ff_ff);
+
+                        return vec![Directive::Instruction(ib::instr_i(
+                            op,
+                            output,
+                            reg.start as usize,
+                            c,
+                        ))];
+                    }
+                    _ => unreachable!("combination of inputs not possible for binary op"),
+                }
             }
             Err(op) => op,
         };
@@ -780,20 +811,56 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
         let op = match op {
             Ok(op) => {
-                let greater_side = inputs[0].start as usize;
-                let lower_side = inputs[1].start as usize;
+                let op = op.as_usize();
                 let output = output.unwrap().start as usize;
-                return vec![Directive::Instruction(ib::instr_r(
-                    op.as_usize(),
-                    output,
-                    lower_side,
-                    greater_side,
-                ))];
+                match inputs.as_slice() {
+                    [
+                        WasmOpInput::Register(greater_side),
+                        WasmOpInput::Register(lesser_side),
+                    ] => {
+                        // Case of two register inputs
+                        return vec![Directive::Instruction(ib::instr_r(
+                            op,
+                            output,
+                            lesser_side.start as usize,
+                            greater_side.start as usize,
+                        ))];
+                    }
+                    [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
+                        // Case of one register input and one constant input.
+                        //
+                        // The constant will be on the left side, because GT is just LT
+                        // with the operands reversed, and LT expects the immediate as the
+                        // greater side.
+                        let c: i16 = match c {
+                            WasmValue::I32(v) => *v as i16,
+                            WasmValue::I64(v) => *v as i16,
+                            _ => unreachable!("Other types are not used as binary op inputs"),
+                        };
+                        let c = F::from_canonical_u32((c as i32 as u32) & 0xff_ff_ff);
+                        return vec![Directive::Instruction(ib::instr_i(
+                            op,
+                            output,
+                            reg.start as usize,
+                            c,
+                        ))];
+                    }
+                    _ => unreachable!("combination of inputs not possible for GT op"),
+                }
             }
             Err(op) => op,
         };
 
         // Handle the remaining operations
+        let inputs = inputs
+            .into_iter()
+            .map(|input| match input {
+                WasmOpInput::Register(r) => r,
+                WasmOpInput::Constant(_) => {
+                    unreachable!("Constant inputs should have been handled above")
+                }
+            })
+            .collect_vec();
         match op {
             // 32-bit integer instructions
             Op::I32Const { value } => {
@@ -1122,7 +1189,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Global::Mutable(allocated_var) => {
                         load_from_const_addr(c, allocated_var.address, output.unwrap()).0
                     }
-                    Global::Immutable(op) => self.emit_wasm_op(c, op.clone(), inputs, output),
+                    Global::Immutable(op) => self.emit_wasm_op(c, op.clone(), Vec::new(), output),
                 }
             }
 

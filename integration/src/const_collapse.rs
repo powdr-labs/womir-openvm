@@ -52,6 +52,7 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         // | Operator::I64Rotl
         // | Operator::I32Rotr
         // | Operator::I64Rotr
+        // TODO: Operator::Select could benefit from immediates, but also needs special handling
         => {
             if let [
                 MaybeConstant::NonConstant,
