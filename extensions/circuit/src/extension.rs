@@ -578,7 +578,7 @@ mod phantom {
     };
     use openvm_instructions::PhantomDiscriminant;
     use openvm_stark_backend::p3_field::{Field, PrimeField32};
-    use rand::{rngs::OsRng, Rng};
+    use rand::{Rng, rngs::OsRng};
 
     use crate::adapters::unsafe_read_rv32_register;
 
@@ -639,7 +639,8 @@ mod phantom {
             let len = unsafe_read_rv32_register(memory, a) as usize;
             streams.hint_stream.clear();
             streams.hint_stream.extend(
-                std::iter::repeat_with(|| F::from_canonical_u8(self.rng.gen::<u8>())).take(len * 4),
+                std::iter::repeat_with(|| F::from_canonical_u8(self.rng.r#gen::<u8>()))
+                    .take(len * 4),
             );
             Ok(())
         }

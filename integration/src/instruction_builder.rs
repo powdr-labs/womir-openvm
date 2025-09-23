@@ -1,4 +1,4 @@
-use openvm_instructions::{instruction::Instruction, riscv, LocalOpcode, SystemOpcode, VmOpcode};
+use openvm_instructions::{LocalOpcode, SystemOpcode, VmOpcode, instruction::Instruction, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
@@ -27,7 +27,6 @@ pub fn instr_r<F: PrimeField32>(
     )
 }
 
-#[allow(dead_code)]
 pub fn instr_i<F: PrimeField32>(opcode: usize, rd: usize, rs1: usize, imm: F) -> Instruction<F> {
     Instruction::new(
         VmOpcode::from_usize(opcode),
@@ -46,7 +45,7 @@ pub fn add<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
 }
 
 #[allow(dead_code)]
-pub fn addi<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn add_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
     instr_i(BaseAluOpcode::ADD.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -296,7 +295,7 @@ pub fn add_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction
 }
 
 #[allow(dead_code)]
-pub fn addi_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn add_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
     instr_i(
         BaseAlu64Opcode::ADD.global_opcode().as_usize(),
         rd,

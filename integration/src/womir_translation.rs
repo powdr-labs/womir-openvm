@@ -8,7 +8,7 @@ use openvm_circuit::{
 use openvm_instructions::{
     exe::{MemoryImage, VmExe},
     instruction::Instruction,
-    program::{Program, DEFAULT_PC_STEP},
+    program::{DEFAULT_PC_STEP, Program},
     riscv,
 };
 use openvm_stark_backend::p3_field::PrimeField32;
@@ -16,11 +16,13 @@ use wasmparser::{MemArg, Operator as Op, ValType};
 use womir::{
     linker::LabelValue,
     loader::{
-        flattening::{
-            settings::{ComparisonFunction, JumpCondition, Settings},
-            Context, LabelType, WriteOnceAsm,
+        Global, Module,
+        flattening::{Context, LabelType, WriteOnceAsm},
+        func_idx_to_label,
+        settings::{
+            ComparisonFunction, JumpCondition, MaybeConstant, ReturnInfosToCopy, Settings,
+            WasmOpInput,
         },
-        func_idx_to_label, Global, Module,
     },
 };
 
@@ -309,7 +311,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         true
     }
 
-    fn to_plain_local_jump(directive: Self::Directive) -> Result<String, Self::Directive> {
+    fn get_const_collapse_processor(&self) -> Option<impl Fn(&Op, &[MaybeConstant])> {
+        Some(crate::const_collapse::collapse_const_if_possible)
+    }
+
+    fn to_plain_local_jump(directive: Directive<F>) -> Result<String, Directive<F>> {
         if let Directive::Jump { target } = directive {
             Ok(target)
         } else {
@@ -317,7 +323,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         }
     }
 
-    fn is_label(directive: &Self::Directive) -> Option<&str> {
+    fn is_label(directive: &Directive<F>) -> Option<&str> {
         if let Directive::Label { id, .. } = directive {
             Some(id)
         } else {
@@ -329,12 +335,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         false
     }
 
-    fn emit_label(
-        &self,
-        _c: &mut Ctx<F>,
-        name: String,
-        frame_size: Option<u32>,
-    ) -> Self::Directive {
+    fn emit_label(&self, _c: &mut Ctx<F>, name: String, frame_size: Option<u32>) -> Directive<F> {
         Directive::Label {
             id: name,
             frame_size,
@@ -345,7 +346,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         &self,
         _c: &mut Ctx<F>,
         error_code: womir::loader::flattening::TrapReason,
-    ) -> Self::Directive {
+    ) -> Directive<F> {
         Directive::Instruction(ib::trap(error_code as u32 as usize))
     }
 
@@ -354,7 +355,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         _c: &mut Ctx<F>,
         label: String,
         result_ptr: Range<u32>,
-    ) -> Self::Directive {
+    ) -> Directive<F> {
         Directive::AllocateFrameI {
             target_frame: label,
             result_ptr: result_ptr.start,
@@ -366,7 +367,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         _c: &mut Ctx<F>,
         frame_size_ptr: Range<u32>,
         result_ptr: Range<u32>,
-    ) -> Self::Directive {
+    ) -> Directive<F> {
         Directive::Instruction(ib::allocate_frame_reg(
             result_ptr.start as usize,
             frame_size_ptr.start as usize,
@@ -378,8 +379,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         _c: &mut Ctx<F>,
         src_ptr: Range<u32>,
         dest_ptr: Range<u32>,
-    ) -> Self::Directive {
-        Directive::Instruction(ib::addi(
+    ) -> Directive<F> {
+        Directive::Instruction(ib::add_imm(
             dest_ptr.start as usize,
             src_ptr.start as usize,
             F::ZERO,
@@ -392,7 +393,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         src_ptr: Range<u32>,
         dest_frame_ptr: Range<u32>,
         dest_offset: Range<u32>,
-    ) -> Self::Directive {
+    ) -> Directive<F> {
         Directive::Instruction(ib::copy_into_frame(
             dest_offset.start as usize,
             src_ptr.start as usize,
@@ -406,7 +407,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         source_frame_ptr: Range<u32>,
         source_offset: Range<u32>,
         dest_ptr: Range<u32>,
-    ) -> Self::Directive {
+    ) -> Directive<F> {
         Directive::Instruction(ib::copy_from_frame(
             dest_ptr.start as usize,
             source_offset.start as usize,
@@ -414,7 +415,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         ))
     }
 
-    fn emit_jump(&self, label: String) -> Self::Directive {
+    fn emit_jump(&self, label: String) -> Directive<F> {
         Directive::Jump { target: label }
     }
 
@@ -423,9 +424,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         _c: &mut Ctx<F>,
         loop_label: String,
         loop_frame_ptr: Range<u32>,
-        ret_info_to_copy: Option<womir::loader::flattening::settings::ReturnInfosToCopy>,
+        ret_info_to_copy: Option<ReturnInfosToCopy>,
         saved_curr_fp_ptr: Option<Range<u32>>,
-    ) -> Vec<Self::Directive> {
+    ) -> Vec<Directive<F>> {
         let mut directives = if let Some(to_copy) = ret_info_to_copy {
             assert_eq!(Self::words_per_ptr(), 1);
             vec![
@@ -464,10 +465,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     fn emit_conditional_jump(
         &self,
         _c: &mut Ctx<F>,
-        condition_type: womir::loader::flattening::settings::JumpCondition,
+        condition_type: JumpCondition,
         label: String,
         condition_ptr: Range<u32>,
-    ) -> Self::Directive {
+    ) -> Directive<F> {
         match condition_type {
             JumpCondition::IfNotZero => Directive::JumpIf {
                 target: label,
@@ -483,11 +484,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     fn emit_conditional_jump_cmp_immediate(
         &self,
         c: &mut Ctx<F>,
-        cmp: womir::loader::flattening::settings::ComparisonFunction,
+        cmp: ComparisonFunction,
         value_ptr: Range<u32>,
         immediate: u32,
         label: String,
-    ) -> Vec<Self::Directive> {
+    ) -> Vec<Directive<F>> {
         let comparison = c.register_gen.allocate_type(ValType::I32);
 
         let mut directives = if let Ok(imm_f) = immediate.to_f() {
@@ -545,7 +546,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         directives
     }
 
-    fn emit_relative_jump(&self, _c: &mut Ctx<F>, offset_ptr: Range<u32>) -> Self::Directive {
+    fn emit_relative_jump(&self, _c: &mut Ctx<F>, offset_ptr: Range<u32>) -> Directive<F> {
         Directive::Instruction(ib::skip(offset_ptr.start as usize))
     }
 
@@ -554,7 +555,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         _c: &mut Ctx<F>,
         target_label: String,
         target_frame_ptr: Range<u32>,
-    ) -> Self::Directive {
+    ) -> Directive<F> {
         Directive::Jaaf {
             target: target_label,
             new_frame_ptr: target_frame_ptr.start,
@@ -566,7 +567,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         _c: &mut Ctx<F>,
         ret_pc_ptr: Range<u32>,
         caller_fp_ptr: Range<u32>,
-    ) -> Self::Directive {
+    ) -> Directive<F> {
         Directive::Instruction(ib::ret(
             ret_pc_ptr.start as usize,
             caller_fp_ptr.start as usize,
@@ -580,7 +581,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         function: &'a str,
         _inputs: Vec<Range<u32>>,
         outputs: Vec<Range<u32>>,
-    ) -> Vec<Self::Directive> {
+    ) -> Vec<Directive<F>> {
         match (module, function) {
             ("env", "read_u32") => {
                 let output = outputs[0].start as usize;
@@ -607,7 +608,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         function_frame_ptr: Range<u32>,
         saved_ret_pc_ptr: Range<u32>,
         saved_caller_fp_ptr: Range<u32>,
-    ) -> Self::Directive {
+    ) -> Directive<F> {
         Directive::Call {
             target_pc: function_label,
             new_frame_ptr: function_frame_ptr.start,
@@ -623,7 +624,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         function_frame_ptr: Range<u32>,
         saved_ret_pc_ptr: Range<u32>,
         saved_caller_fp_ptr: Range<u32>,
-    ) -> Self::Directive {
+    ) -> Directive<F> {
         Directive::Instruction(ib::call_indirect(
             saved_ret_pc_ptr.start as usize,
             saved_caller_fp_ptr.start as usize,
@@ -638,7 +639,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         table_idx: u32,
         entry_idx_ptr: Range<u32>,
         dest_ptr: Range<u32>,
-    ) -> Vec<Self::Directive> {
+    ) -> Vec<Directive<F>> {
         const TABLE_ENTRY_SIZE: u32 = 12;
         const TABLE_SEGMENT_HEADER_SIZE: u32 = 8;
 
@@ -672,10 +673,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         &self,
         c: &mut Ctx<F>,
         op: Op<'a>,
-        inputs: Vec<Range<u32>>,
+        inputs: Vec<WasmOpInput>,
         output: Option<Range<u32>>,
-    ) -> Vec<Self::Directive> {
-        // First handle single-instruction binary operations.
+    ) -> Vec<Directive<F>> {
+        // Handle single-instruction binary operations over registers.
         type BinaryOpFn<F> = fn(usize, usize, usize) -> Instruction<F>;
         let binary_op: Result<BinaryOpFn<F>, Op> = match op {
             // 32-bit integer instructions
@@ -951,7 +952,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let output = output.unwrap().start as usize;
 
                 // Just copy the lower limb to the output.
-                vec![Directive::Instruction(ib::addi(
+                vec![Directive::Instruction(ib::add_imm(
                     output,
                     lower_limb,
                     F::ZERO,
@@ -1009,7 +1010,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 vec![
                     // Copy the 32 bit values to the high 32 bits of the temporary value.
                     // Leave the low bits undefined.
-                    Directive::Instruction(ib::addi(high_shifted + 1, input, F::ZERO)),
+                    Directive::Instruction(ib::add_imm(high_shifted + 1, input, F::ZERO)),
                     // Arithmetic shift right to fill the high bits with the sign bit.
                     Directive::Instruction(ib::shr_s_imm_64(
                         output,
@@ -1024,7 +1025,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 vec![
                     // Copy the 32 bit value to the low 32 bits of the output.
-                    Directive::Instruction(ib::addi(output, input, F::ZERO)),
+                    Directive::Instruction(ib::add_imm(output, input, F::ZERO)),
                     // Zero the high 32 bits.
                     Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)),
                 ]
@@ -1051,7 +1052,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 ];
                 // if jump is not taken, copy the value for "if zero"
                 directives.extend(if_zero_val.zip(output.clone()).map(|(src, dest)| {
-                    Directive::Instruction(ib::addi(dest as usize, src as usize, F::ZERO))
+                    Directive::Instruction(ib::add_imm(dest as usize, src as usize, F::ZERO))
                 }));
                 // jump to continuation
                 directives.push(Directive::Jump {
@@ -1064,7 +1065,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     frame_size: None,
                 });
                 directives.extend(if_set_val.zip(output).map(|(src, dest)| {
-                    Directive::Instruction(ib::addi(dest as usize, src as usize, F::ZERO))
+                    Directive::Instruction(ib::add_imm(dest as usize, src as usize, F::ZERO))
                 }));
 
                 // continuation label
@@ -1744,7 +1745,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // - write new size to header.
                     Directive::Instruction(ib::storew(new_size, header_addr_reg.start as usize, 0)),
                     // - write old size to output.
-                    Directive::Instruction(ib::addi(output, size_reg, F::ZERO)),
+                    Directive::Instruction(ib::add_imm(output, size_reg, F::ZERO)),
                     // - jump to continuation label.
                     Directive::Jump {
                         target: continuation_label.clone(),
@@ -1866,7 +1867,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     .clone()
                     .zip(output.unwrap())
                     .map(|(input, output)| {
-                        Directive::Instruction(ib::addi(output as usize, input as usize, F::ZERO))
+                        Directive::Instruction(ib::add_imm(
+                            output as usize,
+                            input as usize,
+                            F::ZERO,
+                        ))
                     })
                     .collect()
             }
@@ -2020,7 +2025,7 @@ impl<F: Clone> womir::linker::Directive for Directive<F> {
         Directive::Nop
     }
 
-    fn as_label(&self) -> Option<womir::linker::Label> {
+    fn as_label(&self) -> Option<womir::linker::Label<'_>> {
         if let Directive::Label { id, frame_size } = self {
             Some(womir::linker::Label {
                 id,
