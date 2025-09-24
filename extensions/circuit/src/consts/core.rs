@@ -4,7 +4,7 @@ use openvm_circuit::arch::{
     AdapterAirContext, MinimalInstruction, Result, VmAdapterInterface, VmCoreAir,
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{instruction::Instruction, LocalOpcode};
+use openvm_instructions::{LocalOpcode, instruction::Instruction};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,

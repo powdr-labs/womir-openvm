@@ -11,8 +11,8 @@ use openvm_circuit::{
     },
     system::{
         memory::{
-            offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols},
             MemoryAddress, MemoryController, OfflineMemory, RecordId,
+            offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols},
         },
         program::ProgramBus,
     },

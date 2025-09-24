@@ -1,6 +1,6 @@
 use crate::VmChipWrapperWom;
 
-use super::adapters::{WomBaseAluAdapterChip, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, WomBaseAluAdapterChip};
 
 use crate::divrem::DivRemCoreChip;
 

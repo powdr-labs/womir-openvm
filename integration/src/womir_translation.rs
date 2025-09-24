@@ -857,7 +857,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             .map(|input| match input {
                 WasmOpInput::Register(r) => r,
                 WasmOpInput::Constant(_) => {
-                    unreachable!("Constant inputs should have been handled above")
+                    unreachable!("Op {op:?}: constant inputs should have been handled above")
                 }
             })
             .collect_vec();

@@ -6,7 +6,7 @@ use openvm_circuit::{
         MinimalInstruction, Result as ResultVm, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{offline_checker::MemoryBridge, MemoryController, OfflineMemory, RecordId},
+        memory::{MemoryController, OfflineMemory, RecordId, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
@@ -50,11 +50,11 @@ pub struct WomBaseAluAdapterChip<
 }
 
 impl<
-        F: PrimeField32,
-        const READ_32BIT_WORDS: usize,
-        const READ_BYTES: usize,
-        const WRITE_BYTES: usize,
-    > WomBaseAluAdapterChip<F, READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
+    F: PrimeField32,
+    const READ_32BIT_WORDS: usize,
+    const READ_BYTES: usize,
+    const WRITE_BYTES: usize,
+> WomBaseAluAdapterChip<F, READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
 {
     pub fn new(
         execution_bus: ExecutionBus,
@@ -148,11 +148,11 @@ impl<F: Field, const N: usize, const M: usize, const T: usize> ColumnsAir<F>
 }
 
 impl<
-        AB: InteractionBuilder,
-        const READ_32BIT_WORDS: usize,
-        const READ_BYTES: usize,
-        const WRITE_BYTES: usize,
-    > VmAdapterAir<AB> for WomBaseAluAdapterAir<READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
+    AB: InteractionBuilder,
+    const READ_32BIT_WORDS: usize,
+    const READ_BYTES: usize,
+    const WRITE_BYTES: usize,
+> VmAdapterAir<AB> for WomBaseAluAdapterAir<READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
 {
     type Interface = BasicAdapterInterface<
         AB::Expr,
@@ -181,11 +181,11 @@ impl<
 }
 
 impl<
-        F: PrimeField32,
-        const READ_32BIT_WORDS: usize,
-        const READ_BYTES: usize,
-        const WRITE_BYTES: usize,
-    > VmAdapterChipWom<F> for WomBaseAluAdapterChip<F, READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
+    F: PrimeField32,
+    const READ_32BIT_WORDS: usize,
+    const READ_BYTES: usize,
+    const WRITE_BYTES: usize,
+> VmAdapterChipWom<F> for WomBaseAluAdapterChip<F, READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
 where
     [F; WRITE_BYTES]: Serialize + for<'de> Deserialize<'de>,
 {
