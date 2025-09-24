@@ -5,18 +5,15 @@ use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
 
 mod allocate_frame;
 mod alu;
-mod branch;
 mod consts;
 mod copy_into_frame;
 mod jaaf;
 mod jalr;
 mod jump;
 mod loadstore;
-mod rdwrite;
 
 pub use allocate_frame::*;
 pub use alu::*;
-pub use branch::*;
 pub use consts::*;
 pub use copy_into_frame::*;
 pub use jaaf::*;
@@ -24,7 +21,6 @@ pub use jalr::*;
 pub use jump::*;
 pub use loadstore::*;
 pub use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
-pub use rdwrite::*;
 
 /// 256-bit heap integer stored as 32 bytes (32 limbs of 8-bits)
 pub const INT256_NUM_LIMBS: usize = 32;
