@@ -37,7 +37,7 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         | Operator::I32Eq
         | Operator::I64Eq
         | Operator::I32Ne
-        | Operator::I64Ne 
+        | Operator::I64Ne
         // TODO: the operations below can have right-hand immediates, but need special handling
         // on code translation, so we leave them out for now.
         // | Operator::I32GeS
@@ -63,7 +63,7 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
                 must_collapse.replace(true);
             } else if is_commutative(op)
                 && let [
-                    MaybeConstant::ReferenceConstant {  
+                    MaybeConstant::ReferenceConstant {
                         value,
                         must_collapse,
                     },
@@ -77,7 +77,7 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         }
 
         // GT is special because the left operand is the one that can be immediate
-        Operator::I32GtS | Operator::I32GtU | Operator::I64GtS | Operator::I64GtU 
+        Operator::I32GtS | Operator::I32GtU | Operator::I64GtS | Operator::I64GtU
             // TODO: the operations below can have left-hand immediates, but need special handling
             // on code translation, so we leave them out for now.
             // | Operator::I32LeS
