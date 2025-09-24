@@ -829,9 +829,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
                         // Case of one register input and one constant input.
                         //
-                        // The constant will be on the left side, because GT is just LT
-                        // with the operands reversed, and LT expects the immediate as the
-                        // greater side.
+                        // The constant is only allowed to be on the left side, because GT
+                        // is just LT with the operands reversed, and LT expects the immediate as
+                        // the greater side.
                         let c: i16 = match c {
                             WasmValue::I32(v) => *v as i16,
                             WasmValue::I64(v) => *v as i16,
