@@ -30,10 +30,6 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         | Operator::I64ShrS
         | Operator::I32ShrU
         | Operator::I64ShrU
-        | Operator::I32Rotl
-        | Operator::I64Rotl
-        | Operator::I32Rotr
-        | Operator::I64Rotr
         | Operator::I32LtS
         | Operator::I64LtS
         | Operator::I32LtU
