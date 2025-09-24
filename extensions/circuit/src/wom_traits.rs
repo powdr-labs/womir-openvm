@@ -8,7 +8,8 @@ use std::sync::{Arc, Mutex};
 
 use openvm_circuit::{
     arch::{
-        AdapterRuntimeContext, ExecutionState, InstructionExecutor as InstructionExecutorTrait, Result as ResultVm, VmAdapterAir, VmAdapterInterface, VmAirWrapper, VmCoreAir, VmCoreChip
+        AdapterRuntimeContext, ExecutionState, InstructionExecutor as InstructionExecutorTrait,
+        Result as ResultVm, VmAdapterAir, VmAdapterInterface, VmAirWrapper, VmCoreAir, VmCoreChip,
     },
     system::memory::{MemoryController, OfflineMemory},
     utils::next_power_of_two_or_zero,
