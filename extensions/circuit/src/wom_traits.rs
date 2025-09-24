@@ -31,6 +31,8 @@ use openvm_stark_backend::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
+use crate::WomController;
+
 // ============ Frame Bus System ============
 // These types manage the frame pointer state transitions in the VM
 
@@ -133,11 +135,12 @@ pub struct FrameBridgeInteractor<AB: InteractionBuilder> {
 // Main wrapper that manages frame pointer state across instruction execution
 
 pub struct VmChipWrapperWom<F, A: VmAdapterChipWom<F>, C: VmCoreChipWom<F, A::Interface>> {
-    pub adapter: A,
-    pub core: C,
-    pub records: Vec<(A::ReadRecord, A::WriteRecord, C::Record)>,
-    pub offline_memory: Arc<Mutex<OfflineMemory<F>>>,
-    pub fp: Arc<Mutex<u32>>,
+    adapter: A,
+    core: C,
+    records: Vec<(A::ReadRecord, A::WriteRecord, C::Record)>,
+    offline_memory: Arc<Mutex<OfflineMemory<F>>>,
+    fp: Arc<Mutex<u32>>,
+    wom: Arc<Mutex<WomController<F>>>,
 }
 
 const DEFAULT_RECORDS_CAPACITY: usize = 1 << 5;
@@ -152,6 +155,7 @@ where
         core: C,
         offline_memory: Arc<Mutex<OfflineMemory<F>>>,
         fp: Arc<Mutex<u32>>,
+        wom: Arc<Mutex<WomController<F>>>,
     ) -> Self {
         Self {
             adapter,
@@ -159,6 +163,7 @@ where
             records: Vec::with_capacity(DEFAULT_RECORDS_CAPACITY),
             offline_memory,
             fp,
+            wom,
         }
     }
 }

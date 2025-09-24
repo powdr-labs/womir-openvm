@@ -15,7 +15,7 @@ use openvm_circuit_primitives::{
 };
 use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
 use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
-use openvm_stark_backend::p3_field::PrimeField32;
+use openvm_stark_backend::{interaction::PermutationCheckBus, p3_field::PrimeField32};
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
     DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode,
@@ -164,6 +164,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         let pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
 
         let shared_fp = Arc::new(Mutex::new(DEFAULT_INIT_FP));
+        let wom_controller = Arc::new(Mutex::new(WomController::new(PermutationCheckBus::new(builder.new_bus_idx()))));
 
         let bitwise_lu_chip = if let Some(&chip) = builder
             .find_chip::<SharedBitwiseOperationLookupChip<8>>()
@@ -188,6 +189,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             BaseAluCoreChipWom::new(bitwise_lu_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(
             base_alu_chip,
@@ -205,6 +207,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             BaseAluCoreChipWom::new(bitwise_lu_chip.clone(), BaseAlu64Opcode::CLASS_OFFSET),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(
             base_alu_64_chip,
@@ -216,6 +219,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             JaafCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(jaaf_chip, JaafOpcode::iter().map(|x| x.global_opcode()))?;
 
@@ -224,6 +228,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             JumpCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(jump_chip, JumpOpcode::iter().map(|x| x.global_opcode()))?;
 
@@ -232,6 +237,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             AllocateFrameCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(
             allocate_frame_chip,
@@ -243,6 +249,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             CopyIntoFrameCoreChipWom::new(),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(
             copy_into_frame_chip,
@@ -254,6 +261,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             ConstsCoreChipWom::new(),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(consts_chip, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 
@@ -268,6 +276,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             LessThanCoreChip::new(bitwise_lu_chip.clone(), LessThanOpcode::CLASS_OFFSET),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(lt_chip, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
 
@@ -282,6 +291,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             LessThanCoreChip::new(bitwise_lu_chip.clone(), LessThan64Opcode::CLASS_OFFSET),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(
             lt_chip_64,
@@ -299,6 +309,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             EqCoreChip::new(EqOpcode::CLASS_OFFSET),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(eq_chip, EqOpcode::iter().map(|x| x.global_opcode()))?;
 
@@ -313,6 +324,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             EqCoreChip::new(Eq64Opcode::CLASS_OFFSET),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(eq_chip_64, Eq64Opcode::iter().map(|x| x.global_opcode()))?;
 
@@ -324,6 +336,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             memory_bridge,
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
             builder.system_config().memory_config.pointer_max_bits,
             HintStoreOpcode::CLASS_OFFSET,
         );
@@ -361,6 +374,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             MultiplicationCoreChip::new(range_tuple_checker.clone(), MulOpcode::CLASS_OFFSET),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(mul_chip, MulOpcode::iter().map(|x| x.global_opcode()))?;
 
@@ -375,6 +389,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             MultiplicationCoreChip::new(range_tuple_checker.clone(), Mul64Opcode::CLASS_OFFSET),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(mul_chip_64, Mul64Opcode::iter().map(|x| x.global_opcode()))?;
 
@@ -393,6 +408,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             ),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(
             div_rem_chip,
@@ -414,6 +430,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             ),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(
             div_rem_chip_64,
@@ -435,6 +452,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             ),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(shift_chip, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
 
@@ -453,6 +471,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             ),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(
             shift_64_chip,
@@ -471,6 +490,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             LoadStoreCoreChip::new(LoadStoreOpcode::CLASS_OFFSET),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(
             load_store_chip,
@@ -491,6 +511,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             LoadSignExtendCoreChip::new(range_checker.clone()),
             offline_memory.clone(),
             shared_fp.clone(),
+            wom_controller.clone(),
         );
         inventory.add_executor(
             load_sign_extend_chip,
