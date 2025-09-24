@@ -6,7 +6,7 @@ use openvm_circuit::{
         MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{offline_checker::MemoryBridge, MemoryController, OfflineMemory, RecordId},
+        memory::{MemoryController, OfflineMemory, RecordId, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    adapters::{compose, decompose},
     AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom,
+    adapters::{compose, decompose},
 };
 
 use super::RV32_REGISTER_NUM_LIMBS;
