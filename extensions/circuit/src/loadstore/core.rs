@@ -1,7 +1,6 @@
 use std::borrow::{Borrow, BorrowMut};
 
-use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
-use openvm_circuit::arch::{AdapterAirContext, Result, VmAdapterInterface, VmCoreAir};
+use openvm_circuit::arch::{AdapterAirContext, AdapterRuntimeContext, Result, VmAdapterInterface, VmCoreAir, VmCoreChip};
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{instruction::Instruction, LocalOpcode};
 use openvm_stark_backend::{
@@ -265,7 +264,7 @@ impl<const NUM_CELLS: usize> LoadStoreCoreChip<NUM_CELLS> {
     }
 }
 
-impl<F: PrimeField32, I: VmAdapterInterface<F>, const NUM_CELLS: usize> VmCoreChipWom<F, I>
+impl<F: PrimeField32, I: VmAdapterInterface<F>, const NUM_CELLS: usize> VmCoreChip<F, I>
     for LoadStoreCoreChip<NUM_CELLS>
 where
     I::Reads: Into<([[F; NUM_CELLS]; 2], F)>,
@@ -279,9 +278,8 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
-        _from_fp: u32,
         reads: I::Reads,
-    ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
+    ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
         let local_opcode =
             LoadStoreOpcode::from_usize(instruction.opcode.local_opcode_idx(self.air.offset));
 
@@ -290,7 +288,7 @@ where
         let prev_data = reads[0];
         let read_data = reads[1];
         let write_data = run_write_data(local_opcode, read_data, prev_data, shift);
-        let output = AdapterRuntimeContextWom::without_pc_fp([write_data]);
+        let output = AdapterRuntimeContext::without_pc([write_data]);
 
         Ok((
             output,

@@ -2,8 +2,7 @@ use std::{borrow::Borrow, marker::PhantomData};
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, BasicAdapterInterface, ExecutionBridge, ExecutionBus, ExecutionState,
-        MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
+        AdapterAirContext, AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge, ExecutionBus, ExecutionState, MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface
     },
     system::{
         memory::{offline_checker::MemoryBridge, MemoryController, OfflineMemory, RecordId},
@@ -22,7 +21,7 @@ use openvm_womir_transpiler::CopyIntoFrameOpcode;
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom};
+use crate::{FrameBus, FrameState, VmAdapterChipWom};
 
 use super::{compose, decompose, RV32_REGISTER_NUM_LIMBS};
 
@@ -182,7 +181,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        _output: AdapterRuntimeContextWom<F, Self::Interface>,
+        _output: AdapterRuntimeContext<F, Self::Interface>,
         read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction {

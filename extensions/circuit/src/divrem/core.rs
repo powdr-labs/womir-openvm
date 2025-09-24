@@ -6,7 +6,7 @@ use std::{
 use num_bigint::BigUint;
 use num_integer::Integer;
 use openvm_circuit::arch::{
-    AdapterAirContext, MinimalInstruction, Result, VmAdapterInterface, VmCoreAir,
+    AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, Result, VmAdapterInterface, VmCoreAir, VmCoreChip
 };
 use openvm_circuit_primitives::{
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
@@ -26,8 +26,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
-
-use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
@@ -429,7 +427,7 @@ pub(super) enum DivRemCoreSpecialCase {
 }
 
 impl<F: PrimeField32, I: VmAdapterInterface<F>, const NUM_LIMBS: usize, const LIMB_BITS: usize>
-    VmCoreChipWom<F, I> for DivRemCoreChip<NUM_LIMBS, LIMB_BITS>
+    VmCoreChip<F, I> for DivRemCoreChip<NUM_LIMBS, LIMB_BITS>
 where
     I::Reads: Into<[[F; NUM_LIMBS]; 2]>,
     I::Writes: From<[[F; NUM_LIMBS]; 1]>,
@@ -442,9 +440,8 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
-        _from_frame: u32,
         reads: I::Reads,
-    ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
+    ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
         let Instruction { opcode, .. } = instruction;
         let divrem_opcode = DivRemOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
@@ -505,9 +502,8 @@ where
         let r_prime_f = r_prime.map(F::from_canonical_u32);
         let writes = [(if is_div { &q } else { &r }).map(F::from_canonical_u32)].into();
 
-        let output = AdapterRuntimeContextWom {
+        let output = AdapterRuntimeContext {
             to_pc: None,
-            to_fp: None,
             writes,
         };
         let record = DivRemCoreRecord {

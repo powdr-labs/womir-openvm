@@ -3,7 +3,7 @@ use std::{
     borrow::{Borrow, BorrowMut},
 };
 
-use openvm_circuit::arch::{AdapterAirContext, MinimalInstruction, VmAdapterInterface, VmCoreAir};
+use openvm_circuit::arch::{AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, VmAdapterInterface, VmCoreAir, VmCoreChip};
 use openvm_circuit_primitives::{
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
     utils::not,
@@ -21,8 +21,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
-
-use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
 
 use openvm_circuit::arch::Result as ResultVm;
 
@@ -209,7 +207,7 @@ impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAluCoreChipWom<NUM_LIMB
     }
 }
 
-impl<F, I, const NUM_LIMBS: usize, const LIMB_BITS: usize> VmCoreChipWom<F, I>
+impl<F, I, const NUM_LIMBS: usize, const LIMB_BITS: usize> VmCoreChip<F, I>
     for BaseAluCoreChipWom<NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
@@ -225,9 +223,8 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
-        _from_frame: u32,
         reads: I::Reads,
-    ) -> ResultVm<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
+    ) -> ResultVm<(AdapterRuntimeContext<F, I>, Self::Record)> {
         let Instruction { opcode, .. } = instruction;
         let local_opcode = BaseAluOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
@@ -236,9 +233,8 @@ where
         let c = data[1].map(|y| y.as_canonical_u32());
         let a = run_alu::<NUM_LIMBS, LIMB_BITS>(local_opcode, &b, &c);
 
-        let output = AdapterRuntimeContextWom {
+        let output = AdapterRuntimeContext {
             to_pc: None,
-            to_fp: None,
             writes: [a.map(F::from_canonical_u32)].into(),
         };
 

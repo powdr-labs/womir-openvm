@@ -6,8 +6,7 @@ use std::{
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, ExecutionBridge, ExecutionBus, ExecutionState, Result, VmAdapterAir,
-        VmAdapterInterface,
+        AdapterAirContext, AdapterRuntimeContext, ExecutionBridge, ExecutionBus, ExecutionState, Result, VmAdapterAir, VmAdapterInterface
     },
     system::{
         memory::{
@@ -42,7 +41,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use super::{compose, RV32_REGISTER_NUM_LIMBS};
 use crate::adapters::RV32_CELL_BITS;
-use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
+use crate::{FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
 
 /// LoadStore Adapter handles all memory and register operations, so it must be aware
 /// of the instruction type, specifically whether it is a load or store
@@ -487,7 +486,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        output: AdapterRuntimeContextWom<F, Self::Interface>,
+        output: AdapterRuntimeContext<F, Self::Interface>,
         read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction {
@@ -527,7 +526,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
                 pc: output.to_pc.unwrap_or(from_state.pc + DEFAULT_PC_STEP),
                 timestamp: memory.timestamp(),
             },
-            output.to_fp.unwrap_or(from_frame.fp),
+            from_frame.fp,
             Self::WriteRecord {
                 from_state,
                 from_frame,

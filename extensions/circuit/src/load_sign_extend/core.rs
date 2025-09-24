@@ -3,7 +3,7 @@ use std::{
     borrow::{Borrow, BorrowMut},
 };
 
-use openvm_circuit::arch::{AdapterAirContext, Result, VmAdapterInterface, VmCoreAir};
+use openvm_circuit::arch::{AdapterAirContext, AdapterRuntimeContext, Result, VmAdapterInterface, VmCoreAir, VmCoreChip};
 use openvm_circuit_primitives::{
     utils::select,
     var_range::{SharedVariableRangeCheckerChip, VariableRangeCheckerBus},
@@ -21,7 +21,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{adapters::LoadStoreInstruction, AdapterRuntimeContextWom, VmCoreChipWom};
+use crate::{adapters::LoadStoreInstruction};
 
 /// LoadSignExtend Core Chip handles byte/halfword into word conversions through sign extend
 /// This chip uses read_data to construct write_data
@@ -202,7 +202,7 @@ impl<const NUM_CELLS: usize, const LIMB_BITS: usize> LoadSignExtendCoreChip<NUM_
 }
 
 impl<F: PrimeField32, I: VmAdapterInterface<F>, const NUM_CELLS: usize, const LIMB_BITS: usize>
-    VmCoreChipWom<F, I> for LoadSignExtendCoreChip<NUM_CELLS, LIMB_BITS>
+    VmCoreChip<F, I> for LoadSignExtendCoreChip<NUM_CELLS, LIMB_BITS>
 where
     I::Reads: Into<([[F; NUM_CELLS]; 2], F)>,
     I::Writes: From<[[F; NUM_CELLS]; 1]>,
@@ -215,9 +215,8 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
-        _from_fp: u32,
         reads: I::Reads,
-    ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
+    ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
         let local_opcode = LoadStoreOpcode::from_usize(
             instruction
                 .opcode
@@ -232,7 +231,7 @@ where
             data[0],
             shift_amount,
         );
-        let output = AdapterRuntimeContextWom::without_pc_fp([write_data]);
+        let output = AdapterRuntimeContext::without_pc([write_data]);
 
         let most_sig_limb = match local_opcode {
             LOADB => write_data[0],

@@ -1,7 +1,7 @@
 use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::arch::{
-    AdapterAirContext, MinimalInstruction, Result, VmAdapterInterface, VmCoreAir,
+    AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, Result, VmAdapterInterface, VmCoreAir, VmCoreChip
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{instruction::Instruction, LocalOpcode};
@@ -13,8 +13,6 @@ use openvm_stark_backend::{
 };
 use openvm_womir_transpiler::JumpOpcode::{self, *};
 use struct_reflection::{StructReflection, StructReflectionHelper};
-
-use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
 
 use crate::adapters::RV32_REGISTER_NUM_LIMBS;
 
@@ -84,7 +82,7 @@ pub struct JumpCoreChipWom {
     pub air: JumpCoreAir,
 }
 
-impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChipWom<F, I> for JumpCoreChipWom
+impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChip<F, I> for JumpCoreChipWom
 where
     I::Reads: Into<[[F; RV32_REGISTER_NUM_LIMBS]; 1]>,
     I::Writes: From<[[F; RV32_REGISTER_NUM_LIMBS]; 0]>,
@@ -97,12 +95,10 @@ where
         &self,
         _instruction: &Instruction<F>,
         _from_pc: u32,
-        _from_fp: u32,
         _reads: I::Reads,
-    ) -> Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
-        let output = AdapterRuntimeContextWom {
+    ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
+        let output = AdapterRuntimeContext {
             to_pc: None,
-            to_fp: None,
             writes: [].into(),
         };
 
