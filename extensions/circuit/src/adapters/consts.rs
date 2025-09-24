@@ -21,7 +21,9 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController};
+use crate::{
+    AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController,
+};
 
 use super::{decompose, RV32_REGISTER_NUM_LIMBS};
 

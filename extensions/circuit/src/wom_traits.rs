@@ -305,7 +305,9 @@ where
     ) -> ResultVm<ExecutionState<u32>> {
         let mut fp = self.fp.lock().unwrap();
         let mut wom = self.wom.lock().unwrap();
-        let (reads, read_record) = self.adapter.preprocess(memory, &mut wom, *fp, instruction)?;
+        let (reads, read_record) = self
+            .adapter
+            .preprocess(memory, &mut wom, *fp, instruction)?;
         let (output, core_record) =
             self.core
                 .execute_instruction(instruction, from_state.pc, *fp, reads)?;

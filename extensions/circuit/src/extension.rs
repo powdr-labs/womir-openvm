@@ -164,7 +164,9 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         let pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
 
         let shared_fp = Arc::new(Mutex::new(DEFAULT_INIT_FP));
-        let wom_controller = Arc::new(Mutex::new(WomController::new(PermutationCheckBus::new(builder.new_bus_idx()))));
+        let wom_controller = Arc::new(Mutex::new(WomController::new(PermutationCheckBus::new(
+            builder.new_bus_idx(),
+        ))));
         let wom_bridge = wom_controller.lock().unwrap().bridge();
 
         let bitwise_lu_chip = if let Some(&chip) = builder
@@ -218,7 +220,13 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         )?;
 
         let jaaf_chip = JaafChipWom::new(
-            JaafAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge, wom_bridge),
+            JaafAdapterChipWom::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                wom_bridge,
+            ),
             JaafCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),
@@ -236,7 +244,13 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         inventory.add_executor(jump_chip, JumpOpcode::iter().map(|x| x.global_opcode()))?;
 
         let allocate_frame_chip = AllocateFrameChipWom::new(
-            AllocateFrameAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge, wom_bridge),
+            AllocateFrameAdapterChipWom::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                wom_bridge,
+            ),
             AllocateFrameCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),
@@ -248,7 +262,13 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         )?;
 
         let copy_into_frame_chip = CopyIntoFrameChipWom::new(
-            CopyIntoFrameAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge, wom_bridge),
+            CopyIntoFrameAdapterChipWom::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                wom_bridge,
+            ),
             CopyIntoFrameCoreChipWom::new(),
             offline_memory.clone(),
             shared_fp.clone(),
@@ -260,7 +280,13 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         )?;
 
         let consts_chip = ConstsChipWom::new(
-            ConstsAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge, wom_bridge),
+            ConstsAdapterChipWom::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                wom_bridge,
+            ),
             ConstsCoreChipWom::new(),
             offline_memory.clone(),
             shared_fp.clone(),

@@ -22,7 +22,9 @@ use openvm_womir_transpiler::CopyIntoFrameOpcode;
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController};
+use crate::{
+    AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController,
+};
 
 use super::{compose, decompose, RV32_REGISTER_NUM_LIMBS};
 

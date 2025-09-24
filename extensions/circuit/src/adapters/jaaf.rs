@@ -27,7 +27,10 @@ use openvm_womir_transpiler::JaafOpcode::{self, *};
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController};
+use crate::{
+    AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge,
+    WomController,
+};
 
 use super::{compose, decompose, RV32_REGISTER_NUM_LIMBS};
 

@@ -28,7 +28,10 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController};
+use crate::{
+    AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge,
+    WomController,
+};
 
 use super::RV32_CELL_BITS;
 
