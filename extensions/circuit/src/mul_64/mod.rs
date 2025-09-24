@@ -1,7 +1,7 @@
 use super::adapters::{WomBaseAluAdapterChip, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 use crate::VmChipWrapperWom;
 
-use crate::mul::MultiplicationCoreChip;
+use openvm_rv32im_circuit::MultiplicationCoreChip;
 
 pub type WomMultiplication64Chip<F> = VmChipWrapperWom<
     F,

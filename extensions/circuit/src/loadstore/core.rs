@@ -16,7 +16,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::adapters::LoadStoreInstruction;
+use openvm_rv32im_circuit::adapters::LoadStoreInstruction;
 
 #[derive(Debug, Clone, Copy)]
 enum InstructionOpcode {

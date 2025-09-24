@@ -23,7 +23,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::adapters::LoadStoreInstruction;
+use openvm_rv32im_circuit::adapters::LoadStoreInstruction;
 
 /// LoadSignExtend Core Chip handles byte/halfword into word conversions through sign extend
 /// This chip uses read_data to construct write_data

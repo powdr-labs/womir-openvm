@@ -177,8 +177,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Create VM configuration
             let vm_config = SdkVmConfig::builder()
                 .system(Default::default())
-                .rv32i(Default::default())
-                .rv32m(Default::default())
+                // .rv32i(Default::default())
+                // .rv32m(Default::default())
                 .io(Default::default())
                 .build();
             let vm_config = SpecializedConfig::new(vm_config);
@@ -209,8 +209,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Create VM configuration
                 let vm_config = SdkVmConfig::builder()
                     .system(Default::default())
-                    .rv32i(Default::default())
-                    .rv32m(Default::default())
+                    // .rv32i(Default::default())
+                    // .rv32m(Default::default())
                     .io(Default::default())
                     .build();
                 let vm_config = SpecializedConfig::new(vm_config);
@@ -357,8 +357,8 @@ mod tests {
         // Create VM configuration
         let vm_config = SdkVmConfig::builder()
             .system(Default::default())
-            .rv32i(Default::default())
-            .rv32m(Default::default())
+            // .rv32i(Default::default())
+            // .rv32m(Default::default())
             .io(Default::default())
             .build();
         let vm_config = SpecializedConfig::new(vm_config);
@@ -1757,8 +1757,8 @@ mod wast_tests {
         // Create VM configuration
         let vm_config = SdkVmConfig::builder()
             .system(Default::default())
-            .rv32i(Default::default())
-            .rv32m(Default::default())
+            // .rv32i(Default::default())
+            // .rv32m(Default::default())
             .io(Default::default())
             .build();
         let vm_config = SpecializedConfig::new(vm_config);
