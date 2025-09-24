@@ -165,6 +165,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
 
         let shared_fp = Arc::new(Mutex::new(DEFAULT_INIT_FP));
         let wom_controller = Arc::new(Mutex::new(WomController::new(PermutationCheckBus::new(builder.new_bus_idx()))));
+        let wom_bridge = wom_controller.lock().unwrap().bridge();
 
         let bitwise_lu_chip = if let Some(&chip) = builder
             .find_chip::<SharedBitwiseOperationLookupChip<8>>()
@@ -184,6 +185,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             BaseAluCoreChipWom::new(bitwise_lu_chip.clone(), BaseAluOpcode::CLASS_OFFSET),
@@ -202,6 +204,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             BaseAluCoreChipWom::new(bitwise_lu_chip.clone(), BaseAlu64Opcode::CLASS_OFFSET),
@@ -215,7 +218,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         )?;
 
         let jaaf_chip = JaafChipWom::new(
-            JaafAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge),
+            JaafAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge, wom_bridge),
             JaafCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),
@@ -224,7 +227,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         inventory.add_executor(jaaf_chip, JaafOpcode::iter().map(|x| x.global_opcode()))?;
 
         let jump_chip = JumpChipWom::new(
-            JumpAdapterChipWom::new(execution_bus, program_bus, memory_bridge),
+            JumpAdapterChipWom::new(execution_bus, program_bus, memory_bridge, wom_bridge),
             JumpCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),
@@ -233,7 +236,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         inventory.add_executor(jump_chip, JumpOpcode::iter().map(|x| x.global_opcode()))?;
 
         let allocate_frame_chip = AllocateFrameChipWom::new(
-            AllocateFrameAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge),
+            AllocateFrameAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge, wom_bridge),
             AllocateFrameCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),
@@ -245,7 +248,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         )?;
 
         let copy_into_frame_chip = CopyIntoFrameChipWom::new(
-            CopyIntoFrameAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge),
+            CopyIntoFrameAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge, wom_bridge),
             CopyIntoFrameCoreChipWom::new(),
             offline_memory.clone(),
             shared_fp.clone(),
@@ -257,7 +260,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         )?;
 
         let consts_chip = ConstsChipWom::new(
-            ConstsAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge),
+            ConstsAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge, wom_bridge),
             ConstsCoreChipWom::new(),
             offline_memory.clone(),
             shared_fp.clone(),
@@ -271,6 +274,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             LessThanCoreChip::new(bitwise_lu_chip.clone(), LessThanOpcode::CLASS_OFFSET),
@@ -286,6 +290,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             LessThanCoreChip::new(bitwise_lu_chip.clone(), LessThan64Opcode::CLASS_OFFSET),
@@ -304,6 +309,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             EqCoreChip::new(EqOpcode::CLASS_OFFSET),
@@ -319,6 +325,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             EqCoreChip::new(Eq64Opcode::CLASS_OFFSET),
@@ -369,6 +376,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             MultiplicationCoreChip::new(range_tuple_checker.clone(), MulOpcode::CLASS_OFFSET),
@@ -384,6 +392,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             MultiplicationCoreChip::new(range_tuple_checker.clone(), Mul64Opcode::CLASS_OFFSET),
@@ -399,6 +408,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             DivRemCoreChip::new(
@@ -421,6 +431,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             DivRemCoreChip::new(
@@ -443,6 +454,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             ShiftCoreChip::new(
@@ -462,6 +474,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 bitwise_lu_chip.clone(),
             ),
             ShiftCoreChip::new(
@@ -484,6 +497,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 pointer_max_bits,
                 range_checker.clone(),
             ),
@@ -505,6 +519,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 program_bus,
                 frame_bus,
                 memory_bridge,
+                wom_bridge,
                 pointer_max_bits,
                 range_checker.clone(),
             ),

@@ -41,7 +41,7 @@ impl<F: PrimeField32> WomController<F> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct WomBridge {
     bus: PermutationCheckBus,
 }

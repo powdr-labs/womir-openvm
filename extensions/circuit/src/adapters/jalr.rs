@@ -31,6 +31,8 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
+use crate::WomBridge;
+
 use super::RV32_REGISTER_NUM_LIMBS;
 
 // This adapter reads from [b:4]_d (rs1) and writes to [a:4]_d (rd)
@@ -45,11 +47,13 @@ impl<F: PrimeField32> Rv32JalrAdapterChip<F> {
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
     ) -> Self {
         Self {
             air: Rv32JalrAdapterAir {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 memory_bridge,
+                wom_bridge,
             },
             _marker: PhantomData,
         }
@@ -84,6 +88,7 @@ pub struct Rv32JalrAdapterCols<T> {
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct Rv32JalrAdapterAir {
     pub(super) memory_bridge: MemoryBridge,
+    pub(super) wom_bridge: WomBridge,
     pub(super) execution_bridge: ExecutionBridge,
 }
 

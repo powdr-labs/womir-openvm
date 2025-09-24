@@ -31,6 +31,8 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
+use crate::WomBridge;
+
 use super::RV32_REGISTER_NUM_LIMBS;
 
 /// This adapter doesn't read anything, and writes to \[a:4\]_d, where d == 1
@@ -53,11 +55,13 @@ impl<F: PrimeField32> Rv32RdWriteAdapterChip<F> {
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
     ) -> Self {
         Self {
             air: Rv32RdWriteAdapterAir {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 memory_bridge,
+                wom_bridge,
             },
             _marker: PhantomData,
         }
@@ -69,8 +73,9 @@ impl<F: PrimeField32> Rv32CondRdWriteAdapterChip<F> {
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
     ) -> Self {
-        let inner = Rv32RdWriteAdapterChip::new(execution_bus, program_bus, memory_bridge);
+        let inner = Rv32RdWriteAdapterChip::new(execution_bus, program_bus, memory_bridge, wom_bridge);
         let air = Rv32CondRdWriteAdapterAir { inner: inner.air };
         Self { inner, air }
     }
@@ -101,6 +106,7 @@ pub struct Rv32CondRdWriteAdapterCols<T> {
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct Rv32RdWriteAdapterAir {
     pub(super) memory_bridge: MemoryBridge,
+    pub(super) wom_bridge: WomBridge,
     pub(super) execution_bridge: ExecutionBridge,
 }
 

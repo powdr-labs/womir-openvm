@@ -30,6 +30,8 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
+use crate::WomBridge;
+
 use super::RV32_REGISTER_NUM_LIMBS;
 
 /// Reads instructions of the form OP a, b, c, d, e where if(\[a:4\]_d op \[b:4\]_e) pc += c.
@@ -45,11 +47,13 @@ impl<F: PrimeField32> Rv32BranchAdapterChip<F> {
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
     ) -> Self {
         Self {
             air: Rv32BranchAdapterAir {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 memory_bridge,
+                wom_bridge,
             },
             _marker: PhantomData,
         }
@@ -84,6 +88,7 @@ pub struct Rv32BranchAdapterCols<T> {
 pub struct Rv32BranchAdapterAir {
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) memory_bridge: MemoryBridge,
+    pub(super) wom_bridge: WomBridge,
 }
 
 impl<F: Field> BaseAir<F> for Rv32BranchAdapterAir {

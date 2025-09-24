@@ -22,8 +22,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    adapters::{compose, decompose},
-    AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, WomController,
+    adapters::{compose, decompose}, AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController
 };
 
 use super::RV32_REGISTER_NUM_LIMBS;
@@ -40,10 +39,12 @@ impl AllocateFrameAdapterChipWom {
         program_bus: ProgramBus,
         frame_bus: FrameBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
     ) -> Self {
         Self {
             air: AllocateFrameAdapterAirWom {
                 _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                _wom_bridge: wom_bridge,
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
             },
@@ -84,6 +85,7 @@ pub struct AllocateFrameAdapterColsWom<T> {
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct AllocateFrameAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
+    pub(super) _wom_bridge: WomBridge,
     pub(super) _execution_bridge: ExecutionBridge,
     pub(super) _frame_bus: FrameBus,
 }

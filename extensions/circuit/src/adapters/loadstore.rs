@@ -41,7 +41,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use super::{compose, RV32_REGISTER_NUM_LIMBS};
-use crate::{adapters::RV32_CELL_BITS, WomController};
+use crate::{adapters::RV32_CELL_BITS, WomBridge, WomController};
 use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
 
 /// LoadStore Adapter handles all memory and register operations, so it must be aware
@@ -110,6 +110,7 @@ impl<F: PrimeField32> Rv32LoadStoreAdapterChip<F> {
         program_bus: ProgramBus,
         frame_bus: FrameBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
         pointer_max_bits: usize,
         range_checker_chip: SharedVariableRangeCheckerChip,
     ) -> Self {
@@ -119,6 +120,7 @@ impl<F: PrimeField32> Rv32LoadStoreAdapterChip<F> {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 frame_bridge: FrameBridge::new(frame_bus),
                 memory_bridge,
+                wom_bridge,
                 range_bus: range_checker_chip.bus(),
                 pointer_max_bits,
             },
@@ -190,6 +192,7 @@ pub struct Rv32LoadStoreAdapterAir {
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) frame_bridge: FrameBridge,
     pub(super) memory_bridge: MemoryBridge,
+    pub(super) wom_bridge: WomBridge,
     pub range_bus: VariableRangeCheckerBus,
     pointer_max_bits: usize,
 }
