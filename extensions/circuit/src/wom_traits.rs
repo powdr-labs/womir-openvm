@@ -191,6 +191,7 @@ pub trait VmAdapterChipWom<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
     ) -> ResultVm<(
@@ -204,6 +205,7 @@ pub trait VmAdapterChipWom<F> {
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
@@ -302,12 +304,14 @@ where
         from_state: ExecutionState<u32>,
     ) -> ResultVm<ExecutionState<u32>> {
         let mut fp = self.fp.lock().unwrap();
-        let (reads, read_record) = self.adapter.preprocess(memory, *fp, instruction)?;
+        let mut wom = self.wom.lock().unwrap();
+        let (reads, read_record) = self.adapter.preprocess(memory, &mut wom, *fp, instruction)?;
         let (output, core_record) =
             self.core
                 .execute_instruction(instruction, from_state.pc, *fp, reads)?;
         let (to_state, to_fp, write_record) = self.adapter.postprocess(
             memory,
+            &mut wom,
             instruction,
             from_state,
             FrameState::new(from_state.pc, *fp),

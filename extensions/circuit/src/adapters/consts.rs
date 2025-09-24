@@ -21,7 +21,7 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom};
+use crate::{AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, WomController};
 
 use super::{decompose, RV32_REGISTER_NUM_LIMBS};
 
@@ -122,6 +122,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
     fn preprocess(
         &mut self,
         _memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         _fp: u32,
         _instruction: &Instruction<F>,
     ) -> Result<(
@@ -134,6 +135,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,

@@ -23,7 +23,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
     adapters::{compose, decompose},
-    AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom,
+    AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, WomController,
 };
 
 use super::RV32_REGISTER_NUM_LIMBS;
@@ -142,6 +142,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
@@ -183,6 +184,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
