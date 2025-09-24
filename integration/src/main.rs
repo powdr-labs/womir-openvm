@@ -1595,18 +1595,21 @@ mod wast_tests {
 
     fn extract_wast_test_info(
         wast_file: &str,
-    ) -> Result<Vec<TestModule>, Box<dyn std::error::Error>> {
+    ) -> Result<(PathBuf, Vec<TestModule>), Box<dyn std::error::Error>> {
         // Convert .wast to .json using wast2json
-        let wast_path = Path::new(wast_file);
-        let json_path = wast_path.with_extension("json");
-        let _output_dir = wast_path.parent().unwrap_or(Path::new("."));
+        let target_dir =
+            PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("../wast_target");
+        fs::create_dir_all(&target_dir).unwrap();
+        let wast_path = Path::new(wast_file).canonicalize()?;
+        let json_path =
+            target_dir.join(Path::new(wast_path.file_stem().unwrap()).with_extension("json"));
 
         let output = Command::new("wast2json")
-            .arg(wast_file)
-            .arg("-o")
-            .arg(&json_path)
+            .arg(wast_path)
             .arg("--debug-names")
-            .output()?;
+            .current_dir(&target_dir)
+            .output()
+            .unwrap();
 
         if !output.status.success() {
             return Err(format!(
@@ -1691,10 +1694,7 @@ mod wast_tests {
             }
         }
 
-        // Clean up JSON file
-        let _ = fs::remove_file(&json_path);
-
-        Ok(test_cases)
+        Ok((target_dir, test_cases))
     }
 
     fn parse_as_vec_u32(ty: &str, value: &str) -> Option<Vec<u32>> {
@@ -1845,12 +1845,11 @@ mod wast_tests {
     }
 
     fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let test_cases = extract_wast_test_info(tf)?;
+        let (target_dir, test_cases) = extract_wast_test_info(tf)?;
 
         // Run all test cases
         for (module_path, _line, cases) in &test_cases {
-            // Prepend ../ to the module path since we're running from integration directory
-            let full_module_path = format!("../wasm_tests/{module_path}");
+            let full_module_path = target_dir.join(module_path);
 
             // Load the module to be executed multiple times.
             println!("Loading test module: {module_path}");
