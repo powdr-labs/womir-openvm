@@ -41,8 +41,8 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose};
-use crate::adapters::RV32_CELL_BITS;
 use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
+use crate::{WomBridge, WomController, adapters::RV32_CELL_BITS};
 
 /// LoadStore Adapter handles all memory and register operations, so it must be aware
 /// of the instruction type, specifically whether it is a load or store
@@ -110,6 +110,7 @@ impl<F: PrimeField32> Rv32LoadStoreAdapterChip<F> {
         program_bus: ProgramBus,
         frame_bus: FrameBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
         pointer_max_bits: usize,
         range_checker_chip: SharedVariableRangeCheckerChip,
     ) -> Self {
@@ -119,6 +120,7 @@ impl<F: PrimeField32> Rv32LoadStoreAdapterChip<F> {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 frame_bridge: FrameBridge::new(frame_bus),
                 memory_bridge,
+                wom_bridge,
                 range_bus: range_checker_chip.bus(),
                 pointer_max_bits,
             },
@@ -190,6 +192,7 @@ pub struct Rv32LoadStoreAdapterAir {
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) frame_bridge: FrameBridge,
     pub(super) memory_bridge: MemoryBridge,
+    pub(super) wom_bridge: WomBridge,
     pub range_bus: VariableRangeCheckerBus,
     pointer_max_bits: usize,
 }
@@ -404,6 +407,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
@@ -484,6 +488,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,

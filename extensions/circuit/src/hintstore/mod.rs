@@ -43,8 +43,8 @@ use openvm_womir_transpiler::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::adapters::compose;
 use crate::{FrameBridge, FrameBus};
+use crate::{WomController, adapters::compose};
 
 #[repr(C)]
 #[derive(AlignedBorrow, Debug, StructReflection)]
@@ -289,6 +289,7 @@ pub struct HintStoreChip<F: Field> {
     offline_memory: Arc<Mutex<OfflineMemory<F>>>,
     pub streams: OnceLock<Arc<Mutex<Streams<F>>>>,
     pub shared_fp: Arc<Mutex<u32>>,
+    wom: Arc<Mutex<WomController<F>>>,
     bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
 }
 
@@ -302,6 +303,7 @@ impl<F: PrimeField32> HintStoreChip<F> {
         memory_bridge: MemoryBridge,
         offline_memory: Arc<Mutex<OfflineMemory<F>>>,
         shared_fp: Arc<Mutex<u32>>,
+        wom: Arc<Mutex<WomController<F>>>,
         pointer_max_bits: usize,
         offset: usize,
     ) -> Self {
@@ -320,6 +322,7 @@ impl<F: PrimeField32> HintStoreChip<F> {
             offline_memory,
             streams: OnceLock::new(),
             shared_fp,
+            wom,
             bitwise_lookup_chip,
         }
     }

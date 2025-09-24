@@ -28,7 +28,10 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
+use crate::{
+    AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge,
+    WomController,
+};
 
 use super::RV32_CELL_BITS;
 
@@ -61,6 +64,7 @@ impl<
         program_bus: ProgramBus,
         frame_bus: FrameBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
         bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
     ) -> Self {
         Self {
@@ -68,6 +72,7 @@ impl<
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 frame_bridge: FrameBridge::new(frame_bus),
                 memory_bridge,
+                wom_bridge,
                 bitwise_lookup_bus: bitwise_lookup_chip.bus(),
             },
             _bitwise_lookup_chip: bitwise_lookup_chip,
@@ -128,6 +133,7 @@ pub struct WomBaseAluAdapterAir<
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) frame_bridge: FrameBridge,
     pub(super) memory_bridge: MemoryBridge,
+    pub(super) wom_bridge: WomBridge,
     bitwise_lookup_bus: BitwiseOperationLookupBus,
 }
 
@@ -197,6 +203,7 @@ where
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
     ) -> ResultVm<(
@@ -240,6 +247,7 @@ where
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,

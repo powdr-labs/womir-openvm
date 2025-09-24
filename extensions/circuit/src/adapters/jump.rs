@@ -22,7 +22,7 @@ use openvm_womir_transpiler::JumpOpcode::{self, *};
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{AdapterRuntimeContextWom, VmAdapterChipWom};
+use crate::{AdapterRuntimeContextWom, VmAdapterChipWom, WomBridge, WomController};
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose};
 
@@ -37,11 +37,13 @@ impl<F: PrimeField32> JumpAdapterChipWom<F> {
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
     ) -> Self {
         Self {
             air: JumpAdapterAirWom {
                 _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 _memory_bridge: memory_bridge,
+                _wom_bridge: wom_bridge,
             },
             _marker: PhantomData,
         }
@@ -78,6 +80,7 @@ pub struct JumpAdapterColsWom<T> {
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct JumpAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
+    pub(super) _wom_bridge: WomBridge,
     pub(super) _execution_bridge: ExecutionBridge,
 }
 
@@ -137,6 +140,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
@@ -176,6 +180,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         _from_frame: crate::FrameState<u32>,

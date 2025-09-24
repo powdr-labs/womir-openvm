@@ -27,6 +27,7 @@ num-integer.workspace = true
 serde = { workspace = true, features = ["derive", "std"] }
 serde-big-array.workspace = true
 struct-reflection.workspace = true
+itertools = "0.14"
 
 [dev-dependencies]
 openvm-stark-sdk = { workspace = true }
