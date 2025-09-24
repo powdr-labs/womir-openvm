@@ -12,6 +12,10 @@ use openvm_instructions::{
     riscv,
 };
 use openvm_stark_backend::p3_field::PrimeField32;
+use openvm_womir_transpiler::{
+    BaseAlu64Opcode, BaseAluOpcode, DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode,
+    LessThan64Opcode, LessThanOpcode, Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
+};
 use wasmparser::{MemArg, Operator as Op, ValType};
 use womir::{
     linker::LabelValue,
@@ -675,50 +679,47 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         inputs: Vec<Range<u32>>,
         output: Option<Range<u32>>,
     ) -> Vec<Self::Directive> {
+        use openvm_instructions::LocalOpcode;
+
         // First handle single-instruction binary operations.
-        type BinaryOpFn<F> = fn(usize, usize, usize) -> Instruction<F>;
-        let binary_op: Result<BinaryOpFn<F>, Op> = match op {
+        let binary_op = match op {
             // 32-bit integer instructions
-            Op::I32Eq => Ok(ib::eq),
-            Op::I32Ne => Ok(ib::neq),
-            Op::I32LtS => Ok(ib::lt_s),
-            Op::I32LtU => Ok(ib::lt_u),
-            Op::I32GtS => Ok(ib::gt_s),
-            Op::I32GtU => Ok(ib::gt_u),
-            Op::I32Add => Ok(ib::add),
-            Op::I32Sub => Ok(ib::sub),
-            Op::I32Mul => Ok(ib::mul),
-            Op::I32DivS => Ok(ib::div),
-            Op::I32DivU => Ok(ib::divu),
-            Op::I32RemS => Ok(ib::rem),
-            Op::I32RemU => Ok(ib::remu),
-            Op::I32And => Ok(ib::and),
-            Op::I32Or => Ok(ib::or),
-            Op::I32Xor => Ok(ib::xor),
-            Op::I32Shl => Ok(ib::shl),
-            Op::I32ShrS => Ok(ib::shr_s),
-            Op::I32ShrU => Ok(ib::shr_u),
+            Op::I32Eq => Ok(EqOpcode::EQ.global_opcode()),
+            Op::I32Ne => Ok(EqOpcode::NEQ.global_opcode()),
+            Op::I32LtS => Ok(LessThanOpcode::SLT.global_opcode()),
+            Op::I32LtU => Ok(LessThanOpcode::SLTU.global_opcode()),
+            Op::I32Add => Ok(BaseAluOpcode::ADD.global_opcode()),
+            Op::I32Sub => Ok(BaseAluOpcode::SUB.global_opcode()),
+            Op::I32And => Ok(BaseAluOpcode::AND.global_opcode()),
+            Op::I32Or => Ok(BaseAluOpcode::OR.global_opcode()),
+            Op::I32Xor => Ok(BaseAluOpcode::XOR.global_opcode()),
+            Op::I32Mul => Ok(MulOpcode::MUL.global_opcode()),
+            Op::I32DivS => Ok(DivRemOpcode::DIV.global_opcode()),
+            Op::I32DivU => Ok(DivRemOpcode::DIVU.global_opcode()),
+            Op::I32RemS => Ok(DivRemOpcode::REM.global_opcode()),
+            Op::I32RemU => Ok(DivRemOpcode::REMU.global_opcode()),
+            Op::I32Shl => Ok(ShiftOpcode::SLL.global_opcode()),
+            Op::I32ShrS => Ok(ShiftOpcode::SRA.global_opcode()),
+            Op::I32ShrU => Ok(ShiftOpcode::SRL.global_opcode()),
 
             // 64-bit integer instructions
-            Op::I64Eq => Ok(ib::eq_64),
-            Op::I64Ne => Ok(ib::neq_64),
-            Op::I64LtS => Ok(ib::lt_s_64),
-            Op::I64LtU => Ok(ib::lt_u_64),
-            Op::I64GtS => Ok(ib::gt_s_64),
-            Op::I64GtU => Ok(ib::gt_u_64),
-            Op::I64Add => Ok(ib::add_64),
-            Op::I64Sub => Ok(ib::sub_64),
-            Op::I64Mul => Ok(ib::mul_64),
-            Op::I64DivS => Ok(ib::div_64),
-            Op::I64DivU => Ok(ib::divu_64),
-            Op::I64RemS => Ok(ib::rem_64),
-            Op::I64RemU => Ok(ib::remu_64),
-            Op::I64And => Ok(ib::and_64),
-            Op::I64Or => Ok(ib::or_64),
-            Op::I64Xor => Ok(ib::xor_64),
-            Op::I64Shl => Ok(ib::shl_64),
-            Op::I64ShrS => Ok(ib::shr_s_64),
-            Op::I64ShrU => Ok(ib::shr_u_64),
+            Op::I64Eq => Ok(Eq64Opcode::EQ.global_opcode()),
+            Op::I64Ne => Ok(Eq64Opcode::NEQ.global_opcode()),
+            Op::I64LtS => Ok(LessThan64Opcode::SLT.global_opcode()),
+            Op::I64LtU => Ok(LessThan64Opcode::SLTU.global_opcode()),
+            Op::I64Add => Ok(BaseAlu64Opcode::ADD.global_opcode()),
+            Op::I64Sub => Ok(BaseAlu64Opcode::SUB.global_opcode()),
+            Op::I64And => Ok(BaseAlu64Opcode::AND.global_opcode()),
+            Op::I64Or => Ok(BaseAlu64Opcode::OR.global_opcode()),
+            Op::I64Xor => Ok(BaseAlu64Opcode::XOR.global_opcode()),
+            Op::I64Mul => Ok(Mul64Opcode::MUL.global_opcode()),
+            Op::I64DivS => Ok(DivRem64Opcode::DIV.global_opcode()),
+            Op::I64DivU => Ok(DivRem64Opcode::DIVU.global_opcode()),
+            Op::I64RemS => Ok(DivRem64Opcode::REM.global_opcode()),
+            Op::I64RemU => Ok(DivRem64Opcode::REMU.global_opcode()),
+            Op::I64Shl => Ok(Shift64Opcode::SLL.global_opcode()),
+            Op::I64ShrS => Ok(Shift64Opcode::SRA.global_opcode()),
+            Op::I64ShrU => Ok(Shift64Opcode::SRL.global_opcode()),
 
             // Float instructions
             Op::F32Eq => todo!(),
@@ -753,11 +754,40 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         };
 
         let op: Op<'_> = match binary_op {
-            Ok(op_fn) => {
+            Ok(op) => {
                 let input1 = inputs[0].start as usize;
                 let input2 = inputs[1].start as usize;
                 let output = output.unwrap().start as usize;
-                return vec![Directive::Instruction(op_fn(output, input1, input2))];
+                return vec![Directive::Instruction(ib::instr_r(
+                    op.as_usize(),
+                    output,
+                    input1,
+                    input2,
+                ))];
+            }
+            Err(op) => op,
+        };
+
+        // Handle the GT instructions, which are just reversed LT
+        let op = match op {
+            Op::I32GtS => Ok(LessThanOpcode::SLT.global_opcode()),
+            Op::I32GtU => Ok(LessThanOpcode::SLTU.global_opcode()),
+            Op::I64GtS => Ok(LessThan64Opcode::SLT.global_opcode()),
+            Op::I64GtU => Ok(LessThan64Opcode::SLTU.global_opcode()),
+            op => Err(op),
+        };
+
+        let op = match op {
+            Ok(op) => {
+                let greater_side = inputs[0].start as usize;
+                let lower_side = inputs[1].start as usize;
+                let output = output.unwrap().start as usize;
+                return vec![Directive::Instruction(ib::instr_r(
+                    op.as_usize(),
+                    output,
+                    lower_side,
+                    greater_side,
+                ))];
             }
             Err(op) => op,
         };
