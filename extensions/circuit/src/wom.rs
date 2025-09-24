@@ -103,7 +103,7 @@ impl<F: FieldAlgebra, const N: usize> WomReadOperation<F, N> {
     where
         AB: InteractionBuilder<Expr = F>,
     {
-        let message = std::iter::once(self.address).chain(self.data.into_iter());
+        let message = std::iter::once(self.address).chain(self.data);
         self.bus.receive(builder, message, enabled);
     }
 }
@@ -120,10 +120,9 @@ impl<F: FieldAlgebra, const N: usize> WomWriteOperation<F, N> {
     where
         AB: InteractionBuilder<Expr = F>,
     {
-        let message = std::iter::once(self.address).chain(self.data.into_iter());
-        let mult = AB::Expr::from(self.mult);
+        let message = std::iter::once(self.address).chain(self.data);
         // TODO: how to handle multiplicity? does the PermutationBus handle it (comments say to ensure boolean)
-        self.bus.send(builder, message, mult * enabled.into());
+        self.bus.send(builder, message, self.mult * enabled.into());
     }
 }
 
