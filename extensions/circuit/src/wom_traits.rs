@@ -17,6 +17,7 @@ use openvm_circuit::{
 use openvm_circuit_primitives::AlignedBorrow;
 use openvm_instructions::instruction::Instruction;
 use openvm_stark_backend::{
+    AirRef, Chip, ChipUsageGetter,
     air_builders::{debug::DebugConstraintBuilder, symbolic::SymbolicRapBuilder},
     config::{StarkGenericConfig, Val},
     interaction::{BusIndex, InteractionBuilder, PermutationCheckBus},
@@ -25,10 +26,9 @@ use openvm_stark_backend::{
     p3_matrix::dense::RowMajorMatrix,
     p3_maybe_rayon::prelude::*,
     prover::types::AirProofInput,
-    rap::{get_air_name, BaseAirWithPublicValues, ColumnsAir},
-    AirRef, Chip, ChipUsageGetter,
+    rap::{BaseAirWithPublicValues, ColumnsAir, get_air_name},
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 // ============ Frame Bus System ============
@@ -334,9 +334,9 @@ where
             <A::Air as VmAdapterAir<SymbolicRapBuilder<Val<SC>>>>::Interface,
         > + ColumnsAir<Val<SC>>,
     C::Air: for<'a> VmCoreAir<
-        DebugConstraintBuilder<'a, SC>,
-        <A::Air as VmAdapterAir<DebugConstraintBuilder<'a, SC>>>::Interface,
-    >,
+            DebugConstraintBuilder<'a, SC>,
+            <A::Air as VmAdapterAir<DebugConstraintBuilder<'a, SC>>>::Interface,
+        >,
 {
     fn air(&self) -> AirRef<SC> {
         let air: VmAirWrapper<A::Air, C::Air> = VmAirWrapper {

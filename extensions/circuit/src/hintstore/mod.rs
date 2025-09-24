@@ -9,8 +9,8 @@ use openvm_circuit::{
     },
     system::{
         memory::{
-            offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols},
             MemoryAddress, MemoryAuxColsFactory, MemoryController, OfflineMemory, RecordId,
+            offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols},
         },
         program::ProgramBus,
     },
@@ -21,20 +21,20 @@ use openvm_circuit_primitives::{
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_CELL_BITS, RV32_MEMORY_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
-    LocalOpcode,
 };
 use openvm_stark_backend::{
+    Chip, ChipUsageGetter,
     config::{StarkGenericConfig, Val},
     interaction::InteractionBuilder,
     p3_air::{Air, AirBuilder, BaseAir},
     p3_field::{Field, FieldAlgebra, PrimeField32},
-    p3_matrix::{dense::RowMajorMatrix, Matrix},
+    p3_matrix::{Matrix, dense::RowMajorMatrix},
     prover::types::AirProofInput,
     rap::{AnyRap, BaseAirWithPublicValues, ColumnsAir, PartitionedBaseAir},
-    Chip, ChipUsageGetter,
 };
 use openvm_womir_transpiler::{
     HintStoreOpcode,

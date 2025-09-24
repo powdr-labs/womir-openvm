@@ -267,7 +267,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn load_wasm(wasm_bytes: &[u8]) -> (Module, Vec<WriteOnceAsm<Directive<F>>>) {
+fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>) {
     let PartiallyParsedProgram {
         s: settings,
         m: mut module,
