@@ -125,7 +125,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
     fn preprocess(
         &mut self,
         _memory: &mut MemoryController<F>,
-        wom: &mut WomController<F>,
+        _wom: &mut WomController<F>,
         _fp: u32,
         _instruction: &Instruction<F>,
     ) -> Result<(
