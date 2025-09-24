@@ -1,4 +1,4 @@
-use crate::{adapters::JaafAdapterChipWom, VmChipWrapperWom};
+use crate::{VmChipWrapperWom, adapters::JaafAdapterChipWom};
 
 mod core;
 pub use core::*;

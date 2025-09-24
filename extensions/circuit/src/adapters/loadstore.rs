@@ -11,10 +11,10 @@ use openvm_circuit::{
     },
     system::{
         memory::{
+            MemoryAddress, MemoryController, OfflineMemory, RecordId,
             offline_checker::{
                 MemoryBaseAuxCols, MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols,
             },
-            MemoryAddress, MemoryController, OfflineMemory, RecordId,
         },
         program::ProgramBus,
     },
@@ -25,10 +25,10 @@ use openvm_circuit_primitives::{
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
-    LocalOpcode,
 };
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
@@ -40,9 +40,9 @@ use openvm_womir_transpiler::LoadStoreOpcode::*;
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use super::{compose, RV32_REGISTER_NUM_LIMBS};
-use crate::{adapters::RV32_CELL_BITS, WomBridge, WomController};
+use super::{RV32_REGISTER_NUM_LIMBS, compose};
 use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
+use crate::{WomBridge, WomController, adapters::RV32_CELL_BITS};
 
 /// LoadStore Adapter handles all memory and register operations, so it must be aware
 /// of the instruction type, specifically whether it is a load or store

@@ -6,12 +6,12 @@ use openvm_circuit::{
         MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{offline_checker::MemoryBridge, MemoryController, OfflineMemory, RecordId},
+        memory::{MemoryController, OfflineMemory, RecordId, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode};
+use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
@@ -26,7 +26,7 @@ use crate::{
     AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController,
 };
 
-use super::{compose, decompose, RV32_REGISTER_NUM_LIMBS};
+use super::{RV32_REGISTER_NUM_LIMBS, compose, decompose};
 
 #[derive(Debug)]
 pub struct CopyIntoFrameAdapterChipWom<F: Field> {
