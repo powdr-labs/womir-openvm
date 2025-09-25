@@ -4,6 +4,7 @@ use std::{
     marker::PhantomData,
 };
 
+use LoadStoreOpcode::*;
 use openvm_circuit::{
     arch::{
         AdapterAirContext, AdapterRuntimeContext, ExecutionBridge, ExecutionBus, ExecutionState,
@@ -39,7 +40,6 @@ use openvm_stark_backend::{
 };
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
-use LoadStoreOpcode::*;
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose};
 use crate::adapters::RV32_CELL_BITS;
