@@ -227,7 +227,7 @@ impl<
     const NUM_LIMBS_READ: usize,
     const NUM_LIMBS_WRITE: usize,
     const LIMB_BITS: usize,
-> VmCoreChipWom<F, I> for LessThanCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
+> VmCoreChip<F, I> for LessThanCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 where
     I::Reads: Into<[[F; NUM_LIMBS_READ]; 2]>,
     I::Writes: From<[[F; NUM_LIMBS_WRITE]; 1]>,

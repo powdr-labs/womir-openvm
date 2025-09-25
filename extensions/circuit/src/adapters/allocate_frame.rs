@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom,
+    FrameBus, FrameState, VmAdapterChipWom,
     adapters::{compose, decompose},
 };
 
