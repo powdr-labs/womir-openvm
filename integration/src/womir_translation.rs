@@ -500,7 +500,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         let mut directives = if let Ok(imm_f) = immediate.to_f() {
             // If immediate fits into field, we can save one instruction:
             let cmp_insn = match cmp {
-                ComparisonFunction::Equal => ib::eqi::<F>,
+                ComparisonFunction::Equal => ib::eq_imm::<F>,
                 ComparisonFunction::GreaterThanOrEqualUnsigned
                 | ComparisonFunction::LessThanUnsigned => ib::lt_u_imm,
             };
@@ -658,7 +658,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         // Read the 3 words of the reference into contiguous registers
         assert_eq!(dest_ptr.len(), 3);
 
-        let mut instrs = vec![Directive::Instruction(ib::muli::<F>(
+        let mut instrs = vec![Directive::Instruction(ib::mul_imm::<F>(
             mul_result,
             entry_idx_ptr.start as usize,
             TABLE_ENTRY_SIZE.to_f().unwrap(),
@@ -896,7 +896,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let shiftr = c.register_gen.allocate_type(ValType::I32).start as usize;
                 vec![
                     // get least significant 5 bits for rotation amount
-                    Directive::Instruction(ib::andi(shiftl_amount, input2, 0x1f.to_f().unwrap())),
+                    Directive::Instruction(ib::and_imm(
+                        shiftl_amount,
+                        input2,
+                        0x1f.to_f().unwrap(),
+                    )),
                     // shift left
                     Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
                     // get right shift amount
@@ -919,7 +923,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let shiftr = c.register_gen.allocate_type(ValType::I32).start as usize;
                 vec![
                     // get least significant 5 bits for rotation amount
-                    Directive::Instruction(ib::andi(shiftr_amount, input2, 0x1f.to_f().unwrap())),
+                    Directive::Instruction(ib::and_imm(
+                        shiftr_amount,
+                        input2,
+                        0x1f.to_f().unwrap(),
+                    )),
                     // shift right
                     Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
                     // get left shift amount
@@ -942,7 +950,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let shiftr = c.register_gen.allocate_type(ValType::I64).start as usize;
                 vec![
                     // get least significant 6 bits for rotation amount
-                    Directive::Instruction(ib::andi_64(
+                    Directive::Instruction(ib::and_imm_64(
                         shiftl_amount,
                         input2,
                         0x3f.to_f().unwrap(),
@@ -970,7 +978,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let shiftr = c.register_gen.allocate_type(ValType::I64).start as usize;
                 vec![
                     // get least significant 5 bits for rotation amount
-                    Directive::Instruction(ib::andi_64(
+                    Directive::Instruction(ib::and_imm_64(
                         shiftr_amount,
                         input2,
                         0x3f.to_f().unwrap(),
@@ -1005,7 +1013,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 // Perform the inverse operation and invert the result
                 vec![
                     Directive::Instruction(inverse_op(inverse_result, input1, input2)),
-                    Directive::Instruction(ib::eqi(output, inverse_result, F::ZERO)),
+                    Directive::Instruction(ib::eq_imm(output, inverse_result, F::ZERO)),
                 ]
             }
             Op::I64LeS | Op::I64LeU | Op::I64GeS | Op::I64GeU => {
@@ -1026,18 +1034,22 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 // Perform the inverse operation and invert the result
                 vec![
                     Directive::Instruction(inverse_op(inverse_result, input1, input2)),
-                    Directive::Instruction(ib::eqi(output, inverse_result, F::ZERO)),
+                    Directive::Instruction(ib::eq_imm(output, inverse_result, F::ZERO)),
                 ]
             }
             Op::I32Eqz => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
-                vec![Directive::Instruction(ib::eqi(output, input, F::ZERO))]
+                vec![Directive::Instruction(ib::eq_imm(output, input, F::ZERO))]
             }
             Op::I64Eqz => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
-                vec![Directive::Instruction(ib::eqi_64(output, input, F::ZERO))]
+                vec![Directive::Instruction(ib::eq_imm_64(
+                    output,
+                    input,
+                    F::ZERO,
+                ))]
             }
 
             Op::I32WrapI64 => {
