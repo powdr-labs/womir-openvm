@@ -854,11 +854,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         // Handle the remaining operations
         let inputs = inputs
             .into_iter()
-            .map(|input| match input {
-                WasmOpInput::Register(r) => r,
-                WasmOpInput::Constant(_) => {
-                    unreachable!("Op {op:?}: constant inputs should have been handled above")
-                }
+            .map(|input| {
+                input
+                    .as_register()
+                    .expect("input must be a register")
+                    .clone()
             })
             .collect_vec();
         match op {
