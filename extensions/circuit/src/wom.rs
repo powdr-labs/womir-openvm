@@ -3,6 +3,7 @@ use openvm_stark_backend::{
     interaction::{BusIndex, InteractionBuilder, PermutationCheckBus},
     p3_field::{FieldAlgebra, PrimeField32},
 };
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 pub struct WomController<F> {
@@ -23,18 +24,22 @@ impl<F: PrimeField32> WomController<F> {
         WomBridge { bus: self.bus }
     }
 
-    pub fn read<const N: usize>(&self, pointer: F) -> [F; N] {
+    pub fn read<const N: usize>(&self, pointer: F) -> WomRecord<F> {
         let ptr_u32 = pointer.as_canonical_u32();
-        self.memory
+        let data = self.memory
             .iter()
             .skip(ptr_u32 as usize)
             .take(N)
             .map(|f| f.expect("WOM read before write"))
-            .collect_array()
-            .expect("WOM read before write")
+            .collect_vec();
+        assert_eq!(data.len(), N, "WOM read before write");
+        WomRecord {
+            pointer,
+            data,
+        }
     }
 
-    pub fn write<const N: usize>(&mut self, pointer: F, data: [F; N]) {
+    pub fn write<const N: usize>(&mut self, pointer: F, data: [F; N]) -> WomRecord<F> {
         let ptr_u32 = pointer.as_canonical_u32();
         let needed_len = ptr_u32 as usize + N;
         if needed_len > self.memory.len() {
@@ -50,7 +55,20 @@ impl<F: PrimeField32> WomController<F> {
                 assert!(old.is_none(), "WOM double write");
                 *old = Some(new);
             });
+        WomRecord {
+            pointer,
+            data: data.into(),
+        }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+// Original OVM memory keeps a log of memory operations and returns a `RecordId`.
+// This `RecordId` is later used during trace generatation to get a `MemoryRecord` with relevant data from the offline memory.
+// Here, we don't keep a log and instead have operations directly return a `WomRecord` which is passed directly to trace generation.
+pub struct WomRecord<F> {
+    pub pointer: F,
+    pub data: Vec<F>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -132,6 +150,8 @@ mod test {
     use openvm_stark_backend::p3_field::FieldAlgebra;
     use openvm_stark_sdk::p3_baby_bear::BabyBear;
 
+    use crate::WomRecord;
+
     use super::WomController;
 
     #[test]
@@ -187,21 +207,23 @@ mod test {
     #[test]
     fn test_wom_write_read() {
         let mut wom = WomController::<BabyBear>::new(PermutationCheckBus::new(0));
+        let p1 = BabyBear::from_canonical_u32(0);
         let w1 = [
             BabyBear::from_canonical_u32(1),
             BabyBear::from_canonical_u32(2),
             BabyBear::from_canonical_u32(3),
             BabyBear::from_canonical_u32(4),
         ];
+        let p2 = BabyBear::from_canonical_u32(4);
         let w2 = [
             BabyBear::from_canonical_u32(5),
             BabyBear::from_canonical_u32(6),
             BabyBear::from_canonical_u32(7),
             BabyBear::from_canonical_u32(8),
         ];
-        wom.write(BabyBear::from_canonical_u32(4), w2);
-        wom.write(BabyBear::from_canonical_u32(0), w1);
-        assert_eq!(wom.read(BabyBear::from_canonical_u32(0)), w1);
-        assert_eq!(wom.read(BabyBear::from_canonical_u32(4)), w2);
+        wom.write(p2, w2);
+        wom.write(p1, w1);
+        assert_eq!(wom.read::<4>(BabyBear::from_canonical_u32(0)), WomRecord { pointer: p1, data: w1.into() } );
+        assert_eq!(wom.read::<4>(BabyBear::from_canonical_u32(4)), WomRecord { pointer: p2, data: w2.into() } );
     }
 }
