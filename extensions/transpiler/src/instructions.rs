@@ -20,6 +20,9 @@ use strum::{EnumCount, EnumIter, FromRepr};
 )]
 #[opcode_offset = 0x1200]
 #[repr(usize)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's BaseAluOpcode
+// in order to be able to re-use the original Alu core chip.
+// The alternative to that is to not have this new enum here and use OpenVM's BaseAluOpcode.
 pub enum BaseAluOpcode {
     ADD,
     SUB,
@@ -45,6 +48,9 @@ pub enum BaseAluOpcode {
 )]
 #[opcode_offset = 0x2200]
 #[repr(usize)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's BaseAluOpcode
+// in order to be able to re-use the original Alu core chip.
+// The alternative to that is to not have this new enum here and use OpenVM's BaseAluOpcode.
 pub enum BaseAlu64Opcode {
     ADD,
     SUB,
@@ -70,6 +76,9 @@ pub enum BaseAlu64Opcode {
 )]
 #[opcode_offset = 0x1205]
 #[repr(usize)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's ShiftOpcode
+// in order to be able to re-use the original Shift core chip.
+// The alternative to that is to not have this new enum here and use OpenVM's ShiftOpcode.
 pub enum ShiftOpcode {
     SLL,
     SRL,
@@ -93,6 +102,9 @@ pub enum ShiftOpcode {
 )]
 #[opcode_offset = 0x2205]
 #[repr(usize)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's ShiftOpcode
+// in order to be able to re-use the original Shift core chip.
+// The alternative to that is to not have this new enum here and use OpenVM's ShiftOpcode.
 pub enum Shift64Opcode {
     SLL,
     SRL,
@@ -116,6 +128,9 @@ pub enum Shift64Opcode {
 )]
 #[opcode_offset = 0x1208]
 #[repr(usize)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's LessThanOpcode
+// in order to be able to re-use the original LessThan core chip.
+// The alternative to that is to not have this new enum here and use OpenVM's LessThanOpcode.
 pub enum LessThanOpcode {
     SLT,
     SLTU,
@@ -138,6 +153,9 @@ pub enum LessThanOpcode {
 )]
 #[opcode_offset = 0x2208]
 #[repr(usize)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's LessThanOpcode
+// in order to be able to re-use the original LessThan core chip.
+// The alternative to that is to not have this new enum here and use OpenVM's LessThanOpcode.
 pub enum LessThan64Opcode {
     SLT,
     SLTU,
@@ -185,84 +203,6 @@ pub enum EqOpcode {
 pub enum Eq64Opcode {
     EQ,
     NEQ,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x1210]
-#[repr(usize)]
-pub enum LoadStoreOpcode {
-    LOADW,
-    /// LOADBU, LOADHU are unsigned extend opcodes, implemented in the same chip with LOADW
-    LOADBU,
-    LOADHU,
-    STOREW,
-    STOREH,
-    STOREB,
-    /// The following are signed extend opcodes
-    LOADB,
-    LOADH,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x1220]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum BranchEqualOpcode {
-    BEQ,
-    BNE,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x1225]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum BranchLessThanOpcode {
-    BLT,
-    BLTU,
-    BGE,
-    BGEU,
 }
 
 #[derive(
@@ -340,19 +280,12 @@ pub enum JumpOpcode {
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
 )]
-#[opcode_offset = 0x1240]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum AuipcOpcode {
-    AUIPC,
-}
-
-#[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
-)]
 #[opcode_offset = 0x1250]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's MulOpcode
+// in order to be able to re-use the original Mul core chip.
+// The alternative to that is to not have this new enum here and use OpenVM's MulOpcode.
 pub enum MulOpcode {
     MUL,
 }
@@ -363,6 +296,9 @@ pub enum MulOpcode {
 #[opcode_offset = 0x2250]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's MulOpcode
+// in order to be able to re-use the original Mul core chip.
+// The alternative to that is to not have this new enum here and use OpenVM's MulOpcode.
 pub enum Mul64Opcode {
     MUL,
 }
@@ -385,6 +321,9 @@ pub enum Mul64Opcode {
 #[opcode_offset = 0x1254]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's DivRemOpcode
+// in order to be able to re-use the original DivRem core chip.
+// The alternative to that is to not have this new enum here and use OpenVM's DivRemOpcode.
 pub enum DivRemOpcode {
     DIV,
     DIVU,
@@ -410,6 +349,9 @@ pub enum DivRemOpcode {
 #[opcode_offset = 0x2254]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's DivRemOpcode
+// in order to be able to re-use the original DivRem core chip.
+// The alternative to that is to not have this new enum here and use OpenVM's DivRemOpcode.
 pub enum DivRem64Opcode {
     DIV,
     DIVU,
