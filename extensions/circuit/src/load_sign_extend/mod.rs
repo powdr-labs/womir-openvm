@@ -1,5 +1,5 @@
 use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
-use crate::{adapters::Rv32LoadStoreAdapterChip, VmChipWrapperWom};
+use crate::{VmChipWrapperWom, adapters::Rv32LoadStoreAdapterChip};
 
 use openvm_rv32im_circuit::LoadSignExtendCoreChip;
 

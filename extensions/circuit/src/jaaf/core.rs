@@ -5,7 +5,7 @@ use openvm_circuit::arch::{
     VmCoreAir, VmCoreChip,
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{instruction::Instruction, LocalOpcode};
+use openvm_instructions::{LocalOpcode, instruction::Instruction};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,

@@ -11,10 +11,10 @@ use openvm_circuit::{
     },
     system::{
         memory::{
+            MemoryAddress, MemoryController, OfflineMemory, RecordId,
             offline_checker::{
                 MemoryBaseAuxCols, MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols,
             },
-            MemoryAddress, MemoryController, OfflineMemory, RecordId,
         },
         program::ProgramBus,
     },
@@ -25,10 +25,10 @@ use openvm_circuit_primitives::{
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
-    LocalOpcode,
 };
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode as LoadStoreOpcode;
 use openvm_stark_backend::{
@@ -41,7 +41,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use LoadStoreOpcode::*;
 
-use super::{compose, RV32_REGISTER_NUM_LIMBS};
+use super::{RV32_REGISTER_NUM_LIMBS, compose};
 use crate::adapters::RV32_CELL_BITS;
 use crate::{FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
 

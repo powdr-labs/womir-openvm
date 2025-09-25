@@ -6,16 +6,16 @@ use openvm_circuit::{
         ExecutionBus, ExecutionState, MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{offline_checker::MemoryBridge, MemoryController, OfflineMemory, RecordId},
+        memory::{MemoryController, OfflineMemory, RecordId, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::{DEFAULT_PC_STEP, PC_BITS},
     riscv::RV32_CELL_BITS,
-    LocalOpcode,
 };
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
@@ -29,7 +29,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
 
-use super::{compose, decompose, RV32_REGISTER_NUM_LIMBS};
+use super::{RV32_REGISTER_NUM_LIMBS, compose, decompose};
 
 const RV32_LIMB_MAX: u32 = (1 << RV32_CELL_BITS) - 1;
 

@@ -6,7 +6,7 @@ use openvm_circuit::{
         ExecutionBus, ExecutionState, MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{offline_checker::MemoryBridge, MemoryController, OfflineMemory, RecordId},
+        memory::{MemoryController, OfflineMemory, RecordId, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
@@ -23,7 +23,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{FrameBus, FrameState, VmAdapterChipWom};
 
-use super::{decompose, RV32_REGISTER_NUM_LIMBS};
+use super::{RV32_REGISTER_NUM_LIMBS, decompose};
 
 #[derive(Debug)]
 pub struct ConstsAdapterChipWom<F: Field> {

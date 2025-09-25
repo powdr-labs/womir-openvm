@@ -2050,7 +2050,7 @@ impl<F: Clone> womir::linker::Directive for Directive<F> {
         Directive::Nop
     }
 
-    fn as_label(&self) -> Option<womir::linker::Label> {
+    fn as_label(&self) -> Option<womir::linker::Label<'_>> {
         if let Directive::Label { id, frame_size } = self {
             Some(womir::linker::Label {
                 id,

@@ -9,7 +9,7 @@ use openvm_circuit::arch::{
 };
 use openvm_circuit_primitives::utils::not;
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{instruction::Instruction, LocalOpcode};
+use openvm_instructions::{LocalOpcode, instruction::Instruction};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
@@ -17,7 +17,7 @@ use openvm_stark_backend::{
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
 use openvm_womir_transpiler::EqOpcode;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
@@ -53,36 +53,24 @@ pub struct EqCoreAir<
     offset: usize,
 }
 
-impl<
-        F: Field,
-        const NUM_LIMBS_READ: usize,
-        const NUM_LIMBS_WRITE: usize,
-        const LIMB_BITS: usize,
-    > BaseAir<F> for EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
+impl<F: Field, const NUM_LIMBS_READ: usize, const NUM_LIMBS_WRITE: usize, const LIMB_BITS: usize>
+    BaseAir<F> for EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 {
     fn width(&self) -> usize {
         EqCoreCols::<F, NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>::width()
     }
 }
 
-impl<
-        F: Field,
-        const NUM_LIMBS_READ: usize,
-        const NUM_LIMBS_WRITE: usize,
-        const LIMB_BITS: usize,
-    > ColumnsAir<F> for EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
+impl<F: Field, const NUM_LIMBS_READ: usize, const NUM_LIMBS_WRITE: usize, const LIMB_BITS: usize>
+    ColumnsAir<F> for EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 {
     fn columns(&self) -> Option<Vec<String>> {
         EqCoreCols::<F, NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>::struct_reflection()
     }
 }
 
-impl<
-        F: Field,
-        const NUM_LIMBS_READ: usize,
-        const NUM_LIMBS_WRITE: usize,
-        const LIMB_BITS: usize,
-    > BaseAirWithPublicValues<F> for EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
+impl<F: Field, const NUM_LIMBS_READ: usize, const NUM_LIMBS_WRITE: usize, const LIMB_BITS: usize>
+    BaseAirWithPublicValues<F> for EqCoreAir<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 {
 }
 
@@ -210,12 +198,12 @@ impl<const NUM_LIMBS_READ: usize, const NUM_LIMBS_WRITE: usize, const LIMB_BITS:
 }
 
 impl<
-        F: PrimeField32,
-        I: VmAdapterInterface<F>,
-        const NUM_LIMBS_READ: usize,
-        const NUM_LIMBS_WRITE: usize,
-        const LIMB_BITS: usize,
-    > VmCoreChip<F, I> for EqCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
+    F: PrimeField32,
+    I: VmAdapterInterface<F>,
+    const NUM_LIMBS_READ: usize,
+    const NUM_LIMBS_WRITE: usize,
+    const LIMB_BITS: usize,
+> VmCoreChipWom<F, I> for EqCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 where
     I::Reads: Into<[[F; NUM_LIMBS_READ]; 2]>,
     I::Writes: From<[[F; NUM_LIMBS_WRITE]; 1]>,

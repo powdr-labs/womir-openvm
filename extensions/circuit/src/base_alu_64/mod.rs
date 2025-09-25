@@ -1,5 +1,5 @@
 use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
-use crate::{adapters::WomBaseAluAdapterChip, VmChipWrapperWom};
+use crate::{VmChipWrapperWom, adapters::WomBaseAluAdapterChip};
 
 use openvm_rv32im_circuit::BaseAluCoreChip;
 
