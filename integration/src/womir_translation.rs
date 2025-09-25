@@ -1,6 +1,7 @@
 use std::{collections::HashMap, ops::Range, vec};
 
 use crate::{instruction_builder as ib, to_field::ToField};
+use arrayvec::ArrayVec;
 use itertools::Itertools;
 use openvm_circuit::{
     arch::{ExecutionError, Streams, VmConfig, VmExecutor},
@@ -23,7 +24,7 @@ use womir::{
     loader::{
         Global, Module,
         dag::WasmValue,
-        flattening::{Context, LabelType, WriteOnceAsm},
+        flattening::{Context, LabelType, Tree, WriteOnceAsm},
         func_idx_to_label,
         settings::{
             ComparisonFunction, JumpCondition, MaybeConstant, ReturnInfosToCopy, Settings,
@@ -278,6 +279,14 @@ pub enum Directive<F> {
         new_frame_ptr: u32,
         saved_ret_pc: u32,
         saved_caller_fp: u32,
+    },
+    ConstFuncFrameSize {
+        func_idx: u32,
+        reg_dest: u32,
+    },
+    ConstFuncAddr {
+        func_idx: u32,
+        reg_dest: u32,
     },
     Instruction(Instruction<F>),
 }
@@ -681,7 +690,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         op: Op<'a>,
         inputs: Vec<WasmOpInput>,
         output: Option<Range<u32>>,
-    ) -> Vec<Self::Directive> {
+    ) -> Tree<Directive<F>> {
         use openvm_instructions::LocalOpcode;
 
         // First handle single-instruction binary operations.
@@ -763,12 +772,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 match inputs.as_slice() {
                     [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
                         // Case of two register inputs
-                        return vec![Directive::Instruction(ib::instr_r(
+                        return Directive::Instruction(ib::instr_r(
                             op,
                             output,
                             input1.start as usize,
                             input2.start as usize,
-                        ))];
+                        ))
+                        .into();
                     }
                     [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
                     | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
@@ -787,12 +797,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         };
                         let c = F::from_canonical_u32((c as i32 as u32) & 0xff_ff_ff);
 
-                        return vec![Directive::Instruction(ib::instr_i(
+                        return Directive::Instruction(ib::instr_i(
                             op,
                             output,
                             reg.start as usize,
                             c,
-                        ))];
+                        ))
+                        .into();
                     }
                     _ => unreachable!("combination of inputs not possible for binary op"),
                 }
@@ -819,12 +830,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         WasmOpInput::Register(lesser_side),
                     ] => {
                         // Case of two register inputs
-                        return vec![Directive::Instruction(ib::instr_r(
+                        return Directive::Instruction(ib::instr_r(
                             op,
                             output,
                             lesser_side.start as usize,
                             greater_side.start as usize,
-                        ))];
+                        ))
+                        .into();
                     }
                     [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
                         // Case of one register input and one constant input.
@@ -838,12 +850,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             _ => unreachable!("Other types are not used as binary op inputs"),
                         };
                         let c = F::from_canonical_u32((c as i32 as u32) & 0xff_ff_ff);
-                        return vec![Directive::Instruction(ib::instr_i(
+                        return Directive::Instruction(ib::instr_i(
                             op,
                             output,
                             reg.start as usize,
                             c,
-                        ))];
+                        ))
+                        .into();
                     }
                     _ => unreachable!("combination of inputs not possible for GT op"),
                 }
@@ -851,14 +864,78 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Err(op) => op,
         };
 
-        // Handle the remaining operations
+        // Handle the complex instructions that supports constant inlining
+        match &op {
+            Op::Select | Op::TypedSelect { .. } => {
+                // Works like a ternary operator: if the condition (3rd input) is non-zero,
+                // select the 1st input, otherwise select the 2nd input.
+                let output = output.unwrap();
+                let condition = inputs[2].as_register().unwrap().start;
+
+                // The directives to set the output to either of the alternatives
+                let [if_non_zero, if_zero] =
+                    [&inputs[0], &inputs[1]].map(|alternative| match alternative {
+                        // This input is a register, so we issue register to register copy instructions
+                        WasmOpInput::Register(r) => r
+                            .clone()
+                            .zip(output.clone())
+                            .map(|(src, dest)| {
+                                Directive::Instruction(ib::add_imm(
+                                    dest as usize,
+                                    src as usize,
+                                    F::ZERO,
+                                ))
+                            })
+                            .collect_vec(),
+                        // This input is a constant, so we issue const to register instructions
+                        WasmOpInput::Constant(value) => {
+                            const_wasm_value(c.program, value, output.clone())
+                        }
+                    });
+
+                let if_set_label = c.new_label(LabelType::Local);
+                let continuation_label = c.new_label(LabelType::Local);
+
+                return Tree::Node(vec![
+                    // if condition != 0 jump to if_set_label
+                    Tree::Leaf(Directive::JumpIf {
+                        target: if_set_label.clone(),
+                        condition_reg: condition,
+                    }),
+                    // if jump is not taken, copy the value for "if zero"
+                    if_zero.into(),
+                    // jump to continuation
+                    Directive::Jump {
+                        target: continuation_label.clone(),
+                    }
+                    .into(),
+                    // alternative label
+                    Directive::Label {
+                        id: if_set_label,
+                        frame_size: None,
+                    }
+                    .into(),
+                    // if jump is taken, copy the value for "if set"
+                    if_non_zero.into(),
+                    // continuation label
+                    Directive::Label {
+                        id: continuation_label,
+                        frame_size: None,
+                    }
+                    .into(),
+                ]);
+            }
+            _ => (),
+        }
+
+        // Handle the remaining operations, whose inputs are all registers
         let inputs = inputs
             .into_iter()
-            .map(|input| match input {
-                WasmOpInput::Register(r) => r,
-                WasmOpInput::Constant(_) => {
-                    unreachable!("Op {op:?}: constant inputs should have been handled above")
-                }
+            .map(|input| {
+                input
+                    .as_register()
+                    .expect("input must be a register")
+                    .clone()
             })
             .collect_vec();
         match op {
@@ -868,9 +945,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let value_u = value as u32;
                 let imm_lo: u16 = (value_u & 0xffff) as u16;
                 let imm_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
-                vec![Directive::Instruction(ib::const_32_imm(
-                    output, imm_lo, imm_hi,
-                ))]
+                Directive::Instruction(ib::const_32_imm(output, imm_lo, imm_hi)).into()
             }
             Op::I64Const { value } => {
                 let output = output.unwrap().start as usize;
@@ -884,6 +959,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
                     Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
                 ]
+                .into()
             }
             Op::I32Rotl => {
                 let input1 = inputs[0].start as usize;
@@ -907,6 +983,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // or the two results
                     Directive::Instruction(ib::or(output, shiftl, shiftr)),
                 ]
+                .into()
             }
             Op::I32Rotr => {
                 let input1 = inputs[0].start as usize;
@@ -930,6 +1007,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // or the two results
                     Directive::Instruction(ib::or(output, shiftl, shiftr)),
                 ]
+                .into()
             }
             Op::I64Rotl => {
                 let input1 = inputs[0].start as usize;
@@ -958,6 +1036,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // or the two results
                     Directive::Instruction(ib::or_64(output, shiftl, shiftr)),
                 ]
+                .into()
             }
             Op::I64Rotr => {
                 let input1 = inputs[0].start as usize;
@@ -986,30 +1065,21 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // or the two results
                     Directive::Instruction(ib::or_64(output, shiftl, shiftr)),
                 ]
+                .into()
             }
-            Op::I32LeS | Op::I32LeU | Op::I32GeS | Op::I32GeU => {
+            Op::I32LeS
+            | Op::I32LeU
+            | Op::I32GeS
+            | Op::I32GeU
+            | Op::I64LeS
+            | Op::I64LeU
+            | Op::I64GeS
+            | Op::I64GeU => {
                 let inverse_op = match op {
                     Op::I32LeS => ib::gt_s,
                     Op::I32LeU => ib::gt_u,
                     Op::I32GeS => ib::lt_s,
                     Op::I32GeU => ib::lt_u,
-                    _ => unreachable!(),
-                };
-
-                let input1 = inputs[0].start as usize;
-                let input2 = inputs[1].start as usize;
-                let output = output.unwrap().start as usize;
-
-                let inverse_result = c.register_gen.allocate_type(ValType::I32).start as usize;
-
-                // Perform the inverse operation and invert the result
-                vec![
-                    Directive::Instruction(inverse_op(inverse_result, input1, input2)),
-                    Directive::Instruction(ib::eqi(output, inverse_result, F::ZERO)),
-                ]
-            }
-            Op::I64LeS | Op::I64LeU | Op::I64GeS | Op::I64GeU => {
-                let inverse_op = match op {
                     Op::I64LeS => ib::gt_s_64,
                     Op::I64LeU => ib::gt_u_64,
                     Op::I64GeS => ib::lt_s_64,
@@ -1028,16 +1098,17 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(inverse_op(inverse_result, input1, input2)),
                     Directive::Instruction(ib::eqi(output, inverse_result, F::ZERO)),
                 ]
+                .into()
             }
             Op::I32Eqz => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
-                vec![Directive::Instruction(ib::eqi(output, input, F::ZERO))]
+                Directive::Instruction(ib::eqi(output, input, F::ZERO)).into()
             }
             Op::I64Eqz => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
-                vec![Directive::Instruction(ib::eqi_64(output, input, F::ZERO))]
+                Directive::Instruction(ib::eqi_64(output, input, F::ZERO)).into()
             }
 
             Op::I32WrapI64 => {
@@ -1049,11 +1120,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let output = output.unwrap().start as usize;
 
                 // Just copy the lower limb to the output.
-                vec![Directive::Instruction(ib::add_imm(
-                    output,
-                    lower_limb,
-                    F::ZERO,
-                ))]
+                Directive::Instruction(ib::add_imm(output, lower_limb, F::ZERO)).into()
             }
             Op::I32Extend8S | Op::I32Extend16S => {
                 let input = inputs[0].start as usize;
@@ -1074,6 +1141,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::shl_imm(tmp, input, shift)),
                     Directive::Instruction(ib::shr_s_imm(output, tmp, shift)),
                 ]
+                .into()
             }
             Op::I64Extend8S | Op::I64Extend16S | Op::I64Extend32S => {
                 let input = inputs[0].start as usize;
@@ -1095,6 +1163,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::shl_imm_64(tmp, input, shift)),
                     Directive::Instruction(ib::shr_s_imm_64(output, tmp, shift)),
                 ]
+                .into()
             }
 
             // 64-bit integer instructions
@@ -1115,6 +1184,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         32.to_f().unwrap(),
                     )),
                 ]
+                .into()
             }
             Op::I64ExtendI32U => {
                 let input = inputs[0].start as usize;
@@ -1126,52 +1196,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // Zero the high 32 bits.
                     Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)),
                 ]
-            }
-
-            // Parametric instruction
-            Op::Select | Op::TypedSelect { .. } => {
-                // Works like a ternary operator: if the condition (3rd input) is non-zero,
-                // select the 1st input, otherwise select the 2nd input.
-                let if_set_val = inputs[0].clone();
-                let if_zero_val = inputs[1].clone();
-                let output = output.unwrap();
-                let condition = inputs[2].start;
-
-                let if_set_label = c.new_label(LabelType::Local);
-                let continuation_label = c.new_label(LabelType::Local);
-
-                let mut directives = vec![
-                    // if condition != 0 jump to if_set_label
-                    Directive::JumpIf {
-                        target: if_set_label.clone(),
-                        condition_reg: condition,
-                    },
-                ];
-                // if jump is not taken, copy the value for "if zero"
-                directives.extend(if_zero_val.zip(output.clone()).map(|(src, dest)| {
-                    Directive::Instruction(ib::add_imm(dest as usize, src as usize, F::ZERO))
-                }));
-                // jump to continuation
-                directives.push(Directive::Jump {
-                    target: continuation_label.clone(),
-                });
-
-                // if jump is taken, copy the value for "if set"
-                directives.push(Directive::Label {
-                    id: if_set_label,
-                    frame_size: None,
-                });
-                directives.extend(if_set_val.zip(output).map(|(src, dest)| {
-                    Directive::Instruction(ib::add_imm(dest as usize, src as usize, F::ZERO))
-                }));
-
-                // continuation label
-                directives.push(Directive::Label {
-                    id: continuation_label,
-                    frame_size: None,
-                });
-
-                directives
+                .into()
             }
 
             // Global instructions
@@ -1181,13 +1206,15 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     unreachable!()
                 };
 
-                store_to_const_addr(c, allocated_var.address, inputs[0].clone())
+                store_to_const_addr(c, allocated_var.address, inputs[0].clone()).into()
             }
             Op::GlobalGet { global_index } => {
                 let global = &c.program.globals[global_index as usize];
                 match global {
                     Global::Mutable(allocated_var) => {
-                        load_from_const_addr(c, allocated_var.address, output.unwrap()).0
+                        load_from_const_addr(c, allocated_var.address, output.unwrap())
+                            .0
+                            .into()
                     }
                     Global::Immutable(op) => self.emit_wasm_op(c, op.clone(), Vec::new(), output),
                 }
@@ -1233,6 +1260,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
                             Directive::Instruction(ib::or(output, lo, hi)),
                         ]
+                        .into()
                     }
                     1 => {
                         // read two half words
@@ -1249,10 +1277,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             )),
                             Directive::Instruction(ib::or(output, lo, hi_shifted)),
                         ]
+                        .into()
                     }
-                    2.. => {
-                        vec![Directive::Instruction(ib::loadw(output, base_addr, imm))]
-                    }
+                    2.. => Directive::Instruction(ib::loadw(output, base_addr, imm)).into(),
                 }
             }
 
@@ -1281,14 +1308,14 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             )),
                             Directive::Instruction(ib::or(output, b0, b1_shifted)),
                         ]
+                        .into()
                     }
-                    1.. => {
-                        if let Op::I32Load16S { .. } = op {
-                            vec![Directive::Instruction(ib::loadh(output, base_addr, imm))]
-                        } else {
-                            vec![Directive::Instruction(ib::loadhu(output, base_addr, imm))]
-                        }
+                    1.. => if let Op::I32Load16S { .. } = op {
+                        Directive::Instruction(ib::loadh(output, base_addr, imm))
+                    } else {
+                        Directive::Instruction(ib::loadhu(output, base_addr, imm))
                     }
+                    .into(),
                 }
             }
             Op::I32Load8U { memarg } => {
@@ -1296,14 +1323,14 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let base_addr = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
 
-                vec![Directive::Instruction(ib::loadbu(output, base_addr, imm))]
+                Directive::Instruction(ib::loadbu(output, base_addr, imm)).into()
             }
             Op::I32Load8S { memarg } => {
                 let imm = mem_offset(memarg, c);
                 let base_addr = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
 
-                vec![Directive::Instruction(ib::loadb(output, base_addr, imm))]
+                Directive::Instruction(ib::loadb(output, base_addr, imm)).into()
             }
             Op::I64Load { memarg } => {
                 let imm = mem_offset(memarg, c);
@@ -1419,6 +1446,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         ]
                     }
                 }
+                .into()
             }
             Op::I64Load8U { memarg } | Op::I64Load8S { memarg } => {
                 let imm = mem_offset(memarg, c);
@@ -1436,6 +1464,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // shift i64 val right, keeping the sign
                     Directive::Instruction(ib::shr_s_imm_64(output, val, F::from_canonical_u8(32))),
                 ]
+                .into()
             }
             Op::I64Load16U { memarg } | Op::I64Load16S { memarg } => {
                 let imm = mem_offset(memarg, c);
@@ -1495,6 +1524,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         }
                     }
                 }
+                .into()
             }
             Op::I64Load32U { memarg } | Op::I64Load32S { memarg } => {
                 let imm = mem_offset(memarg, c);
@@ -1608,6 +1638,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         ]
                     }
                 }
+                .into()
             }
             Op::I32Store { memarg } | Op::I64Store32 { memarg } => {
                 let imm = mem_offset(memarg, c);
@@ -1645,6 +1676,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             )),
                             Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
                         ]
+                        .into()
                     }
                     1 => {
                         let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
@@ -1659,10 +1691,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             )),
                             Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
                         ]
+                        .into()
                     }
-                    2.. => {
-                        vec![Directive::Instruction(ib::storew(value, base_addr, imm))]
-                    }
+                    2.. => Directive::Instruction(ib::storew(value, base_addr, imm)).into(),
                 }
             }
             Op::I32Store8 { memarg } | Op::I64Store8 { memarg } => {
@@ -1670,7 +1701,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let base_addr = inputs[0].start as usize;
                 let value = inputs[1].start as usize;
 
-                vec![Directive::Instruction(ib::storeb(value, base_addr, imm))]
+                Directive::Instruction(ib::storeb(value, base_addr, imm)).into()
             }
             Op::I32Store16 { memarg } | Op::I64Store16 { memarg } => {
                 let imm = mem_offset(memarg, c);
@@ -1691,10 +1722,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             )),
                             Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
                         ]
+                        .into()
                     }
-                    1.. => {
-                        vec![Directive::Instruction(ib::storeh(value, base_addr, imm))]
-                    }
+                    1.. => Directive::Instruction(ib::storeh(value, base_addr, imm)).into(),
                 }
             }
             Op::I64Store { memarg } => {
@@ -1793,11 +1823,14 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         ]
                     }
                 }
+                .into()
             }
 
             Op::MemorySize { mem } => {
                 assert_eq!(mem, 0, "Only a single linear memory is supported");
-                load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap()).0
+                load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap())
+                    .0
+                    .into()
             }
             Op::MemoryGrow { mem } => {
                 assert_eq!(mem, 0, "Only a single linear memory is supported");
@@ -1860,7 +1893,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     },
                 ]);
 
-                directives
+                directives.into()
             }
             Op::MemoryInit {
                 data_index: _,
@@ -1878,18 +1911,31 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 src_table: _,
             } => todo!(),
             Op::TableFill { table: _ } => todo!(),
-            Op::TableGet { table } => {
-                self.emit_table_get(c, table, inputs[0].clone(), output.unwrap())
-            }
+            Op::TableGet { table } => self
+                .emit_table_get(c, table, inputs[0].clone(), output.unwrap())
+                .into(),
             Op::TableSet { table: _ } => todo!(),
             Op::TableGrow { table: _ } => todo!(),
             Op::TableSize { table: _ } => todo!(),
             Op::ElemDrop { elem_index: _ } => todo!(),
 
             // Reference instructions
-            Op::RefNull { hty: _ } => todo!(),
+            Op::RefNull { hty: _ } => NULL_REF
+                .iter()
+                .zip_eq(output.unwrap())
+                .map(|(v, reg)| {
+                    Directive::Instruction(ib::const_32_imm(
+                        reg as usize,
+                        *v as u16,
+                        (*v >> 16) as u16,
+                    ))
+                })
+                .collect_vec()
+                .into(),
             Op::RefIsNull => todo!(),
-            Op::RefFunc { function_index: _ } => todo!(),
+            Op::RefFunc { function_index } => {
+                const_function_reference(c.program, function_index, output.unwrap()).into()
+            }
 
             // Float instructions
             Op::F32Load { memarg: _ } => todo!(),
@@ -1901,9 +1947,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let value_u = value.bits();
                 let value_lo: u16 = (value_u & 0xffff) as u16;
                 let value_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
-                vec![Directive::Instruction(ib::const_32_imm(
-                    output, value_lo, value_hi,
-                ))]
+                Directive::Instruction(ib::const_32_imm(output, value_lo, value_hi)).into()
             }
             Op::F64Const { value } => {
                 let output = output.unwrap().start as usize;
@@ -1918,6 +1962,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
                     Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
                 ]
+                .into()
             }
             Op::F32Abs => todo!(),
             Op::F32Neg => todo!(),
@@ -1970,7 +2015,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             F::ZERO,
                         ))
                     })
-                    .collect()
+                    .collect_vec()
+                    .into()
             }
 
             // Instructions that are implemented as function calls
@@ -2054,6 +2100,24 @@ impl<F: PrimeField32> Directive<F> {
                     new_frame_ptr as usize,
                 ))
             }
+            Directive::ConstFuncFrameSize { func_idx, reg_dest } => {
+                let label = func_idx_to_label(func_idx);
+                let frame_size = label_map.get(&label)?.frame_size.unwrap();
+                Some(ib::const_32_imm(
+                    reg_dest as usize,
+                    frame_size as u16,
+                    (frame_size >> 16) as u16,
+                ))
+            }
+            Directive::ConstFuncAddr { func_idx, reg_dest } => {
+                let label = func_idx_to_label(func_idx);
+                let pc = label_map.get(&label)?.pc;
+                Some(ib::const_32_imm(
+                    reg_dest as usize,
+                    pc as u16,
+                    (pc >> 16) as u16,
+                ))
+            }
             Directive::Instruction(i) => Some(i),
         }
     }
@@ -2132,4 +2196,67 @@ impl<F: Clone> womir::linker::Directive for Directive<F> {
             None
         }
     }
+}
+
+fn const_function_reference<F: PrimeField32>(
+    module: &Module,
+    func_idx: u32,
+    reg_dest: Range<u32>,
+) -> Vec<Directive<F>> {
+    assert_eq!(reg_dest.len(), 3);
+    let reg_dest = reg_dest.start;
+
+    let ty = module.get_func_type(func_idx);
+    vec![
+        // Unique function type identifier
+        Directive::Instruction(ib::const_32_imm(
+            reg_dest as usize,
+            ty.unique_id as u16,
+            (ty.unique_id >> 16) as u16,
+        )),
+        // Function frame size
+        Directive::ConstFuncFrameSize {
+            func_idx,
+            reg_dest: reg_dest + 1,
+        },
+        // Function address
+        Directive::ConstFuncAddr {
+            func_idx,
+            reg_dest: reg_dest + 2,
+        },
+    ]
+}
+
+fn const_wasm_value<F: PrimeField32>(
+    module: &Module,
+    value: &WasmValue,
+    reg_dest: Range<u32>,
+) -> Vec<Directive<F>> {
+    let mut words = ArrayVec::<_, 4>::new();
+    match value {
+        WasmValue::I32(v) => words.push(*v as u32),
+        WasmValue::I64(v) => words.extend([*v as u32, (*v >> 32) as u32]),
+        WasmValue::F64(v) => words.extend([v.bits() as u32, (v.bits() >> 32) as u32]),
+        WasmValue::F32(ieee32) => words.push(ieee32.bits()),
+        WasmValue::V128(v128) => words.extend(
+            v128.bytes()
+                .chunks(4)
+                .map(|b| u32::from_le_bytes(b.try_into().unwrap())),
+        ),
+        WasmValue::RefNull => words.extend(NULL_REF),
+        WasmValue::RefFunc(func_ref) => {
+            return const_function_reference(module, *func_ref, reg_dest);
+        }
+    };
+    words
+        .into_iter()
+        .zip_eq(reg_dest)
+        .map(|(word, reg)| {
+            Directive::Instruction(ib::const_32_imm(
+                reg as usize,
+                word as u16,
+                (word >> 16) as u16,
+            ))
+        })
+        .collect()
 }

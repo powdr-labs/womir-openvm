@@ -48,10 +48,9 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         // | Operator::I64Rotl
         // | Operator::I32Rotr
         // | Operator::I64Rotr
-        // TODO: Operator::Select could benefit from immediates, but also needs special handling
         => {
             if let [
-                MaybeConstant::NonConstant,
+                _,
                 MaybeConstant::ReferenceConstant {
                     value,
                     must_collapse,
@@ -90,12 +89,26 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
                     value,
                     must_collapse,
                 },
-                MaybeConstant::NonConstant,
+                _,
             ] = inputs
                 && can_be_i16(value)
             {
                 // Left operand is constant and can be immediate
                 must_collapse.replace(true);
+            }
+        }
+
+        // In Select, both value inputs can be immediates.
+        // The condition can not, assuming an optimized wasm.
+        Operator::Select | Operator::TypedSelect { .. } => {
+            for input in &inputs[..2] {
+                if let MaybeConstant::ReferenceConstant {
+                    must_collapse,
+                    ..
+                } = input
+                {
+                    must_collapse.replace(true);
+                }
             }
         }
         _ => {
