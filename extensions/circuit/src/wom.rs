@@ -24,7 +24,7 @@ impl<F: PrimeField32> WomController<F> {
         WomBridge { bus: self.bus }
     }
 
-    pub fn read<const N: usize>(&self, pointer: F) -> WomRecord<F> {
+    pub fn read<const N: usize>(&self, pointer: F) -> (WomRecord<F>, [F; N]) {
         let ptr_u32 = pointer.as_canonical_u32();
         let data = self.memory
             .iter()
@@ -33,10 +33,19 @@ impl<F: PrimeField32> WomController<F> {
             .map(|f| f.expect("WOM read before write"))
             .collect_vec();
         assert_eq!(data.len(), N, "WOM read before write");
-        WomRecord {
-            pointer,
-            data,
-        }
+        (
+            WomRecord {
+                pointer,
+                data: data.clone(),
+            },
+            data.try_into().unwrap()
+        )
+    }
+
+    pub fn unsafe_read_cell(&self, pointer: F) -> F {
+        let ptr_u32 = pointer.as_canonical_u32();
+        let cell = self.memory.get(ptr_u32 as usize).expect("WOM read before write").expect("WOM read before write");
+        cell
     }
 
     pub fn write<const N: usize>(&mut self, pointer: F, data: [F; N]) -> WomRecord<F> {
@@ -223,7 +232,11 @@ mod test {
         ];
         wom.write(p2, w2);
         wom.write(p1, w1);
-        assert_eq!(wom.read::<4>(BabyBear::from_canonical_u32(0)), WomRecord { pointer: p1, data: w1.into() } );
-        assert_eq!(wom.read::<4>(BabyBear::from_canonical_u32(4)), WomRecord { pointer: p2, data: w2.into() } );
+        let (r1_rec, r1_data) = wom.read(p1);
+        let (r2_rec, r2_data) = wom.read(p2);
+        assert_eq!(r1_rec, WomRecord { pointer: p1, data: w1.into() } );
+        assert_eq!(r1_data, w1);
+        assert_eq!(r2_rec, WomRecord { pointer: p2, data: w2.into() } );
+        assert_eq!(r2_data, w2);
     }
 }

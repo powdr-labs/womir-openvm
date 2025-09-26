@@ -6,7 +6,7 @@ use openvm_circuit::{
         MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{MemoryController, OfflineMemory, RecordId, offline_checker::MemoryBridge},
+        memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController,
+    AdapterRuntimeContextWom, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
 };
 
 use super::{RV32_REGISTER_NUM_LIMBS, decompose};
@@ -55,11 +55,10 @@ impl<F: PrimeField32> ConstsAdapterChipWom<F> {
 
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConstsWriteRecord {
+pub struct ConstsWriteRecord<F> {
     pub from_state: ExecutionState<u32>,
     pub from_frame: FrameState<u32>,
-    pub rd: u32,
-    pub rd_id: Option<RecordId>,
+    pub rd: Option<WomRecord<F>>,
 }
 
 #[repr(C)]
@@ -113,7 +112,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
 
 impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
     type ReadRecord = ();
-    type WriteRecord = ConstsWriteRecord;
+    type WriteRecord = ConstsWriteRecord<F>;
     type Air = ConstsAdapterAirWom;
     type Interface = BasicAdapterInterface<
         F,
@@ -155,7 +154,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
             ..
         } = *instruction;
 
-        let mut destination_id = None;
+        let mut write_result = None;
 
         if enabled != F::ZERO {
             let imm_lo = b.as_canonical_u32();
@@ -166,8 +165,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
             );
             let imm = imm_hi << 16 | imm_lo;
             let fp_f = F::from_canonical_u32(from_frame.fp);
-            let write_result = memory.write(F::ONE, a + fp_f, decompose(imm));
-            destination_id = Some(write_result.0);
+            write_result = Some(wom.write(a + fp_f, decompose(imm)));
         }
 
         Ok((
@@ -179,8 +177,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
             Self::WriteRecord {
                 from_state,
                 from_frame,
-                rd: a.as_canonical_u32(),
-                rd_id: destination_id,
+                rd: write_result,
             },
         ))
     }

@@ -9,7 +9,7 @@ use openvm_circuit::{
     },
     system::{
         memory::{
-            MemoryAddress, MemoryAuxColsFactory, MemoryController, OfflineMemory, RecordId,
+            MemoryAddress, MemoryAuxColsFactory, MemoryController, OfflineMemory, 
             offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols},
         },
         program::ProgramBus,
@@ -43,7 +43,7 @@ use openvm_womir_transpiler::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{FrameBridge, FrameBus};
+use crate::{FrameBridge, FrameBus, WomRecord};
 use crate::{WomController, adapters::compose};
 
 #[repr(C)]
@@ -278,8 +278,8 @@ pub struct HintStoreRecord<F: Field> {
     pub rd: u32,
     pub num_words: u32,
 
-    pub num_words_read: Option<RecordId>,
-    pub hints: Vec<([F; RV32_REGISTER_NUM_LIMBS], RecordId)>,
+    pub num_words_read: Option<WomRecord<F>>,
+    pub hints: Vec<WomRecord<F>>,
 }
 
 pub struct HintStoreChip<F: Field> {
@@ -353,12 +353,15 @@ impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
         debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
         let local_opcode = HintStoreOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
+        let mut wom = self.wom.lock().unwrap();
+
+        memory.increment_timestamp();
+
         let (num_words, num_words_read) = if local_opcode == HINT_STOREW {
-            memory.increment_timestamp();
             (1, None)
         } else {
             let (num_words_read, num_words_limbs) =
-                memory.read::<RV32_REGISTER_NUM_LIMBS>(d, num_words_reg + fp_f);
+                wom.read::<RV32_REGISTER_NUM_LIMBS>(num_words_reg + fp_f);
             (compose(num_words_limbs), Some(num_words_read))
         };
         debug_assert_ne!(num_words, 0);
@@ -380,8 +383,8 @@ impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
 
         let data: [F; RV32_REGISTER_NUM_LIMBS] =
             std::array::from_fn(|_| streams.hint_stream.pop_front().unwrap());
-        let (write, _) = memory.write(d, rd + fp_f, data);
-        record.hints.push((data, write));
+        let write = wom.write(rd + fp_f, data);
+        record.hints.push(write);
 
         self.height += record.hints.len();
         self.records.push(record);

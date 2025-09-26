@@ -6,7 +6,7 @@ use openvm_circuit::{
         MinimalInstruction, Result as ResultVm, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{MemoryController, OfflineMemory, RecordId, offline_checker::MemoryBridge},
+        memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
@@ -30,7 +30,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
     AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge,
-    WomController,
+    WomController, WomRecord,
 };
 
 use super::RV32_CELL_BITS;
@@ -85,12 +85,12 @@ impl<
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct WomBaseAluReadRecord<F: Field> {
-    /// Read register value from address space d=1
-    pub rs1: RecordId,
+    /// Read register value
+    pub rs1: WomRecord<F>,
     /// Either
     /// - read rs2 register value or
     /// - if `rs2_is_imm` is true, this is None
-    pub rs2: Option<RecordId>,
+    pub rs2: Option<WomRecord<F>>,
     /// immediate value of rs2 or 0
     pub rs2_imm: F,
 }
@@ -105,7 +105,7 @@ pub struct WomBaseAluWriteRecord<F: Field, const WRITE_BYTES: usize> {
     pub from_state: ExecutionState<u32>,
     pub from_frame: FrameState<u32>,
     /// Write to destination register
-    pub rd: (RecordId, [F; WRITE_BYTES]),
+    pub rd: WomRecord<F>,
 }
 
 #[repr(C)]
@@ -202,7 +202,7 @@ where
 
     fn preprocess(
         &mut self,
-        memory: &mut MemoryController<F>,
+        _memory: &mut MemoryController<F>,
         wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
@@ -218,11 +218,11 @@ where
         );
 
         let fp_f = F::from_canonical_u32(fp);
-        let rs1 = memory.read::<READ_BYTES>(d, b + fp_f);
+        assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+        let (rs1, rs1_data) = wom.read::<READ_BYTES>(b + fp_f);
         let (rs2, rs2_data, rs2_imm) = if e.is_zero() {
             let c_u32 = c.as_canonical_u32();
             debug_assert_eq!(c_u32 >> 24, 0);
-            memory.increment_timestamp();
             let mut c_bytes = [0u8; READ_BYTES];
             c_bytes[0] = c_u32 as u8;
             c_bytes[1] = (c_u32 >> 8) as u8;
@@ -230,14 +230,15 @@ where
             c_bytes[3] = (c_u32 >> 16) as u8;
             (None, c_bytes.map(F::from_canonical_u8), c)
         } else {
-            let rs2_read = memory.read::<READ_BYTES>(e, c + fp_f);
-            (Some(rs2_read.0), rs2_read.1, F::ZERO)
+            assert_eq!(e.as_canonical_u32(), RV32_REGISTER_AS);
+            let (rs2, rs2_data) = wom.read::<READ_BYTES>(c + fp_f);
+            (Some(rs2), rs2_data, F::ZERO)
         };
 
         Ok((
-            [rs1.1, rs2_data],
+            [rs1_data, rs2_data],
             Self::ReadRecord {
-                rs1: rs1.0,
+                rs1,
                 rs2,
                 rs2_imm,
             },
@@ -256,13 +257,14 @@ where
     ) -> ResultVm<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction { a, d, .. } = instruction;
         let fp_f = F::from_canonical_u32(from_frame.fp);
-        let rd = memory.write(*d, *a + fp_f, output.writes[0]);
+        assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+        let rd = wom.write(*a + fp_f, output.writes[0]);
 
-        let timestamp_delta = memory.timestamp() - from_state.timestamp;
-        debug_assert!(
-            timestamp_delta == 3,
-            "timestamp delta is {timestamp_delta}, expected 3"
-        );
+        // let timestamp_delta = memory.timestamp() - from_state.timestamp;
+        // debug_assert!(
+        //     timestamp_delta == 3,
+        //     "timestamp delta is {timestamp_delta}, expected 3"
+        // );
 
         Ok((
             ExecutionState {

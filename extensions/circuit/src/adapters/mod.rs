@@ -1,6 +1,6 @@
 use std::ops::Mul;
 
-use openvm_circuit::system::memory::{MemoryController, RecordId};
+use openvm_circuit::system::memory::{MemoryController};
 use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
 
 mod allocate_frame;
@@ -21,6 +21,8 @@ pub use jalr::*;
 pub use jump::*;
 pub use loadstore::*;
 pub use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+
+use crate::WomController;
 
 /// 256-bit heap integer stored as 32 bytes (32 limbs of 8-bits)
 pub const INT256_NUM_LIMBS: usize = 32;
@@ -50,18 +52,10 @@ pub fn decompose<F: PrimeField32>(value: u32) -> [F; RV32_REGISTER_NUM_LIMBS] {
     })
 }
 
-/// Read register value as [RV32_REGISTER_NUM_LIMBS] limbs from memory.
-/// Returns the read record and the register value as u32.
-/// Does not make any range check calls.
-pub fn read_rv32_register<F: PrimeField32>(
-    memory: &mut MemoryController<F>,
-    address_space: F,
-    pointer: F,
-) -> (RecordId, u32) {
-    debug_assert_eq!(address_space, F::ONE);
-    let record = memory.read::<RV32_REGISTER_NUM_LIMBS>(address_space, pointer);
-    let val = compose(record.1);
-    (record.0, val)
+/// Read write once register.
+pub fn read_wom_register<F: PrimeField32>(wom: &WomController<F>, pointer: F) -> u32 {
+    let data = wom.read::<RV32_REGISTER_NUM_LIMBS>(pointer).1;
+    compose(data)
 }
 
 /// Peeks at the value of a register without updating the memory state or incrementing the

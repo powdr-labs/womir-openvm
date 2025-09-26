@@ -615,15 +615,19 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             PhantomDiscriminant(Phantom::HintInput as u16),
         )?;
         builder.add_phantom_sub_executor(
-            phantom::HintRandomSubEx::new(),
+            phantom::HintRandomSubEx::new(wom_controller.clone()),
             PhantomDiscriminant(Phantom::HintRandom as u16),
         )?;
         builder.add_phantom_sub_executor(
-            phantom::PrintStrSubEx,
+            phantom::PrintStrSubEx {
+                wom: wom_controller.clone(),
+            },
             PhantomDiscriminant(Phantom::PrintStr as u16),
         )?;
         builder.add_phantom_sub_executor(
-            phantom::HintLoadByKeySubEx,
+            phantom::HintLoadByKeySubEx {
+                wom: wom_controller.clone(),
+            },
             PhantomDiscriminant(Phantom::HintLoadByKey as u16),
         )?;
 
@@ -633,6 +637,8 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
 
 /// Phantom sub-executors
 mod phantom {
+    use std::sync::{Arc, Mutex};
+
     use eyre::bail;
     use openvm_circuit::{
         arch::{PhantomSubExecutor, Streams},
@@ -642,19 +648,27 @@ mod phantom {
     use openvm_stark_backend::p3_field::{Field, PrimeField32};
     use rand::{Rng, rngs::OsRng};
 
-    use crate::adapters::unsafe_read_rv32_register;
+    use crate::{adapters::read_wom_register, WomController};
 
     pub struct HintInputSubEx;
-    pub struct HintRandomSubEx {
+
+    pub struct HintRandomSubEx<F> {
+        wom: Arc<Mutex<WomController<F>>>,
         rng: OsRng,
     }
-    impl HintRandomSubEx {
-        pub fn new() -> Self {
-            Self { rng: OsRng }
+    impl<F> HintRandomSubEx<F> {
+        pub fn new(wom: Arc<Mutex<WomController<F>>>) -> Self {
+            Self { wom, rng: OsRng }
         }
     }
-    pub struct PrintStrSubEx;
-    pub struct HintLoadByKeySubEx;
+
+    pub struct PrintStrSubEx<F> {
+        pub wom: Arc<Mutex<WomController<F>>>,
+    }
+
+    pub struct HintLoadByKeySubEx<F> {
+        pub wom: Arc<Mutex<WomController<F>>>,
+    }
 
     impl<F: Field> PhantomSubExecutor<F> for HintInputSubEx {
         fn phantom_execute(
@@ -688,17 +702,17 @@ mod phantom {
         }
     }
 
-    impl<F: PrimeField32> PhantomSubExecutor<F> for HintRandomSubEx {
+    impl<F: PrimeField32> PhantomSubExecutor<F> for HintRandomSubEx<F> {
         fn phantom_execute(
             &mut self,
-            memory: &MemoryController<F>,
+            _memory: &MemoryController<F>,
             streams: &mut Streams<F>,
             _: PhantomDiscriminant,
             a: F,
             _: F,
             _: u16,
         ) -> eyre::Result<()> {
-            let len = unsafe_read_rv32_register(memory, a) as usize;
+            let len = read_wom_register(&self.wom.lock().unwrap(), a) as usize;
             streams.hint_stream.clear();
             streams.hint_stream.extend(
                 std::iter::repeat_with(|| F::from_canonical_u8(self.rng.r#gen::<u8>()))
@@ -708,7 +722,7 @@ mod phantom {
         }
     }
 
-    impl<F: PrimeField32> PhantomSubExecutor<F> for PrintStrSubEx {
+    impl<F: PrimeField32> PhantomSubExecutor<F> for PrintStrSubEx<F> {
         fn phantom_execute(
             &mut self,
             memory: &MemoryController<F>,
@@ -718,8 +732,8 @@ mod phantom {
             b: F,
             _: u16,
         ) -> eyre::Result<()> {
-            let rd = unsafe_read_rv32_register(memory, a);
-            let rs1 = unsafe_read_rv32_register(memory, b);
+            let rd = read_wom_register(&self.wom.lock().unwrap(), a);
+            let rs1 = read_wom_register(&self.wom.lock().unwrap(), b);
             let bytes = (0..rs1)
                 .map(|i| -> eyre::Result<u8> {
                     let val = memory.unsafe_read_cell(F::TWO, F::from_canonical_u32(rd + i));
@@ -733,7 +747,7 @@ mod phantom {
         }
     }
 
-    impl<F: PrimeField32> PhantomSubExecutor<F> for HintLoadByKeySubEx {
+    impl<F: PrimeField32> PhantomSubExecutor<F> for HintLoadByKeySubEx<F> {
         fn phantom_execute(
             &mut self,
             memory: &MemoryController<F>,
@@ -743,8 +757,8 @@ mod phantom {
             b: F,
             _: u16,
         ) -> eyre::Result<()> {
-            let ptr = unsafe_read_rv32_register(memory, a);
-            let len = unsafe_read_rv32_register(memory, b);
+            let ptr = read_wom_register(&self.wom.lock().unwrap(), a);
+            let len = read_wom_register(&self.wom.lock().unwrap(), b);
             let key: Vec<u8> = (0..len)
                 .map(|i| {
                     memory

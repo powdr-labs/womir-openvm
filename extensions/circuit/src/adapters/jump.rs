@@ -6,7 +6,7 @@ use openvm_circuit::{
         MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{MemoryController, OfflineMemory, RecordId, offline_checker::MemoryBridge},
+        memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
@@ -22,7 +22,7 @@ use openvm_womir_transpiler::JumpOpcode::{self, *};
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{AdapterRuntimeContextWom, VmAdapterChipWom, WomBridge, WomController};
+use crate::{AdapterRuntimeContextWom, VmAdapterChipWom, WomBridge, WomController, WomRecord};
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose};
 
@@ -53,7 +53,7 @@ impl<F: PrimeField32> JumpAdapterChipWom<F> {
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JumpReadRecord<T> {
-    pub reg_value: Option<RecordId>, // condition register for JUMP_IF and JUMP_IF_ZERO, offset for SKIP
+    pub reg_value: Option<WomRecord<T>>, // condition register for JUMP_IF and JUMP_IF_ZERO, offset for SKIP
     pub reg_data: [T; 4],
 }
 
@@ -154,16 +154,17 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
 
         let fp_f = F::from_canonical_u32(fp);
 
+        memory.increment_timestamp();
+
         // Determine which registers to read based on opcode
         let (reg_value, reg_data) = match local_opcode {
             JumpOpcode::JUMP_IF | JumpOpcode::JUMP_IF_ZERO | JumpOpcode::SKIP => {
                 // Read condition (b field) for conditional jumps, or the offset for skip
-                let reg_value = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, b + fp_f);
+                let reg_value = wom.read::<RV32_REGISTER_NUM_LIMBS>(b + fp_f);
                 (Some(reg_value.0), reg_value.1)
             }
             _ => {
-                // For JUMP, we don't read condition but still need to advance timestamp
-                memory.increment_timestamp();
+                // For JUMP, we don't read condition
                 (None, [F::ZERO; RV32_REGISTER_NUM_LIMBS])
             }
         };
@@ -180,7 +181,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
-        wom: &mut WomController<F>,
+        _wom: &mut WomController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         _from_frame: crate::FrameState<u32>,

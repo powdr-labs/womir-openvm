@@ -1050,7 +1050,7 @@ mod tests {
             wom::halt(),       // PC=8: End
         ];
 
-        // We expect 4 because the register allocator starts at 4 as convention.
+        // The expected value comes from the frame allocator (`AllocateFrameAdapterChipWom`) initial frame pointer value
         run_vm_test("ALLOCATE_FRAME instruction", instructions, 8, None)
     }
 
