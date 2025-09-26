@@ -2431,7 +2431,6 @@ dependencies = [
  "openvm-circuit-primitives-derive",
  "openvm-instructions",
  "openvm-rv32im-circuit",
- "openvm-rv32im-transpiler",
  "openvm-stark-backend",
  "openvm-stark-sdk",
  "openvm-womir-transpiler",
@@ -2450,6 +2449,7 @@ version = "0.0.1"
 dependencies = [
  "openvm-instructions",
  "openvm-instructions-derive",
+ "openvm-rv32im-transpiler",
  "openvm-stark-backend",
  "serde",
  "strum",

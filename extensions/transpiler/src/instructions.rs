@@ -3,33 +3,10 @@ use openvm_instructions_derive::LocalOpcode;
 use serde::{Deserialize, Serialize};
 use strum::{EnumCount, EnumIter, FromRepr};
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x1200]
-#[repr(usize)]
-// Note: these need to be exactly the same and in the exact same order as OpenVM's BaseAluOpcode
-// in order to be able to re-use the original Alu core chip.
-// The alternative to that is to not have this new enum here and use OpenVM's BaseAluOpcode.
-pub enum BaseAluOpcode {
-    ADD,
-    SUB,
-    XOR,
-    OR,
-    AND,
-}
+pub use openvm_rv32im_transpiler::{
+    BaseAluOpcode, DivRemOpcode, LessThanOpcode, MulOpcode, Rv32LoadStoreOpcode as LoadStoreOpcode,
+    ShiftOpcode,
+};
 
 #[derive(
     Copy,
@@ -74,32 +51,6 @@ pub enum BaseAlu64Opcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x1205]
-#[repr(usize)]
-// Note: these need to be exactly the same and in the exact same order as OpenVM's ShiftOpcode
-// in order to be able to re-use the original Shift core chip.
-// The alternative to that is to not have this new enum here and use OpenVM's ShiftOpcode.
-pub enum ShiftOpcode {
-    SLL,
-    SRL,
-    SRA,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
 #[opcode_offset = 0x2205]
 #[repr(usize)]
 // Note: these need to be exactly the same and in the exact same order as OpenVM's ShiftOpcode
@@ -109,31 +60,6 @@ pub enum Shift64Opcode {
     SLL,
     SRL,
     SRA,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x1208]
-#[repr(usize)]
-// Note: these need to be exactly the same and in the exact same order as OpenVM's LessThanOpcode
-// in order to be able to re-use the original LessThan core chip.
-// The alternative to that is to not have this new enum here and use OpenVM's LessThanOpcode.
-pub enum LessThanOpcode {
-    SLT,
-    SLTU,
 }
 
 #[derive(
@@ -206,27 +132,6 @@ pub enum Eq64Opcode {
 }
 
 #[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
-)]
-#[opcode_offset = 0x1230]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum JalLuiOpcode {
-    JAL,
-    LUI,
-}
-
-#[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
-)]
-#[opcode_offset = 0x1235]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum JalrOpcode {
-    JALR,
-}
-
-#[derive(
     Copy,
     Clone,
     Debug,
@@ -280,19 +185,6 @@ pub enum JumpOpcode {
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
 )]
-#[opcode_offset = 0x1250]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-// Note: these need to be exactly the same and in the exact same order as OpenVM's MulOpcode
-// in order to be able to re-use the original Mul core chip.
-// The alternative to that is to not have this new enum here and use OpenVM's MulOpcode.
-pub enum MulOpcode {
-    MUL,
-}
-
-#[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
-)]
 #[opcode_offset = 0x2250]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
@@ -301,34 +193,6 @@ pub enum MulOpcode {
 // The alternative to that is to not have this new enum here and use OpenVM's MulOpcode.
 pub enum Mul64Opcode {
     MUL,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x1254]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-// Note: these need to be exactly the same and in the exact same order as OpenVM's DivRemOpcode
-// in order to be able to re-use the original DivRem core chip.
-// The alternative to that is to not have this new enum here and use OpenVM's DivRemOpcode.
-pub enum DivRemOpcode {
-    DIV,
-    DIVU,
-    REM,
-    REMU,
 }
 
 #[derive(

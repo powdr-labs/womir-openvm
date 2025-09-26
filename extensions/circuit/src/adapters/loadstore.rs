@@ -31,13 +31,13 @@ use openvm_instructions::{
     program::DEFAULT_PC_STEP,
     riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
 };
-use openvm_rv32im_transpiler::Rv32LoadStoreOpcode as LoadStoreOpcode;
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
+use openvm_womir_transpiler::LoadStoreOpcode;
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 

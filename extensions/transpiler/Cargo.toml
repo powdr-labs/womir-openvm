@@ -7,6 +7,7 @@ edition.workspace = true
 [dependencies]
 openvm-stark-backend = { workspace = true }
 openvm-instructions = { workspace = true }
+openvm-rv32im-transpiler = { workspace = true }
 tracing = { workspace = true }
 openvm-instructions-derive = { workspace = true }
 strum = { workspace = true }

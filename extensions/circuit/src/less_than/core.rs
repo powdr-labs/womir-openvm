@@ -13,13 +13,13 @@ use openvm_circuit_primitives::{
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{LocalOpcode, instruction::Instruction};
-use openvm_rv32im_transpiler::LessThanOpcode;
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
+use openvm_womir_transpiler::LessThanOpcode;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
