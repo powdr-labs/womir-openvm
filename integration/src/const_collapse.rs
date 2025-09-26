@@ -38,16 +38,14 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         | Operator::I64Eq
         | Operator::I32Ne
         | Operator::I64Ne
-        // TODO: the operations below can have right-hand immediates, but need special handling
-        // on code translation, so we leave them out for now.
-        // | Operator::I32GeS
-        // | Operator::I64GeS
-        // | Operator::I32GeU
-        // | Operator::I64GeU
-        // | Operator::I32Rotl
-        // | Operator::I64Rotl
-        // | Operator::I32Rotr
-        // | Operator::I64Rotr
+        | Operator::I32GeS
+        | Operator::I64GeS
+        | Operator::I32GeU
+        | Operator::I64GeU
+        //| Operator::I32Rotl
+        //| Operator::I64Rotl
+        //| Operator::I32Rotr
+        //| Operator::I64Rotr
         => {
             if let [
                 _,
@@ -76,14 +74,14 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         }
 
         // GT is special because the left operand is the one that can be immediate
-        Operator::I32GtS | Operator::I32GtU | Operator::I64GtS | Operator::I64GtU
-            // TODO: the operations below can have left-hand immediates, but need special handling
-            // on code translation, so we leave them out for now.
-            // | Operator::I32LeS
-            // | Operator::I64LeS
-            // | Operator::I32LeU
-            // | Operator::I64LeU
-        => {
+        Operator::I32GtS
+        | Operator::I32GtU
+        | Operator::I64GtS
+        | Operator::I64GtU
+        | Operator::I32LeS
+        | Operator::I64LeS
+        | Operator::I32LeU
+        | Operator::I64LeU => {
             if let [
                 MaybeConstant::ReferenceConstant {
                     value,
@@ -102,11 +100,7 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         // The condition can not, assuming an optimized wasm.
         Operator::Select | Operator::TypedSelect { .. } => {
             for input in &inputs[..2] {
-                if let MaybeConstant::ReferenceConstant {
-                    must_collapse,
-                    ..
-                } = input
-                {
+                if let MaybeConstant::ReferenceConstant { must_collapse, .. } = input {
                     must_collapse.replace(true);
                 }
             }

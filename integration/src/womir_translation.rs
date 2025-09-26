@@ -790,12 +790,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         // The constant has already been validated to be in i16 range during
                         // const folding, now we need to sign-extend it to 24-bits and then
                         // convert to field element.
-                        let c: i16 = match c {
-                            WasmValue::I32(v) => *v as i16,
-                            WasmValue::I64(v) => *v as i16,
-                            _ => unreachable!("Other types are not used as binary op inputs"),
-                        };
-                        let c = F::from_canonical_u32((c as i32 as u32) & 0xff_ff_ff);
+                        let c = const_i16_as_field(c);
 
                         return Directive::Instruction(ib::instr_i(
                             op,
@@ -844,12 +839,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         // The constant is only allowed to be on the left side, because GT
                         // is just LT with the operands reversed, and LT expects the immediate as
                         // the greater side.
-                        let c: i16 = match c {
-                            WasmValue::I32(v) => *v as i16,
-                            WasmValue::I64(v) => *v as i16,
-                            _ => unreachable!("Other types are not used as binary op inputs"),
-                        };
-                        let c = F::from_canonical_u32((c as i32 as u32) & 0xff_ff_ff);
+                        let c = const_i16_as_field(c);
                         return Directive::Instruction(ib::instr_i(
                             op,
                             output,
@@ -866,6 +856,67 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
         // Handle the complex instructions that supports constant inlining
         match &op {
+            Op::I32LeS
+            | Op::I32LeU
+            | Op::I32GeS
+            | Op::I32GeU
+            | Op::I64LeS
+            | Op::I64LeU
+            | Op::I64GeS
+            | Op::I64GeU => {
+                let inverse_result = c.register_gen.allocate_type(ValType::I32).start as usize;
+                let output = output.unwrap().start as usize;
+
+                let comp_instruction = match [&inputs[0], &inputs[1]] {
+                    [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
+                        let inverse_op = match op {
+                            Op::I32GeS => ib::lt_s,
+                            Op::I32GeU => ib::lt_u,
+                            Op::I64GeS => ib::lt_s_64,
+                            Op::I64GeU => ib::lt_u_64,
+                            Op::I32LeS => ib::gt_s,
+                            Op::I32LeU => ib::gt_u,
+                            Op::I64LeS => ib::gt_s_64,
+                            Op::I64LeU => ib::gt_u_64,
+                            _ => unreachable!(),
+                        };
+
+                        let input1 = input1.start as usize;
+                        let input2 = input2.start as usize;
+
+                        // Perform the inverse operation and invert the result
+                        inverse_op(inverse_result, input1, input2)
+                    }
+                    [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
+                    | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
+                        // This is a little confusing, because GE and LE are using the same opcode,
+                        // but this is correct, as the operands are reversed between GE and LE.
+                        // Const folding step guarantees that only GE will have the constant on
+                        // the right side, and only LE will have the constant on the left side.
+                        //
+                        // In another words: the order of the operands will guarantee that the inverse
+                        // operation is always a less-than comparison: reg_value < constant_value.
+                        let inverse_op = match op {
+                            Op::I32GeS | Op::I32LeS => LessThanOpcode::SLT.global_opcode(),
+                            Op::I32GeU | Op::I32LeU => LessThanOpcode::SLTU.global_opcode(),
+                            Op::I64GeS | Op::I64LeS => LessThan64Opcode::SLT.global_opcode(),
+                            Op::I64GeU | Op::I64LeU => LessThan64Opcode::SLTU.global_opcode(),
+                            _ => unreachable!(),
+                        };
+
+                        let c = const_i16_as_field(c);
+                        ib::instr_i(inverse_op.as_usize(), inverse_result, reg.start as usize, c)
+                    }
+                    _ => unreachable!("combination of inputs not possible for GE/LE operations"),
+                };
+
+                // Perform the inverse operation and invert the result
+                return vec![
+                    Directive::Instruction(comp_instruction),
+                    Directive::Instruction(ib::eq_imm(output, inverse_result, F::ZERO)),
+                ]
+                .into();
+            }
             Op::Select | Op::TypedSelect { .. } => {
                 // Works like a ternary operator: if the condition (3rd input) is non-zero,
                 // select the 1st input, otherwise select the 2nd input.
@@ -1072,39 +1123,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::shl_64(shiftl, input1, shiftl_amount)),
                     // or the two results
                     Directive::Instruction(ib::or_64(output, shiftl, shiftr)),
-                ]
-                .into()
-            }
-            Op::I32LeS
-            | Op::I32LeU
-            | Op::I32GeS
-            | Op::I32GeU
-            | Op::I64LeS
-            | Op::I64LeU
-            | Op::I64GeS
-            | Op::I64GeU => {
-                let inverse_op = match op {
-                    Op::I32LeS => ib::gt_s,
-                    Op::I32LeU => ib::gt_u,
-                    Op::I32GeS => ib::lt_s,
-                    Op::I32GeU => ib::lt_u,
-                    Op::I64LeS => ib::gt_s_64,
-                    Op::I64LeU => ib::gt_u_64,
-                    Op::I64GeS => ib::lt_s_64,
-                    Op::I64GeU => ib::lt_u_64,
-                    _ => unreachable!(),
-                };
-
-                let input1 = inputs[0].start as usize;
-                let input2 = inputs[1].start as usize;
-                let output = output.unwrap().start as usize;
-
-                let inverse_result = c.register_gen.allocate_type(ValType::I32).start as usize;
-
-                // Perform the inverse operation and invert the result
-                vec![
-                    Directive::Instruction(inverse_op(inverse_result, input1, input2)),
-                    Directive::Instruction(ib::eq_imm(output, inverse_result, F::ZERO)),
                 ]
                 .into()
             }
@@ -2129,6 +2147,16 @@ impl<F: PrimeField32> Directive<F> {
             Directive::Instruction(i) => Some(i),
         }
     }
+}
+
+/// Precondition: `value` is either `WasmValue::I32` or `WasmValue::I64`
+fn const_i16_as_field<F: PrimeField32>(value: &WasmValue) -> F {
+    let c: i16 = match *value {
+        WasmValue::I32(v) => v as i16,
+        WasmValue::I64(v) => v as i16,
+        _ => panic!("not valid i16"),
+    };
+    F::from_canonical_u32((c as i32 as u32) & 0xff_ff_ff)
 }
 
 fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> i32 {
