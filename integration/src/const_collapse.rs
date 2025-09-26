@@ -31,7 +31,7 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         | Operator::I32GeS
         | Operator::I64GeS
         | Operator::I32GeU
-        | Operator::I64GeU 
+        | Operator::I64GeU
         | Operator::I32Eq
         | Operator::I64Eq
         | Operator::I32Ne
