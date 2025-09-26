@@ -774,7 +774,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
                         // Case of one register input and one constant input.
                         //
-                        // Doesn't matter the order, because only commutative operations will
+                        // The order doesn't matter, because only commutative operations will
                         // have the constant operand on the left side, as const folding ensures.
 
                         // The constant has already been validated to be in i16 range during
