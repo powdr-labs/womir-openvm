@@ -787,9 +787,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         // Doesn't matter the order, because only commutative operations will
                         // have the constant operand on the left side, as const folding ensures.
 
-                        // The constant has already been validated to be in i16 range during
-                        // const folding, now we need to sign-extend it to 24-bits and then
-                        // convert to field element.
+                        // The constant folding step guarantees that the constant can be safely
+                        // truncated to i16.
                         let c = const_i16_as_field(c);
 
                         return Directive::Instruction(ib::instr_i(
@@ -856,14 +855,14 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
         // Handle the complex instructions that supports constant inlining
         match &op {
-            Op::I32LeS
-            | Op::I32LeU
-            | Op::I32GeS
+            Op::I32GeS
             | Op::I32GeU
-            | Op::I64LeS
-            | Op::I64LeU
             | Op::I64GeS
-            | Op::I64GeU => {
+            | Op::I64GeU
+            | Op::I32LeS
+            | Op::I32LeU
+            | Op::I64LeS
+            | Op::I64LeU => {
                 let inverse_result = c.register_gen.allocate_type(ValType::I32).start as usize;
                 let output = output.unwrap().start as usize;
 

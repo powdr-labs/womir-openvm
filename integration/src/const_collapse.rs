@@ -24,29 +24,18 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         | Operator::I64Or
         | Operator::I32And
         | Operator::I64And
-        | Operator::I32Shl
-        | Operator::I64Shl
-        | Operator::I32ShrS
-        | Operator::I64ShrS
-        | Operator::I32ShrU
-        | Operator::I64ShrU
         | Operator::I32LtS
         | Operator::I64LtS
         | Operator::I32LtU
         | Operator::I64LtU
-        | Operator::I32Eq
-        | Operator::I64Eq
-        | Operator::I32Ne
-        | Operator::I64Ne
         | Operator::I32GeS
         | Operator::I64GeS
         | Operator::I32GeU
-        | Operator::I64GeU
-        //| Operator::I32Rotl
-        //| Operator::I64Rotl
-        //| Operator::I32Rotr
-        //| Operator::I64Rotr
-        => {
+        | Operator::I64GeU 
+        | Operator::I32Eq
+        | Operator::I64Eq
+        | Operator::I32Ne
+        | Operator::I64Ne => {
             if let [
                 _,
                 MaybeConstant::ReferenceConstant {
@@ -71,6 +60,22 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
                 // Left operand is constant and can be immediate (commutative operations only)
                 must_collapse.replace(true);
             }
+        }
+
+        // Shift and rot operations are special because they can handle immediates bigger than i16,
+        // as the value is masked to the bitwidth of the type.
+        Operator::I32Shl
+        | Operator::I64Shl
+        | Operator::I32ShrS
+        | Operator::I64ShrS
+        | Operator::I32ShrU
+        | Operator::I64ShrU
+        //| Operator::I32Rotl
+        //| Operator::I64Rotl
+        //| Operator::I32Rotr
+        //| Operator::I64Rotr
+        => if let [_, MaybeConstant::ReferenceConstant { must_collapse, .. }] = inputs {
+            must_collapse.replace(true);
         }
 
         // GT is special because the left operand is the one that can be immediate
