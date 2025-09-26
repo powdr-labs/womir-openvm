@@ -3,8 +3,10 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
     Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
-    LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
+    LessThanOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
+
+use openvm_rv32im_transpiler::Rv32LoadStoreOpcode as LoadStoreOpcode;
 
 use crate::womir_translation::{ERROR_ABORT_CODE, ERROR_CODE_OFFSET};
 

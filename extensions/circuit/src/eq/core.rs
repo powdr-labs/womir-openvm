@@ -3,7 +3,10 @@ use std::{
     borrow::{Borrow, BorrowMut},
 };
 
-use openvm_circuit::arch::{AdapterAirContext, MinimalInstruction, VmAdapterInterface, VmCoreAir};
+use openvm_circuit::arch::{
+    AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, VmAdapterInterface, VmCoreAir,
+    VmCoreChip,
+};
 use openvm_circuit_primitives::utils::not;
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{LocalOpcode, instruction::Instruction};
@@ -19,7 +22,6 @@ use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
 
-use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
 use openvm_circuit::arch::Result as ResultVm;
 
 #[repr(C)]
@@ -201,7 +203,7 @@ impl<
     const NUM_LIMBS_READ: usize,
     const NUM_LIMBS_WRITE: usize,
     const LIMB_BITS: usize,
-> VmCoreChipWom<F, I> for EqCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
+> VmCoreChip<F, I> for EqCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 where
     I::Reads: Into<[[F; NUM_LIMBS_READ]; 2]>,
     I::Writes: From<[[F; NUM_LIMBS_WRITE]; 1]>,
@@ -214,9 +216,8 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
-        _from_frame: u32,
         reads: I::Reads,
-    ) -> ResultVm<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
+    ) -> ResultVm<(AdapterRuntimeContext<F, I>, Self::Record)> {
         let Instruction { opcode, .. } = instruction;
         let eq_opcode = EqOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
@@ -227,9 +228,8 @@ where
         let mut a: [F; NUM_LIMBS_WRITE] = [F::ZERO; NUM_LIMBS_WRITE];
         a[0] = F::from_bool(cmp_result);
 
-        let output = AdapterRuntimeContextWom {
+        let output = AdapterRuntimeContext {
             to_pc: None,
-            to_fp: None,
             writes: [a].into(),
         };
 
