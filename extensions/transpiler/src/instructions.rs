@@ -27,7 +27,8 @@ pub use openvm_rv32im_transpiler::{
 #[repr(usize)]
 // Note: these need to be exactly the same and in the exact same order as OpenVM's BaseAluOpcode
 // in order to be able to re-use the original Alu core chip.
-// The alternative to that is to not have this new enum here and use OpenVM's BaseAluOpcode.
+// We do re-use the `BaseAluOpcode` type for 32-bit operations, but need a new opcode/enum for
+// 64-bit ops.
 pub enum BaseAlu64Opcode {
     ADD,
     SUB,
@@ -55,7 +56,8 @@ pub enum BaseAlu64Opcode {
 #[repr(usize)]
 // Note: these need to be exactly the same and in the exact same order as OpenVM's ShiftOpcode
 // in order to be able to re-use the original Shift core chip.
-// The alternative to that is to not have this new enum here and use OpenVM's ShiftOpcode.
+// We do re-use the `BaseAluOpcode` type for 32-bit operations, but need a new opcode/enum for
+// 64-bit ops.
 pub enum Shift64Opcode {
     SLL,
     SRL,
@@ -81,7 +83,8 @@ pub enum Shift64Opcode {
 #[repr(usize)]
 // Note: these need to be exactly the same and in the exact same order as OpenVM's LessThanOpcode
 // in order to be able to re-use the original LessThan core chip.
-// The alternative to that is to not have this new enum here and use OpenVM's LessThanOpcode.
+// We do re-use the `BaseAluOpcode` type for 32-bit operations, but need a new opcode/enum for
+// 64-bit ops.
 pub enum LessThan64Opcode {
     SLT,
     SLTU,
@@ -190,7 +193,8 @@ pub enum JumpOpcode {
 #[allow(non_camel_case_types)]
 // Note: these need to be exactly the same and in the exact same order as OpenVM's MulOpcode
 // in order to be able to re-use the original Mul core chip.
-// The alternative to that is to not have this new enum here and use OpenVM's MulOpcode.
+// We do re-use the `BaseAluOpcode` type for 32-bit operations, but need a new opcode/enum for
+// 64-bit ops.
 pub enum Mul64Opcode {
     MUL,
 }
@@ -215,7 +219,8 @@ pub enum Mul64Opcode {
 #[allow(non_camel_case_types)]
 // Note: these need to be exactly the same and in the exact same order as OpenVM's DivRemOpcode
 // in order to be able to re-use the original DivRem core chip.
-// The alternative to that is to not have this new enum here and use OpenVM's DivRemOpcode.
+// We do re-use the `BaseAluOpcode` type for 32-bit operations, but need a new opcode/enum for
+// 64-bit ops.
 pub enum DivRem64Opcode {
     DIV,
     DIVU,
