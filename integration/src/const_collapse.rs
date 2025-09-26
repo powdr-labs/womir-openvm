@@ -51,7 +51,7 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         // TODO: Operator::Select could benefit from immediates, but also needs special handling
         => {
             if let [
-                MaybeConstant::NonConstant,
+                _,
                 MaybeConstant::ReferenceConstant {
                     value,
                     must_collapse,
@@ -90,7 +90,7 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
                     value,
                     must_collapse,
                 },
-                MaybeConstant::NonConstant,
+                _,
             ] = inputs
                 && can_be_i16(value)
             {
