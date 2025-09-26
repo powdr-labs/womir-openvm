@@ -495,56 +495,6 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             load_sign_extend_chip,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
         )?;
-        //
-        // let beq_chip = Rv32BranchEqualChip::new(
-        //     Rv32BranchAdapterChip::new(execution_bus, program_bus, memory_bridge),
-        //     BranchEqualCoreChip::new(BranchEqualOpcode::CLASS_OFFSET, DEFAULT_PC_STEP),
-        //     offline_memory.clone(),
-        // );
-        // inventory.add_executor(
-        //     beq_chip,
-        //     BranchEqualOpcode::iter().map(|x| x.global_opcode()),
-        // )?;
-        //
-        // let blt_chip = Rv32BranchLessThanChip::new(
-        //     Rv32BranchAdapterChip::new(execution_bus, program_bus, memory_bridge),
-        //     BranchLessThanCoreChip::new(
-        //         bitwise_lu_chip.clone(),
-        //         BranchLessThanOpcode::CLASS_OFFSET,
-        //     ),
-        //     offline_memory.clone(),
-        // );
-        // inventory.add_executor(
-        //     blt_chip,
-        //     BranchLessThanOpcode::iter().map(|x| x.global_opcode()),
-        // )?;
-        //
-        // let jal_lui_chip = Rv32JalLuiChip::new(
-        //     Rv32CondRdWriteAdapterChip::new(execution_bus, program_bus, memory_bridge),
-        //     Rv32JalLuiCoreChip::new(bitwise_lu_chip.clone()),
-        //     offline_memory.clone(),
-        // );
-        // inventory.add_executor(
-        //     jal_lui_chip,
-        //     Rv32JalLuiOpcode::iter().map(|x| x.global_opcode()),
-        // )?;
-        //
-        // let jalr_chip = Rv32JalrChip::new(
-        //     Rv32JalrAdapterChip::new(execution_bus, program_bus, memory_bridge),
-        //     Rv32JalrCoreChip::new(bitwise_lu_chip.clone(), range_checker.clone()),
-        //     offline_memory.clone(),
-        // );
-        // inventory.add_executor(jalr_chip, Rv32JalrOpcode::iter().map(|x| x.global_opcode()))?;
-        //
-        // let auipc_chip = Rv32AuipcChip::new(
-        //     Rv32RdWriteAdapterChip::new(execution_bus, program_bus, memory_bridge),
-        //     Rv32AuipcCoreChip::new(bitwise_lu_chip.clone()),
-        //     offline_memory.clone(),
-        // );
-        // inventory.add_executor(
-        //     auipc_chip,
-        //     Rv32AuipcOpcode::iter().map(|x| x.global_opcode()),
-        // )?;
 
         // There is no downside to adding phantom sub-executors, so we do it in the base extension.
         builder.add_phantom_sub_executor(
