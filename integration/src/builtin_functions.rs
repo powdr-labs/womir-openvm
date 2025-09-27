@@ -4,9 +4,9 @@ use itertools::Itertools;
 use openvm_stark_backend::p3_field::PrimeField32;
 use wasmparser::{Operator, ValType};
 use womir::loader::{
+    Module,
     blockless_dag::{BlocklessDag, Operation},
     flattening::WriteOnceAsm,
-    Module,
 };
 
 use crate::womir_translation::{Directive, OpenVMSettings};
