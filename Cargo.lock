@@ -4084,6 +4084,7 @@ dependencies = [
 name = "womir-openvm-integration"
 version = "0.0.1"
 dependencies = [
+ "arrayvec",
  "clap",
  "derive_more 1.0.0",
  "eyre",
