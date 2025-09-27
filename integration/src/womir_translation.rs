@@ -1,6 +1,6 @@
 use std::{collections::HashMap, ops::Range, vec};
 
-use crate::{instruction_builder as ib, to_field::ToField};
+use crate::{const_collapse::can_turn_to_lt, instruction_builder as ib, to_field::ToField};
 use arrayvec::ArrayVec;
 use itertools::Itertools;
 use openvm_circuit::{
@@ -888,14 +888,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     }
                     [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
                     | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
-                        // This is a little confusing, because GE and LE are using the same opcode,
-                        // but this is correct, as the operands are reversed between GE and LE.
-                        // Const folding step guarantees that only GE will have the constant on
-                        // the right side, and only LE will have the constant on the left side.
-                        //
-                        // In another words: the order of the operands will guarantee that the inverse
-                        // operation is always a less-than comparison: reg_value < constant_value.
-                        let inverse_op = match op {
+                        let opcode = match op {
                             Op::I32GeS | Op::I32LeS => LessThanOpcode::SLT.global_opcode(),
                             Op::I32GeU | Op::I32LeU => LessThanOpcode::SLTU.global_opcode(),
                             Op::I64GeS | Op::I64LeS => LessThan64Opcode::SLT.global_opcode(),
@@ -903,8 +896,24 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             _ => unreachable!(),
                         };
 
+                        // Check whether this is the case where "c >= r" or "r <= c" can be turned into "r < c + 1".
+                        if ((matches!(op, Op::I32GeS | Op::I32GeU | Op::I64GeS | Op::I64GeU)
+                            && matches!(&inputs[0], WasmOpInput::Constant(_)))
+                            || (matches!(op, Op::I32LeS | Op::I32LeU | Op::I64LeS | Op::I64LeU)
+                                && matches!(&inputs[0], WasmOpInput::Register(_))))
+                            && let Some(inc_c) = can_turn_to_lt(&op, c)
+                        {
+                            return Directive::Instruction(ib::instr_i(
+                                opcode.as_usize(),
+                                output,
+                                reg.start as usize,
+                                i16_to_imm_field(inc_c),
+                            ))
+                            .into();
+                        }
+
                         let c = const_i16_as_field(c);
-                        ib::instr_i(inverse_op.as_usize(), inverse_result, reg.start as usize, c)
+                        ib::instr_i(opcode.as_usize(), inverse_result, reg.start as usize, c)
                     }
                     _ => unreachable!("combination of inputs not possible for GE/LE operations"),
                 };
@@ -2155,7 +2164,11 @@ fn const_i16_as_field<F: PrimeField32>(value: &WasmValue) -> F {
         WasmValue::I64(v) => v as i16,
         _ => panic!("not valid i16"),
     };
-    F::from_canonical_u32((c as i32 as u32) & 0xff_ff_ff)
+    i16_to_imm_field(c)
+}
+
+fn i16_to_imm_field<F: PrimeField32>(value: i16) -> F {
+    F::from_canonical_u32((value as i32 as u32) & 0xff_ff_ff)
 }
 
 fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> i32 {

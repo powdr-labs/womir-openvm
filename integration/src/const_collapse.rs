@@ -47,17 +47,19 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
             {
                 // Right operand is constant and can be immediate
                 must_collapse.replace(true);
-            } else if is_commutative(op)
-                && let [
+            } else if let [
                     MaybeConstant::ReferenceConstant {
                         value,
                         must_collapse,
                     },
                     MaybeConstant::NonConstant,
                 ] = inputs
-                && can_be_i16(value)
+                && ((is_commutative(op)
+                    && can_be_i16(value)) || can_turn_to_lt(op, value).is_some())
             {
-                // Left operand is constant and can be immediate (commutative operations only)
+                // Left operand is constant and can be immediate
+                // (either the operation is commutative, or it's
+                // a GE that can be transformed to LT)
                 must_collapse.replace(true);
             }
         }
@@ -98,6 +100,18 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
             {
                 // Left operand is constant and can be immediate
                 must_collapse.replace(true);
+            } else if let [
+                    _,
+                    MaybeConstant::ReferenceConstant {
+                        value,
+                        must_collapse,
+                    },
+                ] = inputs
+                && can_turn_to_lt(op, value).is_some()
+            {
+                // The constant is on the right, but we can turn the LE into an LT,
+                // so we can use the left operand as immediate.
+                must_collapse.replace(true);
             }
         }
 
@@ -134,6 +148,35 @@ fn is_commutative(op: &Operator) -> bool {
             | Operator::I32Ne
             | Operator::I64Ne
     )
+}
+
+/// If op is a GE or LE, can we turn "c >= x" or "x <= c" into "x < c + 1", where c + 1 fits in i16?
+pub fn can_turn_to_lt(op: &Operator, value: &WasmValue) -> Option<i16> {
+    match op {
+        // Signed case:
+        Operator::I32GeS | Operator::I64GeS | Operator::I32LeS | Operator::I64LeS => match value {
+            WasmValue::I32(v) => v.checked_add(1).and_then(|v| i16::try_from(v).ok()),
+            WasmValue::I64(v) => v.checked_add(1).and_then(|v| i16::try_from(v).ok()),
+            _ => None,
+        },
+        // Unsigned case:
+        // This is weird, because we need to represent an unsigned value as a sign-extended i16.
+        // So, we can represent (c+1) if it falls in the ranges:
+        // [0..0x7FFF] or [0xFFFF8000..0xFFFFFFFF], for u32
+        // [0..0x7FFF] or [0xFFFFFFFFFFFF8000..0xFFFFFFFFFFFFFFFF], for u64
+        Operator::I32GeU | Operator::I64GeU | Operator::I32LeU | Operator::I64LeU => match value {
+            WasmValue::I32(v) => {
+                let uv = *v as u32;
+                uv.checked_add(1).and_then(|v| i16::try_from(v as i32).ok())
+            }
+            WasmValue::I64(v) => {
+                let uv = *v as u64;
+                uv.checked_add(1).and_then(|v| i16::try_from(v as i64).ok())
+            }
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 fn can_be_i16(value: &WasmValue) -> bool {
