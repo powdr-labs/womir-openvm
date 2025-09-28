@@ -219,8 +219,10 @@ where
             let mut c_bytes = [0u8; READ_BYTES];
             c_bytes[0] = c_u32 as u8;
             c_bytes[1] = (c_u32 >> 8) as u8;
-            c_bytes[2] = (c_u32 >> 16) as u8;
-            c_bytes[3] = (c_u32 >> 16) as u8;
+            let bit_extension = (c_u32 >> 16) as u8;
+            for byte in &mut c_bytes[2..] {
+                *byte = bit_extension;
+            }
             (None, c_bytes.map(F::from_canonical_u8), c)
         } else {
             let rs2_read = memory.read::<READ_BYTES>(e, c + fp_f);
