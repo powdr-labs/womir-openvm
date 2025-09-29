@@ -2,8 +2,9 @@ use std::{borrow::Borrow, marker::PhantomData};
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, BasicAdapterInterface, ExecutionBridge, ExecutionBus, ExecutionState,
-        MinimalInstruction, Result as ResultVm, VmAdapterAir, VmAdapterInterface,
+        AdapterAirContext, AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge,
+        ExecutionBus, ExecutionState, MinimalInstruction, Result as ResultVm, VmAdapterAir,
+        VmAdapterInterface,
     },
     system::{
         memory::{MemoryController, OfflineMemory, RecordId, offline_checker::MemoryBridge},
@@ -28,7 +29,7 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
+use crate::{FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
 
 use super::RV32_CELL_BITS;
 
@@ -245,7 +246,7 @@ where
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        output: AdapterRuntimeContextWom<F, Self::Interface>,
+        output: AdapterRuntimeContext<F, Self::Interface>,
         _read_record: &Self::ReadRecord,
     ) -> ResultVm<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction { a, d, .. } = instruction;

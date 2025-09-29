@@ -178,8 +178,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Create VM configuration
             let vm_config = SdkVmConfig::builder()
                 .system(Default::default())
-                .rv32i(Default::default())
-                .rv32m(Default::default())
                 .io(Default::default())
                 .build();
             let vm_config = SpecializedConfig::new(vm_config);
@@ -210,8 +208,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Create VM configuration
                 let vm_config = SdkVmConfig::builder()
                     .system(Default::default())
-                    .rv32i(Default::default())
-                    .rv32m(Default::default())
                     .io(Default::default())
                     .build();
                 let vm_config = SpecializedConfig::new(vm_config);
@@ -358,8 +354,6 @@ mod tests {
         // Create VM configuration
         let vm_config = SdkVmConfig::builder()
             .system(Default::default())
-            .rv32i(Default::default())
-            .rv32m(Default::default())
             .io(Default::default())
             .build();
         let vm_config = SpecializedConfig::new(vm_config);
@@ -1756,8 +1750,6 @@ mod wast_tests {
         // Create VM configuration
         let vm_config = SdkVmConfig::builder()
             .system(Default::default())
-            .rv32i(Default::default())
-            .rv32m(Default::default())
             .io(Default::default())
             .build();
         let vm_config = SpecializedConfig::new(vm_config);
@@ -1866,21 +1858,21 @@ mod wast_tests {
 
     #[test]
     fn test_fib() {
-        run_single_wasm_test("../sample_programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
+        run_single_wasm_test("../sample-programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
     }
 
     #[test]
     fn test_call_indirect_wasm() {
-        run_single_wasm_test("../sample_programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
+        run_single_wasm_test("../sample-programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
         run_single_wasm_test(
-            "../sample_programs/call_indirect.wasm",
+            "../sample-programs/call_indirect.wasm",
             "call_op",
             &[0, 10, 20],
             &[30],
         )
         .unwrap();
         run_single_wasm_test(
-            "../sample_programs/call_indirect.wasm",
+            "../sample-programs/call_indirect.wasm",
             "call_op",
             &[1, 10, 3],
             &[7],
@@ -1890,6 +1882,102 @@ mod wast_tests {
 
     #[test]
     fn test_keccak() {
-        run_single_wasm_test("../sample_programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
+        run_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
+    }
+
+    #[test]
+    fn test_keccak_rust_womir() {
+        run_womir_guest(
+            "keccak_with_inputs",
+            "main",
+            &[0, 0],
+            // keccak([0; 32]) = [41, ...]
+            &[1, 41],
+            &[],
+        )
+    }
+
+    #[test]
+    fn test_keccak_rust_openvm() {
+        let path = format!(
+            "{}/../sample-programs/keccak_with_inputs",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        // TODO the outputs are not checked yet because powdr-openvm does not return the outputs.
+        run_openvm_guest(&path, &[1], &[41]).unwrap();
+    }
+
+    fn run_womir_guest(
+        case: &str,
+        main_function: &str,
+        func_inputs: &[u32],
+        data_inputs: &[u32],
+        outputs: &[u32],
+    ) {
+        let path = format!("{}/../sample-programs/{case}", env!("CARGO_MANIFEST_DIR"));
+        build_wasm(&PathBuf::from(&path));
+        let wasm_path = format!("{path}/target/wasm32-unknown-unknown/release/{case}.wasm",);
+        let args = func_inputs
+            .iter()
+            .chain(data_inputs)
+            .copied()
+            .collect::<Vec<_>>();
+        run_single_wasm_test(&wasm_path, main_function, &args, outputs).unwrap()
+    }
+
+    fn build_wasm(path: &PathBuf) {
+        assert!(path.exists(), "Target directory does not exist: {path:?}",);
+
+        let output = Command::new("cargo")
+            .arg("build")
+            .arg("--release")
+            .arg("--target")
+            .arg("wasm32-unknown-unknown")
+            .current_dir(path)
+            .output()
+            .expect("Failed to run cargo build");
+
+        if !output.status.success() {
+            eprintln!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
+            eprintln!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+        }
+
+        assert!(output.status.success(), "cargo build failed for {path:?}",);
+    }
+
+    // We use powdr-openvm to run OpenVM RISC-V so we don't have to deal with
+    // SdkConfig stuff and have access to autoprecompiles.
+    fn run_openvm_guest(
+        guest: &str,
+        args: &[u32],
+        expected: &[u32],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        setup_tracing_with_log_level(Level::WARN);
+        println!("Running OpenVM test {guest} with ({args:?}): expected {expected:?}");
+
+        let compiled_program = powdr_openvm::compile_guest(
+            guest,
+            Default::default(),
+            powdr_autoprecompiles::PowdrConfig::new(
+                0,
+                0,
+                powdr_openvm::DegreeBound {
+                    identities: 3,
+                    bus_interactions: 2,
+                },
+            ),
+            Default::default(),
+            Default::default(),
+        )
+        .unwrap();
+
+        let mut stdin = StdIn::default();
+        for arg in args {
+            stdin.write(arg);
+        }
+
+        powdr_openvm::execute(compiled_program, stdin).unwrap();
+
+        Ok(())
     }
 }

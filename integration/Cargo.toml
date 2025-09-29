@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+powdr-openvm = { workspace = true }
+powdr-autoprecompiles = { workspace = true }
 serde.workspace = true
 eyre.workspace = true
 thiserror.workspace = true
