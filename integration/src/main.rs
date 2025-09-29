@@ -1866,8 +1866,8 @@ mod wast_tests {
         run_single_wasm_test(
             "../sample-programs/n_first_sum.wasm",
             "n_first_sum",
-            &[42],
-            &[903],
+            &[42, 0],
+            &[903, 0],
         )
         .unwrap()
     }
