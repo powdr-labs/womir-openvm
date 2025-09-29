@@ -1,9 +1,11 @@
 [package]
 name = "womir-openvm-integration"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
+powdr-openvm = { workspace = true }
+powdr-autoprecompiles = { workspace = true }
 serde.workspace = true
 eyre.workspace = true
 thiserror.workspace = true

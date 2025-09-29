@@ -2,8 +2,9 @@ use std::{borrow::Borrow, marker::PhantomData};
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, BasicAdapterInterface, ExecutionBridge, ExecutionBus, ExecutionState,
-        MinimalInstruction, Result as ResultVm, VmAdapterAir, VmAdapterInterface,
+        AdapterAirContext, AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge,
+        ExecutionBus, ExecutionState, MinimalInstruction, Result as ResultVm, VmAdapterAir,
+        VmAdapterInterface,
     },
     system::{
         memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
@@ -226,8 +227,10 @@ where
             let mut c_bytes = [0u8; READ_BYTES];
             c_bytes[0] = c_u32 as u8;
             c_bytes[1] = (c_u32 >> 8) as u8;
-            c_bytes[2] = (c_u32 >> 16) as u8;
-            c_bytes[3] = (c_u32 >> 16) as u8;
+            let bit_extension = (c_u32 >> 16) as u8;
+            for byte in &mut c_bytes[2..] {
+                *byte = bit_extension;
+            }
             (None, c_bytes.map(F::from_canonical_u8), c)
         } else {
             assert_eq!(e.as_canonical_u32(), RV32_REGISTER_AS);
@@ -252,7 +255,7 @@ where
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        output: AdapterRuntimeContextWom<F, Self::Interface>,
+        output: AdapterRuntimeContext<F, Self::Interface>,
         _read_record: &Self::ReadRecord,
     ) -> ResultVm<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction { a, d, .. } = instruction;

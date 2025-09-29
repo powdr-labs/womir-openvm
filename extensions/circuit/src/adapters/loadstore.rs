@@ -4,10 +4,11 @@ use std::{
     marker::PhantomData,
 };
 
+use LoadStoreOpcode::*;
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, ExecutionBridge, ExecutionBus, ExecutionState, Result, VmAdapterAir,
-        VmAdapterInterface,
+        AdapterAirContext, AdapterRuntimeContext, ExecutionBridge, ExecutionBus, ExecutionState,
+        Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
         memory::{
@@ -36,7 +37,7 @@ use openvm_stark_backend::{
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
-use openvm_womir_transpiler::LoadStoreOpcode::*;
+use openvm_womir_transpiler::LoadStoreOpcode;
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
@@ -44,28 +45,7 @@ use super::{RV32_REGISTER_NUM_LIMBS, compose};
 use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomRecord};
 use crate::{WomBridge, WomController, adapters::RV32_CELL_BITS};
 
-/// LoadStore Adapter handles all memory and register operations, so it must be aware
-/// of the instruction type, specifically whether it is a load or store
-/// LoadStore Adapter handles 4 byte aligned lw, sw instructions,
-///                           2 byte aligned lh, lhu, sh instructions and
-///                           1 byte aligned lb, lbu, sb instructions
-/// This adapter always batch reads/writes 4 bytes,
-/// thus it needs to shift left the memory pointer by some amount in case of not 4 byte aligned
-/// intermediate pointers
-pub struct LoadStoreInstruction<T> {
-    /// is_valid is constrained to be bool
-    pub is_valid: T,
-    /// Absolute opcode number
-    pub opcode: T,
-    /// is_load is constrained to be bool, and can only be 1 if is_valid is 1
-    pub is_load: T,
-
-    /// Keeping two separate shift amounts is needed for getting the read_ptr/write_ptr with degree
-    /// 2 load_shift_amount will be the shift amount if load and 0 if store
-    pub load_shift_amount: T,
-    /// store_shift_amount will be 0 if load and the shift amount if store
-    pub store_shift_amount: T,
-}
+use openvm_rv32im_circuit::adapters::LoadStoreInstruction;
 
 /// The LoadStoreAdapter separates Runtime and Air AdapterInterfaces.
 /// This is necessary because `prev_data` should be owned by the core chip and sent to the adapter,
@@ -429,9 +409,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
         debug_assert!(e.as_canonical_u32() != RV32_IMM_AS);
 
-        let local_opcode = openvm_womir_transpiler::LoadStoreOpcode::from_usize(
-            opcode.local_opcode_idx(openvm_womir_transpiler::LoadStoreOpcode::CLASS_OFFSET),
-        );
+        let local_opcode =
+            LoadStoreOpcode::from_usize(opcode.local_opcode_idx(LoadStoreOpcode::CLASS_OFFSET));
 
         let fp_f = F::from_canonical_u32(fp);
         assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
@@ -501,7 +480,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        output: AdapterRuntimeContextWom<F, Self::Interface>,
+        output: AdapterRuntimeContext<F, Self::Interface>,
         read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction {
@@ -513,9 +492,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
             ..
         } = *instruction;
 
-        let local_opcode = openvm_womir_transpiler::LoadStoreOpcode::from_usize(
-            opcode.local_opcode_idx(openvm_womir_transpiler::LoadStoreOpcode::CLASS_OFFSET),
-        );
+        let local_opcode =
+            LoadStoreOpcode::from_usize(opcode.local_opcode_idx(LoadStoreOpcode::CLASS_OFFSET));
 
 
         let fp_f = F::from_canonical_u32(from_frame.fp);
@@ -542,7 +520,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
                 pc: output.to_pc.unwrap_or(from_state.pc + DEFAULT_PC_STEP),
                 timestamp: memory.timestamp(),
             },
-            output.to_fp.unwrap_or(from_frame.fp),
+            from_frame.fp,
             Self::WriteRecord {
                 from_state,
                 from_frame,

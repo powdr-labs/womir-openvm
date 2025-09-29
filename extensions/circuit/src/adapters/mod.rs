@@ -8,7 +8,6 @@ mod alu;
 mod consts;
 mod copy_into_frame;
 mod jaaf;
-mod jalr;
 mod jump;
 mod loadstore;
 
@@ -17,7 +16,6 @@ pub use alu::*;
 pub use consts::*;
 pub use copy_into_frame::*;
 pub use jaaf::*;
-pub use jalr::*;
 pub use jump::*;
 pub use loadstore::*;
 pub use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
@@ -64,14 +62,4 @@ pub fn unsafe_read_wom_register<F: PrimeField32>(wom: &WomController<F>, pointer
 pub fn unsafe_read_rv32_register<F: PrimeField32>(memory: &MemoryController<F>, pointer: F) -> u32 {
     let data = memory.unsafe_read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, pointer);
     compose(data)
-}
-
-pub fn abstract_compose<T: FieldAlgebra, V: Mul<T, Output = T>>(
-    data: [V; RV32_REGISTER_NUM_LIMBS],
-) -> T {
-    data.into_iter()
-        .enumerate()
-        .fold(T::ZERO, |acc, (i, limb)| {
-            acc + limb * T::from_canonical_u32(1 << (i * RV32_CELL_BITS))
-        })
 }

@@ -3,26 +3,28 @@ use std::{
     borrow::{Borrow, BorrowMut},
 };
 
-use openvm_circuit::arch::{AdapterAirContext, MinimalInstruction, VmAdapterInterface, VmCoreAir};
+use openvm_circuit::arch::{
+    AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, VmAdapterInterface, VmCoreAir,
+    VmCoreChip,
+};
 use openvm_circuit_primitives::{
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
     utils::not,
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{LocalOpcode, instruction::Instruction};
-use openvm_rv32im_transpiler::LessThanOpcode;
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
+use openvm_womir_transpiler::LessThanOpcode;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
 
-use crate::{AdapterRuntimeContextWom, VmCoreChipWom};
 use openvm_circuit::arch::Result as ResultVm;
 
 #[repr(C)]
@@ -225,7 +227,7 @@ impl<
     const NUM_LIMBS_READ: usize,
     const NUM_LIMBS_WRITE: usize,
     const LIMB_BITS: usize,
-> VmCoreChipWom<F, I> for LessThanCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
+> VmCoreChip<F, I> for LessThanCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 where
     I::Reads: Into<[[F; NUM_LIMBS_READ]; 2]>,
     I::Writes: From<[[F; NUM_LIMBS_WRITE]; 1]>,
@@ -238,9 +240,8 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
-        _from_frame: u32,
         reads: I::Reads,
-    ) -> ResultVm<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
+    ) -> ResultVm<(AdapterRuntimeContext<F, I>, Self::Record)> {
         let Instruction { opcode, .. } = instruction;
         let less_than_opcode = LessThanOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
@@ -301,7 +302,7 @@ where
         let mut writes = [0u32; NUM_LIMBS_WRITE];
         writes[0] = cmp_result as u32;
 
-        let output = AdapterRuntimeContextWom::without_pc_fp([writes.map(F::from_canonical_u32)]);
+        let output = AdapterRuntimeContext::without_pc([writes.map(F::from_canonical_u32)]);
         let record = LessThanCoreRecord {
             opcode: less_than_opcode,
             b: data[0],

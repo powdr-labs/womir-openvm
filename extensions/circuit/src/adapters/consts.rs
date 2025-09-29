@@ -2,8 +2,8 @@ use std::{borrow::Borrow, marker::PhantomData};
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, BasicAdapterInterface, ExecutionBridge, ExecutionBus, ExecutionState,
-        MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
+        AdapterAirContext, AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge,
+        ExecutionBus, ExecutionState, MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
         memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
@@ -143,7 +143,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        _output: AdapterRuntimeContextWom<F, Self::Interface>,
+        _output: AdapterRuntimeContext<F, Self::Interface>,
         _read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction {

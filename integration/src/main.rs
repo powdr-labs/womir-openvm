@@ -1,4 +1,5 @@
 mod builtin_functions;
+mod const_collapse;
 mod instruction_builder;
 mod to_field;
 mod womir_translation;
@@ -17,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
 use womir::loader::flattening::WriteOnceAsm;
 use womir::loader::{FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics};
 
@@ -26,10 +27,10 @@ use openvm_circuit::arch::{
 };
 use openvm_circuit::circuit_derive::{Chip, ChipUsageGetter};
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
-use openvm_sdk::config::{
-    AppConfig, SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery, DEFAULT_APP_LOG_BLOWUP,
-};
 use openvm_sdk::Sdk;
+use openvm_sdk::config::{
+    AppConfig, DEFAULT_APP_LOG_BLOWUP, SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery,
+};
 use openvm_stark_sdk::config::FriParameters;
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
@@ -177,8 +178,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Create VM configuration
             let vm_config = SdkVmConfig::builder()
                 .system(Default::default())
-                .rv32i(Default::default())
-                .rv32m(Default::default())
                 .io(Default::default())
                 .build();
             let vm_config = SpecializedConfig::new(vm_config);
@@ -209,8 +208,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Create VM configuration
                 let vm_config = SdkVmConfig::builder()
                     .system(Default::default())
-                    .rv32i(Default::default())
-                    .rv32m(Default::default())
                     .io(Default::default())
                     .build();
                 let vm_config = SpecializedConfig::new(vm_config);
@@ -357,8 +354,6 @@ mod tests {
         // Create VM configuration
         let vm_config = SdkVmConfig::builder()
             .system(Default::default())
-            .rv32i(Default::default())
-            .rv32m(Default::default())
             .io(Default::default())
             .build();
         let vm_config = SpecializedConfig::new(vm_config);
@@ -398,8 +393,8 @@ mod tests {
     fn test_basic_wom_operations() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 666.to_f()?),
-            wom::addi::<F>(9, 0, 1.to_f()?),
+            wom::add_imm::<F>(8, 0, 666.to_f()?),
+            wom::add_imm::<F>(9, 0, 1.to_f()?),
             wom::add::<F>(10, 8, 9),
             wom::reveal(10, 0),
             wom::halt(),
@@ -426,8 +421,8 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm(1, 0, 0),
-            wom::addi_64::<F>(8, 0, 666.to_f()?),
-            wom::addi_64::<F>(10, 8, 1.to_f()?),
+            wom::add_imm_64::<F>(8, 0, 666.to_f()?),
+            wom::add_imm_64::<F>(10, 8, 1.to_f()?),
             wom::reveal(10, 0),
             wom::halt(),
         ];
@@ -439,8 +434,8 @@ mod tests {
     fn test_basic_mul() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 666.to_f()?),
-            wom::addi::<F>(9, 0, 1.to_f()?),
+            wom::add_imm::<F>(8, 0, 666.to_f()?),
+            wom::add_imm::<F>(9, 0, 1.to_f()?),
             wom::mul::<F>(10, 8, 9),
             wom::reveal(10, 0),
             wom::halt(),
@@ -453,8 +448,8 @@ mod tests {
     fn test_mul_zero() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 12345.to_f()?),
-            wom::addi::<F>(9, 0, 0.to_f()?),
+            wom::add_imm::<F>(8, 0, 12345.to_f()?),
+            wom::add_imm::<F>(9, 0, 0.to_f()?),
             wom::mul::<F>(10, 8, 9), // 12345 * 0 = 0
             wom::reveal(10, 0),
             wom::halt(),
@@ -466,8 +461,8 @@ mod tests {
     fn test_mul_one() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 999.to_f()?),
-            wom::addi::<F>(9, 0, 1.to_f()?),
+            wom::add_imm::<F>(8, 0, 999.to_f()?),
+            wom::add_imm::<F>(9, 0, 1.to_f()?),
             wom::mul::<F>(10, 8, 9), // 999 * 1 = 999
             wom::reveal(10, 0),
             wom::halt(),
@@ -500,8 +495,8 @@ mod tests {
     fn test_mul_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 7.to_f()?),
-            wom::addi::<F>(9, 0, 8.to_f()?), // 2^3
+            wom::add_imm::<F>(8, 0, 7.to_f()?),
+            wom::add_imm::<F>(9, 0, 8.to_f()?), // 2^3
             wom::mul::<F>(10, 8, 9),         // 7 * 8 = 56
             wom::reveal(10, 0),
             wom::halt(),
@@ -547,8 +542,8 @@ mod tests {
     fn test_mul_commutative() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 13.to_f()?),
-            wom::addi::<F>(9, 0, 17.to_f()?),
+            wom::add_imm::<F>(8, 0, 13.to_f()?),
+            wom::add_imm::<F>(9, 0, 17.to_f()?),
             wom::mul::<F>(10, 8, 9),   // 13 * 17 = 221
             wom::mul::<F>(11, 9, 8),   // 17 * 13 = 221 (should be same)
             wom::sub::<F>(12, 10, 11), // Should be 0 if commutative
@@ -562,9 +557,9 @@ mod tests {
     fn test_mul_chain() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 2.to_f()?),
-            wom::addi::<F>(9, 0, 3.to_f()?),
-            wom::addi::<F>(10, 0, 5.to_f()?),
+            wom::add_imm::<F>(8, 0, 2.to_f()?),
+            wom::add_imm::<F>(9, 0, 3.to_f()?),
+            wom::add_imm::<F>(10, 0, 5.to_f()?),
             wom::mul::<F>(11, 8, 9),   // 2 * 3 = 6
             wom::mul::<F>(12, 11, 10), // 6 * 5 = 30
             wom::reveal(12, 0),
@@ -579,7 +574,7 @@ mod tests {
             // Test with maximum 32-bit value
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFF, 0xFFFF), // 2^32 - 1
-            wom::addi::<F>(9, 0, 1.to_f()?),
+            wom::add_imm::<F>(9, 0, 1.to_f()?),
             wom::mul::<F>(10, 8, 9), // (2^32 - 1) * 1 = 2^32 - 1
             wom::reveal(10, 0),
             wom::halt(),
@@ -598,7 +593,7 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFB, 0xFFFF), // -5 in two's complement
-            wom::addi::<F>(9, 0, 3.to_f()?),
+            wom::add_imm::<F>(9, 0, 3.to_f()?),
             wom::mul::<F>(10, 8, 9), // -5 * 3 = -15
             wom::reveal(10, 0),
             wom::halt(),
@@ -617,7 +612,7 @@ mod tests {
         // Test multiplication of positive and negative numbers
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 4.to_f()?),
+            wom::add_imm::<F>(8, 0, 4.to_f()?),
             wom::const_32_imm::<F>(9, 0xFFFA, 0xFFFF), // -6 in two's complement
             wom::mul::<F>(10, 8, 9),                   // 4 * -6 = -24
             wom::reveal(10, 0),
@@ -651,7 +646,7 @@ mod tests {
         // Test multiplication by -1
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 42.to_f()?),
+            wom::add_imm::<F>(8, 0, 42.to_f()?),
             wom::const_32_imm::<F>(9, 0xFFFF, 0xFFFF), // -1 in two's complement
             wom::mul::<F>(10, 8, 9),                   // 42 * -1 = -42
             wom::reveal(10, 0),
@@ -690,8 +685,8 @@ mod tests {
     fn test_basic_div() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 100.to_f()?),
-            wom::addi::<F>(9, 0, 10.to_f()?),
+            wom::add_imm::<F>(8, 0, 100.to_f()?),
+            wom::add_imm::<F>(9, 0, 10.to_f()?),
             wom::div::<F>(10, 8, 9), // 100 / 10 = 10
             wom::reveal(10, 0),
             wom::halt(),
@@ -703,8 +698,8 @@ mod tests {
     fn test_div_by_one() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 999.to_f()?),
-            wom::addi::<F>(9, 0, 1.to_f()?),
+            wom::add_imm::<F>(8, 0, 999.to_f()?),
+            wom::add_imm::<F>(9, 0, 1.to_f()?),
             wom::div::<F>(10, 8, 9), // 999 / 1 = 999
             wom::reveal(10, 0),
             wom::halt(),
@@ -716,8 +711,8 @@ mod tests {
     fn test_div_equal_numbers() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 42.to_f()?),
-            wom::addi::<F>(9, 0, 42.to_f()?),
+            wom::add_imm::<F>(8, 0, 42.to_f()?),
+            wom::add_imm::<F>(9, 0, 42.to_f()?),
             wom::div::<F>(10, 8, 9), // 42 / 42 = 1
             wom::reveal(10, 0),
             wom::halt(),
@@ -729,8 +724,8 @@ mod tests {
     fn test_div_with_remainder() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 17.to_f()?),
-            wom::addi::<F>(9, 0, 5.to_f()?),
+            wom::add_imm::<F>(8, 0, 17.to_f()?),
+            wom::add_imm::<F>(9, 0, 5.to_f()?),
             wom::div::<F>(10, 8, 9), // 17 / 5 = 3 (integer division)
             wom::reveal(10, 0),
             wom::halt(),
@@ -742,8 +737,8 @@ mod tests {
     fn test_div_zero_dividend() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 0.to_f()?),
-            wom::addi::<F>(9, 0, 100.to_f()?),
+            wom::add_imm::<F>(8, 0, 0.to_f()?),
+            wom::add_imm::<F>(9, 0, 100.to_f()?),
             wom::div::<F>(10, 8, 9), // 0 / 100 = 0
             wom::reveal(10, 0),
             wom::halt(),
@@ -768,9 +763,9 @@ mod tests {
     fn test_div_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 128.to_f()?),
-            wom::addi::<F>(9, 0, 8.to_f()?), // 2^3
-            wom::div::<F>(10, 8, 9),         // 128 / 8 = 16
+            wom::add_imm::<F>(8, 0, 128.to_f()?),
+            wom::add_imm::<F>(9, 0, 8.to_f()?), // 2^3
+            wom::div::<F>(10, 8, 9),            // 128 / 8 = 16
             wom::reveal(10, 0),
             wom::halt(),
         ];
@@ -781,9 +776,9 @@ mod tests {
     fn test_div_chain() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 120.to_f()?),
-            wom::addi::<F>(9, 0, 2.to_f()?),
-            wom::addi::<F>(10, 0, 3.to_f()?),
+            wom::add_imm::<F>(8, 0, 120.to_f()?),
+            wom::add_imm::<F>(9, 0, 2.to_f()?),
+            wom::add_imm::<F>(10, 0, 3.to_f()?),
             wom::div::<F>(11, 8, 9),   // 120 / 2 = 60
             wom::div::<F>(12, 11, 10), // 60 / 3 = 20
             wom::reveal(12, 0),
@@ -798,7 +793,7 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFF6, 0xFFFF), // -10 in two's complement
-            wom::addi::<F>(9, 0, 2.to_f()?),
+            wom::add_imm::<F>(9, 0, 2.to_f()?),
             wom::div::<F>(10, 8, 9), // -10 / 2 = -5
             wom::reveal(10, 0),
             wom::halt(),
@@ -831,8 +826,8 @@ mod tests {
         // Test that (a / b) * b ≈ a (with integer truncation)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 100.to_f()?),
-            wom::addi::<F>(9, 0, 7.to_f()?),
+            wom::add_imm::<F>(8, 0, 100.to_f()?),
+            wom::add_imm::<F>(9, 0, 7.to_f()?),
             wom::div::<F>(10, 8, 9),  // 100 / 7 = 14
             wom::mul::<F>(11, 10, 9), // 14 * 7 = 98 (not 100 due to truncation)
             wom::reveal(11, 0),
@@ -852,8 +847,8 @@ mod tests {
         // We'll set up a value, jump with JAAF, and verify the result
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 42.to_f()?),    // x8 = 42
-            wom::addi::<F>(9, 0, 5.to_f()?),     // x9 = 5 (new frame pointer)
+            wom::add_imm::<F>(8, 0, 42.to_f()?), // x8 = 42
+            wom::add_imm::<F>(9, 0, 5.to_f()?),  // x9 = 5 (new frame pointer)
             wom::copy_into_frame::<F>(10, 8, 9), // PC=12: Copy x8 to [x9[x10]], which writes to address pointed by x10
             wom::jaaf::<F>(24, 9),               // Jump to PC=24, set FP=x9
             wom::halt(),                         // This should be skipped
@@ -871,9 +866,9 @@ mod tests {
         // Test JAAF_SAVE: jump and save FP
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 99.to_f()?),  // x8 = 99
-            wom::addi::<F>(9, 0, 10.to_f()?),  // x9 = 10 (new frame pointer)
-            wom::addi::<F>(11, 0, 99.to_f()?), // x11 = 99 (to show it gets overwritten)
+            wom::add_imm::<F>(8, 0, 99.to_f()?),  // x8 = 99
+            wom::add_imm::<F>(9, 0, 10.to_f()?),  // x9 = 10 (new frame pointer)
+            wom::add_imm::<F>(11, 0, 99.to_f()?), // x11 = 99 (to show it gets overwritten)
             wom::jaaf_save::<F>(11, 28, 9),    // Jump to PC=24, set FP=x9, save old FP to x11
             wom::halt(),                       // This should be skipped
             wom::halt(),                       // This should be skipped too
@@ -891,9 +886,9 @@ mod tests {
         // Test RET: return to saved PC and FP
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(10, 0, 24.to_f()?), // x10 = 24 (return PC)
-            wom::addi::<F>(11, 0, 0.to_f()?),  // x11 = 0 (saved FP)
-            wom::addi::<F>(8, 0, 88.to_f()?),  // x8 = 88
+            wom::add_imm::<F>(10, 0, 24.to_f()?), // x10 = 24 (return PC)
+            wom::add_imm::<F>(11, 0, 0.to_f()?),  // x11 = 0 (saved FP)
+            wom::add_imm::<F>(8, 0, 88.to_f()?),  // x8 = 88
             wom::ret::<F>(10, 11),             // Return to PC=x10, FP=x11
             wom::halt(),                       // This should be skipped
             // PC = 24 (where x10 points)
@@ -909,9 +904,9 @@ mod tests {
         // Test CALL: save PC and FP, then jump
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(9, 0, 16.to_f()?),  // x9 = 16 (new FP)
+            wom::add_imm::<F>(9, 0, 16.to_f()?),  // x9 = 16 (new FP)
             wom::call::<F>(10, 11, 24, 9),     // Call to PC=24, FP=x9, save PC to x10, FP to x11
-            wom::addi::<F>(8, 0, 123.to_f()?), // x8 = 123 (after return) - this should NOT execute
+            wom::add_imm::<F>(8, 0, 123.to_f()?), // x8 = 123 (after return) - this should NOT execute
             wom::reveal(8, 0),                 // wom::reveal x8 - this should NOT execute
             wom::halt(),                       // Padding
             // PC = 24 (function start)
@@ -928,11 +923,11 @@ mod tests {
         // Test CALL_INDIRECT: save PC and FP, jump to register value
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(12, 0, 32.to_f()?),      // x12 = 32 (target PC)
-            wom::addi::<F>(9, 0, 0x100.to_f()?),       // x9 = 256 (new FP)
-            wom::addi::<F>(11, 0, 999.to_f()?),     // x11 = 999
+            wom::add_imm::<F>(12, 0, 32.to_f()?),      // x12 = 32 (target PC)
+            wom::add_imm::<F>(9, 0, 0x100.to_f()?),       // x9 = 256 (new FP)
+            wom::add_imm::<F>(11, 0, 999.to_f()?),     // x11 = 999
             wom::call_indirect::<F>(10, 11, 12, 9), // Call to PC=x12, FP=x9, save PC to x10, FP to x11
-            wom::addi::<F>(8, 0, 456.to_f()?), // x8 = 456 (after return) - this should NOT execute
+            wom::add_imm::<F>(8, 0, 456.to_f()?), // x8 = 456 (after return) - this should NOT execute
             wom::reveal(8, 0),                 // wom::reveal x8 - this should NOT execute
             wom::halt(),                       // Padding
             // PC = 32 (function start, where x12 points)
@@ -950,8 +945,8 @@ mod tests {
         // Note: When FP changes, register addressing changes too
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 50.to_f()?), // x8 = 50 (at FP=0)
-            wom::addi::<F>(9, 0, 0x100.to_f()?), // x9 = 256 (new FP for function)
+            wom::add_imm::<F>(8, 0, 50.to_f()?), // x8 = 50 (at FP=0)
+            wom::add_imm::<F>(9, 0, 0x100.to_f()?), // x9 = 256 (new FP for function)
             wom::call::<F>(10, 11, 28, 9),   // Call function at PC=28, FP=0
             wom::reveal(8, 0),               // wom::reveal x8 after return (should be 75)
             wom::halt(),
@@ -971,11 +966,11 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),        // PC=0:
             wom::jump::<F>(20),                // PC=4: Jump to PC=20
-            wom::addi::<F>(9, 0, 999.to_f()?), // PC=8: This should be skipped
+            wom::add_imm::<F>(9, 0, 999.to_f()?), // PC=8: This should be skipped
             wom::reveal(9, 0),                 // PC=12: This should be skipped
             wom::halt(),                       // PC=16: Padding
             // PC = 20 (jump target)
-            wom::addi::<F>(9, 0, 58.to_f()?), // PC=20: x8 = 42 + 58 = 100
+            wom::add_imm::<F>(9, 0, 58.to_f()?), // PC=20: x8 = 42 + 58 = 100
             wom::reveal(9, 0),                // PC=24: wom::reveal x8 (should be 100)
             wom::halt(),                      // PC=28: End
         ];
@@ -988,13 +983,13 @@ mod tests {
         // Test conditional JUMP_IF (condition != 0)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),        // PC=0
-            wom::addi::<F>(9, 0, 5.to_f()?),   // PC=4: x9 = 5 (condition != 0)
+            wom::add_imm::<F>(9, 0, 5.to_f()?),   // PC=4: x9 = 5 (condition != 0)
             wom::jump_if::<F>(9, 24),          // PC=8: Jump to PC=24 if x9 != 0 (should jump)
-            wom::addi::<F>(8, 0, 999.to_f()?), // PC=12: This should be skipped
+            wom::add_imm::<F>(8, 0, 999.to_f()?), // PC=12: This should be skipped
             wom::reveal(8, 0),                 // PC=16: This should be skipped
             wom::halt(),                       // PC=20: Padding
             // PC = 24 (jump target)
-            wom::addi::<F>(8, 0, 15.to_f()?), // PC=24: x8 = 15
+            wom::add_imm::<F>(8, 0, 15.to_f()?), // PC=24: x8 = 15
             wom::reveal(8, 0),                // PC=28: wom::reveal x8 (should be 25)
             wom::halt(),                      // PC=32: End
         ];
@@ -1012,15 +1007,15 @@ mod tests {
         // Test conditional JUMP_IF with false condition (should not jump)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(9, 0, 0.to_f()?),  // PC=4: x9 = 0 (condition == 0, should not jump)
+            wom::add_imm::<F>(9, 0, 0.to_f()?),  // PC=4: x9 = 0 (condition == 0, should not jump)
             wom::jump_if::<F>(9, 28),         // PC=8: Jump to PC=28 if x9 != 0 (should NOT jump)
-            wom::addi::<F>(8, 0, 20.to_f()?), // PC=12: x8 = 30 + 20 = 50 (this should execute)
+            wom::add_imm::<F>(8, 0, 20.to_f()?), // PC=12: x8 = 30 + 20 = 50 (this should execute)
             wom::reveal(8, 0),                // PC=16: wom::reveal x8 (should be 50)
             wom::halt(),                      // PC=20: End
             // PC = 24 (jump target that should not be reached)
-            wom::addi::<F>(8, 0, 999.to_f()?), // PC=24: This should not execute
-            wom::reveal(8, 0),                 // PC=28: This should not execute
-            wom::halt(),                       // PC=32: This should not execute
+            wom::add_imm::<F>(8, 0, 999.to_f()?), // PC=24: This should not execute
+            wom::reveal(8, 0),                    // PC=28: This should not execute
+            wom::halt(),                          // PC=32: This should not execute
         ];
 
         run_vm_test(
@@ -1036,13 +1031,13 @@ mod tests {
         // Test conditional JUMP_IF_ZERO (condition == 0)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(9, 0, 0.to_f()?),   // PC=4: x9 = 0 (condition == 0)
+            wom::add_imm::<F>(9, 0, 0.to_f()?),   // PC=4: x9 = 0 (condition == 0)
             wom::jump_if_zero::<F>(9, 24),     // PC=8: Jump to PC=24 if x9 == 0 (should jump)
-            wom::addi::<F>(8, 0, 999.to_f()?), // PC=12: This should be skipped
+            wom::add_imm::<F>(8, 0, 999.to_f()?), // PC=12: This should be skipped
             wom::reveal(8, 0),                 // PC=16: This should be skipped
             wom::halt(),                       // PC=20: Padding
             // PC = 24 (jump target)
-            wom::addi::<F>(8, 0, 23.to_f()?), // PC=24: x8 = 23
+            wom::add_imm::<F>(8, 0, 23.to_f()?), // PC=24: x8 = 23
             wom::reveal(8, 0),                // PC=28: wom::reveal x8 (should be 100)
             wom::halt(),                      // PC=32: End
         ];
@@ -1060,15 +1055,15 @@ mod tests {
         // Test conditional JUMP_IF_ZERO with false condition (should not jump)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(9, 0, 7.to_f()?),  // PC=4: x9 = 7 (condition != 0, should not jump)
+            wom::add_imm::<F>(9, 0, 7.to_f()?),  // PC=4: x9 = 7 (condition != 0, should not jump)
             wom::jump_if_zero::<F>(9, 28),    // PC=8: Jump to PC=28 if x9 == 0 (should NOT jump)
-            wom::addi::<F>(8, 0, 40.to_f()?), // PC=12: x8 = 40 (this should execute)
+            wom::add_imm::<F>(8, 0, 40.to_f()?), // PC=12: x8 = 40 (this should execute)
             wom::reveal(8, 0),                // PC=16: wom::reveal x8 (should be 100)
             wom::halt(),                      // PC=20: End
             // PC = 24 (jump target that should not be reached)
-            wom::addi::<F>(8, 0, 999.to_f()?), // PC=24: This should not execute
-            wom::reveal(8, 0),                 // PC=28: This should not execute
-            wom::halt(),                       // PC=32: This should not execute
+            wom::add_imm::<F>(8, 0, 999.to_f()?), // PC=24: This should not execute
+            wom::reveal(8, 0),                    // PC=28: This should not execute
+            wom::halt(),                          // PC=32: This should not execute
         ];
 
         run_vm_test(
@@ -1099,9 +1094,9 @@ mod tests {
         // This test verifies that copy_into_frame actually writes to memory
         let instructions = vec![
             wom::const_32_imm(0, 0, 0), // PC=0
-            wom::addi::<F>(8, 0, 42.to_f()?), // PC=4: x8 = 42 (value to copy)
-            wom::addi::<F>(9, 0, 0x1000.to_f()?), // PC=8: x9 = 0x1000 (mock frame pointer)
-            wom::addi::<F>(10, 0, 0.to_f()?), // PC=12: x10 = 0 (register to read into)
+            wom::add_imm::<F>(8, 0, 42.to_f()?), // PC=4: x8 = 42 (value to copy)
+            wom::add_imm::<F>(9, 0, 0x1000.to_f()?), // PC=8: x9 = 0x1000 (mock frame pointer)
+            wom::add_imm::<F>(10, 0, 0.to_f()?), // PC=12: x10 = 0 (register to read into)
             wom::copy_into_frame::<F>(10, 8, 9), // PC=16: Copy x8 to [x9[x10]], which writes to address pointed by x10
             wom::jaaf::<F>(24, 9),               // Jump to PC=24, set FP=x9
             // Since copy_into_frame writes x8's value to memory at [x9[x10]],
@@ -1120,10 +1115,10 @@ mod tests {
         // This test verifies that copy_into_frame actually writes the value
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 123.to_f()?), // PC=4: x8 = 123 (value to store)
+            wom::add_imm::<F>(8, 0, 123.to_f()?), // PC=4: x8 = 123 (value to store)
             wom::allocate_frame_imm::<F>(9, 128), // PC=8: Allocate 128 bytes, pointer in x9. x9=2
             // by convention on the first allocation.
-            wom::addi::<F>(10, 0, 0.to_f()?), // PC=12: x10 = 0 (destination register)
+            wom::add_imm::<F>(10, 0, 0.to_f()?), // PC=12: x10 = 0 (destination register)
             wom::copy_into_frame::<F>(10, 8, 9), // PC=16: Copy x8 to [x9[x10]]
             wom::jaaf::<F>(28, 9),            // Jump to PC=28, set FP=x9
             wom::halt(),                      // Should be skipped
@@ -1509,8 +1504,8 @@ mod tests {
         // Test basic LOADW instruction
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 100.to_f()?), // x8 = 100 (base address)
-            wom::addi::<F>(9, 0, 42.to_f()?),  // x9 = 42 (value to store)
+            wom::add_imm::<F>(8, 0, 100.to_f()?), // x8 = 100 (base address)
+            wom::add_imm::<F>(9, 0, 42.to_f()?),  // x9 = 42 (value to store)
             wom::storew::<F>(9, 8, 0),         // MEM[x8 + 0] = x9 (store 42 at address 100)
             wom::loadw::<F>(10, 8, 0),         // x10 = MEM[x8 + 0] (load from address 100)
             wom::reveal(10, 0),                // wom::reveal x10 (should be 42)
@@ -1525,9 +1520,9 @@ mod tests {
         // Test STOREW with positive offset
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 200.to_f()?),  // x8 = 200 (base address)
-            wom::addi::<F>(9, 0, 111.to_f()?),  // x9 = 111 (first value)
-            wom::addi::<F>(10, 0, 222.to_f()?), // x10 = 222 (second value)
+            wom::add_imm::<F>(8, 0, 200.to_f()?),  // x8 = 200 (base address)
+            wom::add_imm::<F>(9, 0, 111.to_f()?),  // x9 = 111 (first value)
+            wom::add_imm::<F>(10, 0, 222.to_f()?), // x10 = 222 (second value)
             wom::storew::<F>(9, 8, 0),          // MEM[x8 + 0] = 111
             wom::storew::<F>(10, 8, 4),         // MEM[x8 + 4] = 222
             wom::loadw::<F>(11, 8, 0),          // x11 = MEM[x8 + 0] (should be 111)
@@ -1546,8 +1541,8 @@ mod tests {
         // Test LOADBU instruction (load byte unsigned)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 300.to_f()?),  // x8 = 300 (base address)
-            wom::addi::<F>(9, 0, 0xFF.to_f()?), // x9 = 255 (max byte value)
+            wom::add_imm::<F>(8, 0, 300.to_f()?),  // x8 = 300 (base address)
+            wom::add_imm::<F>(9, 0, 0xFF.to_f()?), // x9 = 255 (max byte value)
             wom::storeb::<F>(9, 8, 0),          // MEM[x8 + 0] = 255 (store as byte)
             wom::loadbu::<F>(10, 8, 0),         // x10 = MEM[x8 + 0] (load byte unsigned)
             wom::reveal(10, 0),                 // Reveal x10 (should be 255)
@@ -1561,7 +1556,7 @@ mod tests {
         // Test LOADHU instruction (load halfword unsigned)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 400.to_f()?),    // x8 = 400 (base address)
+            wom::add_imm::<F>(8, 0, 400.to_f()?),    // x8 = 400 (base address)
             wom::const_32_imm::<F>(9, 0xABCD, 0), // x9 = 0xABCD (43981)
             wom::storeh::<F>(9, 8, 0),            // MEM[x8 + 0] = 0xABCD (store as halfword)
             wom::loadhu::<F>(10, 8, 0),           // x10 = MEM[x8 + 0] (load halfword unsigned)
@@ -1576,7 +1571,7 @@ mod tests {
         // Test STOREB with offset and masking
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 500.to_f()?),    // x8 = 500 (base address)
+            wom::add_imm::<F>(8, 0, 500.to_f()?),    // x8 = 500 (base address)
             wom::const_32_imm::<F>(9, 0x1234, 0), // x9 = 0x1234 (only lowest byte 0x34 will be stored)
             wom::storeb::<F>(9, 8, 0),            // MEM[x8 + 0] = 0x34 (store lowest byte)
             wom::storeb::<F>(9, 8, 1),            // MEM[x8 + 1] = 0x34 (store at offset 1)
@@ -1594,7 +1589,7 @@ mod tests {
         // Test STOREH with offset
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::addi::<F>(8, 0, 600.to_f()?),     // x8 = 600 (base address)
+            wom::add_imm::<F>(8, 0, 600.to_f()?),     // x8 = 600 (base address)
             wom::const_32_imm::<F>(9, 0x1111, 0),  // x9 = 0x1111
             wom::const_32_imm::<F>(10, 0x2222, 0), // x10 = 0x2222
             wom::storeh::<F>(9, 8, 0),             // MEM[x8 + 0] = 0x1111 (store halfword)
@@ -1695,67 +1690,65 @@ mod wast_tests {
         for cmd in test_file.commands {
             match cmd.cmd_type.as_str() {
                 "module" => {
-                    if let Some(module) = current_module.take() {
-                        if !assert_cases.is_empty() {
-                            test_cases.push((module, current_line, assert_cases.clone()));
-                            assert_cases.clear();
-                        }
+                    if let Some(module) = current_module.take()
+                        && !assert_cases.is_empty()
+                    {
+                        test_cases.push((module, current_line, assert_cases.clone()));
+                        assert_cases.clear();
                     }
                     current_module = cmd.filename;
                     current_line = cmd.line.unwrap_or(0);
                 }
                 "action" | "assert_return" => {
-                    if let (Some(action), Some(expected)) = (cmd.action, cmd.expected) {
-                        if action.action_type == "invoke" {
-                            if let (Some(field), Some(args)) = (action.field, action.args) {
-                                let args_u32: Vec<u32> = args
-                                    .iter()
-                                    .filter_map(|v| {
-                                        if let Value::Object(obj) = v {
-                                            if let Some(Value::String(val_str)) = obj.get("value") {
-                                                // In OpenVM we read the inputs as u32s, so here we
-                                                // need to parse the input as 32-bit limbs.
-                                                if let Some(Value::String(ty_str)) = obj.get("type")
-                                                {
-                                                    parse_as_vec_u32(ty_str, val_str)
-                                                } else {
-                                                    Some(vec![val_str.parse::<u32>().unwrap()])
-                                                }
-                                            } else {
-                                                None
-                                            }
+                    if let (Some(action), Some(expected)) = (cmd.action, cmd.expected)
+                        && action.action_type == "invoke"
+                        && let (Some(field), Some(args)) = (action.field, action.args)
+                    {
+                        let args_u32: Vec<u32> = args
+                            .iter()
+                            .filter_map(|v| {
+                                if let Value::Object(obj) = v {
+                                    if let Some(Value::String(val_str)) = obj.get("value") {
+                                        // In OpenVM we read the inputs as u32s, so here we
+                                        // need to parse the input as 32-bit limbs.
+                                        if let Some(Value::String(ty_str)) = obj.get("type") {
+                                            parse_as_vec_u32(ty_str, val_str)
                                         } else {
-                                            None
+                                            Some(vec![val_str.parse::<u32>().unwrap()])
                                         }
-                                    })
-                                    .flatten()
-                                    .collect();
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                            .flatten()
+                            .collect();
 
-                                let expected_u32: Vec<u32> = expected
-                                    .iter()
-                                    .filter_map(|e| {
-                                        // Parse as 32-bit limbs for the same reason as
-                                        // above.
-                                        e.value
-                                            .as_ref()
-                                            .and_then(|v| parse_as_vec_u32(&e.expected_type, v))
-                                    })
-                                    .flatten()
-                                    .collect();
+                        let expected_u32: Vec<u32> = expected
+                            .iter()
+                            .filter_map(|e| {
+                                // Parse as 32-bit limbs for the same reason as
+                                // above.
+                                e.value
+                                    .as_ref()
+                                    .and_then(|v| parse_as_vec_u32(&e.expected_type, v))
+                            })
+                            .flatten()
+                            .collect();
 
-                                assert_cases.push((field, args_u32, expected_u32));
-                            }
-                        }
+                        assert_cases.push((field, args_u32, expected_u32));
                     }
                 }
                 _ => {}
             }
         }
 
-        if let Some(module) = current_module {
-            if !assert_cases.is_empty() {
-                test_cases.push((module, current_line, assert_cases));
-            }
+        if let Some(module) = current_module
+            && !assert_cases.is_empty()
+        {
+            test_cases.push((module, current_line, assert_cases));
         }
 
         Ok((target_dir, test_cases))
@@ -1821,8 +1814,6 @@ mod wast_tests {
         // Create VM configuration
         let vm_config = SdkVmConfig::builder()
             .system(Default::default())
-            .rv32i(Default::default())
-            .rv32m(Default::default())
             .io(Default::default())
             .build();
         let vm_config = SpecializedConfig::new(vm_config);
@@ -1931,21 +1922,21 @@ mod wast_tests {
 
     #[test]
     fn test_fib() {
-        run_single_wasm_test("../sample_programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
+        run_single_wasm_test("../sample-programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
     }
 
     #[test]
     fn test_call_indirect_wasm() {
-        run_single_wasm_test("../sample_programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
+        run_single_wasm_test("../sample-programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
         run_single_wasm_test(
-            "../sample_programs/call_indirect.wasm",
+            "../sample-programs/call_indirect.wasm",
             "call_op",
             &[0, 10, 20],
             &[30],
         )
         .unwrap();
         run_single_wasm_test(
-            "../sample_programs/call_indirect.wasm",
+            "../sample-programs/call_indirect.wasm",
             "call_op",
             &[1, 10, 3],
             &[7],
@@ -1955,6 +1946,102 @@ mod wast_tests {
 
     #[test]
     fn test_keccak() {
-        run_single_wasm_test("../sample_programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
+        run_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
+    }
+
+    #[test]
+    fn test_keccak_rust_womir() {
+        run_womir_guest(
+            "keccak_with_inputs",
+            "main",
+            &[0, 0],
+            // keccak([0; 32]) = [41, ...]
+            &[1, 41],
+            &[],
+        )
+    }
+
+    #[test]
+    fn test_keccak_rust_openvm() {
+        let path = format!(
+            "{}/../sample-programs/keccak_with_inputs",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        // TODO the outputs are not checked yet because powdr-openvm does not return the outputs.
+        run_openvm_guest(&path, &[1], &[41]).unwrap();
+    }
+
+    fn run_womir_guest(
+        case: &str,
+        main_function: &str,
+        func_inputs: &[u32],
+        data_inputs: &[u32],
+        outputs: &[u32],
+    ) {
+        let path = format!("{}/../sample-programs/{case}", env!("CARGO_MANIFEST_DIR"));
+        build_wasm(&PathBuf::from(&path));
+        let wasm_path = format!("{path}/target/wasm32-unknown-unknown/release/{case}.wasm",);
+        let args = func_inputs
+            .iter()
+            .chain(data_inputs)
+            .copied()
+            .collect::<Vec<_>>();
+        run_single_wasm_test(&wasm_path, main_function, &args, outputs).unwrap()
+    }
+
+    fn build_wasm(path: &PathBuf) {
+        assert!(path.exists(), "Target directory does not exist: {path:?}",);
+
+        let output = Command::new("cargo")
+            .arg("build")
+            .arg("--release")
+            .arg("--target")
+            .arg("wasm32-unknown-unknown")
+            .current_dir(path)
+            .output()
+            .expect("Failed to run cargo build");
+
+        if !output.status.success() {
+            eprintln!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
+            eprintln!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+        }
+
+        assert!(output.status.success(), "cargo build failed for {path:?}",);
+    }
+
+    // We use powdr-openvm to run OpenVM RISC-V so we don't have to deal with
+    // SdkConfig stuff and have access to autoprecompiles.
+    fn run_openvm_guest(
+        guest: &str,
+        args: &[u32],
+        expected: &[u32],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        setup_tracing_with_log_level(Level::WARN);
+        println!("Running OpenVM test {guest} with ({args:?}): expected {expected:?}");
+
+        let compiled_program = powdr_openvm::compile_guest(
+            guest,
+            Default::default(),
+            powdr_autoprecompiles::PowdrConfig::new(
+                0,
+                0,
+                powdr_openvm::DegreeBound {
+                    identities: 3,
+                    bus_interactions: 2,
+                },
+            ),
+            Default::default(),
+            Default::default(),
+        )
+        .unwrap();
+
+        let mut stdin = StdIn::default();
+        for arg in args {
+            stdin.write(arg);
+        }
+
+        powdr_openvm::execute(compiled_program, stdin).unwrap();
+
+        Ok(())
     }
 }
