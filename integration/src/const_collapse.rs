@@ -2,6 +2,52 @@ use wasmparser::Operator;
 use womir::loader::{dag::WasmValue, settings::MaybeConstant};
 
 pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
+    // Handle the cases where we can turn unsigned "reg > 0" and "reg >= 1" into "reg != 0"
+    if let (
+        Operator::I32GtU,
+        [
+            _,
+            MaybeConstant::ReferenceConstant {
+                value: WasmValue::I32(0),
+                must_collapse,
+            },
+        ],
+    )
+    | (
+        Operator::I64GtU,
+        [
+            _,
+            MaybeConstant::ReferenceConstant {
+                value: WasmValue::I64(0),
+                must_collapse,
+            },
+        ],
+    )
+    | (
+        Operator::I32GeU,
+        [
+            _,
+            MaybeConstant::ReferenceConstant {
+                value: WasmValue::I32(1),
+                must_collapse,
+            },
+        ],
+    )
+    | (
+        Operator::I64GeU,
+        [
+            _,
+            MaybeConstant::ReferenceConstant {
+                value: WasmValue::I64(1),
+                must_collapse,
+            },
+        ],
+    ) = (op, inputs)
+    {
+        must_collapse.replace(true);
+        return;
+    }
+
     match op {
         // All the operations using the alu adapter, thus supporting immediate operands
         Operator::I32Add

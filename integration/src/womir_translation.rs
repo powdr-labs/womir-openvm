@@ -847,6 +847,19 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         ))
                         .into();
                     }
+                    [WasmOpInput::Register(reg), WasmOpInput::Constant(c)] => {
+                        // This can only be the case where you can turn "r > 0" into "r != 0".
+                        assert!(matches!(c, WasmValue::I32(0) | WasmValue::I64(0)));
+
+                        println!("########### Turning GT op into NEQ op ###########");
+
+                        return Directive::Instruction(ib::neq_imm(
+                            output,
+                            reg.start as usize,
+                            F::ZERO,
+                        ))
+                        .into();
+                    }
                     _ => unreachable!("combination of inputs not possible for GT op"),
                 }
             }
@@ -888,6 +901,20 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     }
                     [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
                     | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
+                        // Handle the case where unsigned "reg >= 1" can be turned into "reg != 0"
+                        if (matches!(op, Op::I32GeU | Op::I64GeU)
+                            && matches!(c, WasmValue::I32(1) | WasmValue::I64(1)))
+                        {
+                            println!("########### Turning GE op into NEQ op ###########");
+
+                            return Directive::Instruction(ib::neq_imm(
+                                output,
+                                reg.start as usize,
+                                F::ZERO,
+                            ))
+                            .into();
+                        }
+
                         let opcode = match op {
                             Op::I32GeS | Op::I32LeS => LessThanOpcode::SLT.global_opcode(),
                             Op::I32GeU | Op::I32LeU => LessThanOpcode::SLTU.global_opcode(),

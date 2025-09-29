@@ -199,6 +199,10 @@ pub fn eq_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<
     instr_i(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+pub fn neq_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+    instr_i(EqOpcode::NEQ.global_opcode().as_usize(), rd, rs1, imm)
+}
+
 pub fn const_32_imm<F: PrimeField32>(
     target_reg: usize,
     imm_lo: u16,
