@@ -20,17 +20,6 @@ pub use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 
 use crate::WomController;
 
-/// 256-bit heap integer stored as 32 bytes (32 limbs of 8-bits)
-pub const INT256_NUM_LIMBS: usize = 32;
-
-// For soundness, should be <= 16
-pub const RV_IS_TYPE_IMM_BITS: usize = 12;
-
-// Branch immediate value is in [-2^12, 2^12)
-pub const RV_B_TYPE_IMM_BITS: usize = 13;
-
-pub const RV_J_TYPE_IMM_BITS: usize = 21;
-
 /// Convert the RISC-V register data (32 bits represented as 4 bytes, where each byte is represented
 /// as a field element) back into its value as u32.
 pub fn compose<F: PrimeField32>(ptr_data: [F; RV32_REGISTER_NUM_LIMBS]) -> u32 {
