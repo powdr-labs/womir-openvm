@@ -851,8 +851,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         // This can only be the case where you can turn "r > 0" into "r != 0".
                         assert!(matches!(c, WasmValue::I32(0) | WasmValue::I64(0)));
 
-                        println!("########### Turning GT op into NEQ op ###########");
-
                         return Directive::Instruction(ib::neq_imm(
                             output,
                             reg.start as usize,
@@ -905,8 +903,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         if (matches!(op, Op::I32GeU | Op::I64GeU)
                             && matches!(c, WasmValue::I32(1) | WasmValue::I64(1)))
                         {
-                            println!("########### Turning GE op into NEQ op ###########");
-
                             return Directive::Instruction(ib::neq_imm(
                                 output,
                                 reg.start as usize,
