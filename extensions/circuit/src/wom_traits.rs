@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 
 use openvm_circuit::{
     arch::{
-        ExecutionState, InstructionExecutor as InstructionExecutorTrait, Result as ResultVm,
-        VmAdapterAir, VmAdapterInterface, VmAirWrapper, VmCoreAir,
+        AdapterRuntimeContext, ExecutionState, InstructionExecutor as InstructionExecutorTrait,
+        Result as ResultVm, VmAdapterAir, VmAdapterInterface, VmAirWrapper, VmCoreAir, VmCoreChip,
     },
     system::memory::{MemoryController, OfflineMemory},
     utils::next_power_of_two_or_zero,
@@ -132,7 +132,7 @@ pub struct FrameBridgeInteractor<AB: InteractionBuilder> {
 // ============ Wom VM Chip Wrapper ============
 // Main wrapper that manages frame pointer state across instruction execution
 
-pub struct VmChipWrapperWom<F, A: VmAdapterChipWom<F>, C: VmCoreChipWom<F, A::Interface>> {
+pub struct VmChipWrapperWom<F, A: VmAdapterChipWom<F>, C: VmCoreChip<F, A::Interface>> {
     pub adapter: A,
     pub core: C,
     pub records: Vec<(A::ReadRecord, A::WriteRecord, C::Record)>,
@@ -145,7 +145,7 @@ const DEFAULT_RECORDS_CAPACITY: usize = 1 << 5;
 impl<F, A, C> VmChipWrapperWom<F, A, C>
 where
     A: VmAdapterChipWom<F>,
-    C: VmCoreChipWom<F, A::Interface>,
+    C: VmCoreChip<F, A::Interface>,
 {
     pub fn new(
         adapter: A,
@@ -202,7 +202,7 @@ pub trait VmAdapterChipWom<F> {
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        output: AdapterRuntimeContextWom<F, Self::Interface>,
+        output: AdapterRuntimeContext<F, Self::Interface>,
         read_record: &Self::ReadRecord,
     ) -> ResultVm<(ExecutionState<u32>, u32, Self::WriteRecord)>;
 
@@ -288,7 +288,7 @@ impl<F, A, M> InstructionExecutorTrait<F> for VmChipWrapperWom<F, A, M>
 where
     F: PrimeField32,
     A: VmAdapterChipWom<F> + Send + Sync,
-    M: VmCoreChipWom<F, A::Interface> + Send + Sync,
+    M: VmCoreChip<F, A::Interface> + Send + Sync,
 {
     fn execute(
         &mut self,
@@ -300,7 +300,7 @@ where
         let (reads, read_record) = self.adapter.preprocess(memory, *fp, instruction)?;
         let (output, core_record) =
             self.core
-                .execute_instruction(instruction, from_state.pc, *fp, reads)?;
+                .execute_instruction(instruction, from_state.pc, reads)?;
         let (to_state, to_fp, write_record) = self.adapter.postprocess(
             memory,
             instruction,
@@ -324,7 +324,7 @@ where
     SC: StarkGenericConfig,
     Val<SC>: PrimeField32,
     A: VmAdapterChipWom<Val<SC>> + Send + Sync,
-    C: VmCoreChipWom<Val<SC>, A::Interface> + Send + Sync,
+    C: VmCoreChip<Val<SC>, A::Interface> + Send + Sync,
     A::Air: Send + Sync + 'static,
     A::Air: VmAdapterAir<SymbolicRapBuilder<Val<SC>>> + ColumnsAir<Val<SC>>,
     A::Air: for<'a> VmAdapterAir<DebugConstraintBuilder<'a, SC>>,
@@ -378,7 +378,7 @@ where
 impl<F, A, M> ChipUsageGetter for VmChipWrapperWom<F, A, M>
 where
     A: VmAdapterChipWom<F> + Sync,
-    M: VmCoreChipWom<F, A::Interface> + Sync,
+    M: VmCoreChip<F, A::Interface> + Sync,
 {
     fn air_name(&self) -> String {
         format!(

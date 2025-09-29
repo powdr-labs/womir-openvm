@@ -3,30 +3,10 @@ use openvm_instructions_derive::LocalOpcode;
 use serde::{Deserialize, Serialize};
 use strum::{EnumCount, EnumIter, FromRepr};
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x1200]
-#[repr(usize)]
-pub enum BaseAluOpcode {
-    ADD,
-    SUB,
-    XOR,
-    OR,
-    AND,
-}
+pub use openvm_rv32im_transpiler::{
+    BaseAluOpcode, DivRemOpcode, LessThanOpcode, MulOpcode, Rv32LoadStoreOpcode as LoadStoreOpcode,
+    ShiftOpcode,
+};
 
 #[derive(
     Copy,
@@ -45,6 +25,10 @@ pub enum BaseAluOpcode {
 )]
 #[opcode_offset = 0x2200]
 #[repr(usize)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's BaseAluOpcode
+// in order to be able to re-use the original Alu core chip.
+// We do re-use the `BaseAluOpcode` type for 32-bit operations, but need a new opcode/enum for
+// 64-bit ops.
 pub enum BaseAlu64Opcode {
     ADD,
     SUB,
@@ -68,31 +52,12 @@ pub enum BaseAlu64Opcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x1205]
-#[repr(usize)]
-pub enum ShiftOpcode {
-    SLL,
-    SRL,
-    SRA,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
 #[opcode_offset = 0x2205]
 #[repr(usize)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's ShiftOpcode
+// in order to be able to re-use the original Shift core chip.
+// We do re-use the `BaseAluOpcode` type for 32-bit operations, but need a new opcode/enum for
+// 64-bit ops.
 pub enum Shift64Opcode {
     SLL,
     SRL,
@@ -114,30 +79,12 @@ pub enum Shift64Opcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x1208]
-#[repr(usize)]
-pub enum LessThanOpcode {
-    SLT,
-    SLTU,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
 #[opcode_offset = 0x2208]
 #[repr(usize)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's LessThanOpcode
+// in order to be able to re-use the original LessThan core chip.
+// We do re-use the `BaseAluOpcode` type for 32-bit operations, but need a new opcode/enum for
+// 64-bit ops.
 pub enum LessThan64Opcode {
     SLT,
     SLTU,
@@ -202,105 +149,6 @@ pub enum Eq64Opcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x1210]
-#[repr(usize)]
-pub enum LoadStoreOpcode {
-    LOADW,
-    /// LOADBU, LOADHU are unsigned extend opcodes, implemented in the same chip with LOADW
-    LOADBU,
-    LOADHU,
-    STOREW,
-    STOREH,
-    STOREB,
-    /// The following are signed extend opcodes
-    LOADB,
-    LOADH,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x1220]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum BranchEqualOpcode {
-    BEQ,
-    BNE,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x1225]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum BranchLessThanOpcode {
-    BLT,
-    BLTU,
-    BGE,
-    BGEU,
-}
-
-#[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
-)]
-#[opcode_offset = 0x1230]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum JalLuiOpcode {
-    JAL,
-    LUI,
-}
-
-#[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
-)]
-#[opcode_offset = 0x1235]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum JalrOpcode {
-    JALR,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
 #[opcode_offset = 0x1236]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
@@ -340,56 +188,15 @@ pub enum JumpOpcode {
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
 )]
-#[opcode_offset = 0x1240]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum AuipcOpcode {
-    AUIPC,
-}
-
-#[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
-)]
-#[opcode_offset = 0x1250]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum MulOpcode {
-    MUL,
-}
-
-#[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
-)]
 #[opcode_offset = 0x2250]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's MulOpcode
+// in order to be able to re-use the original Mul core chip.
+// We do re-use the `BaseAluOpcode` type for 32-bit operations, but need a new opcode/enum for
+// 64-bit ops.
 pub enum Mul64Opcode {
     MUL,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x1254]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum DivRemOpcode {
-    DIV,
-    DIVU,
-    REM,
-    REMU,
 }
 
 #[derive(
@@ -410,6 +217,10 @@ pub enum DivRemOpcode {
 #[opcode_offset = 0x2254]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
+// Note: these need to be exactly the same and in the exact same order as OpenVM's DivRemOpcode
+// in order to be able to re-use the original DivRem core chip.
+// We do re-use the `BaseAluOpcode` type for 32-bit operations, but need a new opcode/enum for
+// 64-bit ops.
 pub enum DivRem64Opcode {
     DIV,
     DIVU,

@@ -2,8 +2,7 @@ use crate::VmChipWrapperWom;
 
 use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, WomBaseAluAdapterChip};
 
-mod core;
-pub use core::*;
+use openvm_rv32im_circuit::ShiftCoreChip;
 
 pub type WomShiftChip<F> = VmChipWrapperWom<
     F,

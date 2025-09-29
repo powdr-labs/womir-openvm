@@ -2,7 +2,7 @@ use crate::VmChipWrapperWom;
 
 use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, WomBaseAluAdapterChip};
 
-use crate::divrem::DivRemCoreChip;
+use openvm_rv32im_circuit::DivRemCoreChip;
 
 pub type WomDivRem64Chip<F> = VmChipWrapperWom<
     F,
