@@ -72,6 +72,7 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         | Operator::I64ShrS
         | Operator::I32ShrU
         | Operator::I64ShrU
+        // TODO: the following operations can also be made to support immediates.
         //| Operator::I32Rotl
         //| Operator::I64Rotl
         //| Operator::I32Rotr
@@ -81,6 +82,7 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
         }
 
         // GT is special because the left operand is the one that can be immediate
+        // LE is implemented in terms of GT, so the same applies.
         Operator::I32GtS
         | Operator::I32GtU
         | Operator::I64GtS
