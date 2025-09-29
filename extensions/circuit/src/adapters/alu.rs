@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge,
+    FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge,
     WomController, WomRecord,
 };
 

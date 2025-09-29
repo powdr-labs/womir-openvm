@@ -42,7 +42,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose};
-use crate::{AdapterRuntimeContextWom, FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomRecord};
+use crate::{FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomRecord};
 use crate::{WomBridge, WomController, adapters::RV32_CELL_BITS};
 
 use openvm_rv32im_circuit::adapters::LoadStoreInstruction;

@@ -1,7 +1,5 @@
-use std::ops::Mul;
-
-use openvm_circuit::system::memory::{MemoryController};
-use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
+use openvm_circuit::system::memory::MemoryController;
+use openvm_stark_backend::p3_field::PrimeField32;
 
 mod allocate_frame;
 mod alu;
