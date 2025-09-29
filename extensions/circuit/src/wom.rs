@@ -45,8 +45,7 @@ impl<F: PrimeField32> WomController<F> {
 
     pub fn unsafe_read_cell(&self, pointer: F) -> F {
         let ptr_u32 = pointer.as_canonical_u32();
-        self
-            .memory
+        self.memory
             .get(ptr_u32 as usize)
             .expect("WOM read before write")
             .expect("WOM read before write")
@@ -152,7 +151,8 @@ impl<F: FieldAlgebra, const N: usize> WomWriteOperation<F, N> {
         AB: InteractionBuilder<Expr = F>,
     {
         let message = std::iter::once(self.address).chain(self.data);
-        // TODO: how to handle multiplicity? does the PermutationBus handle it (comments say to ensure boolean)
+        // `PermutationBus` comments say the `enabled` argument should be
+        // boolean, but here we're using it as the write multiplicity.
         self.bus.send(builder, message, self.mult * enabled.into());
     }
 }
