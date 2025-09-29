@@ -1,8 +1,4 @@
-use std::{
-    array,
-    borrow::{Borrow, BorrowMut},
-    marker::PhantomData,
-};
+use std::{array, borrow::Borrow, marker::PhantomData};
 
 use LoadStoreOpcode::*;
 use openvm_circuit::{
@@ -42,8 +38,8 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose};
-use crate::adapters::RV32_CELL_BITS;
-use crate::{FrameBridge, FrameBus, FrameState, VmAdapterChipWom};
+use crate::{FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomRecord};
+use crate::{WomBridge, WomController, adapters::RV32_CELL_BITS};
 
 use openvm_rv32im_circuit::adapters::LoadStoreInstruction;
 
@@ -90,6 +86,7 @@ impl<F: PrimeField32> Rv32LoadStoreAdapterChip<F> {
         program_bus: ProgramBus,
         frame_bus: FrameBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
         pointer_max_bits: usize,
         range_checker_chip: SharedVariableRangeCheckerChip,
     ) -> Self {
@@ -99,6 +96,7 @@ impl<F: PrimeField32> Rv32LoadStoreAdapterChip<F> {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 frame_bridge: FrameBridge::new(frame_bus),
                 memory_bridge,
+                _wom_bridge: wom_bridge,
                 range_bus: range_checker_chip.bus(),
                 pointer_max_bits,
             },
@@ -112,10 +110,11 @@ impl<F: PrimeField32> Rv32LoadStoreAdapterChip<F> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct Rv32LoadStoreReadRecord<F: Field> {
-    pub rs1_record: RecordId,
-    /// This will be a read from a register in case of Stores and a read from RISC-V memory in case
-    /// of Loads.
-    pub read: RecordId,
+    pub rs1_record: WomRecord<F>,
+    /// read from register for stores
+    pub wom_read: Option<WomRecord<F>>,
+    /// read from mememory for loads
+    pub mem_read: Option<RecordId>,
     pub rs1_ptr: F,
     pub imm: F,
     pub imm_sign: F,
@@ -131,7 +130,8 @@ pub struct Rv32LoadStoreWriteRecord<F: Field> {
     /// This will be a write to a register in case of Load and a write to RISC-V memory in case of
     /// Stores. For better struct packing, `RecordId(usize::MAX)` is used to indicate that
     /// there is no write.
-    pub write_id: RecordId,
+    pub wom_write: Option<WomRecord<F>>,
+    pub mem_write: Option<RecordId>,
     pub from_state: ExecutionState<u32>,
     pub from_frame: FrameState<u32>,
     pub rd_rs2_ptr: F,
@@ -170,6 +170,7 @@ pub struct Rv32LoadStoreAdapterAir {
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) frame_bridge: FrameBridge,
     pub(super) memory_bridge: MemoryBridge,
+    pub(super) _wom_bridge: WomBridge,
     pub range_bus: VariableRangeCheckerBus,
     pointer_max_bits: usize,
 }
@@ -384,6 +385,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
@@ -407,7 +409,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
             LoadStoreOpcode::from_usize(opcode.local_opcode_idx(LoadStoreOpcode::CLASS_OFFSET));
 
         let fp_f = F::from_canonical_u32(fp);
-        let rs1_record = memory.read::<RV32_REGISTER_NUM_LIMBS>(d, b + fp_f);
+        assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+        let rs1_record = wom.read::<RV32_REGISTER_NUM_LIMBS>(b + fp_f);
 
         let rs1_val = compose(rs1_record.1);
         let imm = c.as_canonical_u32();
@@ -425,11 +428,16 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         let mem_ptr_limbs = array::from_fn(|i| ((ptr_val >> (i * (RV32_CELL_BITS * 2))) & 0xffff));
 
         let ptr_val = ptr_val - shift_amount;
-        let read_record = match local_opcode {
+        let (wom_read, mem_read, read_data) = match local_opcode {
             LOADW | LOADB | LOADH | LOADBU | LOADHU => {
-                memory.read::<RV32_REGISTER_NUM_LIMBS>(e, F::from_canonical_u32(ptr_val))
+                let (rec, data) =
+                    memory.read::<RV32_REGISTER_NUM_LIMBS>(e, F::from_canonical_u32(ptr_val));
+                (None, Some(rec), data)
             }
-            STOREW | STOREH | STOREB => memory.read::<RV32_REGISTER_NUM_LIMBS>(d, a + fp_f),
+            STOREW | STOREH | STOREB => {
+                let (rec, data) = wom.read::<RV32_REGISTER_NUM_LIMBS>(a + fp_f);
+                (Some(rec), None, data)
+            }
         };
 
         // We need to keep values of some cells to keep them unchanged when writing to those cells
@@ -437,20 +445,19 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
             STOREW | STOREH | STOREB => array::from_fn(|i| {
                 memory.unsafe_read_cell(e, F::from_canonical_usize(ptr_val as usize + i))
             }),
-            LOADW | LOADB | LOADH | LOADBU | LOADHU => array::from_fn(|i| {
-                memory.unsafe_read_cell(d, a + fp_f + F::from_canonical_usize(i))
+            LOADW | LOADB | LOADH | LOADBU | LOADHU => array::from_fn(|_i| {
+                // we don't read before writing in WOM
+                F::ZERO
             }),
         };
 
         Ok((
-            (
-                [prev_data, read_record.1],
-                F::from_canonical_u32(shift_amount),
-            ),
+            ([prev_data, read_data], F::from_canonical_u32(shift_amount)),
             Self::ReadRecord {
                 rs1_record: rs1_record.0,
                 rs1_ptr: b,
-                read: read_record.0,
+                wom_read,
+                mem_read,
                 imm: c,
                 imm_sign: g,
                 shift_amount,
@@ -463,6 +470,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
@@ -482,22 +490,29 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
             LoadStoreOpcode::from_usize(opcode.local_opcode_idx(LoadStoreOpcode::CLASS_OFFSET));
 
         let fp_f = F::from_canonical_u32(from_frame.fp);
-        let write_id = if enabled != F::ZERO {
-            let (record_id, _) = match local_opcode {
+        let (wom_write, mem_write) = if enabled != F::ZERO {
+            assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+            match local_opcode {
                 STOREW | STOREH | STOREB => {
                     let ptr = read_record.mem_ptr_limbs[0]
                         + read_record.mem_ptr_limbs[1] * (1 << (RV32_CELL_BITS * 2));
-                    memory.write(e, F::from_canonical_u32(ptr & 0xfffffffc), output.writes[0])
+                    (
+                        None,
+                        Some(
+                            memory
+                                .write(e, F::from_canonical_u32(ptr & 0xfffffffc), output.writes[0])
+                                .0,
+                        ),
+                    )
                 }
                 LOADW | LOADB | LOADH | LOADBU | LOADHU => {
-                    memory.write(d, a + fp_f, output.writes[0])
+                    memory.increment_timestamp();
+                    (Some(wom.write(a + fp_f, output.writes[0])), None)
                 }
-            };
-            record_id
+            }
         } else {
             memory.increment_timestamp();
-            // RecordId will never get to usize::MAX, so it can be used as a flag for no write
-            RecordId(usize::MAX)
+            (None, None)
         };
 
         Ok((
@@ -509,7 +524,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
             Self::WriteRecord {
                 from_state,
                 from_frame,
-                write_id,
+                mem_write,
+                wom_write,
                 rd_rs2_ptr: a,
             },
         ))
@@ -517,10 +533,10 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
 
     fn generate_trace_row(
         &self,
-        row_slice: &mut [F],
+        _row_slice: &mut [F],
         read_record: Self::ReadRecord,
-        write_record: Self::WriteRecord,
-        memory: &OfflineMemory<F>,
+        _write_record: Self::WriteRecord,
+        _memory: &OfflineMemory<F>,
     ) {
         self.range_checker_chip.add_count(
             (read_record.mem_ptr_limbs[0] - read_record.shift_amount) / 4,
@@ -531,26 +547,28 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
             self.air.pointer_max_bits - RV32_CELL_BITS * 2,
         );
 
-        let aux_cols_factory = memory.aux_cols_factory();
-        let adapter_cols: &mut Rv32LoadStoreAdapterCols<_> = row_slice.borrow_mut();
-        adapter_cols.from_state = write_record.from_state.map(F::from_canonical_u32);
-        adapter_cols.from_frame = write_record.from_frame.map(F::from_canonical_u32);
-        let rs1 = memory.record_by_id(read_record.rs1_record);
-        adapter_cols.rs1_data.copy_from_slice(rs1.data_slice());
-        aux_cols_factory.generate_read_aux(rs1, &mut adapter_cols.rs1_aux_cols);
-        adapter_cols.rs1_ptr = read_record.rs1_ptr;
-        adapter_cols.rd_rs2_ptr = write_record.rd_rs2_ptr;
-        let read = memory.record_by_id(read_record.read);
-        aux_cols_factory.generate_read_aux(read, &mut adapter_cols.read_data_aux);
-        adapter_cols.imm = read_record.imm;
-        adapter_cols.imm_sign = read_record.imm_sign;
-        adapter_cols.mem_ptr_limbs = read_record.mem_ptr_limbs.map(F::from_canonical_u32);
-        adapter_cols.mem_as = read_record.mem_as;
-        if write_record.write_id.0 != usize::MAX {
-            let write = memory.record_by_id(write_record.write_id);
-            aux_cols_factory.generate_base_aux(write, &mut adapter_cols.write_base_aux);
-            adapter_cols.needs_write = F::ONE;
-        }
+        // TODO: columns need to be adapted after WOM
+
+        // let aux_cols_factory = memory.aux_cols_factory();
+        // let adapter_cols: &mut Rv32LoadStoreAdapterCols<_> = row_slice.borrow_mut();
+        // adapter_cols.from_state = write_record.from_state.map(F::from_canonical_u32);
+        // adapter_cols.from_frame = write_record.from_frame.map(F::from_canonical_u32);
+        // let rs1 = memory.record_by_id(read_record.rs1_record);
+        // adapter_cols.rs1_data.copy_from_slice(rs1.data_slice());
+        // aux_cols_factory.generate_read_aux(rs1, &mut adapter_cols.rs1_aux_cols);
+        // adapter_cols.rs1_ptr = read_record.rs1_ptr;
+        // adapter_cols.rd_rs2_ptr = write_record.rd_rs2_ptr;
+        // let read = memory.record_by_id(read_record.read);
+        // aux_cols_factory.generate_read_aux(read, &mut adapter_cols.read_data_aux);
+        // adapter_cols.imm = read_record.imm;
+        // adapter_cols.imm_sign = read_record.imm_sign;
+        // adapter_cols.mem_ptr_limbs = read_record.mem_ptr_limbs.map(F::from_canonical_u32);
+        // adapter_cols.mem_as = read_record.mem_as;
+        // if write_record.write_id.0 != usize::MAX {
+        //     let write = memory.record_by_id(write_record.write_id);
+        //     aux_cols_factory.generate_base_aux(write, &mut adapter_cols.write_base_aux);
+        //     adapter_cols.needs_write = F::ONE;
+        // }
     }
 
     fn air(&self) -> &Self::Air {

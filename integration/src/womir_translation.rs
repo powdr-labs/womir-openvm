@@ -1120,6 +1120,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // Copy the 32 bit values to the high 32 bits of the temporary value.
                     // Leave the low bits undefined.
                     Directive::Instruction(ib::add_imm(high_shifted + 1, input, F::ZERO)),
+                    // shr will read 64 bits, so we need to zero the other half due to WOM
+                    Directive::Instruction(ib::const_32_imm(high_shifted, 0, 0)),
                     // Arithmetic shift right to fill the high bits with the sign bit.
                     Directive::Instruction(ib::shr_s_imm_64(
                         output,
@@ -1445,6 +1447,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     } else {
                         Directive::Instruction(ib::loadbu(val + 1, base_addr, imm))
                     },
+                    // shr will read 64 bits, so we need to zero the other half due to WOM
+                    Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                     // shift i64 val right, keeping the sign
                     Directive::Instruction(ib::shr_s_imm_64(output, val, F::from_canonical_u8(32))),
                 ]
@@ -1477,6 +1481,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
                             // combine b0 and b1
                             Directive::Instruction(ib::or(val + 1, b0, b1_shifted)),
+                            // shr will read 64 bits, so we need to zero the other half due to WOM
+                            Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                             // shift i64 val right, keeping the sign
                             Directive::Instruction(ib::shr_s_imm_64(
                                 output,
@@ -1490,6 +1496,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             vec![
                                 // load signed halfword as i32 on the hi part of the i64 val
                                 Directive::Instruction(ib::loadh(val + 1, base_addr, imm)),
+                                // shr will read 64 bits, so we need to zero the other half due to WOM
+                                Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                                 // shift i64 val right, keeping the sign
                                 Directive::Instruction(ib::shr_s_imm_64(
                                     output,
@@ -1551,6 +1559,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
                             // build hi i32 in val
                             Directive::Instruction(ib::or(val + 1, lo, hi)),
+                            // shr will read 64 bits, so we need to zero the other half due to WOM
+                            Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                             // shift signed/unsigned
                             if let Op::I64Load32S { .. } = op {
                                 Directive::Instruction(ib::shr_s_imm_64(
@@ -1583,6 +1593,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             )),
                             // combine h0 and h1
                             Directive::Instruction(ib::or(val + 1, h0, h1_shifted)),
+                            // shr will read 64 bits, so we need to zero the other half due to WOM
+                            Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                             // shift signed/unsigned
                             if let Op::I64Load32S { .. } = op {
                                 Directive::Instruction(ib::shr_s_imm_64(
@@ -1603,6 +1615,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         vec![
                             // load word
                             Directive::Instruction(ib::loadw(val + 1, base_addr, imm)),
+                            // shr will read 64 bits, so we need to zero the other half due to WOM
+                            Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                             // shift signed/unsigned
                             if let Op::I64Load32S { .. } = op {
                                 Directive::Instruction(ib::shr_s_imm_64(
