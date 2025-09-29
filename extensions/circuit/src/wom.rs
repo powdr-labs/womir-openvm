@@ -26,7 +26,8 @@ impl<F: PrimeField32> WomController<F> {
 
     pub fn read<const N: usize>(&self, pointer: F) -> (WomRecord<F>, [F; N]) {
         let ptr_u32 = pointer.as_canonical_u32();
-        let data = self.memory
+        let data = self
+            .memory
             .iter()
             .skip(ptr_u32 as usize)
             .take(N)
@@ -38,13 +39,17 @@ impl<F: PrimeField32> WomController<F> {
                 pointer,
                 data: data.clone(),
             },
-            data.try_into().unwrap()
+            data.try_into().unwrap(),
         )
     }
 
     pub fn unsafe_read_cell(&self, pointer: F) -> F {
         let ptr_u32 = pointer.as_canonical_u32();
-        let cell = self.memory.get(ptr_u32 as usize).expect("WOM read before write").expect("WOM read before write");
+        let cell = self
+            .memory
+            .get(ptr_u32 as usize)
+            .expect("WOM read before write")
+            .expect("WOM read before write");
         cell
     }
 
@@ -164,14 +169,14 @@ mod test {
     use super::WomController;
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "WOM read before write")]
     fn test_wom_read_before_write1() {
         let wom = WomController::<BabyBear>::new(PermutationCheckBus::new(0));
         wom.read::<4>(BabyBear::from_canonical_u32(0));
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "WOM read before write")]
     fn test_wom_read_before_write2() {
         let mut wom = WomController::<BabyBear>::new(PermutationCheckBus::new(0));
         // write to addr 4
@@ -189,7 +194,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "WOM double write")]
     fn test_wom_double_write() {
         let mut wom = WomController::<BabyBear>::new(PermutationCheckBus::new(0));
         // double write to addr 0
@@ -234,9 +239,21 @@ mod test {
         wom.write(p1, w1);
         let (r1_rec, r1_data) = wom.read(p1);
         let (r2_rec, r2_data) = wom.read(p2);
-        assert_eq!(r1_rec, WomRecord { pointer: p1, data: w1.into() } );
+        assert_eq!(
+            r1_rec,
+            WomRecord {
+                pointer: p1,
+                data: w1.into()
+            }
+        );
         assert_eq!(r1_data, w1);
-        assert_eq!(r2_rec, WomRecord { pointer: p2, data: w2.into() } );
+        assert_eq!(
+            r2_rec,
+            WomRecord {
+                pointer: p2,
+                data: w2.into()
+            }
+        );
         assert_eq!(r2_data, w2);
     }
 }

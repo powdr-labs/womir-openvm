@@ -30,8 +30,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge,
-    WomController, WomRecord,
+    FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
 };
 
 use super::RV32_CELL_BITS;
@@ -238,14 +237,7 @@ where
             (Some(rs2), rs2_data, F::ZERO)
         };
 
-        Ok((
-            [rs1_data, rs2_data],
-            Self::ReadRecord {
-                rs1,
-                rs2,
-                rs2_imm,
-            },
-        ))
+        Ok(([rs1_data, rs2_data], Self::ReadRecord { rs1, rs2, rs2_imm }))
     }
 
     fn postprocess(

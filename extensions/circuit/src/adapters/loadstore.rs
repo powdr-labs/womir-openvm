@@ -1,8 +1,4 @@
-use std::{
-    array,
-    borrow::{Borrow},
-    marker::PhantomData,
-};
+use std::{array, borrow::Borrow, marker::PhantomData};
 
 use LoadStoreOpcode::*;
 use openvm_circuit::{
@@ -434,13 +430,14 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         let ptr_val = ptr_val - shift_amount;
         let (wom_read, mem_read, read_data) = match local_opcode {
             LOADW | LOADB | LOADH | LOADBU | LOADHU => {
-                let (rec, data) = memory.read::<RV32_REGISTER_NUM_LIMBS>(e, F::from_canonical_u32(ptr_val));
+                let (rec, data) =
+                    memory.read::<RV32_REGISTER_NUM_LIMBS>(e, F::from_canonical_u32(ptr_val));
                 (None, Some(rec), data)
             }
             STOREW | STOREH | STOREB => {
                 let (rec, data) = wom.read::<RV32_REGISTER_NUM_LIMBS>(a + fp_f);
                 (Some(rec), None, data)
-            },
+            }
         };
 
         // We need to keep values of some cells to keep them unchanged when writing to those cells
@@ -455,10 +452,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         };
 
         Ok((
-            (
-                [prev_data, read_data],
-                F::from_canonical_u32(shift_amount),
-            ),
+            ([prev_data, read_data], F::from_canonical_u32(shift_amount)),
             Self::ReadRecord {
                 rs1_record: rs1_record.0,
                 rs1_ptr: b,
@@ -495,7 +489,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         let local_opcode =
             LoadStoreOpcode::from_usize(opcode.local_opcode_idx(LoadStoreOpcode::CLASS_OFFSET));
 
-
         let fp_f = F::from_canonical_u32(from_frame.fp);
         let (wom_write, mem_write) = if enabled != F::ZERO {
             assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
@@ -503,7 +496,14 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
                 STOREW | STOREH | STOREB => {
                     let ptr = read_record.mem_ptr_limbs[0]
                         + read_record.mem_ptr_limbs[1] * (1 << (RV32_CELL_BITS * 2));
-                    (None, Some(memory.write(e, F::from_canonical_u32(ptr & 0xfffffffc), output.writes[0]).0))
+                    (
+                        None,
+                        Some(
+                            memory
+                                .write(e, F::from_canonical_u32(ptr & 0xfffffffc), output.writes[0])
+                                .0,
+                        ),
+                    )
                 }
                 LOADW | LOADB | LOADH | LOADBU | LOADHU => {
                     memory.increment_timestamp();

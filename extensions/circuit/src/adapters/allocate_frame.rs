@@ -22,7 +22,8 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    adapters::{compose, decompose}, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord
+    FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
+    adapters::{compose, decompose},
 };
 
 use super::RV32_REGISTER_NUM_LIMBS;

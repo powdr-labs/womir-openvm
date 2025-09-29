@@ -22,9 +22,7 @@ use openvm_womir_transpiler::CopyIntoFrameOpcode;
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{
-    FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
-};
+use crate::{FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord};
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose, decompose};
 
@@ -167,9 +165,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
         memory.increment_timestamp();
 
         let value_to_copy = match local_opcode {
-            CopyIntoFrameOpcode::COPY_INTO_FRAME => {
-                wom.read::<RV32_REGISTER_NUM_LIMBS>(b + fp_f)
-            }
+            CopyIntoFrameOpcode::COPY_INTO_FRAME => wom.read::<RV32_REGISTER_NUM_LIMBS>(b + fp_f),
             CopyIntoFrameOpcode::COPY_FROM_FRAME => {
                 wom.read::<RV32_REGISTER_NUM_LIMBS>(b + other_fp_f)
             }
@@ -215,12 +211,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
             let other_fp_f = F::from_canonical_u32(other_fp);
 
             write_result = Some(match local_opcode {
-                CopyIntoFrameOpcode::COPY_INTO_FRAME => {
-                    wom.write(a + other_fp_f, decompose(value))
-                }
-                CopyIntoFrameOpcode::COPY_FROM_FRAME => {
-                    wom.write(a + fp_f, decompose(value))
-                }
+                CopyIntoFrameOpcode::COPY_INTO_FRAME => wom.write(a + other_fp_f, decompose(value)),
+                CopyIntoFrameOpcode::COPY_FROM_FRAME => wom.write(a + fp_f, decompose(value)),
             });
         }
 

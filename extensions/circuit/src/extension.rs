@@ -597,7 +597,7 @@ mod phantom {
     use openvm_stark_backend::p3_field::{Field, PrimeField32};
     use rand::{Rng, rngs::OsRng};
 
-    use crate::{adapters::unsafe_read_wom_register, WomController};
+    use crate::{WomController, adapters::unsafe_read_wom_register};
 
     pub struct HintInputSubEx;
 

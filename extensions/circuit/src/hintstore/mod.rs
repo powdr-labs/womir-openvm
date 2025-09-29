@@ -9,7 +9,7 @@ use openvm_circuit::{
     },
     system::{
         memory::{
-            MemoryAddress, MemoryAuxColsFactory, MemoryController, OfflineMemory, 
+            MemoryAddress, MemoryAuxColsFactory, MemoryController, OfflineMemory,
             offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols},
         },
         program::ProgramBus,
