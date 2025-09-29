@@ -1040,6 +1040,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // Copy the 32 bit values to the high 32 bits of the temporary value.
                     // Leave the low bits undefined.
                     Directive::Instruction(ib::addi(high_shifted + 1, input, F::ZERO)),
+                    // shr will read 64 bits, so we need to zero the other half due to WOM
+                    Directive::Instruction(ib::const_32_imm(high_shifted, 0, 0)),
                     // Arithmetic shift right to fill the high bits with the sign bit.
                     Directive::Instruction(ib::shr_s_imm_64(
                         output,
