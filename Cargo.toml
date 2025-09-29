@@ -8,6 +8,9 @@ members = ["integration", "extensions/circuit", "extensions/transpiler"]
 resolver = "2"
 
 [workspace.dependencies]
+powdr-openvm = { git = "https://github.com/powdr-labs/powdr.git", rev = "78d81ad", default-features = false }
+powdr-autoprecompiles = { git = "https://github.com/powdr-labs/powdr.git", rev = "78d81ad", default-features = false }
+
 openvm-womir-circuit = { path = "extensions/circuit" }
 openvm-womir-transpiler = { path = "extensions/transpiler" }
 
@@ -17,8 +20,10 @@ openvm-stark-sdk = { git = "https://github.com/powdr-labs/stark-backend.git", re
 openvm-stark-backend = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "ee4e22b", features = [
   "bench-metrics",
 ] }
-
-openvm-sdk = { git = "https://github.com/powdr-labs/openvm.git", rev = "62c5d26", features = [
+openvm-sdk = { git = "https://github.com/powdr-labs/openvm.git", rev = "62c5d26", default-features = false, features = [
+  "parallel",
+  "jemalloc",
+  "nightly-features",
   "bench-metrics",
 ] }
 openvm-circuit-primitives = { git = "https://github.com/powdr-labs/openvm.git", rev = "62c5d26", default-features = false }
@@ -28,6 +33,7 @@ openvm-circuit-derive = { git = "https://github.com/powdr-labs/openvm.git", rev 
 openvm-instructions = { git = "https://github.com/powdr-labs/openvm.git", rev = "62c5d26", default-features = false }
 openvm-instructions-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "62c5d26", default-features = false }
 openvm-rv32im-transpiler = { git = "https://github.com/powdr-labs/openvm.git", rev = "62c5d26", default-features = false }
+openvm-rv32im-circuit = { git = "https://github.com/powdr-labs/openvm.git", rev = "62c5d26", default-features = false }
 
 thiserror = "1.0.65"
 strum_macros = "0.26.4"
