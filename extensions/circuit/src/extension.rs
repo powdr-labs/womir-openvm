@@ -648,7 +648,7 @@ mod phantom {
     use openvm_stark_backend::p3_field::{Field, PrimeField32};
     use rand::{Rng, rngs::OsRng};
 
-    use crate::{adapters::read_wom_register, WomController};
+    use crate::{adapters::unsafe_read_wom_register, WomController};
 
     pub struct HintInputSubEx;
 
@@ -712,7 +712,7 @@ mod phantom {
             _: F,
             _: u16,
         ) -> eyre::Result<()> {
-            let len = read_wom_register(&self.wom.lock().unwrap(), a) as usize;
+            let len = unsafe_read_wom_register(&self.wom.lock().unwrap(), a) as usize;
             streams.hint_stream.clear();
             streams.hint_stream.extend(
                 std::iter::repeat_with(|| F::from_canonical_u8(self.rng.r#gen::<u8>()))
@@ -732,8 +732,8 @@ mod phantom {
             b: F,
             _: u16,
         ) -> eyre::Result<()> {
-            let rd = read_wom_register(&self.wom.lock().unwrap(), a);
-            let rs1 = read_wom_register(&self.wom.lock().unwrap(), b);
+            let rd = unsafe_read_wom_register(&self.wom.lock().unwrap(), a);
+            let rs1 = unsafe_read_wom_register(&self.wom.lock().unwrap(), b);
             let bytes = (0..rs1)
                 .map(|i| -> eyre::Result<u8> {
                     let val = memory.unsafe_read_cell(F::TWO, F::from_canonical_u32(rd + i));
@@ -757,8 +757,8 @@ mod phantom {
             b: F,
             _: u16,
         ) -> eyre::Result<()> {
-            let ptr = read_wom_register(&self.wom.lock().unwrap(), a);
-            let len = read_wom_register(&self.wom.lock().unwrap(), b);
+            let ptr = unsafe_read_wom_register(&self.wom.lock().unwrap(), a);
+            let len = unsafe_read_wom_register(&self.wom.lock().unwrap(), b);
             let key: Vec<u8> = (0..len)
                 .map(|i| {
                     memory

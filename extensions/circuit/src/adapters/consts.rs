@@ -165,6 +165,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
             );
             let imm = imm_hi << 16 | imm_lo;
             let fp_f = F::from_canonical_u32(from_frame.fp);
+            memory.increment_timestamp();
             write_result = Some(wom.write(a + fp_f, decompose(imm)));
         }
 

@@ -160,7 +160,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
     >;
     fn preprocess(
         &mut self,
-        _memory: &mut MemoryController<F>,
+        memory: &mut MemoryController<F>,
         wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
@@ -174,6 +174,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
             JaafOpcode::from_usize(opcode.local_opcode_idx(JaafOpcode::CLASS_OFFSET));
 
         let fp_f = F::from_canonical_u32(fp);
+
+        memory.increment_timestamp();
 
         // Determine which registers to read based on opcode
         let (pc_source_record, pc_source_data) = match local_opcode {

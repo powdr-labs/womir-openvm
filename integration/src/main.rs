@@ -397,6 +397,7 @@ mod tests {
     #[test]
     fn test_basic_wom_operations() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 666.to_f()?),
             wom::addi::<F>(9, 0, 1.to_f()?),
             wom::add::<F>(10, 8, 9),
@@ -423,10 +424,11 @@ mod tests {
     #[test]
     fn test_basic_addi_64() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            // Write to 8 and 9
+            wom::const_32_imm(0, 0, 0),
+            wom::const_32_imm(1, 0, 0),
             wom::addi_64::<F>(8, 0, 666.to_f()?),
-            wom::addi_64::<F>(8, 8, 1.to_f()?),
-            wom::reveal(8, 0),
+            wom::addi_64::<F>(10, 8, 1.to_f()?),
+            wom::reveal(10, 0),
             wom::halt(),
         ];
 
@@ -436,6 +438,7 @@ mod tests {
     #[test]
     fn test_basic_mul() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 666.to_f()?),
             wom::addi::<F>(9, 0, 1.to_f()?),
             wom::mul::<F>(10, 8, 9),
@@ -449,6 +452,7 @@ mod tests {
     #[test]
     fn test_mul_zero() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 12345.to_f()?),
             wom::addi::<F>(9, 0, 0.to_f()?),
             wom::mul::<F>(10, 8, 9), // 12345 * 0 = 0
@@ -461,6 +465,7 @@ mod tests {
     #[test]
     fn test_mul_one() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 999.to_f()?),
             wom::addi::<F>(9, 0, 1.to_f()?),
             wom::mul::<F>(10, 8, 9), // 999 * 1 = 999
@@ -473,6 +478,7 @@ mod tests {
     #[test]
     fn test_skip() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             // Sets to skip 5 instructions.
             wom::const_32_imm(8, 5, 0),
             wom::skip(8),
@@ -493,6 +499,7 @@ mod tests {
     #[test]
     fn test_mul_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 7.to_f()?),
             wom::addi::<F>(9, 0, 8.to_f()?), // 2^3
             wom::mul::<F>(10, 8, 9),         // 7 * 8 = 56
@@ -505,6 +512,7 @@ mod tests {
     #[test]
     fn test_mul_large_numbers() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             // Load large numbers
             wom::const_32_imm::<F>(8, 1, 1), // 65537 = 0x10001 (1 << 16 | 1)
             wom::const_32_imm::<F>(9, 65521, 0), // 65521 = 0xFFF1
@@ -524,6 +532,7 @@ mod tests {
     fn test_mul_overflow() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             // Test multiplication that would overflow 32-bit
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0, 1), // 2^16 = 65536 (upper=1, lower=0)
             wom::const_32_imm::<F>(9, 1, 1), // 65537 (upper=1, lower=1)
             wom::mul::<F>(10, 8, 9), // 65536 * 65537 = 4,295,032,832 (overflows to 65536 in 32-bit)
@@ -537,6 +546,7 @@ mod tests {
     #[test]
     fn test_mul_commutative() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 13.to_f()?),
             wom::addi::<F>(9, 0, 17.to_f()?),
             wom::mul::<F>(10, 8, 9),   // 13 * 17 = 221
@@ -551,6 +561,7 @@ mod tests {
     #[test]
     fn test_mul_chain() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 2.to_f()?),
             wom::addi::<F>(9, 0, 3.to_f()?),
             wom::addi::<F>(10, 0, 5.to_f()?),
@@ -566,6 +577,7 @@ mod tests {
     fn test_mul_max_value() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             // Test with maximum 32-bit value
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFF, 0xFFFF), // 2^32 - 1
             wom::addi::<F>(9, 0, 1.to_f()?),
             wom::mul::<F>(10, 8, 9), // (2^32 - 1) * 1 = 2^32 - 1
@@ -584,6 +596,7 @@ mod tests {
     fn test_mul_negative_positive() -> Result<(), Box<dyn std::error::Error>> {
         // Test multiplication of negative and positive numbers
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFB, 0xFFFF), // -5 in two's complement
             wom::addi::<F>(9, 0, 3.to_f()?),
             wom::mul::<F>(10, 8, 9), // -5 * 3 = -15
@@ -603,6 +616,7 @@ mod tests {
     fn test_mul_positive_negative() -> Result<(), Box<dyn std::error::Error>> {
         // Test multiplication of positive and negative numbers
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 4.to_f()?),
             wom::const_32_imm::<F>(9, 0xFFFA, 0xFFFF), // -6 in two's complement
             wom::mul::<F>(10, 8, 9),                   // 4 * -6 = -24
@@ -622,6 +636,7 @@ mod tests {
     fn test_mul_both_negative() -> Result<(), Box<dyn std::error::Error>> {
         // Test multiplication of two negative numbers
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFF9, 0xFFFF), // -7 in two's complement
             wom::const_32_imm::<F>(9, 0xFFFD, 0xFFFF), // -3 in two's complement
             wom::mul::<F>(10, 8, 9),                   // -7 * -3 = 21
@@ -635,6 +650,7 @@ mod tests {
     fn test_mul_negative_one() -> Result<(), Box<dyn std::error::Error>> {
         // Test multiplication by -1
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 42.to_f()?),
             wom::const_32_imm::<F>(9, 0xFFFF, 0xFFFF), // -1 in two's complement
             wom::mul::<F>(10, 8, 9),                   // 42 * -1 = -42
@@ -654,6 +670,7 @@ mod tests {
     fn test_mul_negative_overflow() -> Result<(), Box<dyn std::error::Error>> {
         // Test multiplication that would overflow with signed numbers
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0x0000, 0x8000), // -2147483648 (INT32_MIN)
             wom::const_32_imm::<F>(9, 0xFFFF, 0xFFFF), // -1
             wom::mul::<F>(10, 8, 9),                   // INT32_MIN * -1 = INT32_MIN (overflow)
@@ -672,6 +689,7 @@ mod tests {
     #[test]
     fn test_basic_div() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 100.to_f()?),
             wom::addi::<F>(9, 0, 10.to_f()?),
             wom::div::<F>(10, 8, 9), // 100 / 10 = 10
@@ -684,6 +702,7 @@ mod tests {
     #[test]
     fn test_div_by_one() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 999.to_f()?),
             wom::addi::<F>(9, 0, 1.to_f()?),
             wom::div::<F>(10, 8, 9), // 999 / 1 = 999
@@ -696,6 +715,7 @@ mod tests {
     #[test]
     fn test_div_equal_numbers() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 42.to_f()?),
             wom::addi::<F>(9, 0, 42.to_f()?),
             wom::div::<F>(10, 8, 9), // 42 / 42 = 1
@@ -708,6 +728,7 @@ mod tests {
     #[test]
     fn test_div_with_remainder() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 17.to_f()?),
             wom::addi::<F>(9, 0, 5.to_f()?),
             wom::div::<F>(10, 8, 9), // 17 / 5 = 3 (integer division)
@@ -720,6 +741,7 @@ mod tests {
     #[test]
     fn test_div_zero_dividend() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 0.to_f()?),
             wom::addi::<F>(9, 0, 100.to_f()?),
             wom::div::<F>(10, 8, 9), // 0 / 100 = 0
@@ -732,6 +754,7 @@ mod tests {
     #[test]
     fn test_div_large_numbers() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0, 1000), // 65536000
             wom::const_32_imm::<F>(9, 256, 0),  // 256
             wom::div::<F>(10, 8, 9),            // 65536000 / 256 = 256000
@@ -744,6 +767,7 @@ mod tests {
     #[test]
     fn test_div_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 128.to_f()?),
             wom::addi::<F>(9, 0, 8.to_f()?), // 2^3
             wom::div::<F>(10, 8, 9),         // 128 / 8 = 16
@@ -756,6 +780,7 @@ mod tests {
     #[test]
     fn test_div_chain() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 120.to_f()?),
             wom::addi::<F>(9, 0, 2.to_f()?),
             wom::addi::<F>(10, 0, 3.to_f()?),
@@ -771,6 +796,7 @@ mod tests {
     fn test_div_negative_signed() -> Result<(), Box<dyn std::error::Error>> {
         // Testing signed division with negative numbers
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFF6, 0xFFFF), // -10 in two's complement
             wom::addi::<F>(9, 0, 2.to_f()?),
             wom::div::<F>(10, 8, 9), // -10 / 2 = -5
@@ -790,6 +816,7 @@ mod tests {
     fn test_div_both_negative() -> Result<(), Box<dyn std::error::Error>> {
         // Testing signed division with both numbers negative
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFEC, 0xFFFF), // -20 in two's complement
             wom::const_32_imm::<F>(9, 0xFFFB, 0xFFFF), // -5 in two's complement
             wom::div::<F>(10, 8, 9),                   // -20 / -5 = 4
@@ -803,6 +830,7 @@ mod tests {
     fn test_div_and_mul_inverse() -> Result<(), Box<dyn std::error::Error>> {
         // Test that (a / b) * b ≈ a (with integer truncation)
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 100.to_f()?),
             wom::addi::<F>(9, 0, 7.to_f()?),
             wom::div::<F>(10, 8, 9),  // 100 / 7 = 14
@@ -823,12 +851,14 @@ mod tests {
         // Simple test with JAAF instruction
         // We'll set up a value, jump with JAAF, and verify the result
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 42.to_f()?),    // x8 = 42
             wom::addi::<F>(9, 0, 5.to_f()?),     // x9 = 5 (new frame pointer)
             wom::copy_into_frame::<F>(10, 8, 9), // PC=12: Copy x8 to [x9[x10]], which writes to address pointed by x10
-            wom::jaaf::<F>(20, 9),               // Jump to PC=16, set FP=x9
+            wom::jaaf::<F>(24, 9),               // Jump to PC=24, set FP=x9
             wom::halt(),                         // This should be skipped
-            // PC = 20 (byte offset, so instruction at index 4)
+            // PC = 24
+            wom::const_32_imm(0, 0, 0),
             wom::reveal(10, 0), // wom::reveal x8 (which should still be 42)
             wom::halt(),
         ];
@@ -840,13 +870,15 @@ mod tests {
     fn test_jaaf_save_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Test JAAF_SAVE: jump and save FP
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 99.to_f()?),  // x8 = 99
             wom::addi::<F>(9, 0, 10.to_f()?),  // x9 = 10 (new frame pointer)
             wom::addi::<F>(11, 0, 99.to_f()?), // x11 = 99 (to show it gets overwritten)
-            wom::jaaf_save::<F>(11, 24, 9),    // Jump to PC=24, set FP=x9, save old FP to x11
+            wom::jaaf_save::<F>(11, 28, 9),    // Jump to PC=24, set FP=x9, save old FP to x11
             wom::halt(),                       // This should be skipped
             wom::halt(),                       // This should be skipped too
-            // PC = 24 (byte offset, so instruction at index 6)
+            // PC = 28 (byte offset, so instruction at index 6)
+            wom::const_32_imm(0, 0, 0),
             wom::reveal(11, 0), // wom::reveal x11 (should be 0, the old FP)
             wom::halt(),
         ];
@@ -858,12 +890,13 @@ mod tests {
     fn test_ret_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Test RET: return to saved PC and FP
         let instructions = vec![
-            wom::addi::<F>(10, 0, 20.to_f()?), // x10 = 20 (return PC)
+            wom::const_32_imm(0, 0, 0),
+            wom::addi::<F>(10, 0, 24.to_f()?), // x10 = 24 (return PC)
             wom::addi::<F>(11, 0, 0.to_f()?),  // x11 = 0 (saved FP)
             wom::addi::<F>(8, 0, 88.to_f()?),  // x8 = 88
             wom::ret::<F>(10, 11),             // Return to PC=x10, FP=x11
             wom::halt(),                       // This should be skipped
-            // PC = 20 (where x10 points)
+            // PC = 24 (where x10 points)
             wom::reveal(8, 0), // wom::reveal x8 (should be 88)
             wom::halt(),
         ];
@@ -875,32 +908,36 @@ mod tests {
     fn test_call_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Test CALL: save PC and FP, then jump
         let instructions = vec![
-            wom::addi::<F>(9, 0, 16.to_f()?),  // x9 = 15 (new FP)
-            wom::call::<F>(10, 11, 20, 9),     // Call to PC=20, FP=x9, save PC to x10, FP to x11
+            wom::const_32_imm(0, 0, 0),
+            wom::addi::<F>(9, 0, 16.to_f()?),  // x9 = 16 (new FP)
+            wom::call::<F>(10, 11, 24, 9),     // Call to PC=24, FP=x9, save PC to x10, FP to x11
             wom::addi::<F>(8, 0, 123.to_f()?), // x8 = 123 (after return) - this should NOT execute
             wom::reveal(8, 0),                 // wom::reveal x8 - this should NOT execute
             wom::halt(),                       // Padding
-            // PC = 20 (function start)
-            wom::reveal(10, 0), // wom::reveal x10 (should be 8, the return address)
+            // PC = 24 (function start)
+            wom::const_32_imm(0, 0, 0),
+            wom::reveal(10, 0), // wom::reveal x10 (should be 12, the return address)
             wom::halt(),        // End the test here, don't return
         ];
 
-        run_vm_test("CALL instruction", instructions, 8, None)
+        run_vm_test("CALL instruction", instructions, 12, None)
     }
 
     #[test]
     fn test_call_indirect_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Test CALL_INDIRECT: save PC and FP, jump to register value
         let instructions = vec![
-            wom::addi::<F>(12, 0, 28.to_f()?),      // x12 = 28 (target PC)
-            wom::addi::<F>(9, 0, 20.to_f()?),       // x9 = 20 (new FP)
+            wom::const_32_imm(0, 0, 0),
+            wom::addi::<F>(12, 0, 32.to_f()?),      // x12 = 32 (target PC)
+            wom::addi::<F>(9, 0, 0x100.to_f()?),       // x9 = 256 (new FP)
             wom::addi::<F>(11, 0, 999.to_f()?),     // x11 = 999
             wom::call_indirect::<F>(10, 11, 12, 9), // Call to PC=x12, FP=x9, save PC to x10, FP to x11
             wom::addi::<F>(8, 0, 456.to_f()?), // x8 = 456 (after return) - this should NOT execute
             wom::reveal(8, 0),                 // wom::reveal x8 - this should NOT execute
             wom::halt(),                       // Padding
-            // PC = 28 (function start, where x12 points)
-            wom::reveal(5 + 11, 0), // wom::reveal x11 (should be 0, the saved FP)
+            // PC = 32 (function start, where x12 points)
+            wom::const_32_imm(0, 0, 0),
+            wom::reveal(11, 0), // wom::reveal x11 (should be 0, the saved FP)
             wom::halt(),            // End the test here, don't return
         ];
 
@@ -912,51 +949,52 @@ mod tests {
         // Test a complete call and return sequence
         // Note: When FP changes, register addressing changes too
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 50.to_f()?), // x8 = 50 (at FP=0)
-            wom::addi::<F>(9, 0, 0.to_f()?), // x9 = 0 (new FP for function - using 0 to keep register addressing simple)
-            wom::call::<F>(10, 11, 24, 9),   // Call function at PC=24, FP=0
+            wom::addi::<F>(9, 0, 0x100.to_f()?), // x9 = 256 (new FP for function)
+            wom::call::<F>(10, 11, 28, 9),   // Call function at PC=28, FP=0
             wom::reveal(8, 0),               // wom::reveal x8 after return (should be 75)
             wom::halt(),
             wom::halt(), // Padding
-            // Function at PC = 24
-            wom::addi::<F>(8, 8, 25.to_f()?), // x8 = x8 + 25 = 75 (still at FP=0)
+            // Function at PC = 28
+            wom::const_32_imm(8, 1, 0), // x8 = 1 in new frame
             wom::ret::<F>(10, 11),            // Return using saved PC and FP
             wom::halt(),
         ];
 
-        run_vm_test("CALL and RETURN sequence", instructions, 75, None)
+        run_vm_test("CALL and RETURN sequence", instructions, 50, None)
     }
 
     #[test]
     fn test_jump_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Test unconditional JUMP
         let instructions = vec![
-            wom::addi::<F>(8, 0, 42.to_f()?),  // PC=0: x8 = 42
+            wom::const_32_imm(0, 0, 0),        // PC=0:
             wom::jump::<F>(20),                // PC=4: Jump to PC=20
-            wom::addi::<F>(8, 0, 999.to_f()?), // PC=8: This should be skipped
-            wom::reveal(8, 0),                 // PC=12: This should be skipped
+            wom::addi::<F>(9, 0, 999.to_f()?), // PC=8: This should be skipped
+            wom::reveal(9, 0),                 // PC=12: This should be skipped
             wom::halt(),                       // PC=16: Padding
             // PC = 20 (jump target)
-            wom::addi::<F>(8, 8, 58.to_f()?), // PC=20: x8 = 42 + 58 = 100
-            wom::reveal(8, 0),                // PC=24: wom::reveal x8 (should be 100)
+            wom::addi::<F>(9, 0, 58.to_f()?), // PC=20: x8 = 42 + 58 = 100
+            wom::reveal(9, 0),                // PC=24: wom::reveal x8 (should be 100)
             wom::halt(),                      // PC=28: End
         ];
 
-        run_vm_test("JUMP instruction", instructions, 100, None)
+        run_vm_test("JUMP instruction", instructions, 58, None)
     }
 
     #[test]
     fn test_jump_if_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Test conditional JUMP_IF (condition != 0)
         let instructions = vec![
-            wom::addi::<F>(8, 0, 10.to_f()?),  // PC=0: x8 = 10
+            wom::const_32_imm(0, 0, 0),        // PC=0
             wom::addi::<F>(9, 0, 5.to_f()?),   // PC=4: x9 = 5 (condition != 0)
             wom::jump_if::<F>(9, 24),          // PC=8: Jump to PC=24 if x9 != 0 (should jump)
             wom::addi::<F>(8, 0, 999.to_f()?), // PC=12: This should be skipped
             wom::reveal(8, 0),                 // PC=16: This should be skipped
             wom::halt(),                       // PC=20: Padding
             // PC = 24 (jump target)
-            wom::addi::<F>(8, 8, 15.to_f()?), // PC=24: x8 = 10 + 15 = 25
+            wom::addi::<F>(8, 0, 15.to_f()?), // PC=24: x8 = 15
             wom::reveal(8, 0),                // PC=28: wom::reveal x8 (should be 25)
             wom::halt(),                      // PC=32: End
         ];
@@ -964,7 +1002,7 @@ mod tests {
         run_vm_test(
             "JUMP_IF instruction (true condition)",
             instructions,
-            25,
+            15,
             None,
         )
     }
@@ -973,10 +1011,10 @@ mod tests {
     fn test_jump_if_false_condition() -> Result<(), Box<dyn std::error::Error>> {
         // Test conditional JUMP_IF with false condition (should not jump)
         let instructions = vec![
-            wom::addi::<F>(8, 0, 30.to_f()?), // PC=0: x8 = 30
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(9, 0, 0.to_f()?),  // PC=4: x9 = 0 (condition == 0, should not jump)
             wom::jump_if::<F>(9, 28),         // PC=8: Jump to PC=28 if x9 != 0 (should NOT jump)
-            wom::addi::<F>(8, 8, 20.to_f()?), // PC=12: x8 = 30 + 20 = 50 (this should execute)
+            wom::addi::<F>(8, 0, 20.to_f()?), // PC=12: x8 = 30 + 20 = 50 (this should execute)
             wom::reveal(8, 0),                // PC=16: wom::reveal x8 (should be 50)
             wom::halt(),                      // PC=20: End
             // PC = 24 (jump target that should not be reached)
@@ -988,7 +1026,7 @@ mod tests {
         run_vm_test(
             "JUMP_IF instruction (false condition)",
             instructions,
-            50,
+            20,
             None,
         )
     }
@@ -997,14 +1035,14 @@ mod tests {
     fn test_jump_if_zero_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Test conditional JUMP_IF_ZERO (condition == 0)
         let instructions = vec![
-            wom::addi::<F>(8, 0, 77.to_f()?),  // PC=0: x8 = 77
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(9, 0, 0.to_f()?),   // PC=4: x9 = 0 (condition == 0)
             wom::jump_if_zero::<F>(9, 24),     // PC=8: Jump to PC=24 if x9 == 0 (should jump)
             wom::addi::<F>(8, 0, 999.to_f()?), // PC=12: This should be skipped
             wom::reveal(8, 0),                 // PC=16: This should be skipped
             wom::halt(),                       // PC=20: Padding
             // PC = 24 (jump target)
-            wom::addi::<F>(8, 8, 23.to_f()?), // PC=24: x8 = 77 + 23 = 100
+            wom::addi::<F>(8, 0, 23.to_f()?), // PC=24: x8 = 23
             wom::reveal(8, 0),                // PC=28: wom::reveal x8 (should be 100)
             wom::halt(),                      // PC=32: End
         ];
@@ -1012,7 +1050,7 @@ mod tests {
         run_vm_test(
             "JUMP_IF_ZERO instruction (true condition)",
             instructions,
-            100,
+            23,
             None,
         )
     }
@@ -1021,10 +1059,10 @@ mod tests {
     fn test_jump_if_zero_false_condition() -> Result<(), Box<dyn std::error::Error>> {
         // Test conditional JUMP_IF_ZERO with false condition (should not jump)
         let instructions = vec![
-            wom::addi::<F>(8, 0, 60.to_f()?), // PC=0: x8 = 60
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(9, 0, 7.to_f()?),  // PC=4: x9 = 7 (condition != 0, should not jump)
             wom::jump_if_zero::<F>(9, 28),    // PC=8: Jump to PC=28 if x9 == 0 (should NOT jump)
-            wom::addi::<F>(8, 8, 40.to_f()?), // PC=12: x8 = 60 + 40 = 100 (this should execute)
+            wom::addi::<F>(8, 0, 40.to_f()?), // PC=12: x8 = 40 (this should execute)
             wom::reveal(8, 0),                // PC=16: wom::reveal x8 (should be 100)
             wom::halt(),                      // PC=20: End
             // PC = 24 (jump target that should not be reached)
@@ -1036,7 +1074,7 @@ mod tests {
         run_vm_test(
             "JUMP_IF_ZERO instruction (false condition)",
             instructions,
-            100,
+            40,
             None,
         )
     }
@@ -1045,9 +1083,10 @@ mod tests {
     fn test_allocate_frame_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Test ALLOCATE_FRAME instruction
         let instructions = vec![
-            wom::allocate_frame_imm::<F>(8, 256), // PC=0: Allocate 256 bytes, store pointer in x8
-            wom::reveal(8, 0), // PC=4: wom::reveal x8 (should be allocated pointer)
-            wom::halt(),       // PC=8: End
+            wom::const_32_imm(0, 0, 0),
+            wom::allocate_frame_imm::<F>(8, 256), // Allocate 256 bytes, store pointer in x8
+            wom::reveal(8, 0), // wom::reveal x8 (should be allocated pointer)
+            wom::halt(),
         ];
 
         // The expected value comes from the frame allocator (`AllocateFrameAdapterChipWom`) initial frame pointer value
@@ -1059,15 +1098,17 @@ mod tests {
         // Test COPY_INTO_FRAME instruction
         // This test verifies that copy_into_frame actually writes to memory
         let instructions = vec![
-            wom::addi::<F>(8, 0, 42.to_f()?), // PC=0: x8 = 42 (value to copy)
-            wom::addi::<F>(9, 0, 0x1000.to_f()?), // PC=4: x9 = 0x1000 (mock frame pointer)
-            wom::addi::<F>(10, 0, 0.to_f()?), // PC=8: x10 = 0 (register to read into)
-            wom::copy_into_frame::<F>(10, 8, 9), // PC=12: Copy x8 to [x9[x10]], which writes to address pointed by x10
-            wom::jaaf::<F>(20, 9),               // Jump to PC=20, set FP=x9
+            wom::const_32_imm(0, 0, 0), // PC=0
+            wom::addi::<F>(8, 0, 42.to_f()?), // PC=4: x8 = 42 (value to copy)
+            wom::addi::<F>(9, 0, 0x1000.to_f()?), // PC=8: x9 = 0x1000 (mock frame pointer)
+            wom::addi::<F>(10, 0, 0.to_f()?), // PC=12: x10 = 0 (register to read into)
+            wom::copy_into_frame::<F>(10, 8, 9), // PC=16: Copy x8 to [x9[x10]], which writes to address pointed by x10
+            wom::jaaf::<F>(24, 9),               // Jump to PC=24, set FP=x9
             // Since copy_into_frame writes x8's value to memory at [x9[x10]],
             // and we activated the frame at x9, x10 should now contain 42.
-            wom::reveal(10, 0), // PC=20: wom::reveal x10 (should be 42, the value from x8)
-            wom::halt(),        // PC=24: End
+            wom::const_32_imm(0, 0, 0),
+            wom::reveal(10, 0), // PC=24: wom::reveal x10 (should be 42, the value from x8)
+            wom::halt(),        // PC=28: End
         ];
 
         run_vm_test("COPY_INTO_FRAME instruction", instructions, 42, None)
@@ -1078,15 +1119,17 @@ mod tests {
         // Test sequence: allocate frame, then copy into it
         // This test verifies that copy_into_frame actually writes the value
         let instructions = vec![
-            wom::addi::<F>(8, 0, 123.to_f()?), // PC=0: x8 = 123 (value to store)
-            wom::allocate_frame_imm::<F>(9, 128), // PC=4: Allocate 128 bytes, pointer in x9. x9=2
+            wom::const_32_imm(0, 0, 0),
+            wom::addi::<F>(8, 0, 123.to_f()?), // PC=4: x8 = 123 (value to store)
+            wom::allocate_frame_imm::<F>(9, 128), // PC=8: Allocate 128 bytes, pointer in x9. x9=2
             // by convention on the first allocation.
-            wom::addi::<F>(10, 0, 0.to_f()?), // PC=8: x10 = 0 (destination register)
-            wom::copy_into_frame::<F>(10, 8, 9), // PC=12: Copy x8 to [x9[x10]]
-            wom::jaaf::<F>(24, 9),            // Jump to PC=20, set FP=x9
+            wom::addi::<F>(10, 0, 0.to_f()?), // PC=12: x10 = 0 (destination register)
+            wom::copy_into_frame::<F>(10, 8, 9), // PC=16: Copy x8 to [x9[x10]]
+            wom::jaaf::<F>(28, 9),            // Jump to PC=28, set FP=x9
             wom::halt(),                      // Should be skipped
-            wom::reveal(10, 0), // PC=24: wom::reveal x10 (should be 123, the value from x8)
-            wom::halt(),        // PC=28: End
+            wom::const_32_imm(0, 0, 0),  // PC=28
+            wom::reveal(10, 0), // wom::reveal x10 (should be 123, the value from x8)
+            wom::halt(),
         ];
 
         run_vm_test(
@@ -1100,6 +1143,7 @@ mod tests {
     #[test]
     fn test_const32_simple() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0x1234, 0x5678), // Load 0x56781234 into x8
             wom::reveal(8, 0),
             wom::halt(),
@@ -1111,6 +1155,7 @@ mod tests {
     #[test]
     fn test_const32_zero() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(10, 0, 0), // Load 0 into x10
             wom::reveal(10, 0),
             wom::halt(),
@@ -1122,6 +1167,7 @@ mod tests {
     #[test]
     fn test_const32_max_value() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(12, 0xFFFF, 0xFFFF), // Load 0xFFFFFFFF into x12
             wom::reveal(12, 0),
             wom::halt(),
@@ -1133,6 +1179,7 @@ mod tests {
     #[test]
     fn test_const32_multiple_registers() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
             wom::const_32_imm::<F>(9, 200, 0), // Load 200 into x9
             wom::add::<F>(11, 8, 9),           // x11 = x8 + x9 = 300
@@ -1146,6 +1193,7 @@ mod tests {
     #[test]
     fn test_const32_with_arithmetic() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 1000, 0), // Load 1000 into x8
             wom::const_32_imm::<F>(9, 234, 0),  // Load 234 into x9
             wom::add::<F>(10, 8, 9),            // x10 = x8 + x9 = 1234
@@ -1161,6 +1209,7 @@ mod tests {
     #[test]
     fn test_lt_u_true() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
             wom::const_32_imm::<F>(9, 200, 0), // Load 200 into x9
             wom::lt_u::<F>(10, 8, 9),          // x10 = (x8 < x9) = (100 < 200) = 1
@@ -1174,6 +1223,7 @@ mod tests {
     #[test]
     fn test_lt_u_false() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 200, 0), // Load 200 into x8
             wom::const_32_imm::<F>(9, 100, 0), // Load 100 into x9
             wom::lt_u::<F>(10, 8, 9),          // x10 = (x8 < x9) = (200 < 100) = 0
@@ -1187,6 +1237,7 @@ mod tests {
     #[test]
     fn test_lt_u_equal() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 150, 0), // Load 150 into x8
             wom::const_32_imm::<F>(9, 150, 0), // Load 150 into x9
             wom::lt_u::<F>(10, 8, 9),          // x10 = (x8 < x9) = (150 < 150) = 0
@@ -1200,6 +1251,7 @@ mod tests {
     #[test]
     fn test_lt_s_positive() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 50, 0),  // Load 50 into x8
             wom::const_32_imm::<F>(9, 100, 0), // Load 100 into x9
             wom::lt_s::<F>(10, 8, 9),          // x10 = (x8 < x9) = (50 < 100) = 1
@@ -1213,6 +1265,7 @@ mod tests {
     #[test]
     fn test_lt_s_negative() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFF, 0xFFFF), // Load -1 into x8
             wom::const_32_imm::<F>(9, 5, 0),           // Load 5 into x9
             wom::lt_s::<F>(10, 8, 9),                  // x10 = (x8 < x9) = (-1 < 5) = 1
@@ -1226,6 +1279,7 @@ mod tests {
     #[test]
     fn test_lt_s_both_negative() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFE, 0xFFFF), // Load -2 into x8
             wom::const_32_imm::<F>(9, 0xFFFC, 0xFFFF), // Load -4 into x9
             wom::lt_s::<F>(10, 8, 9),                  // x10 = (x8 < x9) = (-2 < -4) = 0
@@ -1239,6 +1293,7 @@ mod tests {
     #[test]
     fn test_lt_comparison_chain() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 10, 0),  // x8 = 10
             wom::const_32_imm::<F>(9, 20, 0),  // x9 = 20
             wom::const_32_imm::<F>(10, 30, 0), // x10 = 30
@@ -1255,6 +1310,7 @@ mod tests {
     #[test]
     fn test_gt_u_true() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 200, 0), // Load 200 into x8
             wom::const_32_imm::<F>(9, 100, 0), // Load 100 into x9
             wom::gt_u::<F>(10, 8, 9),          // x10 = (x8 > x9) = (200 > 100) = 1
@@ -1268,6 +1324,7 @@ mod tests {
     #[test]
     fn test_gt_u_false() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
             wom::const_32_imm::<F>(9, 200, 0), // Load 200 into x9
             wom::gt_u::<F>(10, 8, 9),          // x10 = (x8 > x9) = (100 > 200) = 0
@@ -1281,6 +1338,7 @@ mod tests {
     #[test]
     fn test_gt_u_equal() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 150, 0), // Load 150 into x8
             wom::const_32_imm::<F>(9, 150, 0), // Load 150 into x9
             wom::gt_u::<F>(10, 8, 9),          // x10 = (x8 > x9) = (150 > 150) = 0
@@ -1294,6 +1352,7 @@ mod tests {
     #[test]
     fn test_gt_s_positive() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
             wom::const_32_imm::<F>(9, 50, 0),  // Load 50 into x9
             wom::gt_s::<F>(10, 8, 9),          // x10 = (x8 > x9) = (100 > 50) = 1
@@ -1307,6 +1366,7 @@ mod tests {
     #[test]
     fn test_gt_s_negative() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 5, 0),           // Load 5 into x8
             wom::const_32_imm::<F>(9, 0xFFFF, 0xFFFF), // Load -1 into x9
             wom::gt_s::<F>(10, 8, 9),                  // x10 = (x8 > x9) = (5 > -1) = 1
@@ -1320,6 +1380,7 @@ mod tests {
     #[test]
     fn test_gt_s_both_negative() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFE, 0xFFFF), // Load -2 into x8
             wom::const_32_imm::<F>(9, 0xFFFC, 0xFFFF), // Load -4 into x9
             wom::gt_s::<F>(10, 8, 9),                  // x10 = (x8 > x9) = (-2 > -4) = 1
@@ -1334,6 +1395,7 @@ mod tests {
     fn test_gt_edge_cases() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             // Test max unsigned value
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFF, 0xFFFF), // Load 0xFFFFFFFF (max u32) into x8
             wom::const_32_imm::<F>(9, 0, 0),           // Load 0 into x9
             wom::gt_u::<F>(10, 8, 9),                  // x10 = (max > 0) = 1
@@ -1353,6 +1415,7 @@ mod tests {
     #[test]
     fn test_comparison_equivalence() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 25, 0), // x8 = 25
             wom::const_32_imm::<F>(9, 10, 0), // x9 = 10
             // Test that (a > b) == !(a <= b) == !((a < b) || (a == b))
@@ -1370,6 +1433,7 @@ mod tests {
     #[test]
     fn test_mixed_comparisons() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFE, 0xFFFF), // x8 = -2 (signed)
             wom::const_32_imm::<F>(9, 2, 0),           // x9 = 2
             // Unsigned comparison: 0xFFFFFFFE > 2
@@ -1393,6 +1457,7 @@ mod tests {
     #[test]
     fn test_input_hint() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::pre_read_u32::<F>(),
             wom::read_u32::<F>(10),
             wom::reveal(10, 0),
@@ -1407,15 +1472,17 @@ mod tests {
     #[test]
     fn test_input_hint_with_frame_jump_and_xor() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             // Read first value into r8
             wom::pre_read_u32::<F>(),
             wom::read_u32::<F>(8),
             wom::allocate_frame_imm::<F>(9, 64), // Allocate frame, pointer in r9
             wom::copy_into_frame::<F>(2, 8, 9),  // Copy r8 to frame[2]
             // Jump to new frame
-            wom::jaaf::<F>(24, 9), // Jump to PC=24, activate frame at r9
+            wom::jaaf::<F>(28, 9), // Jump to PC=28, activate frame at r9
             // This should be skipped
             wom::halt(),
+            wom::const_32_imm(0, 0, 0), // PC = 28
             // Read second value into r3
             wom::pre_read_u32::<F>(),
             wom::read_u32::<F>(3),
@@ -1441,10 +1508,10 @@ mod tests {
     fn test_loadw_basic() -> Result<(), Box<dyn std::error::Error>> {
         // Test basic LOADW instruction
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 100.to_f()?), // x8 = 100 (base address)
             wom::addi::<F>(9, 0, 42.to_f()?),  // x9 = 42 (value to store)
             wom::storew::<F>(9, 8, 0),         // MEM[x8 + 0] = x9 (store 42 at address 100)
-            wom::addi::<F>(10, 0, 0.to_f()?),  // x10 = 0 (clear register)
             wom::loadw::<F>(10, 8, 0),         // x10 = MEM[x8 + 0] (load from address 100)
             wom::reveal(10, 0),                // wom::reveal x10 (should be 42)
             wom::halt(),
@@ -1457,13 +1524,12 @@ mod tests {
     fn test_storew_with_offset() -> Result<(), Box<dyn std::error::Error>> {
         // Test STOREW with positive offset
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 200.to_f()?),  // x8 = 200 (base address)
             wom::addi::<F>(9, 0, 111.to_f()?),  // x9 = 111 (first value)
             wom::addi::<F>(10, 0, 222.to_f()?), // x10 = 222 (second value)
             wom::storew::<F>(9, 8, 0),          // MEM[x8 + 0] = 111
             wom::storew::<F>(10, 8, 4),         // MEM[x8 + 4] = 222
-            wom::addi::<F>(11, 0, 0.to_f()?),   // x11 = 0 (clear register)
-            wom::addi::<F>(12, 0, 0.to_f()?),   // x12 = 0 (clear register)
             wom::loadw::<F>(11, 8, 0),          // x11 = MEM[x8 + 0] (should be 111)
             wom::loadw::<F>(12, 8, 4),          // x12 = MEM[x8 + 4] (should be 222)
             // Test that we loaded the correct values
@@ -1479,10 +1545,10 @@ mod tests {
     fn test_loadbu_basic() -> Result<(), Box<dyn std::error::Error>> {
         // Test LOADBU instruction (load byte unsigned)
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 300.to_f()?),  // x8 = 300 (base address)
             wom::addi::<F>(9, 0, 0xFF.to_f()?), // x9 = 255 (max byte value)
             wom::storeb::<F>(9, 8, 0),          // MEM[x8 + 0] = 255 (store as byte)
-            wom::addi::<F>(10, 0, 0.to_f()?),   // x10 = 0 (clear register)
             wom::loadbu::<F>(10, 8, 0),         // x10 = MEM[x8 + 0] (load byte unsigned)
             wom::reveal(10, 0),                 // Reveal x10 (should be 255)
             wom::halt(),
@@ -1494,10 +1560,10 @@ mod tests {
     fn test_loadhu_basic() -> Result<(), Box<dyn std::error::Error>> {
         // Test LOADHU instruction (load halfword unsigned)
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 400.to_f()?),    // x8 = 400 (base address)
             wom::const_32_imm::<F>(9, 0xABCD, 0), // x9 = 0xABCD (43981)
             wom::storeh::<F>(9, 8, 0),            // MEM[x8 + 0] = 0xABCD (store as halfword)
-            wom::addi::<F>(10, 0, 0.to_f()?),     // x10 = 0 (clear register)
             wom::loadhu::<F>(10, 8, 0),           // x10 = MEM[x8 + 0] (load halfword unsigned)
             wom::reveal(10, 0),                   // Reveal x10 (should be 0xABCD = 43981)
             wom::halt(),
@@ -1509,12 +1575,11 @@ mod tests {
     fn test_storeb_with_offset() -> Result<(), Box<dyn std::error::Error>> {
         // Test STOREB with offset and masking
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 500.to_f()?),    // x8 = 500 (base address)
             wom::const_32_imm::<F>(9, 0x1234, 0), // x9 = 0x1234 (only lowest byte 0x34 will be stored)
             wom::storeb::<F>(9, 8, 0),            // MEM[x8 + 0] = 0x34 (store lowest byte)
             wom::storeb::<F>(9, 8, 1),            // MEM[x8 + 1] = 0x34 (store at offset 1)
-            wom::addi::<F>(10, 0, 0.to_f()?),     // x10 = 0
-            wom::addi::<F>(11, 0, 0.to_f()?),     // x11 = 0
             wom::loadbu::<F>(10, 8, 0),           // x10 = MEM[x8 + 0] (should be 0x34 = 52)
             wom::loadbu::<F>(11, 8, 1),           // x11 = MEM[x8 + 1] (should be 0x34 = 52)
             wom::add::<F>(12, 10, 11),            // x12 = x10 + x11 = 52 + 52 = 104
@@ -1528,13 +1593,12 @@ mod tests {
     fn test_storeh_with_offset() -> Result<(), Box<dyn std::error::Error>> {
         // Test STOREH with offset
         let instructions = vec![
+            wom::const_32_imm(0, 0, 0),
             wom::addi::<F>(8, 0, 600.to_f()?),     // x8 = 600 (base address)
             wom::const_32_imm::<F>(9, 0x1111, 0),  // x9 = 0x1111
             wom::const_32_imm::<F>(10, 0x2222, 0), // x10 = 0x2222
             wom::storeh::<F>(9, 8, 0),             // MEM[x8 + 0] = 0x1111 (store halfword)
             wom::storeh::<F>(10, 8, 2),            // MEM[x8 + 2] = 0x2222 (store at offset 2)
-            wom::addi::<F>(11, 0, 0.to_f()?),      // x11 = 0
-            wom::addi::<F>(12, 0, 0.to_f()?),      // x12 = 0
             wom::loadhu::<F>(11, 8, 0),            // x11 = MEM[x8 + 0] (should be 0x1111 = 4369)
             wom::loadhu::<F>(12, 8, 2),            // x12 = MEM[x8 + 2] (should be 0x2222 = 8738)
             wom::add::<F>(13, 11, 12),             // x13 = 4369 + 8738 = 13107

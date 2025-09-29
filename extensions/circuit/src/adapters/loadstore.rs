@@ -469,8 +469,9 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
             STOREW | STOREH | STOREB => array::from_fn(|i| {
                 memory.unsafe_read_cell(e, F::from_canonical_usize(ptr_val as usize + i))
             }),
-            LOADW | LOADB | LOADH | LOADBU | LOADHU => array::from_fn(|i| {
-                wom.unsafe_read_cell(a + fp_f + F::from_canonical_usize(i))
+            LOADW | LOADB | LOADH | LOADBU | LOADHU => array::from_fn(|_i| {
+                // we don't read before writing in WOM
+                F::ZERO
             }),
         };
 

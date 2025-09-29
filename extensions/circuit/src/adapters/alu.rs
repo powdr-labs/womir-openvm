@@ -260,6 +260,8 @@ where
         assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
         let rd = wom.write(*a + fp_f, output.writes[0]);
 
+        memory.increment_timestamp();
+
         // let timestamp_delta = memory.timestamp() - from_state.timestamp;
         // debug_assert!(
         //     timestamp_delta == 3,

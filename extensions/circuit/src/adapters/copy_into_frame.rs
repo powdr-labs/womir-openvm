@@ -140,7 +140,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
 
     fn preprocess(
         &mut self,
-        _memory: &mut MemoryController<F>,
+        memory: &mut MemoryController<F>,
         wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
@@ -163,6 +163,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
 
         let other_fp_u32 = compose(other_fp.1);
         let other_fp_f = F::from_canonical_u32(other_fp_u32);
+
+        memory.increment_timestamp();
 
         let value_to_copy = match local_opcode {
             CopyIntoFrameOpcode::COPY_INTO_FRAME => {

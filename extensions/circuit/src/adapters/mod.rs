@@ -53,7 +53,8 @@ pub fn decompose<F: PrimeField32>(value: u32) -> [F; RV32_REGISTER_NUM_LIMBS] {
 }
 
 /// Read write once register.
-pub fn read_wom_register<F: PrimeField32>(wom: &WomController<F>, pointer: F) -> u32 {
+pub fn unsafe_read_wom_register<F: PrimeField32>(wom: &WomController<F>, pointer: F) -> u32 {
+    // WOM reads don't change state for now, so normal read is fine
     let data = wom.read::<RV32_REGISTER_NUM_LIMBS>(pointer).1;
     compose(data)
 }
