@@ -45,12 +45,11 @@ impl<F: PrimeField32> WomController<F> {
 
     pub fn unsafe_read_cell(&self, pointer: F) -> F {
         let ptr_u32 = pointer.as_canonical_u32();
-        let cell = self
+        self
             .memory
             .get(ptr_u32 as usize)
             .expect("WOM read before write")
-            .expect("WOM read before write");
-        cell
+            .expect("WOM read before write")
     }
 
     pub fn write<const N: usize>(&mut self, pointer: F, data: [F; N]) -> WomRecord<F> {

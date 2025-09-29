@@ -202,6 +202,7 @@ pub trait VmAdapterChipWom<F> {
     /// Given instruction and the data to write, perform memory writes and return the `(record,
     /// next_timestamp)` of the full adapter record for this instruction. This is guaranteed to
     /// be called after `preprocess`.
+    #[allow(clippy::too_many_arguments)]
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
