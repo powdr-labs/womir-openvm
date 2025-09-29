@@ -497,7 +497,7 @@ mod tests {
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 7.to_f()?),
             wom::add_imm::<F>(9, 0, 8.to_f()?), // 2^3
-            wom::mul::<F>(10, 8, 9),         // 7 * 8 = 56
+            wom::mul::<F>(10, 8, 9),            // 7 * 8 = 56
             wom::reveal(10, 0),
             wom::halt(),
         ];
@@ -869,9 +869,9 @@ mod tests {
             wom::add_imm::<F>(8, 0, 99.to_f()?),  // x8 = 99
             wom::add_imm::<F>(9, 0, 10.to_f()?),  // x9 = 10 (new frame pointer)
             wom::add_imm::<F>(11, 0, 99.to_f()?), // x11 = 99 (to show it gets overwritten)
-            wom::jaaf_save::<F>(11, 28, 9),    // Jump to PC=24, set FP=x9, save old FP to x11
-            wom::halt(),                       // This should be skipped
-            wom::halt(),                       // This should be skipped too
+            wom::jaaf_save::<F>(11, 28, 9),       // Jump to PC=24, set FP=x9, save old FP to x11
+            wom::halt(),                          // This should be skipped
+            wom::halt(),                          // This should be skipped too
             // PC = 28 (byte offset, so instruction at index 6)
             wom::const_32_imm(0, 0, 0),
             wom::reveal(11, 0), // wom::reveal x11 (should be 0, the old FP)
@@ -889,8 +889,8 @@ mod tests {
             wom::add_imm::<F>(10, 0, 24.to_f()?), // x10 = 24 (return PC)
             wom::add_imm::<F>(11, 0, 0.to_f()?),  // x11 = 0 (saved FP)
             wom::add_imm::<F>(8, 0, 88.to_f()?),  // x8 = 88
-            wom::ret::<F>(10, 11),             // Return to PC=x10, FP=x11
-            wom::halt(),                       // This should be skipped
+            wom::ret::<F>(10, 11),                // Return to PC=x10, FP=x11
+            wom::halt(),                          // This should be skipped
             // PC = 24 (where x10 points)
             wom::reveal(8, 0), // wom::reveal x8 (should be 88)
             wom::halt(),
@@ -904,11 +904,11 @@ mod tests {
         // Test CALL: save PC and FP, then jump
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(9, 0, 16.to_f()?),  // x9 = 16 (new FP)
-            wom::call::<F>(10, 11, 24, 9),     // Call to PC=24, FP=x9, save PC to x10, FP to x11
+            wom::add_imm::<F>(9, 0, 16.to_f()?), // x9 = 16 (new FP)
+            wom::call::<F>(10, 11, 24, 9),       // Call to PC=24, FP=x9, save PC to x10, FP to x11
             wom::add_imm::<F>(8, 0, 123.to_f()?), // x8 = 123 (after return) - this should NOT execute
-            wom::reveal(8, 0),                 // wom::reveal x8 - this should NOT execute
-            wom::halt(),                       // Padding
+            wom::reveal(8, 0),                    // wom::reveal x8 - this should NOT execute
+            wom::halt(),                          // Padding
             // PC = 24 (function start)
             wom::const_32_imm(0, 0, 0),
             wom::reveal(10, 0), // wom::reveal x10 (should be 12, the return address)
@@ -923,17 +923,17 @@ mod tests {
         // Test CALL_INDIRECT: save PC and FP, jump to register value
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(12, 0, 32.to_f()?),      // x12 = 32 (target PC)
-            wom::add_imm::<F>(9, 0, 0x100.to_f()?),       // x9 = 256 (new FP)
-            wom::add_imm::<F>(11, 0, 999.to_f()?),     // x11 = 999
+            wom::add_imm::<F>(12, 0, 32.to_f()?), // x12 = 32 (target PC)
+            wom::add_imm::<F>(9, 0, 0x100.to_f()?), // x9 = 256 (new FP)
+            wom::add_imm::<F>(11, 0, 999.to_f()?), // x11 = 999
             wom::call_indirect::<F>(10, 11, 12, 9), // Call to PC=x12, FP=x9, save PC to x10, FP to x11
             wom::add_imm::<F>(8, 0, 456.to_f()?), // x8 = 456 (after return) - this should NOT execute
-            wom::reveal(8, 0),                 // wom::reveal x8 - this should NOT execute
-            wom::halt(),                       // Padding
+            wom::reveal(8, 0),                    // wom::reveal x8 - this should NOT execute
+            wom::halt(),                          // Padding
             // PC = 32 (function start, where x12 points)
             wom::const_32_imm(0, 0, 0),
             wom::reveal(11, 0), // wom::reveal x11 (should be 0, the saved FP)
-            wom::halt(),            // End the test here, don't return
+            wom::halt(),        // End the test here, don't return
         ];
 
         run_vm_test("CALL_INDIRECT instruction", instructions, 0, None)
@@ -947,13 +947,13 @@ mod tests {
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 50.to_f()?), // x8 = 50 (at FP=0)
             wom::add_imm::<F>(9, 0, 0x100.to_f()?), // x9 = 256 (new FP for function)
-            wom::call::<F>(10, 11, 28, 9),   // Call function at PC=28, FP=0
-            wom::reveal(8, 0),               // wom::reveal x8 after return (should be 75)
+            wom::call::<F>(10, 11, 28, 9),       // Call function at PC=28, FP=0
+            wom::reveal(8, 0),                   // wom::reveal x8 after return (should be 75)
             wom::halt(),
             wom::halt(), // Padding
             // Function at PC = 28
             wom::const_32_imm(8, 1, 0), // x8 = 1 in new frame
-            wom::ret::<F>(10, 11),            // Return using saved PC and FP
+            wom::ret::<F>(10, 11),      // Return using saved PC and FP
             wom::halt(),
         ];
 
@@ -964,15 +964,15 @@ mod tests {
     fn test_jump_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Test unconditional JUMP
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),        // PC=0:
-            wom::jump::<F>(20),                // PC=4: Jump to PC=20
+            wom::const_32_imm(0, 0, 0),           // PC=0:
+            wom::jump::<F>(20),                   // PC=4: Jump to PC=20
             wom::add_imm::<F>(9, 0, 999.to_f()?), // PC=8: This should be skipped
-            wom::reveal(9, 0),                 // PC=12: This should be skipped
-            wom::halt(),                       // PC=16: Padding
+            wom::reveal(9, 0),                    // PC=12: This should be skipped
+            wom::halt(),                          // PC=16: Padding
             // PC = 20 (jump target)
             wom::add_imm::<F>(9, 0, 58.to_f()?), // PC=20: x8 = 42 + 58 = 100
-            wom::reveal(9, 0),                // PC=24: wom::reveal x8 (should be 100)
-            wom::halt(),                      // PC=28: End
+            wom::reveal(9, 0),                   // PC=24: wom::reveal x8 (should be 100)
+            wom::halt(),                         // PC=28: End
         ];
 
         run_vm_test("JUMP instruction", instructions, 58, None)
@@ -982,16 +982,16 @@ mod tests {
     fn test_jump_if_instruction() -> Result<(), Box<dyn std::error::Error>> {
         // Test conditional JUMP_IF (condition != 0)
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),        // PC=0
+            wom::const_32_imm(0, 0, 0),           // PC=0
             wom::add_imm::<F>(9, 0, 5.to_f()?),   // PC=4: x9 = 5 (condition != 0)
-            wom::jump_if::<F>(9, 24),          // PC=8: Jump to PC=24 if x9 != 0 (should jump)
+            wom::jump_if::<F>(9, 24),             // PC=8: Jump to PC=24 if x9 != 0 (should jump)
             wom::add_imm::<F>(8, 0, 999.to_f()?), // PC=12: This should be skipped
-            wom::reveal(8, 0),                 // PC=16: This should be skipped
-            wom::halt(),                       // PC=20: Padding
+            wom::reveal(8, 0),                    // PC=16: This should be skipped
+            wom::halt(),                          // PC=20: Padding
             // PC = 24 (jump target)
             wom::add_imm::<F>(8, 0, 15.to_f()?), // PC=24: x8 = 15
-            wom::reveal(8, 0),                // PC=28: wom::reveal x8 (should be 25)
-            wom::halt(),                      // PC=32: End
+            wom::reveal(8, 0),                   // PC=28: wom::reveal x8 (should be 25)
+            wom::halt(),                         // PC=32: End
         ];
 
         run_vm_test(
@@ -1007,11 +1007,11 @@ mod tests {
         // Test conditional JUMP_IF with false condition (should not jump)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(9, 0, 0.to_f()?),  // PC=4: x9 = 0 (condition == 0, should not jump)
-            wom::jump_if::<F>(9, 28),         // PC=8: Jump to PC=28 if x9 != 0 (should NOT jump)
+            wom::add_imm::<F>(9, 0, 0.to_f()?), // PC=4: x9 = 0 (condition == 0, should not jump)
+            wom::jump_if::<F>(9, 28),           // PC=8: Jump to PC=28 if x9 != 0 (should NOT jump)
             wom::add_imm::<F>(8, 0, 20.to_f()?), // PC=12: x8 = 30 + 20 = 50 (this should execute)
-            wom::reveal(8, 0),                // PC=16: wom::reveal x8 (should be 50)
-            wom::halt(),                      // PC=20: End
+            wom::reveal(8, 0),                  // PC=16: wom::reveal x8 (should be 50)
+            wom::halt(),                        // PC=20: End
             // PC = 24 (jump target that should not be reached)
             wom::add_imm::<F>(8, 0, 999.to_f()?), // PC=24: This should not execute
             wom::reveal(8, 0),                    // PC=28: This should not execute
@@ -1031,15 +1031,15 @@ mod tests {
         // Test conditional JUMP_IF_ZERO (condition == 0)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(9, 0, 0.to_f()?),   // PC=4: x9 = 0 (condition == 0)
-            wom::jump_if_zero::<F>(9, 24),     // PC=8: Jump to PC=24 if x9 == 0 (should jump)
+            wom::add_imm::<F>(9, 0, 0.to_f()?), // PC=4: x9 = 0 (condition == 0)
+            wom::jump_if_zero::<F>(9, 24),      // PC=8: Jump to PC=24 if x9 == 0 (should jump)
             wom::add_imm::<F>(8, 0, 999.to_f()?), // PC=12: This should be skipped
-            wom::reveal(8, 0),                 // PC=16: This should be skipped
-            wom::halt(),                       // PC=20: Padding
+            wom::reveal(8, 0),                  // PC=16: This should be skipped
+            wom::halt(),                        // PC=20: Padding
             // PC = 24 (jump target)
             wom::add_imm::<F>(8, 0, 23.to_f()?), // PC=24: x8 = 23
-            wom::reveal(8, 0),                // PC=28: wom::reveal x8 (should be 100)
-            wom::halt(),                      // PC=32: End
+            wom::reveal(8, 0),                   // PC=28: wom::reveal x8 (should be 100)
+            wom::halt(),                         // PC=32: End
         ];
 
         run_vm_test(
@@ -1055,11 +1055,11 @@ mod tests {
         // Test conditional JUMP_IF_ZERO with false condition (should not jump)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(9, 0, 7.to_f()?),  // PC=4: x9 = 7 (condition != 0, should not jump)
-            wom::jump_if_zero::<F>(9, 28),    // PC=8: Jump to PC=28 if x9 == 0 (should NOT jump)
+            wom::add_imm::<F>(9, 0, 7.to_f()?), // PC=4: x9 = 7 (condition != 0, should not jump)
+            wom::jump_if_zero::<F>(9, 28),      // PC=8: Jump to PC=28 if x9 == 0 (should NOT jump)
             wom::add_imm::<F>(8, 0, 40.to_f()?), // PC=12: x8 = 40 (this should execute)
-            wom::reveal(8, 0),                // PC=16: wom::reveal x8 (should be 100)
-            wom::halt(),                      // PC=20: End
+            wom::reveal(8, 0),                  // PC=16: wom::reveal x8 (should be 100)
+            wom::halt(),                        // PC=20: End
             // PC = 24 (jump target that should not be reached)
             wom::add_imm::<F>(8, 0, 999.to_f()?), // PC=24: This should not execute
             wom::reveal(8, 0),                    // PC=28: This should not execute
@@ -1080,7 +1080,7 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::allocate_frame_imm::<F>(8, 256), // Allocate 256 bytes, store pointer in x8
-            wom::reveal(8, 0), // wom::reveal x8 (should be allocated pointer)
+            wom::reveal(8, 0),                    // wom::reveal x8 (should be allocated pointer)
             wom::halt(),
         ];
 
@@ -1093,10 +1093,10 @@ mod tests {
         // Test COPY_INTO_FRAME instruction
         // This test verifies that copy_into_frame actually writes to memory
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0), // PC=0
-            wom::add_imm::<F>(8, 0, 42.to_f()?), // PC=4: x8 = 42 (value to copy)
+            wom::const_32_imm(0, 0, 0),              // PC=0
+            wom::add_imm::<F>(8, 0, 42.to_f()?),     // PC=4: x8 = 42 (value to copy)
             wom::add_imm::<F>(9, 0, 0x1000.to_f()?), // PC=8: x9 = 0x1000 (mock frame pointer)
-            wom::add_imm::<F>(10, 0, 0.to_f()?), // PC=12: x10 = 0 (register to read into)
+            wom::add_imm::<F>(10, 0, 0.to_f()?),     // PC=12: x10 = 0 (register to read into)
             wom::copy_into_frame::<F>(10, 8, 9), // PC=16: Copy x8 to [x9[x10]], which writes to address pointed by x10
             wom::jaaf::<F>(24, 9),               // Jump to PC=24, set FP=x9
             // Since copy_into_frame writes x8's value to memory at [x9[x10]],
@@ -1120,9 +1120,9 @@ mod tests {
             // by convention on the first allocation.
             wom::add_imm::<F>(10, 0, 0.to_f()?), // PC=12: x10 = 0 (destination register)
             wom::copy_into_frame::<F>(10, 8, 9), // PC=16: Copy x8 to [x9[x10]]
-            wom::jaaf::<F>(28, 9),            // Jump to PC=28, set FP=x9
-            wom::halt(),                      // Should be skipped
-            wom::const_32_imm(0, 0, 0),  // PC=28
+            wom::jaaf::<F>(28, 9),               // Jump to PC=28, set FP=x9
+            wom::halt(),                         // Should be skipped
+            wom::const_32_imm(0, 0, 0),          // PC=28
             wom::reveal(10, 0), // wom::reveal x10 (should be 123, the value from x8)
             wom::halt(),
         ];
@@ -1362,9 +1362,9 @@ mod tests {
     fn test_gt_s_negative() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::const_32_imm::<F>(8, 5, 0),           // Load 5 into x8
+            wom::const_32_imm::<F>(8, 5, 0), // Load 5 into x8
             wom::const_32_imm::<F>(9, 0xFFFF, 0xFFFF), // Load -1 into x9
-            wom::gt_s::<F>(10, 8, 9),                  // x10 = (x8 > x9) = (5 > -1) = 1
+            wom::gt_s::<F>(10, 8, 9),        // x10 = (x8 > x9) = (5 > -1) = 1
             wom::reveal(10, 0),
             wom::halt(),
         ];
@@ -1506,9 +1506,9 @@ mod tests {
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 100.to_f()?), // x8 = 100 (base address)
             wom::add_imm::<F>(9, 0, 42.to_f()?),  // x9 = 42 (value to store)
-            wom::storew::<F>(9, 8, 0),         // MEM[x8 + 0] = x9 (store 42 at address 100)
-            wom::loadw::<F>(10, 8, 0),         // x10 = MEM[x8 + 0] (load from address 100)
-            wom::reveal(10, 0),                // wom::reveal x10 (should be 42)
+            wom::storew::<F>(9, 8, 0),            // MEM[x8 + 0] = x9 (store 42 at address 100)
+            wom::loadw::<F>(10, 8, 0),            // x10 = MEM[x8 + 0] (load from address 100)
+            wom::reveal(10, 0),                   // wom::reveal x10 (should be 42)
             wom::halt(),
         ];
 
@@ -1520,13 +1520,13 @@ mod tests {
         // Test STOREW with positive offset
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(8, 0, 200.to_f()?),  // x8 = 200 (base address)
-            wom::add_imm::<F>(9, 0, 111.to_f()?),  // x9 = 111 (first value)
+            wom::add_imm::<F>(8, 0, 200.to_f()?), // x8 = 200 (base address)
+            wom::add_imm::<F>(9, 0, 111.to_f()?), // x9 = 111 (first value)
             wom::add_imm::<F>(10, 0, 222.to_f()?), // x10 = 222 (second value)
-            wom::storew::<F>(9, 8, 0),          // MEM[x8 + 0] = 111
-            wom::storew::<F>(10, 8, 4),         // MEM[x8 + 4] = 222
-            wom::loadw::<F>(11, 8, 0),          // x11 = MEM[x8 + 0] (should be 111)
-            wom::loadw::<F>(12, 8, 4),          // x12 = MEM[x8 + 4] (should be 222)
+            wom::storew::<F>(9, 8, 0),            // MEM[x8 + 0] = 111
+            wom::storew::<F>(10, 8, 4),           // MEM[x8 + 4] = 222
+            wom::loadw::<F>(11, 8, 0),            // x11 = MEM[x8 + 0] (should be 111)
+            wom::loadw::<F>(12, 8, 4),            // x12 = MEM[x8 + 4] (should be 222)
             // Test that we loaded the correct values
             wom::add::<F>(13, 11, 12), // x13 = x11 + x12 = 111 + 222 = 333
             wom::reveal(13, 0),        // wom::reveal x13 (should be 333)
@@ -1541,11 +1541,11 @@ mod tests {
         // Test LOADBU instruction (load byte unsigned)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(8, 0, 300.to_f()?),  // x8 = 300 (base address)
+            wom::add_imm::<F>(8, 0, 300.to_f()?), // x8 = 300 (base address)
             wom::add_imm::<F>(9, 0, 0xFF.to_f()?), // x9 = 255 (max byte value)
-            wom::storeb::<F>(9, 8, 0),          // MEM[x8 + 0] = 255 (store as byte)
-            wom::loadbu::<F>(10, 8, 0),         // x10 = MEM[x8 + 0] (load byte unsigned)
-            wom::reveal(10, 0),                 // Reveal x10 (should be 255)
+            wom::storeb::<F>(9, 8, 0),            // MEM[x8 + 0] = 255 (store as byte)
+            wom::loadbu::<F>(10, 8, 0),           // x10 = MEM[x8 + 0] (load byte unsigned)
+            wom::reveal(10, 0),                   // Reveal x10 (should be 255)
             wom::halt(),
         ];
         run_vm_test("LOADBU basic test", instructions, 255, None)
@@ -1556,7 +1556,7 @@ mod tests {
         // Test LOADHU instruction (load halfword unsigned)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(8, 0, 400.to_f()?),    // x8 = 400 (base address)
+            wom::add_imm::<F>(8, 0, 400.to_f()?), // x8 = 400 (base address)
             wom::const_32_imm::<F>(9, 0xABCD, 0), // x9 = 0xABCD (43981)
             wom::storeh::<F>(9, 8, 0),            // MEM[x8 + 0] = 0xABCD (store as halfword)
             wom::loadhu::<F>(10, 8, 0),           // x10 = MEM[x8 + 0] (load halfword unsigned)
@@ -1571,7 +1571,7 @@ mod tests {
         // Test STOREB with offset and masking
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(8, 0, 500.to_f()?),    // x8 = 500 (base address)
+            wom::add_imm::<F>(8, 0, 500.to_f()?), // x8 = 500 (base address)
             wom::const_32_imm::<F>(9, 0x1234, 0), // x9 = 0x1234 (only lowest byte 0x34 will be stored)
             wom::storeb::<F>(9, 8, 0),            // MEM[x8 + 0] = 0x34 (store lowest byte)
             wom::storeb::<F>(9, 8, 1),            // MEM[x8 + 1] = 0x34 (store at offset 1)
@@ -1589,15 +1589,15 @@ mod tests {
         // Test STOREH with offset
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(8, 0, 600.to_f()?),     // x8 = 600 (base address)
-            wom::const_32_imm::<F>(9, 0x1111, 0),  // x9 = 0x1111
+            wom::add_imm::<F>(8, 0, 600.to_f()?), // x8 = 600 (base address)
+            wom::const_32_imm::<F>(9, 0x1111, 0), // x9 = 0x1111
             wom::const_32_imm::<F>(10, 0x2222, 0), // x10 = 0x2222
-            wom::storeh::<F>(9, 8, 0),             // MEM[x8 + 0] = 0x1111 (store halfword)
-            wom::storeh::<F>(10, 8, 2),            // MEM[x8 + 2] = 0x2222 (store at offset 2)
-            wom::loadhu::<F>(11, 8, 0),            // x11 = MEM[x8 + 0] (should be 0x1111 = 4369)
-            wom::loadhu::<F>(12, 8, 2),            // x12 = MEM[x8 + 2] (should be 0x2222 = 8738)
-            wom::add::<F>(13, 11, 12),             // x13 = 4369 + 8738 = 13107
-            wom::reveal(13, 0),                    // Reveal x13 (should be 13107)
+            wom::storeh::<F>(9, 8, 0),            // MEM[x8 + 0] = 0x1111 (store halfword)
+            wom::storeh::<F>(10, 8, 2),           // MEM[x8 + 2] = 0x2222 (store at offset 2)
+            wom::loadhu::<F>(11, 8, 0),           // x11 = MEM[x8 + 0] (should be 0x1111 = 4369)
+            wom::loadhu::<F>(12, 8, 2),           // x12 = MEM[x8 + 2] (should be 0x2222 = 8738)
+            wom::add::<F>(13, 11, 12),            // x13 = 4369 + 8738 = 13107
+            wom::reveal(13, 0),                   // Reveal x13 (should be 13107)
             wom::halt(),
         ];
         run_vm_test("STOREH with offset test", instructions, 13107, None)
