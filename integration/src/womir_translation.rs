@@ -952,13 +952,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         }
                     });
 
-                let if_set_label = c.new_label(LabelType::Local);
+                let non_zero_label = c.new_label(LabelType::Local);
                 let continuation_label = c.new_label(LabelType::Local);
 
                 return Tree::Node(vec![
-                    // if condition != 0 jump to if_set_label
+                    // if condition != 0 jump to non_zero_label
                     Tree::Leaf(Directive::JumpIf {
-                        target: if_set_label.clone(),
+                        target: non_zero_label.clone(),
                         condition_reg: condition,
                     }),
                     // if jump is not taken, copy the value for "if zero"
@@ -970,7 +970,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     .into(),
                     // alternative label
                     Directive::Label {
-                        id: if_set_label,
+                        id: non_zero_label,
                         frame_size: None,
                     }
                     .into(),
