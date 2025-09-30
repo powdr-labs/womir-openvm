@@ -903,6 +903,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                                 && matches!(&inputs[0], WasmOpInput::Register(_))))
                             && let Some(inc_c) = can_turn_to_lt(&op, c)
                         {
+                            // The operation can be turned into a single less-than comparison with incremented constant.
+                            // There is no need to do the inverse operation and invert the result.
                             return Directive::Instruction(ib::instr_i(
                                 opcode.as_usize(),
                                 output,
