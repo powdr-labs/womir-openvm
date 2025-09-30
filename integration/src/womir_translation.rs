@@ -1068,120 +1068,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 ]
                 .into()
             }
-            Op::I32Rotl => {
-                let input1 = inputs[0].start as usize;
-                let input2 = inputs[1].start as usize;
-                let output = output.unwrap().start as usize;
-                let shiftl_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let shiftl = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let const32 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let shiftr_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let shiftr = c.register_gen.allocate_type(ValType::I32).start as usize;
-                vec![
-                    // get least significant 5 bits for rotation amount
-                    Directive::Instruction(ib::and_imm(
-                        shiftl_amount,
-                        input2,
-                        0x1f.to_f().unwrap(),
-                    )),
-                    // shift left
-                    Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
-                    // get right shift amount
-                    Directive::Instruction(ib::const_32_imm(const32, 0x20, 0x0)),
-                    Directive::Instruction(ib::sub(shiftr_amount, const32, shiftl_amount)),
-                    // shift right
-                    Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
-                    // or the two results
-                    Directive::Instruction(ib::or(output, shiftl, shiftr)),
-                ]
-                .into()
-            }
-            Op::I32Rotr => {
-                let input1 = inputs[0].start as usize;
-                let input2 = inputs[1].start as usize;
-                let output = output.unwrap().start as usize;
-                let shiftl_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let shiftl = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let const32 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let shiftr_amount = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let shiftr = c.register_gen.allocate_type(ValType::I32).start as usize;
-                vec![
-                    // get least significant 5 bits for rotation amount
-                    Directive::Instruction(ib::and_imm(
-                        shiftr_amount,
-                        input2,
-                        0x1f.to_f().unwrap(),
-                    )),
-                    // shift right
-                    Directive::Instruction(ib::shr_u(shiftr, input1, shiftr_amount)),
-                    // get left shift amount
-                    Directive::Instruction(ib::const_32_imm(const32, 0x20, 0x0)),
-                    Directive::Instruction(ib::sub(shiftl_amount, const32, shiftr_amount)),
-                    // shift left
-                    Directive::Instruction(ib::shl(shiftl, input1, shiftl_amount)),
-                    // or the two results
-                    Directive::Instruction(ib::or(output, shiftl, shiftr)),
-                ]
-                .into()
-            }
-            Op::I64Rotl => {
-                let input1 = inputs[0].start as usize;
-                let input2 = inputs[1].start as usize;
-                let output = output.unwrap().start as usize;
-                let shiftl_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
-                let shiftl = c.register_gen.allocate_type(ValType::I64).start as usize;
-                let const64 = c.register_gen.allocate_type(ValType::I64).start as usize;
-                let shiftr_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
-                let shiftr = c.register_gen.allocate_type(ValType::I64).start as usize;
-                vec![
-                    // get least significant 6 bits for rotation amount
-                    Directive::Instruction(ib::and_imm_64(
-                        shiftl_amount,
-                        input2,
-                        0x3f.to_f().unwrap(),
-                    )),
-                    // shift left
-                    Directive::Instruction(ib::shl_64(shiftl, input1, shiftl_amount)),
-                    // get right shift amount
-                    Directive::Instruction(ib::const_32_imm(const64, 0x40, 0x0)),
-                    Directive::Instruction(ib::const_32_imm(const64 + 1, 0x0, 0x0)),
-                    Directive::Instruction(ib::sub_64(shiftr_amount, const64, shiftl_amount)),
-                    // shift right
-                    Directive::Instruction(ib::shr_u_64(shiftr, input1, shiftr_amount)),
-                    // or the two results
-                    Directive::Instruction(ib::or_64(output, shiftl, shiftr)),
-                ]
-                .into()
-            }
-            Op::I64Rotr => {
-                let input1 = inputs[0].start as usize;
-                let input2 = inputs[1].start as usize;
-                let output = output.unwrap().start as usize;
-                let shiftl_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
-                let shiftl = c.register_gen.allocate_type(ValType::I64).start as usize;
-                let const64 = c.register_gen.allocate_type(ValType::I64).start as usize;
-                let shiftr_amount = c.register_gen.allocate_type(ValType::I64).start as usize;
-                let shiftr = c.register_gen.allocate_type(ValType::I64).start as usize;
-                vec![
-                    // get least significant 5 bits for rotation amount
-                    Directive::Instruction(ib::and_imm_64(
-                        shiftr_amount,
-                        input2,
-                        0x3f.to_f().unwrap(),
-                    )),
-                    // shift right
-                    Directive::Instruction(ib::shr_u_64(shiftr, input1, shiftr_amount)),
-                    // get left shift amount
-                    Directive::Instruction(ib::const_32_imm(const64, 0x40, 0x0)),
-                    Directive::Instruction(ib::const_32_imm(const64 + 1, 0x0, 0x0)),
-                    Directive::Instruction(ib::sub_64(shiftl_amount, const64, shiftr_amount)),
-                    // shift left
-                    Directive::Instruction(ib::shl_64(shiftl, input1, shiftl_amount)),
-                    // or the two results
-                    Directive::Instruction(ib::or_64(output, shiftl, shiftr)),
-                ]
-                .into()
-            }
+            Op::I32Rotl => translate_rot::<F, I32Rot>(c, RotDirection::Left, inputs, output),
+            Op::I32Rotr => translate_rot::<F, I32Rot>(c, RotDirection::Right, inputs, output),
+            Op::I64Rotl => translate_rot::<F, I64Rot>(c, RotDirection::Left, inputs, output),
+            Op::I64Rotr => translate_rot::<F, I64Rot>(c, RotDirection::Right, inputs, output),
             Op::I32Eqz => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
@@ -2203,6 +2093,133 @@ impl<F: PrimeField32> Directive<F> {
             Directive::Instruction(i) => Some(i),
         }
     }
+}
+
+enum RotDirection {
+    Left,
+    Right,
+}
+
+trait RotOps<F: PrimeField32> {
+    fn val_type() -> ValType;
+    fn mask_rot_bits(dest: usize, src: usize) -> Instruction<F>;
+    fn num_bits_const(dest: usize) -> Vec<Directive<F>>;
+    fn shl(dest: usize, val: usize, amount: usize) -> Instruction<F>;
+    fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F>;
+    fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F>;
+    fn or(dest: usize, lhs: usize, rhs: usize) -> Instruction<F>;
+}
+
+struct I32Rot;
+
+impl<F: PrimeField32> RotOps<F> for I32Rot {
+    fn val_type() -> ValType {
+        ValType::I32
+    }
+
+    fn mask_rot_bits(dest: usize, src: usize) -> Instruction<F> {
+        ib::and_imm(dest, src, (32 - 1).to_f().unwrap())
+    }
+
+    fn num_bits_const(dest: usize) -> Vec<Directive<F>> {
+        vec![Directive::Instruction(ib::const_32_imm(dest, 32, 0))]
+    }
+    fn shl(dest: usize, val: usize, amount: usize) -> Instruction<F> {
+        ib::shl(dest, val, amount)
+    }
+    fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F> {
+        ib::shr_u(dest, val, amount)
+    }
+    fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F> {
+        ib::sub(dest, lhs, rhs)
+    }
+    fn or(dest: usize, lhs: usize, rhs: usize) -> Instruction<F> {
+        ib::or(dest, lhs, rhs)
+    }
+}
+
+struct I64Rot;
+
+impl<F: PrimeField32> RotOps<F> for I64Rot {
+    fn val_type() -> ValType {
+        ValType::I64
+    }
+    fn mask_rot_bits(dest: usize, src: usize) -> Instruction<F> {
+        ib::and_imm_64(dest, src, (64 - 1).to_f().unwrap())
+    }
+    fn num_bits_const(dest: usize) -> Vec<Directive<F>> {
+        vec![
+            Directive::Instruction(ib::const_32_imm(dest, 64, 0)),
+            Directive::Instruction(ib::const_32_imm(dest + 1, 0, 0)),
+        ]
+    }
+    fn shl(dest: usize, val: usize, amount: usize) -> Instruction<F> {
+        ib::shl_64(dest, val, amount)
+    }
+    fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F> {
+        ib::shr_u_64(dest, val, amount)
+    }
+    fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F> {
+        ib::sub_64(dest, lhs, rhs)
+    }
+    fn or(dest: usize, lhs: usize, rhs: usize) -> Instruction<F> {
+        ib::or_64(dest, lhs, rhs)
+    }
+}
+
+/// Issue the instructions to perform a rotate operation.
+fn translate_rot<F: PrimeField32, R: RotOps<F>>(
+    c: &mut Ctx<F>,
+    direction: RotDirection,
+    inputs: Vec<Range<u32>>,
+    output: Option<Range<u32>>,
+) -> Tree<Directive<F>> {
+    let input1 = inputs[0].start as usize;
+    let input2 = inputs[1].start as usize;
+    let output = output.unwrap().start as usize;
+    let shift_ref_amount = c.register_gen.allocate_type(R::val_type()).start as usize;
+    let shift_ref = c.register_gen.allocate_type(R::val_type()).start as usize;
+    // TODO: if the transformation from rot to this sequence of instructions
+    // was done earlier in the pipeline, at DAG level, this const could be
+    // optimized away, sometimes.
+    let const_num_bits = c.register_gen.allocate_type(R::val_type()).start as usize;
+    let shift_back_amount = c.register_gen.allocate_type(R::val_type()).start as usize;
+    let shift_back = c.register_gen.allocate_type(R::val_type()).start as usize;
+
+    let mut directives = R::num_bits_const(const_num_bits);
+
+    directives.extend(
+        [
+            // mask the shift amount to the valid range
+            R::mask_rot_bits(shift_ref_amount, input2),
+            // calculate the shift amount for the opposite direction
+            R::sub(shift_back_amount, const_num_bits, shift_ref_amount),
+        ]
+        .map(Directive::Instruction),
+    );
+
+    directives.extend(
+        match direction {
+            RotDirection::Left => [
+                // shift left
+                R::shl(shift_ref, input1, shift_ref_amount),
+                // shift right
+                R::shr_u(shift_back, input1, shift_back_amount),
+            ],
+            RotDirection::Right => [
+                // shift right
+                R::shr_u(shift_ref, input1, shift_ref_amount),
+                // shift left
+                R::shl(shift_back, input1, shift_back_amount),
+            ],
+        }
+        .map(Directive::Instruction),
+    );
+
+    // or the two shifts
+    directives.push(Directive::Instruction(R::or(output, shift_ref, shift_back)));
+
+    directives.into()
 }
 
 /// Precondition: `value` is either `WasmValue::I32` or `WasmValue::I64`
