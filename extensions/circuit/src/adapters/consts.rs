@@ -6,7 +6,7 @@ use openvm_circuit::{
         ExecutionBus, ExecutionState, MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{MemoryController, OfflineMemory, RecordId, offline_checker::MemoryBridge},
+        memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
@@ -21,7 +21,7 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{FrameBus, FrameState, VmAdapterChipWom};
+use crate::{FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord};
 
 use super::{RV32_REGISTER_NUM_LIMBS, decompose};
 
@@ -37,12 +37,14 @@ impl<F: PrimeField32> ConstsAdapterChipWom<F> {
         program_bus: ProgramBus,
         frame_bus: FrameBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
     ) -> Self {
         Self {
             air: ConstsAdapterAirWom {
                 _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
+                _wom_bridge: wom_bridge,
             },
             _marker: PhantomData,
         }
@@ -51,11 +53,10 @@ impl<F: PrimeField32> ConstsAdapterChipWom<F> {
 
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConstsWriteRecord {
+pub struct ConstsWriteRecord<F> {
     pub from_state: ExecutionState<u32>,
     pub from_frame: FrameState<u32>,
-    pub rd: u32,
-    pub rd_id: Option<RecordId>,
+    pub rd: Option<WomRecord<F>>,
 }
 
 #[repr(C)]
@@ -72,6 +73,7 @@ pub struct ConstsAdapterColsWom<T> {
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct ConstsAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
+    pub(super) _wom_bridge: WomBridge,
     pub(super) _execution_bridge: ExecutionBridge,
     pub(super) _frame_bus: FrameBus,
 }
@@ -108,7 +110,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
 
 impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
     type ReadRecord = ();
-    type WriteRecord = ConstsWriteRecord;
+    type WriteRecord = ConstsWriteRecord<F>;
     type Air = ConstsAdapterAirWom;
     type Interface = BasicAdapterInterface<
         F,
@@ -122,6 +124,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
     fn preprocess(
         &mut self,
         _memory: &mut MemoryController<F>,
+        _wom: &mut WomController<F>,
         _fp: u32,
         _instruction: &Instruction<F>,
     ) -> Result<(
@@ -134,6 +137,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
@@ -148,7 +152,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
             ..
         } = *instruction;
 
-        let mut destination_id = None;
+        let mut write_result = None;
 
         if enabled != F::ZERO {
             let imm_lo = b.as_canonical_u32();
@@ -159,8 +163,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
             );
             let imm = imm_hi << 16 | imm_lo;
             let fp_f = F::from_canonical_u32(from_frame.fp);
-            let write_result = memory.write(F::ONE, a + fp_f, decompose(imm));
-            destination_id = Some(write_result.0);
+            memory.increment_timestamp();
+            write_result = Some(wom.write(a + fp_f, decompose(imm)));
         }
 
         Ok((
@@ -172,8 +176,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
             Self::WriteRecord {
                 from_state,
                 from_frame,
-                rd: a.as_canonical_u32(),
-                rd_id: destination_id,
+                rd: write_result,
             },
         ))
     }

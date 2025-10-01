@@ -6,7 +6,7 @@ use openvm_circuit::{
         ExecutionBus, ExecutionState, MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{MemoryController, OfflineMemory, RecordId, offline_checker::MemoryBridge},
+        memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    FrameBus, FrameState, VmAdapterChipWom,
+    FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
     adapters::{compose, decompose},
 };
 
@@ -40,10 +40,12 @@ impl AllocateFrameAdapterChipWom {
         program_bus: ProgramBus,
         frame_bus: FrameBus,
         memory_bridge: MemoryBridge,
+        wom_bridge: WomBridge,
     ) -> Self {
         Self {
             air: AllocateFrameAdapterAirWom {
                 _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                _wom_bridge: wom_bridge,
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
             },
@@ -61,12 +63,12 @@ pub struct AllocateFrameReadRecord {
 
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AllocateFrameWriteRecord {
+pub struct AllocateFrameWriteRecord<F> {
     pub from_state: ExecutionState<u32>,
     pub from_frame: FrameState<u32>,
     pub target_reg: u32,
     pub amount_imm: u32,
-    pub rd_id: Option<RecordId>,
+    pub rd_write: Option<WomRecord<F>>,
 }
 
 #[repr(C)]
@@ -84,6 +86,7 @@ pub struct AllocateFrameAdapterColsWom<T> {
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct AllocateFrameAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
+    pub(super) _wom_bridge: WomBridge,
     pub(super) _execution_bridge: ExecutionBridge,
     pub(super) _frame_bus: FrameBus,
 }
@@ -128,7 +131,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
 
 impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
     type ReadRecord = AllocateFrameReadRecord;
-    type WriteRecord = AllocateFrameWriteRecord;
+    type WriteRecord = AllocateFrameWriteRecord<F>;
     type Air = AllocateFrameAdapterAirWom;
     type Interface = BasicAdapterInterface<
         F,
@@ -141,7 +144,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
 
     fn preprocess(
         &mut self,
-        memory: &mut MemoryController<F>,
+        _memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
     ) -> Result<(
@@ -157,13 +161,12 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
 
         let amount = if use_reg == F::ZERO {
             // If use_reg is zero, we use the immediate value
-            memory.increment_timestamp();
             amount_imm.as_canonical_u32()
         } else {
             // Otherwise, we read the value from the register
             let fp_f = F::from_canonical_u32(fp);
-            let reg_value = memory.read::<RV32_REGISTER_NUM_LIMBS>(F::ONE, amount_reg + fp_f);
-            compose(reg_value.1)
+            let (_, reg_data) = wom.read::<RV32_REGISTER_NUM_LIMBS>(amount_reg + fp_f);
+            compose(reg_data)
         };
         let amount_bytes = RV32_REGISTER_NUM_LIMBS as u32 * amount;
 
@@ -183,6 +186,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
@@ -196,15 +200,15 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
             ..
         } = *instruction;
 
-        let mut target_reg_id = None;
+        memory.increment_timestamp();
+
+        let mut write_result = None;
 
         if enabled != F::ZERO {
-            let write_result = memory.write(
-                F::ONE,
+            write_result = Some(wom.write(
                 target_reg + F::from_canonical_u32(from_frame.fp),
                 decompose(read_record.allocated_ptr),
-            );
-            target_reg_id = Some(write_result.0);
+            ));
         }
 
         Ok((
@@ -218,7 +222,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
                 from_frame,
                 target_reg: target_reg.as_canonical_u32(),
                 amount_imm: b.as_canonical_u32(),
-                rd_id: target_reg_id,
+                rd_write: write_result,
             },
         ))
     }
