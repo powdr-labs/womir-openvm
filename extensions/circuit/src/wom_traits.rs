@@ -31,6 +31,8 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
+use crate::WomController;
+
 // ============ Frame Bus System ============
 // These types manage the frame pointer state transitions in the VM
 
@@ -133,11 +135,12 @@ pub struct FrameBridgeInteractor<AB: InteractionBuilder> {
 // Main wrapper that manages frame pointer state across instruction execution
 
 pub struct VmChipWrapperWom<F, A: VmAdapterChipWom<F>, C: VmCoreChip<F, A::Interface>> {
-    pub adapter: A,
-    pub core: C,
-    pub records: Vec<(A::ReadRecord, A::WriteRecord, C::Record)>,
-    pub offline_memory: Arc<Mutex<OfflineMemory<F>>>,
-    pub fp: Arc<Mutex<u32>>,
+    adapter: A,
+    core: C,
+    records: Vec<(A::ReadRecord, A::WriteRecord, C::Record)>,
+    offline_memory: Arc<Mutex<OfflineMemory<F>>>,
+    fp: Arc<Mutex<u32>>,
+    wom: Arc<Mutex<WomController<F>>>,
 }
 
 const DEFAULT_RECORDS_CAPACITY: usize = 1 << 5;
@@ -152,6 +155,7 @@ where
         core: C,
         offline_memory: Arc<Mutex<OfflineMemory<F>>>,
         fp: Arc<Mutex<u32>>,
+        wom: Arc<Mutex<WomController<F>>>,
     ) -> Self {
         Self {
             adapter,
@@ -159,6 +163,7 @@ where
             records: Vec::with_capacity(DEFAULT_RECORDS_CAPACITY),
             offline_memory,
             fp,
+            wom,
         }
     }
 }
@@ -186,6 +191,7 @@ pub trait VmAdapterChipWom<F> {
     fn preprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
     ) -> ResultVm<(
@@ -196,9 +202,11 @@ pub trait VmAdapterChipWom<F> {
     /// Given instruction and the data to write, perform memory writes and return the `(record,
     /// next_timestamp)` of the full adapter record for this instruction. This is guaranteed to
     /// be called after `preprocess`.
+    #[allow(clippy::too_many_arguments)]
     fn postprocess(
         &mut self,
         memory: &mut MemoryController<F>,
+        wom: &mut WomController<F>,
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
@@ -297,12 +305,16 @@ where
         from_state: ExecutionState<u32>,
     ) -> ResultVm<ExecutionState<u32>> {
         let mut fp = self.fp.lock().unwrap();
-        let (reads, read_record) = self.adapter.preprocess(memory, *fp, instruction)?;
+        let mut wom = self.wom.lock().unwrap();
+        let (reads, read_record) = self
+            .adapter
+            .preprocess(memory, &mut wom, *fp, instruction)?;
         let (output, core_record) =
             self.core
                 .execute_instruction(instruction, from_state.pc, reads)?;
         let (to_state, to_fp, write_record) = self.adapter.postprocess(
             memory,
+            &mut wom,
             instruction,
             from_state,
             FrameState::new(from_state.pc, *fp),
