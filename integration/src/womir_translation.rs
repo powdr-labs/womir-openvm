@@ -1,6 +1,9 @@
 use std::{collections::HashMap, ops::Range, vec};
 
-use crate::{const_collapse::can_turn_to_lt, instruction_builder as ib, to_field::ToField};
+use crate::{
+    const_collapse::can_turn_to_lt,
+    instruction_builder::{self as ib, AluImm},
+};
 use arrayvec::ArrayVec;
 use itertools::Itertools;
 use openvm_circuit::{
@@ -398,7 +401,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         Directive::Instruction(ib::add_imm(
             dest_ptr.start as usize,
             src_ptr.start as usize,
-            F::ZERO,
+            AluImm::from(0),
         ))
     }
 
@@ -506,7 +509,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     ) -> Vec<Directive<F>> {
         let comparison = c.register_gen.allocate_type(ValType::I32);
 
-        let mut directives = if let Ok(imm_f) = immediate.to_f() {
+        let mut directives = if let Ok(imm_f) = immediate.try_into() {
             // If immediate fits into field, we can save one instruction:
             let cmp_insn = match cmp {
                 ComparisonFunction::Equal => ib::eq_imm::<F>,
@@ -655,7 +658,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         entry_idx_ptr: Range<u32>,
         dest_ptr: Range<u32>,
     ) -> Vec<Directive<F>> {
-        const TABLE_ENTRY_SIZE: u32 = 12;
+        const TABLE_ENTRY_SIZE: i16 = 12;
         const TABLE_SEGMENT_HEADER_SIZE: u32 = 8;
 
         let table_segment = c.program.tables[table_idx as usize];
@@ -670,7 +673,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         let mut instrs = vec![Directive::Instruction(ib::mul_imm::<F>(
             mul_result,
             entry_idx_ptr.start as usize,
-            TABLE_ENTRY_SIZE.to_f().unwrap(),
+            TABLE_ENTRY_SIZE.into(),
         ))];
 
         instrs.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
@@ -792,7 +795,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             return Directive::Instruction(ib::neq_imm(
                                 output,
                                 reg.start as usize,
-                                F::ZERO,
+                                AluImm::from(0),
                             ))
                             .into();
                         }
@@ -867,7 +870,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         return Directive::Instruction(ib::neq_imm(
                             output,
                             reg.start as usize,
-                            F::ZERO,
+                            AluImm::from(0),
                         ))
                         .into();
                     }
@@ -929,7 +932,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             return Directive::Instruction(ib::neq_imm(
                                 output,
                                 reg.start as usize,
-                                F::ZERO,
+                                AluImm::from(0),
                             ))
                             .into();
                         }
@@ -955,7 +958,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                                 opcode.as_usize(),
                                 output,
                                 reg.start as usize,
-                                i16_to_imm_field(inc_c),
+                                inc_c.into(),
                             ))
                             .into();
                         }
@@ -969,7 +972,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 // Perform the inverse operation and invert the result
                 return vec![
                     Directive::Instruction(comp_instruction),
-                    Directive::Instruction(ib::eq_imm(output, inverse_result, F::ZERO)),
+                    Directive::Instruction(ib::eq_imm(output, inverse_result, AluImm::from(0))),
                 ]
                 .into();
             }
@@ -1002,7 +1005,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                                 Directive::Instruction(ib::add_imm(
                                     dest as usize,
                                     src as usize,
-                                    F::ZERO,
+                                    AluImm::from(0),
                                 ))
                             })
                             .collect_vec(),
@@ -1083,12 +1086,12 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             Op::I32Eqz => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
-                Directive::Instruction(ib::eq_imm(output, input, F::ZERO)).into()
+                Directive::Instruction(ib::eq_imm(output, input, AluImm::from(0))).into()
             }
             Op::I64Eqz => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
-                Directive::Instruction(ib::eq_imm_64(output, input, F::ZERO)).into()
+                Directive::Instruction(ib::eq_imm_64(output, input, AluImm::from(0))).into()
             }
 
             Op::I32WrapI64 => {
@@ -1100,7 +1103,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let output = output.unwrap().start as usize;
 
                 // Just copy the lower limb to the output.
-                Directive::Instruction(ib::add_imm(output, lower_limb, F::ZERO)).into()
+                Directive::Instruction(ib::add_imm(output, lower_limb, AluImm::from(0))).into()
             }
             Op::I32Extend8S | Op::I32Extend16S => {
                 let input = inputs[0].start as usize;
@@ -1109,12 +1112,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let tmp = c.register_gen.allocate_type(ValType::I32).start as usize;
 
                 let shift = match op {
-                    Op::I32Extend8S => 24,
-                    Op::I32Extend16S => 16,
+                    Op::I32Extend8S => 24_i16,
+                    Op::I32Extend16S => 16_i16,
                     _ => unreachable!(),
                 }
-                .to_f()
-                .unwrap();
+                .into();
 
                 // Left shift followed by arithmetic right shift
                 vec![
@@ -1130,13 +1132,12 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 let tmp = c.register_gen.allocate_type(ValType::I64).start as usize;
 
                 let shift = match op {
-                    Op::I64Extend8S => 56,
-                    Op::I64Extend16S => 48,
-                    Op::I64Extend32S => 32,
+                    Op::I64Extend8S => 56_i16,
+                    Op::I64Extend16S => 48_i16,
+                    Op::I64Extend32S => 32_i16,
                     _ => unreachable!(),
                 }
-                .to_f()
-                .unwrap();
+                .into();
 
                 // Left shift followed by arithmetic right shift
                 vec![
@@ -1156,15 +1157,11 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 vec![
                     // Copy the 32 bit values to the high 32 bits of the temporary value.
                     // Leave the low bits undefined.
-                    Directive::Instruction(ib::add_imm(high_shifted + 1, input, F::ZERO)),
+                    Directive::Instruction(ib::add_imm(high_shifted + 1, input, AluImm::from(0))),
                     // shr will read 64 bits, so we need to zero the other half due to WOM
                     Directive::Instruction(ib::const_32_imm(high_shifted, 0, 0)),
                     // Arithmetic shift right to fill the high bits with the sign bit.
-                    Directive::Instruction(ib::shr_s_imm_64(
-                        output,
-                        high_shifted,
-                        32.to_f().unwrap(),
-                    )),
+                    Directive::Instruction(ib::shr_s_imm_64(output, high_shifted, 32_i16.into())),
                 ]
                 .into()
             }
@@ -1174,7 +1171,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 vec![
                     // Copy the 32 bit value to the low 32 bits of the output.
-                    Directive::Instruction(ib::add_imm(output, input, F::ZERO)),
+                    Directive::Instruction(ib::add_imm(output, input, AluImm::from(0))),
                     // Zero the high 32 bits.
                     Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)),
                 ]
@@ -1223,21 +1220,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
                             Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
                             Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
-                            Directive::Instruction(ib::shl_imm(
-                                b1_shifted,
-                                b1,
-                                F::from_canonical_u8(8),
-                            )),
-                            Directive::Instruction(ib::shl_imm(
-                                b2_shifted,
-                                b2,
-                                F::from_canonical_u8(16),
-                            )),
-                            Directive::Instruction(ib::shl_imm(
-                                b3_shifted,
-                                b3,
-                                F::from_canonical_u8(24),
-                            )),
+                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
+                            Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
+                            Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
                             Directive::Instruction(ib::or(lo, b0, b1_shifted)),
                             Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
                             Directive::Instruction(ib::or(output, lo, hi)),
@@ -1252,11 +1237,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         vec![
                             Directive::Instruction(ib::loadhu(lo, base_addr, imm)),
                             Directive::Instruction(ib::loadhu(hi, base_addr, imm + 2)),
-                            Directive::Instruction(ib::shl_imm(
-                                hi_shifted,
-                                hi,
-                                F::from_canonical_u8(16),
-                            )),
+                            Directive::Instruction(ib::shl_imm(hi_shifted, hi, 16_i16.into())),
                             Directive::Instruction(ib::or(output, lo, hi_shifted)),
                         ]
                         .into()
@@ -1283,11 +1264,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             } else {
                                 Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
                             },
-                            Directive::Instruction(ib::shl_imm(
-                                b1_shifted,
-                                b1,
-                                F::from_canonical_u8(8),
-                            )),
+                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
                             Directive::Instruction(ib::or(output, b0, b1_shifted)),
                         ]
                         .into()
@@ -1353,40 +1330,16 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::loadbu(b6, base_addr, imm + 6)),
                             Directive::Instruction(ib::loadbu(b7, base_addr, imm + 7)),
                             // build lo 32 bits
-                            Directive::Instruction(ib::shl_imm(
-                                b1_shifted,
-                                b1,
-                                F::from_canonical_u8(8),
-                            )),
-                            Directive::Instruction(ib::shl_imm(
-                                b2_shifted,
-                                b2,
-                                F::from_canonical_u8(16),
-                            )),
-                            Directive::Instruction(ib::shl_imm(
-                                b3_shifted,
-                                b3,
-                                F::from_canonical_u8(24),
-                            )),
+                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
+                            Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
+                            Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
                             Directive::Instruction(ib::or(lo0, b0, b1_shifted)),
                             Directive::Instruction(ib::or(lo1, b2_shifted, b3_shifted)),
                             Directive::Instruction(ib::or(output, lo0, lo1)),
                             // build hi 32 bits
-                            Directive::Instruction(ib::shl_imm(
-                                b5_shifted,
-                                b5,
-                                F::from_canonical_u8(8),
-                            )),
-                            Directive::Instruction(ib::shl_imm(
-                                b6_shifted,
-                                b6,
-                                F::from_canonical_u8(16),
-                            )),
-                            Directive::Instruction(ib::shl_imm(
-                                b7_shifted,
-                                b7,
-                                F::from_canonical_u8(24),
-                            )),
+                            Directive::Instruction(ib::shl_imm(b5_shifted, b5, 8_i16.into())),
+                            Directive::Instruction(ib::shl_imm(b6_shifted, b6, 16_i16.into())),
+                            Directive::Instruction(ib::shl_imm(b7_shifted, b7, 24_i16.into())),
                             Directive::Instruction(ib::or(hi0, b4, b5_shifted)),
                             Directive::Instruction(ib::or(hi1, b6_shifted, b7_shifted)),
                             Directive::Instruction(ib::or(output + 1, hi0, hi1)),
@@ -1406,16 +1359,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
                             Directive::Instruction(ib::loadhu(h2, base_addr, imm + 4)),
                             Directive::Instruction(ib::loadhu(h3, base_addr, imm + 6)),
-                            Directive::Instruction(ib::shl_imm(
-                                h1_shifted,
-                                h1,
-                                F::from_canonical_u8(16),
-                            )),
-                            Directive::Instruction(ib::shl_imm(
-                                h3_shifted,
-                                h3,
-                                F::from_canonical_u8(16),
-                            )),
+                            Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16.into())),
+                            Directive::Instruction(ib::shl_imm(h3_shifted, h3, 16_i16.into())),
                             Directive::Instruction(ib::or(output, h0, h1_shifted)),
                             Directive::Instruction(ib::or(output + 1, h2, h3_shifted)),
                         ]
@@ -1446,7 +1391,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // shr will read 64 bits, so we need to zero the other half due to WOM
                     Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                     // shift i64 val right, keeping the sign
-                    Directive::Instruction(ib::shr_s_imm_64(output, val, F::from_canonical_u8(32))),
+                    Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into())),
                 ]
                 .into()
             }
@@ -1469,11 +1414,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                                 Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
                             },
                             // shift b1
-                            Directive::Instruction(ib::shl_imm(
-                                b1_shifted,
-                                b1,
-                                F::from_canonical_u8(8),
-                            )),
+                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
                             // load b0
                             Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
                             // combine b0 and b1
@@ -1481,11 +1422,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             // shr will read 64 bits, so we need to zero the other half due to WOM
                             Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                             // shift i64 val right, keeping the sign
-                            Directive::Instruction(ib::shr_s_imm_64(
-                                output,
-                                val,
-                                F::from_canonical_u8(32),
-                            )),
+                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into())),
                         ]
                     }
                     1.. => {
@@ -1499,7 +1436,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                                 Directive::Instruction(ib::shr_s_imm_64(
                                     output,
                                     val,
-                                    F::from_canonical_u8(32),
+                                    32_i16.into(),
                                 )),
                             ]
                         } else {
@@ -1537,21 +1474,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
                             Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
                             // shifts
-                            Directive::Instruction(ib::shl_imm(
-                                b1_shifted,
-                                b1,
-                                F::from_canonical_u8(8),
-                            )),
-                            Directive::Instruction(ib::shl_imm(
-                                b2_shifted,
-                                b2,
-                                F::from_canonical_u8(16),
-                            )),
-                            Directive::Instruction(ib::shl_imm(
-                                b3_shifted,
-                                b3,
-                                F::from_canonical_u8(24),
-                            )),
+                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
+                            Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
+                            Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
                             // build hi and lo
                             Directive::Instruction(ib::or(lo, b0, b1_shifted)),
                             Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
@@ -1561,17 +1486,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                             // shift signed/unsigned
                             if let Op::I64Load32S { .. } = op {
-                                Directive::Instruction(ib::shr_s_imm_64(
-                                    output,
-                                    val,
-                                    F::from_canonical_u8(32),
-                                ))
+                                Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
                             } else {
-                                Directive::Instruction(ib::shr_u_imm_64(
-                                    output,
-                                    val,
-                                    F::from_canonical_u8(32),
-                                ))
+                                Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
                             },
                         ]
                     }
@@ -1584,28 +1501,16 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
                             Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
                             // shift h1
-                            Directive::Instruction(ib::shl_imm(
-                                h1_shifted,
-                                h1,
-                                F::from_canonical_u8(16),
-                            )),
+                            Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16.into())),
                             // combine h0 and h1
                             Directive::Instruction(ib::or(val + 1, h0, h1_shifted)),
                             // shr will read 64 bits, so we need to zero the other half due to WOM
                             Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                             // shift signed/unsigned
                             if let Op::I64Load32S { .. } = op {
-                                Directive::Instruction(ib::shr_s_imm_64(
-                                    output,
-                                    val,
-                                    F::from_canonical_u8(32),
-                                ))
+                                Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
                             } else {
-                                Directive::Instruction(ib::shr_u_imm_64(
-                                    output,
-                                    val,
-                                    F::from_canonical_u8(32),
-                                ))
+                                Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
                             },
                         ]
                     }
@@ -1617,17 +1522,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                             // shift signed/unsigned
                             if let Op::I64Load32S { .. } = op {
-                                Directive::Instruction(ib::shr_s_imm_64(
-                                    output,
-                                    val,
-                                    F::from_canonical_u8(32),
-                                ))
+                                Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
                             } else {
-                                Directive::Instruction(ib::shr_u_imm_64(
-                                    output,
-                                    val,
-                                    F::from_canonical_u8(32),
-                                ))
+                                Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
                             },
                         ]
                     }
@@ -1649,25 +1546,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             // store byte 0
                             Directive::Instruction(ib::storeb(value, base_addr, imm)),
                             // shift and store byte 1
-                            Directive::Instruction(ib::shr_u_imm(
-                                b1,
-                                value,
-                                F::from_canonical_u8(8),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(b1, value, 8_i16.into())),
                             Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
                             // shift and store byte 2
-                            Directive::Instruction(ib::shr_u_imm(
-                                b2,
-                                value,
-                                F::from_canonical_u8(16),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(b2, value, 16_i16.into())),
                             Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
                             // shift and store byte 3
-                            Directive::Instruction(ib::shr_u_imm(
-                                b3,
-                                value,
-                                F::from_canonical_u8(24),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(b3, value, 24_i16.into())),
                             Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
                         ]
                         .into()
@@ -1678,11 +1563,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             // store halfword 0
                             Directive::Instruction(ib::storeh(value, base_addr, imm)),
                             // shift and store halfword 1
-                            Directive::Instruction(ib::shr_u_imm(
-                                h1,
-                                value,
-                                F::from_canonical_u8(16),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(h1, value, 16_i16.into())),
                             Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
                         ]
                         .into()
@@ -1709,11 +1590,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             // store byte 0
                             Directive::Instruction(ib::storeb(value, base_addr, imm)),
                             // shift and store byte 1
-                            Directive::Instruction(ib::shr_u_imm(
-                                b1,
-                                value,
-                                F::from_canonical_u8(8),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(b1, value, 8_i16.into())),
                             Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
                         ]
                         .into()
@@ -1740,48 +1617,24 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             // store byte 0
                             Directive::Instruction(ib::storeb(value_lo, base_addr, imm)),
                             // shift and store byte 1
-                            Directive::Instruction(ib::shr_u_imm(
-                                b1,
-                                value_lo,
-                                F::from_canonical_u8(8),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(b1, value_lo, 8_i16.into())),
                             Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
                             // shift and store byte 2
-                            Directive::Instruction(ib::shr_u_imm(
-                                b2,
-                                value_lo,
-                                F::from_canonical_u8(16),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(b2, value_lo, 16_i16.into())),
                             Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
                             // shift and store byte 3
-                            Directive::Instruction(ib::shr_u_imm(
-                                b3,
-                                value_lo,
-                                F::from_canonical_u8(24),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(b3, value_lo, 24_i16.into())),
                             Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
                             // store byte 4
                             Directive::Instruction(ib::storeb(value_hi, base_addr, imm + 4)),
                             // shift and store byte 5
-                            Directive::Instruction(ib::shr_u_imm(
-                                b5,
-                                value_hi,
-                                F::from_canonical_u8(8),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(b5, value_hi, 8_i16.into())),
                             Directive::Instruction(ib::storeb(b5, base_addr, imm + 5)),
                             // shift and store byte 6
-                            Directive::Instruction(ib::shr_u_imm(
-                                b6,
-                                value_hi,
-                                F::from_canonical_u8(16),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(b6, value_hi, 16_i16.into())),
                             Directive::Instruction(ib::storeb(b6, base_addr, imm + 6)),
                             // shift and store byte 7
-                            Directive::Instruction(ib::shr_u_imm(
-                                b7,
-                                value_hi,
-                                F::from_canonical_u8(24),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(b7, value_hi, 24_i16.into())),
                             Directive::Instruction(ib::storeb(b7, base_addr, imm + 7)),
                         ]
                     }
@@ -1793,20 +1646,12 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             // store halfword 0
                             Directive::Instruction(ib::storeh(value_lo, base_addr, imm)),
                             // shift and store halfword 1
-                            Directive::Instruction(ib::shr_u_imm(
-                                h1,
-                                value_lo,
-                                F::from_canonical_u8(16),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(h1, value_lo, 16_i16.into())),
                             Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
                             // store halfword 2
                             Directive::Instruction(ib::storeh(value_hi, base_addr, imm + 4)),
                             // shift and store halfword 3
-                            Directive::Instruction(ib::shr_u_imm(
-                                h3,
-                                value_hi,
-                                F::from_canonical_u8(16),
-                            )),
+                            Directive::Instruction(ib::shr_u_imm(h3, value_hi, 16_i16.into())),
                             Directive::Instruction(ib::storeh(h3, base_addr, imm + 6)),
                         ]
                     }
@@ -1869,7 +1714,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     // - write new size to header.
                     Directive::Instruction(ib::storew(new_size, header_addr_reg.start as usize, 0)),
                     // - write old size to output.
-                    Directive::Instruction(ib::add_imm(output, size_reg, F::ZERO)),
+                    Directive::Instruction(ib::add_imm(output, size_reg, AluImm::from(0))),
                     // - jump to continuation label.
                     Directive::Jump {
                         target: continuation_label.clone(),
@@ -2006,7 +1851,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         Directive::Instruction(ib::add_imm(
                             output as usize,
                             input as usize,
-                            F::ZERO,
+                            AluImm::from(0),
                         ))
                     })
                     .collect_vec()
@@ -2129,8 +1974,8 @@ trait RotOps<F: PrimeField32> {
     fn num_bits_const(dest: usize) -> Vec<Directive<F>>;
     fn shl(dest: usize, val: usize, amount: usize) -> Instruction<F>;
     fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F>;
-    fn shl_imm(dest: usize, val: usize, amount: F) -> Instruction<F>;
-    fn shr_u_imm(dest: usize, val: usize, amount: F) -> Instruction<F>;
+    fn shl_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F>;
+    fn shr_u_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F>;
     fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F>;
     fn or(dest: usize, lhs: usize, rhs: usize) -> Instruction<F>;
 }
@@ -2145,7 +1990,7 @@ impl<F: PrimeField32> RotOps<F> for I32Rot {
         32
     }
     fn mask_rot_bits(dest: usize, src: usize) -> Instruction<F> {
-        ib::and_imm(dest, src, (32 - 1).to_f().unwrap())
+        ib::and_imm(dest, src, (32_i16 - 1).into())
     }
 
     fn num_bits_const(dest: usize) -> Vec<Directive<F>> {
@@ -2157,10 +2002,10 @@ impl<F: PrimeField32> RotOps<F> for I32Rot {
     fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F> {
         ib::shr_u(dest, val, amount)
     }
-    fn shl_imm(dest: usize, val: usize, amount: F) -> Instruction<F> {
+    fn shl_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F> {
         ib::shl_imm(dest, val, amount)
     }
-    fn shr_u_imm(dest: usize, val: usize, amount: F) -> Instruction<F> {
+    fn shr_u_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F> {
         ib::shr_u_imm(dest, val, amount)
     }
     fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F> {
@@ -2181,7 +2026,7 @@ impl<F: PrimeField32> RotOps<F> for I64Rot {
         64
     }
     fn mask_rot_bits(dest: usize, src: usize) -> Instruction<F> {
-        ib::and_imm_64(dest, src, (64 - 1).to_f().unwrap())
+        ib::and_imm_64(dest, src, (64_i16 - 1).into())
     }
     fn num_bits_const(dest: usize) -> Vec<Directive<F>> {
         vec![
@@ -2195,10 +2040,10 @@ impl<F: PrimeField32> RotOps<F> for I64Rot {
     fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F> {
         ib::shr_u_64(dest, val, amount)
     }
-    fn shl_imm(dest: usize, val: usize, amount: F) -> Instruction<F> {
+    fn shl_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F> {
         ib::shl_imm_64(dest, val, amount)
     }
-    fn shr_u_imm(dest: usize, val: usize, amount: F) -> Instruction<F> {
+    fn shr_u_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F> {
         ib::shr_u_imm_64(dest, val, amount)
     }
     fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F> {
@@ -2273,8 +2118,8 @@ fn translate_rot<F: PrimeField32, R: RotOps<F>>(
             } & (R::num_bits() - 1);
             let shift_bits_back = R::num_bits() - shift_bits_ref;
 
-            let shift_bits_ref = F::from_canonical_u16(shift_bits_ref as u16);
-            let shift_bits_back = F::from_canonical_u16(shift_bits_back as u16);
+            let shift_bits_ref = shift_bits_ref.into();
+            let shift_bits_back = shift_bits_back.into();
 
             match direction {
                 RotDirection::Left => vec![
@@ -2300,20 +2145,13 @@ fn translate_rot<F: PrimeField32, R: RotOps<F>>(
 }
 
 /// Precondition: `value` is either `WasmValue::I32` or `WasmValue::I64`
-fn const_i16_as_field<F: PrimeField32>(value: &WasmValue) -> F {
+fn const_i16_as_field(value: &WasmValue) -> AluImm {
     let c: i16 = match *value {
         WasmValue::I32(v) => v as i16,
         WasmValue::I64(v) => v as i16,
         _ => panic!("not valid i16"),
     };
-    i16_to_imm_field(c)
-}
-
-fn i16_to_imm_field<F: PrimeField32>(value: i16) -> F {
-    // ALU adapter expects the 16 bits value in the lower 2 bytes,
-    // the sign extension on the 3rd byte, and the 4th byte to
-    // zeroed.
-    F::from_canonical_u32((value as i32 as u32) & 0xff_ff_ff)
+    c.into()
 }
 
 fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> i32 {
