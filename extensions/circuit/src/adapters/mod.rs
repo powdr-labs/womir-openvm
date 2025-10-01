@@ -18,6 +18,8 @@ pub use jump::*;
 pub use loadstore::*;
 pub use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 
+use crate::WomController;
+
 /// Convert the RISC-V register data (32 bits represented as 4 bytes, where each byte is represented
 /// as a field element) back into its value as u32.
 pub fn compose<F: PrimeField32>(ptr_data: [F; RV32_REGISTER_NUM_LIMBS]) -> u32 {
@@ -33,6 +35,13 @@ pub fn decompose<F: PrimeField32>(value: u32) -> [F; RV32_REGISTER_NUM_LIMBS] {
     std::array::from_fn(|i| {
         F::from_canonical_u32((value >> (RV32_CELL_BITS * i)) & ((1 << RV32_CELL_BITS) - 1))
     })
+}
+
+/// Read write once register.
+pub fn unsafe_read_wom_register<F: PrimeField32>(wom: &WomController<F>, pointer: F) -> u32 {
+    // WOM reads don't change state for now, so normal read is fine
+    let data = wom.read::<RV32_REGISTER_NUM_LIMBS>(pointer).1;
+    compose(data)
 }
 
 /// Peeks at the value of a register without updating the memory state or incrementing the
