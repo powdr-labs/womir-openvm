@@ -973,6 +973,18 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 ]
                 .into();
             }
+            Op::I32Rotl => {
+                return translate_rot::<F, I32Rot>(c, RotDirection::Left, inputs, output);
+            }
+            Op::I32Rotr => {
+                return translate_rot::<F, I32Rot>(c, RotDirection::Right, inputs, output);
+            }
+            Op::I64Rotl => {
+                return translate_rot::<F, I64Rot>(c, RotDirection::Left, inputs, output);
+            }
+            Op::I64Rotr => {
+                return translate_rot::<F, I64Rot>(c, RotDirection::Right, inputs, output);
+            }
             Op::Select | Op::TypedSelect { .. } => {
                 // Works like a ternary operator: if the condition (3rd input) is non-zero,
                 // select the 1st input, otherwise select the 2nd input.
@@ -1068,10 +1080,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 ]
                 .into()
             }
-            Op::I32Rotl => translate_rot::<F, I32Rot>(c, RotDirection::Left, inputs, output),
-            Op::I32Rotr => translate_rot::<F, I32Rot>(c, RotDirection::Right, inputs, output),
-            Op::I64Rotl => translate_rot::<F, I64Rot>(c, RotDirection::Left, inputs, output),
-            Op::I64Rotr => translate_rot::<F, I64Rot>(c, RotDirection::Right, inputs, output),
             Op::I32Eqz => {
                 let input = inputs[0].start as usize;
                 let output = output.unwrap().start as usize;
@@ -2116,10 +2124,13 @@ enum RotDirection {
 
 trait RotOps<F: PrimeField32> {
     fn val_type() -> ValType;
+    fn num_bits() -> i16;
     fn mask_rot_bits(dest: usize, src: usize) -> Instruction<F>;
     fn num_bits_const(dest: usize) -> Vec<Directive<F>>;
     fn shl(dest: usize, val: usize, amount: usize) -> Instruction<F>;
     fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F>;
+    fn shl_imm(dest: usize, val: usize, amount: F) -> Instruction<F>;
+    fn shr_u_imm(dest: usize, val: usize, amount: F) -> Instruction<F>;
     fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F>;
     fn or(dest: usize, lhs: usize, rhs: usize) -> Instruction<F>;
 }
@@ -2130,7 +2141,9 @@ impl<F: PrimeField32> RotOps<F> for I32Rot {
     fn val_type() -> ValType {
         ValType::I32
     }
-
+    fn num_bits() -> i16 {
+        32
+    }
     fn mask_rot_bits(dest: usize, src: usize) -> Instruction<F> {
         ib::and_imm(dest, src, (32 - 1).to_f().unwrap())
     }
@@ -2143,6 +2156,12 @@ impl<F: PrimeField32> RotOps<F> for I32Rot {
     }
     fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F> {
         ib::shr_u(dest, val, amount)
+    }
+    fn shl_imm(dest: usize, val: usize, amount: F) -> Instruction<F> {
+        ib::shl_imm(dest, val, amount)
+    }
+    fn shr_u_imm(dest: usize, val: usize, amount: F) -> Instruction<F> {
+        ib::shr_u_imm(dest, val, amount)
     }
     fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F> {
         ib::sub(dest, lhs, rhs)
@@ -2157,6 +2176,9 @@ struct I64Rot;
 impl<F: PrimeField32> RotOps<F> for I64Rot {
     fn val_type() -> ValType {
         ValType::I64
+    }
+    fn num_bits() -> i16 {
+        64
     }
     fn mask_rot_bits(dest: usize, src: usize) -> Instruction<F> {
         ib::and_imm_64(dest, src, (64 - 1).to_f().unwrap())
@@ -2173,6 +2195,12 @@ impl<F: PrimeField32> RotOps<F> for I64Rot {
     fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F> {
         ib::shr_u_64(dest, val, amount)
     }
+    fn shl_imm(dest: usize, val: usize, amount: F) -> Instruction<F> {
+        ib::shl_imm_64(dest, val, amount)
+    }
+    fn shr_u_imm(dest: usize, val: usize, amount: F) -> Instruction<F> {
+        ib::shr_u_imm_64(dest, val, amount)
+    }
     fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F> {
         ib::sub_64(dest, lhs, rhs)
     }
@@ -2185,50 +2213,85 @@ impl<F: PrimeField32> RotOps<F> for I64Rot {
 fn translate_rot<F: PrimeField32, R: RotOps<F>>(
     c: &mut Ctx<F>,
     direction: RotDirection,
-    inputs: Vec<Range<u32>>,
+    inputs: Vec<WasmOpInput>,
     output: Option<Range<u32>>,
 ) -> Tree<Directive<F>> {
-    let input1 = inputs[0].start as usize;
-    let input2 = inputs[1].start as usize;
+    // Const collapse ensures input[0] is always a register.
+    let value = inputs[0].as_register().unwrap().start as usize;
     let output = output.unwrap().start as usize;
-    let shift_ref_amount = c.register_gen.allocate_type(R::val_type()).start as usize;
+
     let shift_ref = c.register_gen.allocate_type(R::val_type()).start as usize;
-    // TODO: if the transformation from rot to this sequence of instructions
-    // was done earlier in the pipeline, at DAG level, this const could be
-    // optimized away, sometimes.
-    let const_num_bits = c.register_gen.allocate_type(R::val_type()).start as usize;
-    let shift_back_amount = c.register_gen.allocate_type(R::val_type()).start as usize;
     let shift_back = c.register_gen.allocate_type(R::val_type()).start as usize;
 
-    let mut directives = R::num_bits_const(const_num_bits);
+    let mut directives = match &inputs[1] {
+        WasmOpInput::Register(reg) => {
+            let reg = reg.start as usize;
+            let shift_ref_amount = c.register_gen.allocate_type(R::val_type()).start as usize;
+            // TODO: if the transformation from rot to this sequence of instructions
+            // was done earlier in the pipeline, at DAG level, this const could be
+            // optimized away, sometimes.
+            let const_num_bits = c.register_gen.allocate_type(R::val_type()).start as usize;
+            let shift_back_amount = c.register_gen.allocate_type(R::val_type()).start as usize;
 
-    directives.extend(
-        [
-            // mask the shift amount to the valid range
-            R::mask_rot_bits(shift_ref_amount, input2),
-            // calculate the shift amount for the opposite direction
-            R::sub(shift_back_amount, const_num_bits, shift_ref_amount),
-        ]
-        .map(Directive::Instruction),
-    );
+            let mut directives = R::num_bits_const(const_num_bits);
 
-    directives.extend(
-        match direction {
-            RotDirection::Left => [
-                // shift left
-                R::shl(shift_ref, input1, shift_ref_amount),
-                // shift right
-                R::shr_u(shift_back, input1, shift_back_amount),
-            ],
-            RotDirection::Right => [
-                // shift right
-                R::shr_u(shift_ref, input1, shift_ref_amount),
-                // shift left
-                R::shl(shift_back, input1, shift_back_amount),
-            ],
+            directives.extend(
+                [
+                    // mask the shift amount to the valid range
+                    R::mask_rot_bits(shift_ref_amount, reg),
+                    // calculate the shift amount for the opposite direction
+                    R::sub(shift_back_amount, const_num_bits, shift_ref_amount),
+                ]
+                .map(Directive::Instruction),
+            );
+
+            directives.extend(
+                match direction {
+                    RotDirection::Left => [
+                        // shift left
+                        R::shl(shift_ref, value, shift_ref_amount),
+                        // shift right
+                        R::shr_u(shift_back, value, shift_back_amount),
+                    ],
+                    RotDirection::Right => [
+                        // shift right
+                        R::shr_u(shift_ref, value, shift_ref_amount),
+                        // shift left
+                        R::shl(shift_back, value, shift_back_amount),
+                    ],
+                }
+                .map(Directive::Instruction),
+            );
+
+            directives
         }
-        .map(Directive::Instruction),
-    );
+        WasmOpInput::Constant(wasm_value) => {
+            let shift_bits_ref = match *wasm_value {
+                WasmValue::I32(v) => v as i16,
+                WasmValue::I64(v) => v as i16,
+                _ => panic!("not valid i16"),
+            } & (R::num_bits() - 1);
+            let shift_bits_back = R::num_bits() - shift_bits_ref;
+
+            let shift_bits_ref = F::from_canonical_u16(shift_bits_ref as u16);
+            let shift_bits_back = F::from_canonical_u16(shift_bits_back as u16);
+
+            match direction {
+                RotDirection::Left => vec![
+                    // shift left
+                    Directive::Instruction(R::shl_imm(shift_ref, value, shift_bits_ref)),
+                    // shift right
+                    Directive::Instruction(R::shr_u_imm(shift_back, value, shift_bits_back)),
+                ],
+                RotDirection::Right => vec![
+                    // shift right
+                    Directive::Instruction(R::shr_u_imm(shift_ref, value, shift_bits_ref)),
+                    // shift left
+                    Directive::Instruction(R::shl_imm(shift_back, value, shift_bits_back)),
+                ],
+            }
+        }
+    };
 
     // or the two shifts
     directives.push(Directive::Instruction(R::or(output, shift_ref, shift_back)));

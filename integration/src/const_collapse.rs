@@ -134,14 +134,14 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
                 // Right operand is constant and can be immediate
                 must_collapse.replace(true);
             } else if let [
-                    MaybeConstant::ReferenceConstant {
-                        value,
-                        must_collapse,
-                    },
-                    MaybeConstant::NonConstant,
-                ] = inputs
-                && ((is_commutative(op)
-                    && can_be_i16(value)) || can_turn_to_lt(op, value).is_some())
+                MaybeConstant::ReferenceConstant {
+                    value,
+                    must_collapse,
+                },
+                MaybeConstant::NonConstant,
+            ] = inputs
+                && ((is_commutative(op) && can_be_i16(value))
+                    || can_turn_to_lt(op, value).is_some())
             {
                 // Left operand is constant and can be immediate
                 // (either the operation is commutative, or it's
@@ -150,21 +150,21 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
             }
         }
 
-        // Shift and rot operations are special because they can handle immediates bigger than i16,
-        // as the value is masked to the bitwidth of the type.
+        // Shift and rot operations are special because they can handle immediates
+        // outside of i16 range, as the value is masked to the bitwidth of the type.
         Operator::I32Shl
         | Operator::I64Shl
         | Operator::I32ShrS
         | Operator::I64ShrS
         | Operator::I32ShrU
         | Operator::I64ShrU
-        // TODO: the following operations can also be made to support immediates.
-        //| Operator::I32Rotl
-        //| Operator::I64Rotl
-        //| Operator::I32Rotr
-        //| Operator::I64Rotr
-        => if let [_, MaybeConstant::ReferenceConstant { must_collapse, .. }] = inputs {
-            must_collapse.replace(true);
+        | Operator::I32Rotl
+        | Operator::I64Rotl
+        | Operator::I32Rotr
+        | Operator::I64Rotr => {
+            if let [_, MaybeConstant::ReferenceConstant { must_collapse, .. }] = inputs {
+                must_collapse.replace(true);
+            }
         }
 
         // GT is special because the left operand is the one that can be immediate
@@ -189,12 +189,12 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
                 // Left operand is constant and can be immediate
                 must_collapse.replace(true);
             } else if let [
-                    _,
-                    MaybeConstant::ReferenceConstant {
-                        value,
-                        must_collapse,
-                    },
-                ] = inputs
+                _,
+                MaybeConstant::ReferenceConstant {
+                    value,
+                    must_collapse,
+                },
+            ] = inputs
                 && can_turn_to_lt(op, value).is_some()
             {
                 // The constant is on the right, but we can turn the LE into an LT,
