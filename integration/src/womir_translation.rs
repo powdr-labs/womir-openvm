@@ -2170,6 +2170,9 @@ fn const_i16_as_field<F: PrimeField32>(value: &WasmValue) -> F {
 }
 
 fn i16_to_imm_field<F: PrimeField32>(value: i16) -> F {
+    // ALU adapter expects the 16 bits value in the lower 2 bytes,
+    // the sign extension on the 3rd byte, and the 4th byte to
+    // zeroed.
     F::from_canonical_u32((value as i32 as u32) & 0xff_ff_ff)
 }
 
