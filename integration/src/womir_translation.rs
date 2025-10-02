@@ -696,131 +696,12 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     ) -> Tree<Directive<F>> {
         use openvm_instructions::LocalOpcode;
 
-        // First handle single-instruction binary operations.
-        let binary_op = match op {
-            // 32-bit integer instructions
-            Op::I32Eq => Ok(EqOpcode::EQ.global_opcode()),
-            Op::I32Ne => Ok(EqOpcode::NEQ.global_opcode()),
-            Op::I32LtS => Ok(LessThanOpcode::SLT.global_opcode()),
-            Op::I32LtU => Ok(LessThanOpcode::SLTU.global_opcode()),
-            Op::I32Add => Ok(BaseAluOpcode::ADD.global_opcode()),
-            Op::I32Sub => Ok(BaseAluOpcode::SUB.global_opcode()),
-            Op::I32And => Ok(BaseAluOpcode::AND.global_opcode()),
-            Op::I32Or => Ok(BaseAluOpcode::OR.global_opcode()),
-            Op::I32Xor => Ok(BaseAluOpcode::XOR.global_opcode()),
-            Op::I32Mul => Ok(MulOpcode::MUL.global_opcode()),
-            Op::I32DivS => Ok(DivRemOpcode::DIV.global_opcode()),
-            Op::I32DivU => Ok(DivRemOpcode::DIVU.global_opcode()),
-            Op::I32RemS => Ok(DivRemOpcode::REM.global_opcode()),
-            Op::I32RemU => Ok(DivRemOpcode::REMU.global_opcode()),
-            Op::I32Shl => Ok(ShiftOpcode::SLL.global_opcode()),
-            Op::I32ShrS => Ok(ShiftOpcode::SRA.global_opcode()),
-            Op::I32ShrU => Ok(ShiftOpcode::SRL.global_opcode()),
-
-            // 64-bit integer instructions
-            Op::I64Eq => Ok(Eq64Opcode::EQ.global_opcode()),
-            Op::I64Ne => Ok(Eq64Opcode::NEQ.global_opcode()),
-            Op::I64LtS => Ok(LessThan64Opcode::SLT.global_opcode()),
-            Op::I64LtU => Ok(LessThan64Opcode::SLTU.global_opcode()),
-            Op::I64Add => Ok(BaseAlu64Opcode::ADD.global_opcode()),
-            Op::I64Sub => Ok(BaseAlu64Opcode::SUB.global_opcode()),
-            Op::I64And => Ok(BaseAlu64Opcode::AND.global_opcode()),
-            Op::I64Or => Ok(BaseAlu64Opcode::OR.global_opcode()),
-            Op::I64Xor => Ok(BaseAlu64Opcode::XOR.global_opcode()),
-            Op::I64Mul => Ok(Mul64Opcode::MUL.global_opcode()),
-            Op::I64DivS => Ok(DivRem64Opcode::DIV.global_opcode()),
-            Op::I64DivU => Ok(DivRem64Opcode::DIVU.global_opcode()),
-            Op::I64RemS => Ok(DivRem64Opcode::REM.global_opcode()),
-            Op::I64RemU => Ok(DivRem64Opcode::REMU.global_opcode()),
-            Op::I64Shl => Ok(Shift64Opcode::SLL.global_opcode()),
-            Op::I64ShrS => Ok(Shift64Opcode::SRA.global_opcode()),
-            Op::I64ShrU => Ok(Shift64Opcode::SRL.global_opcode()),
-
-            // Float instructions
-            Op::F32Eq => todo!(),
-            Op::F32Ne => todo!(),
-            Op::F32Lt => todo!(),
-            Op::F32Gt => todo!(),
-            Op::F32Le => todo!(),
-            Op::F32Ge => todo!(),
-            Op::F64Eq => todo!(),
-            Op::F64Ne => todo!(),
-            Op::F64Lt => todo!(),
-            Op::F64Gt => todo!(),
-            Op::F64Le => todo!(),
-            Op::F64Ge => todo!(),
-            Op::F32Add => todo!(),
-            Op::F32Sub => todo!(),
-            Op::F32Mul => todo!(),
-            Op::F32Div => todo!(),
-            Op::F32Min => todo!(),
-            Op::F32Max => todo!(),
-            Op::F32Copysign => todo!(),
-            Op::F64Add => todo!(),
-            Op::F64Sub => todo!(),
-            Op::F64Mul => todo!(),
-            Op::F64Div => todo!(),
-            Op::F64Min => todo!(),
-            Op::F64Max => todo!(),
-            Op::F64Copysign => todo!(),
-
-            // If not a binary operation, return the operator directly
-            op => Err(op),
-        };
-
-        let op: Op<'_> = match binary_op {
-            Ok(op) => {
-                let opcode = op.as_usize();
-                let output = output.unwrap().start as usize;
-                match inputs.as_slice() {
-                    [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
-                        // Case of two register inputs
-                        return Directive::Instruction(ib::instr_r(
-                            opcode,
-                            output,
-                            input1.start as usize,
-                            input2.start as usize,
-                        ))
-                        .into();
-                    }
-                    [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
-                    | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
-                        // Case of one register input and one constant input.
-
-                        // If this is the case of unsigned "0 < reg", turn into "reg != 0"
-                        if (op == LessThanOpcode::SLTU.global_opcode()
-                            || op == LessThan64Opcode::SLTU.global_opcode())
-                            && let WasmOpInput::Constant(WasmValue::I32(0) | WasmValue::I64(0)) =
-                                inputs[0]
-                        {
-                            return Directive::Instruction(ib::neq_imm(
-                                output,
-                                reg.start as usize,
-                                AluImm::from(0),
-                            ))
-                            .into();
-                        }
-
-                        // The general case below is for commutative operations, so the order
-                        // of the operands doesn't matter.
-
-                        // The constant folding step guarantees that the constant can be safely
-                        // truncated to i16.
-                        let c = const_i16_as_field(c);
-
-                        return Directive::Instruction(ib::instr_i(
-                            opcode,
-                            output,
-                            reg.start as usize,
-                            c,
-                        ))
-                        .into();
-                    }
-                    _ => unreachable!("combination of inputs not possible for binary op"),
-                }
-            }
-            Err(op) => op,
-        };
+        if let Some(instruction) = output.as_ref().and_then(|output| {
+            translate_most_binary_ops(&op, &inputs, output)
+                .or_else(|| translate_less_than_ops(&op, &inputs, output))
+        }) {
+            return Directive::Instruction(instruction).into();
+        }
 
         // Handle the GT instructions, which are just reversed LT
         let op = match op {
@@ -1961,6 +1842,146 @@ impl<F: PrimeField32> Directive<F> {
             Directive::Instruction(i) => Some(i),
         }
     }
+}
+
+/// Translate most binary operations (those with two inputs and one output).
+///
+/// Except for relational operations, which are handled separately.
+fn translate_most_binary_ops<'a, F: PrimeField32>(
+    op: &Op<'a>,
+    inputs: &[WasmOpInput],
+    output: &Range<u32>,
+) -> Option<Instruction<F>> {
+    use openvm_instructions::LocalOpcode;
+
+    let binary_op = match op {
+        // 32-bit integer instructions
+        Op::I32Eq => EqOpcode::EQ.global_opcode(),
+        Op::I32Ne => EqOpcode::NEQ.global_opcode(),
+        Op::I32Add => BaseAluOpcode::ADD.global_opcode(),
+        Op::I32Sub => BaseAluOpcode::SUB.global_opcode(),
+        Op::I32And => BaseAluOpcode::AND.global_opcode(),
+        Op::I32Or => BaseAluOpcode::OR.global_opcode(),
+        Op::I32Xor => BaseAluOpcode::XOR.global_opcode(),
+        Op::I32Mul => MulOpcode::MUL.global_opcode(),
+        Op::I32DivS => DivRemOpcode::DIV.global_opcode(),
+        Op::I32DivU => DivRemOpcode::DIVU.global_opcode(),
+        Op::I32RemS => DivRemOpcode::REM.global_opcode(),
+        Op::I32RemU => DivRemOpcode::REMU.global_opcode(),
+        Op::I32Shl => ShiftOpcode::SLL.global_opcode(),
+        Op::I32ShrS => ShiftOpcode::SRA.global_opcode(),
+        Op::I32ShrU => ShiftOpcode::SRL.global_opcode(),
+
+        // 64-bit integer instructions
+        Op::I64Eq => Eq64Opcode::EQ.global_opcode(),
+        Op::I64Ne => Eq64Opcode::NEQ.global_opcode(),
+        Op::I64Add => BaseAlu64Opcode::ADD.global_opcode(),
+        Op::I64Sub => BaseAlu64Opcode::SUB.global_opcode(),
+        Op::I64And => BaseAlu64Opcode::AND.global_opcode(),
+        Op::I64Or => BaseAlu64Opcode::OR.global_opcode(),
+        Op::I64Xor => BaseAlu64Opcode::XOR.global_opcode(),
+        Op::I64Mul => Mul64Opcode::MUL.global_opcode(),
+        Op::I64DivS => DivRem64Opcode::DIV.global_opcode(),
+        Op::I64DivU => DivRem64Opcode::DIVU.global_opcode(),
+        Op::I64RemS => DivRem64Opcode::REM.global_opcode(),
+        Op::I64RemU => DivRem64Opcode::REMU.global_opcode(),
+        Op::I64Shl => Shift64Opcode::SLL.global_opcode(),
+        Op::I64ShrS => Shift64Opcode::SRA.global_opcode(),
+        Op::I64ShrU => Shift64Opcode::SRL.global_opcode(),
+
+        // Float instructions
+        Op::F32Eq => todo!(),
+        Op::F32Ne => todo!(),
+        Op::F32Lt => todo!(),
+        Op::F32Gt => todo!(),
+        Op::F32Le => todo!(),
+        Op::F32Ge => todo!(),
+        Op::F64Eq => todo!(),
+        Op::F64Ne => todo!(),
+        Op::F64Lt => todo!(),
+        Op::F64Gt => todo!(),
+        Op::F64Le => todo!(),
+        Op::F64Ge => todo!(),
+        Op::F32Add => todo!(),
+        Op::F32Sub => todo!(),
+        Op::F32Mul => todo!(),
+        Op::F32Div => todo!(),
+        Op::F32Min => todo!(),
+        Op::F32Max => todo!(),
+        Op::F32Copysign => todo!(),
+        Op::F64Add => todo!(),
+        Op::F64Sub => todo!(),
+        Op::F64Mul => todo!(),
+        Op::F64Div => todo!(),
+        Op::F64Min => todo!(),
+        Op::F64Max => todo!(),
+        Op::F64Copysign => todo!(),
+
+        // If not a binary operation, return the operator directly
+        _ => return None,
+    };
+
+    let opcode = binary_op.as_usize();
+    let output = output.start as usize;
+
+    Some(match inputs {
+        [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
+            // Case of two register inputs
+            ib::instr_r(opcode, output, input1.start as usize, input2.start as usize)
+        }
+        [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
+        | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
+            // Case of one register input and one constant input.
+
+            // The order doesn't matter, because only commutative operations will
+            // have the constant operand on the left side, as const folding ensures.
+
+            // The constant folding step guarantees that the constant can be safely
+            // truncated to i16.
+            let c = const_i16_as_field(c);
+            ib::instr_i(opcode, output, reg.start as usize, c)
+        }
+        _ => unreachable!("combination of inputs not possible for binary op"),
+    })
+}
+
+fn translate_less_than_ops<'a, F: PrimeField32>(
+    op: &Op<'a>,
+    inputs: &[WasmOpInput],
+    output: &Range<u32>,
+) -> Option<Instruction<F>> {
+    use openvm_instructions::LocalOpcode;
+
+    let rel_op = match op {
+        Op::I32LtS => LessThanOpcode::SLT.global_opcode(),
+        Op::I32LtU => LessThanOpcode::SLTU.global_opcode(),
+        Op::I64LtS => LessThan64Opcode::SLT.global_opcode(),
+        Op::I64LtU => LessThan64Opcode::SLTU.global_opcode(),
+        _ => return None,
+    };
+
+    let opcode = rel_op.as_usize();
+    let output = output.start as usize;
+
+    Some(match inputs {
+        [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
+            ib::instr_r(opcode, output, input1.start as usize, input2.start as usize)
+        }
+        [WasmOpInput::Register(reg), WasmOpInput::Constant(c)] => {
+            // The constant folding step guarantees that the constant can be safely
+            // truncated to i16.
+            let c = const_i16_as_field(c);
+            ib::instr_i(opcode, output, reg.start as usize, c)
+        }
+        [
+            WasmOpInput::Constant(WasmValue::I32(0) | WasmValue::I64(0)),
+            WasmOpInput::Register(reg),
+        ] => {
+            // This is the case of "0 < reg", where we turn it into "reg != 0".
+            ib::neq_imm(output, reg.start as usize, AluImm::from(0))
+        }
+        _ => unreachable!("combination of inputs not possible for binary op"),
+    })
 }
 
 enum RotDirection {
