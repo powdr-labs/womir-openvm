@@ -4,46 +4,49 @@ use womir::loader::{dag::WasmValue as Val, settings};
 pub fn collapse_const_if_possible(op: &Op, inputs: &[settings::MaybeConstant]) {
     use settings::MaybeConstant::{NonConstant, ReferenceConstant};
 
-    if inputs.len() == 2 {
-        // Handle the cases where unsigned "reg >= 1" and "reg > 0" can be turned into "reg != 0"
-        if let (
-            Op::I32GeU | Op::I64GeU,
-            ReferenceConstant {
-                value: Val::I32(1) | Val::I64(1),
-                must_collapse,
-            },
-        )
-        | (
-            Op::I32GtU | Op::I64GtU,
-            ReferenceConstant {
-                value: Val::I32(0) | Val::I64(0),
-                must_collapse,
-            },
-        ) = (&op, &inputs[1])
-        {
-            must_collapse.replace(true);
-            return;
-        }
+    if inputs.len() < 2 {
+        // Not enough inputs to consider collapsing
+        return;
+    }
 
-        // Handle the cases where unsigned "0 < reg" and "1 <= reg" can be turned into "reg != 0"
-        if let (
-            Op::I32LeU | Op::I64LeU,
-            ReferenceConstant {
-                value: Val::I32(1) | Val::I64(1),
-                must_collapse,
-            },
-        )
-        | (
-            Op::I32LtU | Op::I64LtU,
-            ReferenceConstant {
-                value: Val::I32(0) | Val::I64(0),
-                must_collapse,
-            },
-        ) = (&op, &inputs[0])
-        {
-            must_collapse.replace(true);
-            return;
-        }
+    // Handle the cases where unsigned "reg >= 1" and "reg > 0" can be turned into "reg != 0"
+    if let (
+        Op::I32GeU | Op::I64GeU,
+        ReferenceConstant {
+            value: Val::I32(1) | Val::I64(1),
+            must_collapse,
+        },
+    )
+    | (
+        Op::I32GtU | Op::I64GtU,
+        ReferenceConstant {
+            value: Val::I32(0) | Val::I64(0),
+            must_collapse,
+        },
+    ) = (&op, &inputs[1])
+    {
+        must_collapse.replace(true);
+        return;
+    }
+
+    // Handle the cases where unsigned "0 < reg" and "1 <= reg" can be turned into "reg != 0"
+    if let (
+        Op::I32LeU | Op::I64LeU,
+        ReferenceConstant {
+            value: Val::I32(1) | Val::I64(1),
+            must_collapse,
+        },
+    )
+    | (
+        Op::I32LtU | Op::I64LtU,
+        ReferenceConstant {
+            value: Val::I32(0) | Val::I64(0),
+            must_collapse,
+        },
+    ) = (&op, &inputs[0])
+    {
+        must_collapse.replace(true);
+        return;
     }
 
     match op {
