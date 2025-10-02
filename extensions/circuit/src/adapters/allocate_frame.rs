@@ -80,6 +80,8 @@ pub struct AllocateFrameAdapterColsWom<T> {
     pub amount_imm: T,
     // 0 if imm, 1 if reg
     pub amount_imm_or_reg: T,
+    // new frame pointer: provided by the prover
+    pub next_frame_ptr: [T; RV32_REGISTER_NUM_LIMBS],
     pub dest_reg: T,
     // TODO: needed?
     pub allocation_size: T,
@@ -110,8 +112,8 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
     type Interface = BasicAdapterInterface<
         AB::Expr,
         MinimalInstruction<AB::Expr>,
-        2,
         1,
+        0,
         RV32_REGISTER_NUM_LIMBS,
         RV32_REGISTER_NUM_LIMBS,
     >;
@@ -131,14 +133,14 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
             .assert_one(ctx.instruction.is_valid.clone());
 
         self.wom_bridge
-            .read(local.amount_reg + local.from_frame.fp, ctx.reads[1].clone())
+            .read(local.amount_reg + local.from_frame.fp, ctx.reads[0].clone())
             .eval(builder, local.amount_imm_or_reg);
 
         // write fp
         self.wom_bridge
             .write(
                 local.dest_reg + local.from_frame.fp,
-                ctx.writes[0].clone(),
+                local.next_frame_ptr,
                 local.write_mult,
             )
             .eval(builder, ctx.instruction.is_valid.clone());
@@ -173,8 +175,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
     type Interface = BasicAdapterInterface<
         F,
         MinimalInstruction<F>,
-        2,
         1,
+        0,
         RV32_REGISTER_NUM_LIMBS,
         RV32_REGISTER_NUM_LIMBS,
     >;
@@ -211,11 +213,10 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
 
         self.next_fp += amount_bytes;
 
-        let allocated_ptr_f = decompose(self.next_fp);
         let amount_bytes = decompose(amount_bytes);
 
         Ok((
-            [allocated_ptr_f, amount_bytes],
+            [amount_bytes],
             AllocateFrameReadRecord { allocated_ptr },
         ))
     }
