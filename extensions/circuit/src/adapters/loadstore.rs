@@ -329,8 +329,9 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
                     local_cols.imm.into(),
                     AB::Expr::from_canonical_u32(RV32_REGISTER_AS),
                     local_cols.mem_as.into(),
-                    // TODO: ok to just remove this?
-                    // local_cols.needs_write.into(),
+                    // TODO: this was `cols.needs_write` before, which was only 0 on load and `rd == x0`.
+                    // With wom `x0` is not special, so needs_write is always 1?
+                    AB::Expr::ONE,
                     local_cols.imm_sign.into(),
                 ],
                 local_cols.from_state,
