@@ -188,7 +188,7 @@ impl<
             .assert_one(ctx.instruction.is_valid.clone());
         self.wom_bridge
             .read(local.rs2, ctx.reads[1].clone())
-            .eval(builder, local.rs2_as.clone());
+            .eval(builder, local.rs2_as);
         self.wom_bridge
             .write(local.rd_ptr, ctx.writes[0].clone(), local.write_mult)
             .eval(builder, ctx.instruction.is_valid.clone());

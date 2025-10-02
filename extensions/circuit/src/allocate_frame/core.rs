@@ -106,7 +106,7 @@ where
         let output = AdapterRuntimeContext {
             to_pc: None,
             // TODO: should next_fp be in the core? its not really a reg or mem read
-            writes: [reads.into()[0].clone()].into(),
+            writes: [reads.into()[0]].into(),
         };
 
         Ok((output, ()))
