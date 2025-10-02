@@ -255,7 +255,6 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
         let is_store = is_valid.clone() - is_load.clone();
         // constrain mem_as to be in {0, 1, 2} if the instruction is a load,
         // and in {2, 3, 4} if the instruction is a store
-        // TODO: with WOM, i think this should be {1, 2} instead
         builder.assert_tern(local_cols.mem_as - is_store.clone() * AB::Expr::TWO);
         builder
             .when(not::<AB::Expr>(is_valid.clone()))

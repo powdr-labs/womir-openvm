@@ -105,7 +105,8 @@ where
     ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
         let output = AdapterRuntimeContext {
             to_pc: None,
-            // TODO: should next_fp be in the core? its not really a reg or mem read
+            // TODO: this is `next_fp`, which we are passing as if being "read" in the adapter.
+            // Should this be done differently?
             writes: [reads.into()[0]].into(),
         };
 

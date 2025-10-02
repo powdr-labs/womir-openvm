@@ -15,7 +15,7 @@ use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
-    p3_field::{Field, PrimeField32},
+    p3_field::{Field, PrimeField32, FieldAlgebra},
     rap::ColumnsAir,
 };
 use serde::{Deserialize, Serialize};
@@ -44,7 +44,7 @@ impl AllocateFrameAdapterChipWom {
     ) -> Self {
         Self {
             air: AllocateFrameAdapterAirWom {
-                _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 wom_bridge,
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
@@ -76,11 +76,13 @@ pub struct AllocateFrameWriteRecord<F> {
 pub struct AllocateFrameAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
-    pub target_reg_ptr: T,  // Pointer to target register
-    pub allocation_size: T, // amount_imm field from instruction (b)
-    pub src_reg_ptr: T,     // if reading from register
-    pub result: T,
-    pub read_imm_or_reg: T,
+    pub amount_reg: T,
+    pub amount_imm: T,
+    // 0 if imm, 1 if reg
+    pub amount_imm_or_reg: T,
+    pub dest_reg: T,
+    // TODO: needed?
+    pub allocation_size: T,
     pub write_mult: T,
 }
 
@@ -88,7 +90,7 @@ pub struct AllocateFrameAdapterColsWom<T> {
 pub struct AllocateFrameAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
     pub(super) wom_bridge: WomBridge,
-    pub(super) _execution_bridge: ExecutionBridge,
+    pub(super) execution_bridge: ExecutionBridge,
     pub(super) _frame_bus: FrameBus,
 }
 
@@ -123,23 +125,39 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
         let local: &AllocateFrameAdapterColsWom<_> = local.borrow();
 
         // read amount bytes
-        builder.assert_bool(local.read_imm_or_reg);
+        builder.assert_bool(local.amount_imm_or_reg);
         builder
-            .when(local.read_imm_or_reg)
+            .when(local.amount_imm_or_reg)
             .assert_one(ctx.instruction.is_valid.clone());
 
         self.wom_bridge
-            .read(local.src_reg_ptr, ctx.reads[1].clone())
-            .eval(builder, local.read_imm_or_reg);
+            .read(local.amount_reg + local.from_frame.fp, ctx.reads[1].clone())
+            .eval(builder, local.amount_imm_or_reg);
 
         // write fp
         self.wom_bridge
             .write(
-                local.target_reg_ptr,
+                local.dest_reg + local.from_frame.fp,
                 ctx.writes[0].clone(),
                 local.write_mult,
             )
             .eval(builder, ctx.instruction.is_valid.clone());
+
+        let timestamp_change = AB::Expr::ONE;
+
+        self.execution_bridge.execute_and_increment_pc::<AB>(
+            ctx.instruction.opcode,
+            [
+                local.dest_reg.into(),
+                local.amount_imm.into(),
+                local.amount_reg.into(),
+                local.amount_imm_or_reg.into(),
+                AB::Expr::ZERO,
+                // TODO: is this always one?
+                AB::Expr::ONE,
+            ],
+            local.from_state,
+            timestamp_change);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -193,7 +211,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
 
         self.next_fp += amount_bytes;
 
-        // TODO: "next fp" is being handled as a register/mem read (i.e., a read in the `BasicAdapterInterface`), is this right?
         let allocated_ptr_f = decompose(self.next_fp);
         let amount_bytes = decompose(amount_bytes);
 
