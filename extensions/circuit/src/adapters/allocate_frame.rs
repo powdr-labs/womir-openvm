@@ -134,7 +134,11 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
 
         // write fp
         self.wom_bridge
-            .write(local.target_reg_ptr, ctx.writes[0].clone(), local.write_mult)
+            .write(
+                local.target_reg_ptr,
+                ctx.writes[0].clone(),
+                local.write_mult,
+            )
             .eval(builder, ctx.instruction.is_valid.clone());
     }
 

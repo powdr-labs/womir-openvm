@@ -73,9 +73,9 @@ pub struct CopyIntoFrameWriteRecord<F> {
 pub struct CopyIntoFrameAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
-    pub value_reg_ptr: T, // rs1 pointer (register containing value to copy)
+    pub value_reg_ptr: T,     // rs1 pointer (register containing value to copy)
     pub frame_ptr_reg_ptr: T, // rs2 pointer (register containing frame pointer)
-    pub destination_ptr: T, // Where we write: frame_pointer + offset
+    pub destination_ptr: T,   // Where we write: frame_pointer + offset
     /// 0 if copy_from_frame
     /// 1 if copy_into_frame
     pub is_copy_into: T,
@@ -103,7 +103,14 @@ impl<F: Field> ColumnsAir<F> for CopyIntoFrameAdapterAirWom {
 }
 
 impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
-    type Interface = BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 2, 1, RV32_REGISTER_NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>;
+    type Interface = BasicAdapterInterface<
+        AB::Expr,
+        MinimalInstruction<AB::Expr>,
+        2,
+        1,
+        RV32_REGISTER_NUM_LIMBS,
+        RV32_REGISTER_NUM_LIMBS,
+    >;
 
     fn eval(
         &self,
@@ -125,7 +132,11 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
 
         // write dest reg
         self.wom_bridge
-            .write(local.destination_ptr, ctx.writes[0].clone(), local.write_mult)
+            .write(
+                local.destination_ptr,
+                ctx.writes[0].clone(),
+                local.write_mult,
+            )
             .eval(builder, ctx.instruction.is_valid.clone());
     }
 

@@ -180,13 +180,18 @@ impl<
 
         builder.assert_bool(local.rs2_as);
 
-        self.wom_bridge.read(local.rs1_ptr, ctx.reads[0].clone()).eval(builder, ctx.instruction.is_valid.clone());
+        self.wom_bridge
+            .read(local.rs1_ptr, ctx.reads[0].clone())
+            .eval(builder, ctx.instruction.is_valid.clone());
         builder
             .when(local.rs2_as)
             .assert_one(ctx.instruction.is_valid.clone());
-        self.wom_bridge.read(local.rs2, ctx.reads[1].clone()).eval(builder, local.rs2_as.clone());
-        self.wom_bridge.write(local.rd_ptr, ctx.writes[0].clone(), local.write_mult).eval(builder, ctx.instruction.is_valid.clone());
-
+        self.wom_bridge
+            .read(local.rs2, ctx.reads[1].clone())
+            .eval(builder, local.rs2_as.clone());
+        self.wom_bridge
+            .write(local.rd_ptr, ctx.writes[0].clone(), local.write_mult)
+            .eval(builder, ctx.instruction.is_valid.clone());
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

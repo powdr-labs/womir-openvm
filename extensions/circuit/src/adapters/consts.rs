@@ -91,7 +91,14 @@ impl<F: Field> ColumnsAir<F> for ConstsAdapterAirWom {
 }
 
 impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
-    type Interface = BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 0, 1, 0, RV32_REGISTER_NUM_LIMBS>;
+    type Interface = BasicAdapterInterface<
+        AB::Expr,
+        MinimalInstruction<AB::Expr>,
+        0,
+        1,
+        0,
+        RV32_REGISTER_NUM_LIMBS,
+    >;
 
     fn eval(
         &self,

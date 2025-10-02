@@ -284,10 +284,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
 
         // STORE: read from wom
         self.wom_bridge
-            .read(
-                read_ptr,
-                ctx.reads.1,
-            )
+            .read(read_ptr, ctx.reads.1)
             .eval(builder, is_store.clone());
 
         // write_ptr is rd_rs2_ptr + fp for loads and mem_ptr for stores

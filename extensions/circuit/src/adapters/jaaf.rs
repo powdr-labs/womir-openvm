@@ -151,12 +151,20 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
 
         // save pc
         self.wom_bridge
-            .write(local.write_pc_ptr, ctx.writes[0].clone(), local.write_pc_mult)
+            .write(
+                local.write_pc_ptr,
+                ctx.writes[0].clone(),
+                local.write_pc_mult,
+            )
             .eval(builder, local.needs_save_pc);
 
         // save fp
         self.wom_bridge
-            .write(local.write_fp_ptr, ctx.writes[1].clone(), local.write_fp_mult)
+            .write(
+                local.write_fp_ptr,
+                ctx.writes[1].clone(),
+                local.write_fp_mult,
+            )
             .eval(builder, local.needs_save_fp);
     }
 
