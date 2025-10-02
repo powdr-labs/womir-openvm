@@ -14,7 +14,7 @@ use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
-    p3_air::BaseAir,
+    p3_air::{AirBuilder, BaseAir},
     p3_field::{Field, PrimeField32},
     rap::ColumnsAir,
 };
@@ -45,7 +45,7 @@ impl AllocateFrameAdapterChipWom {
         Self {
             air: AllocateFrameAdapterAirWom {
                 _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
-                _wom_bridge: wom_bridge,
+                wom_bridge,
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
             },
@@ -81,12 +81,13 @@ pub struct AllocateFrameAdapterColsWom<T> {
     pub src_reg_ptr: T,     // if reading from register
     pub result: T,
     pub read_imm_or_reg: T,
+    pub write_mult: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct AllocateFrameAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
-    pub(super) _wom_bridge: WomBridge,
+    pub(super) wom_bridge: WomBridge,
     pub(super) _execution_bridge: ExecutionBridge,
     pub(super) _frame_bus: FrameBus,
 }
@@ -107,7 +108,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
     type Interface = BasicAdapterInterface<
         AB::Expr,
         MinimalInstruction<AB::Expr>,
-        0,
+        2,
         1,
         RV32_REGISTER_NUM_LIMBS,
         RV32_REGISTER_NUM_LIMBS,
@@ -117,10 +118,24 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        // Need at least one constraint otherwise stark-backend complains.
-        builder.assert_bool(local[0]);
+        let local: &AllocateFrameAdapterColsWom<_> = local.borrow();
+
+        // read amount bytes
+        builder.assert_bool(local.read_imm_or_reg);
+        builder
+            .when(local.read_imm_or_reg)
+            .assert_one(ctx.instruction.is_valid.clone());
+
+        self.wom_bridge
+            .read(local.src_reg_ptr, ctx.reads[1].clone())
+            .eval(builder, local.read_imm_or_reg);
+
+        // write fp
+        self.wom_bridge
+            .write(local.target_reg_ptr, ctx.writes[0].clone(), local.write_mult)
+            .eval(builder, ctx.instruction.is_valid.clone());
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -174,6 +189,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
 
         self.next_fp += amount_bytes;
 
+        // TODO: "next fp" is being handled as a register/mem read (i.e., a read in the `BasicAdapterInterface`), is this right?
         let allocated_ptr_f = decompose(self.next_fp);
         let amount_bytes = decompose(amount_bytes);
 

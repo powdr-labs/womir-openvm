@@ -10,6 +10,7 @@ use openvm_circuit::{
         program::ProgramBus,
     },
 };
+use openvm_circuit_primitives::utils::not;
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
     LocalOpcode,
@@ -55,7 +56,7 @@ impl<F: PrimeField32> JaafAdapterChipWom<F> {
                 _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 _frame_bridge: FrameBridge::new(frame_bus),
                 _memory_bridge: memory_bridge,
-                _wom_bridge: wom_bridge,
+                wom_bridge,
             },
             _marker: PhantomData,
         }
@@ -85,22 +86,22 @@ pub struct JaafWriteRecord<T> {
 pub struct JaafAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
-    pub rs1_ptr: T,
-    pub rs1_aux_cols: [T; 2],
+    pub read_pc_ptr: T,
+    pub read_fp_ptr: T,
     pub pc_imm: T,
-    pub rs2_ptr: T,
-    pub rs2_aux_cols: T,
-    pub rd1_ptr: T,
-    pub rd2_ptr: T,
+    pub write_pc_ptr: T,
+    pub write_pc_mult: T,
+    pub write_fp_ptr: T,
+    pub write_fp_mult: T,
     pub needs_save_pc: T,
     pub needs_save_fp: T,
-    pub src_pc_imm_or_reg: T,
+    pub read_pc_imm: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct JaafAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
-    pub(super) _wom_bridge: WomBridge,
+    pub(super) wom_bridge: WomBridge,
     pub(super) _execution_bridge: ExecutionBridge,
     pub(super) _frame_bridge: FrameBridge,
 }
@@ -131,12 +132,32 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local_cols: &JaafAdapterColsWom<AB::Var> = local.borrow();
-        let needs_save_pc = local_cols.needs_save_pc;
+        let local: &JaafAdapterColsWom<AB::Var> = local.borrow();
 
-        builder.assert_bool(needs_save_pc);
+        builder.assert_bool(local.needs_save_pc);
+        builder.assert_bool(local.needs_save_fp);
+        builder.assert_bool(local.read_pc_imm);
+
+        self.wom_bridge
+            .read(local.read_fp_ptr, ctx.reads[1].clone())
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        // read pc if not immediate
+        self.wom_bridge
+            .read(local.read_pc_ptr, ctx.reads[0].clone())
+            .eval(builder, not(local.read_pc_imm));
+
+        // save pc
+        self.wom_bridge
+            .write(local.write_pc_ptr, ctx.writes[0].clone(), local.write_pc_mult)
+            .eval(builder, local.needs_save_pc);
+
+        // save fp
+        self.wom_bridge
+            .write(local.write_fp_ptr, ctx.writes[1].clone(), local.write_fp_mult)
+            .eval(builder, local.needs_save_fp);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

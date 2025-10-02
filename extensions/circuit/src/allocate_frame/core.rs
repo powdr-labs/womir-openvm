@@ -44,7 +44,7 @@ impl<AB, I> VmCoreAir<AB, I> for AllocateFrameCoreAir
 where
     AB: InteractionBuilder,
     I: VmAdapterInterface<AB::Expr>,
-    I::Reads: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 0]>,
+    I::Reads: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 2]>,
     I::Writes: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 1]>,
     I::ProcessedInstruction: From<MinimalInstruction<AB::Expr>>,
 {
@@ -64,7 +64,7 @@ where
 
         AdapterAirContext {
             to_pc: None,
-            reads: [].into(),
+            reads: [[AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS], [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS]].into(),
             writes: [[AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS]].into(),
             instruction: MinimalInstruction {
                 is_valid: core_cols.is_valid.into(),
@@ -97,11 +97,12 @@ where
         &self,
         _instruction: &Instruction<F>,
         _from_pc: u32,
-        _reads: I::Reads,
+        reads: I::Reads,
     ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
         let output = AdapterRuntimeContext {
             to_pc: None,
-            writes: [[F::ZERO; RV32_REGISTER_NUM_LIMBS]].into(),
+            // TODO: should next_fp be in the core? its not really a reg or mem read
+            writes: [reads.into()[0].clone()].into(),
         };
 
         Ok((output, ()))

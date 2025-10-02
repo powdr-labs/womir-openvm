@@ -44,7 +44,7 @@ impl<F: PrimeField32> ConstsAdapterChipWom<F> {
                 _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
-                _wom_bridge: wom_bridge,
+                wom_bridge,
             },
             _marker: PhantomData,
         }
@@ -73,7 +73,7 @@ pub struct ConstsAdapterColsWom<T> {
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct ConstsAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
-    pub(super) _wom_bridge: WomBridge,
+    pub(super) wom_bridge: WomBridge,
     pub(super) _execution_bridge: ExecutionBridge,
     pub(super) _frame_bus: FrameBus,
 }
@@ -91,15 +91,18 @@ impl<F: Field> ColumnsAir<F> for ConstsAdapterAirWom {
 }
 
 impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
-    type Interface = BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 0, 0, 0, 0>;
+    type Interface = BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 0, 1, 0, RV32_REGISTER_NUM_LIMBS>;
 
     fn eval(
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        builder.assert_bool(local[0]);
+        let local: &ConstsAdapterColsWom<_> = local.borrow();
+        self.wom_bridge
+            .write(local.value_reg_ptr, ctx.writes[0].clone(), local.write_mult)
+            .eval(builder, ctx.instruction.is_valid.clone());
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

@@ -22,7 +22,7 @@ use openvm_instructions::{
 };
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
-    p3_air::BaseAir,
+    p3_air::{AirBuilder, BaseAir},
     p3_field::{Field, PrimeField32},
     rap::ColumnsAir,
 };
@@ -121,6 +121,7 @@ pub struct WomBaseAluAdapterCols<T, const READ_32BIT_WORDS: usize, const WRITE_B
     pub rs2_as: T,
     pub reads_aux: [[T; 2]; READ_32BIT_WORDS],
     pub writes_aux: [T; WRITE_BYTES],
+    pub write_mult: T,
 }
 
 #[allow(dead_code)]
@@ -173,11 +174,19 @@ impl<
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
         let local: &WomBaseAluAdapterCols<_, READ_32BIT_WORDS, WRITE_BYTES> = local.borrow();
 
         builder.assert_bool(local.rs2_as);
+
+        self.wom_bridge.read(local.rs1_ptr, ctx.reads[0].clone()).eval(builder, ctx.instruction.is_valid.clone());
+        builder
+            .when(local.rs2_as)
+            .assert_one(ctx.instruction.is_valid.clone());
+        self.wom_bridge.read(local.rs2, ctx.reads[1].clone()).eval(builder, local.rs2_as.clone());
+        self.wom_bridge.write(local.rd_ptr, ctx.writes[0].clone(), local.write_mult).eval(builder, ctx.instruction.is_valid.clone());
+
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

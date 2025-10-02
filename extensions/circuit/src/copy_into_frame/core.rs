@@ -44,8 +44,8 @@ impl<AB, I> VmCoreAir<AB, I> for CopyIntoFrameCoreAir
 where
     AB: InteractionBuilder,
     I: VmAdapterInterface<AB::Expr>,
-    I::Reads: From<[[AB::Expr; 0]; 0]>,
-    I::Writes: From<[[AB::Expr; 0]; 0]>,
+    I::Reads: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 2]>,
+    I::Writes: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 1]>,
     I::ProcessedInstruction: From<MinimalInstruction<AB::Expr>>,
 {
     fn eval(
@@ -66,8 +66,8 @@ where
 
         AdapterAirContext {
             to_pc: None,
-            reads: [].into(),
-            writes: [].into(),
+            reads: [[AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS], [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS]].into(),
+            writes: [[AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS]].into(),
             instruction: MinimalInstruction {
                 is_valid: core_cols.is_valid.into(),
                 opcode,

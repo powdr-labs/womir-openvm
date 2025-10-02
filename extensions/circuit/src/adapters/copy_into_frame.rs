@@ -45,7 +45,7 @@ impl<F: PrimeField32> CopyIntoFrameAdapterChipWom<F> {
                 _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
-                _wom_bridge: wom_bridge,
+                wom_bridge,
             },
             _marker: PhantomData,
         }
@@ -74,20 +74,18 @@ pub struct CopyIntoFrameAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
     pub value_reg_ptr: T, // rs1 pointer (register containing value to copy)
-    pub value_reg_aux_cols: [T; 2],
     pub frame_ptr_reg_ptr: T, // rs2 pointer (register containing frame pointer)
-    pub frame_ptr_reg_aux_cols: T,
     pub destination_ptr: T, // Where we write: frame_pointer + offset
-    /// 0 if copy_into_frame
-    /// 1 if copy_from_frame
-    pub copy_into_or_from: T,
+    /// 0 if copy_from_frame
+    /// 1 if copy_into_frame
+    pub is_copy_into: T,
     pub write_mult: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct CopyIntoFrameAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
-    pub(super) _wom_bridge: WomBridge,
+    pub(super) wom_bridge: WomBridge,
     pub(super) _execution_bridge: ExecutionBridge,
     pub(super) _frame_bus: FrameBus,
 }
@@ -105,16 +103,30 @@ impl<F: Field> ColumnsAir<F> for CopyIntoFrameAdapterAirWom {
 }
 
 impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
-    type Interface = BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 0, 0, 0, 0>;
+    type Interface = BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 2, 1, RV32_REGISTER_NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>;
 
     fn eval(
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        // Need at least one constraint otherwise stark-backend complains.
-        builder.assert_bool(local[0]);
+        let local: &CopyIntoFrameAdapterColsWom<_> = local.borrow();
+
+        // read other fp
+        self.wom_bridge
+            .read(local.frame_ptr_reg_ptr, ctx.reads[1].clone())
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        // read src reg
+        self.wom_bridge
+            .read(local.value_reg_ptr, ctx.reads[0].clone())
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        // write dest reg
+        self.wom_bridge
+            .write(local.destination_ptr, ctx.writes[0].clone(), local.write_mult)
+            .eval(builder, ctx.instruction.is_valid.clone());
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
