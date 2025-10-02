@@ -696,71 +696,14 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     ) -> Tree<Directive<F>> {
         use openvm_instructions::LocalOpcode;
 
+        // Handle the cases of plain 1-to-1 mapping instructions
         if let Some(instruction) = output.as_ref().and_then(|output| {
             translate_most_binary_ops(&op, &inputs, output)
                 .or_else(|| translate_less_than_ops(&op, &inputs, output))
+                .or_else(|| translate_greater_than_ops(&op, &inputs, output))
         }) {
             return Directive::Instruction(instruction).into();
         }
-
-        // Handle the GT instructions, which are just reversed LT
-        let op = match op {
-            Op::I32GtS => Ok(LessThanOpcode::SLT.global_opcode()),
-            Op::I32GtU => Ok(LessThanOpcode::SLTU.global_opcode()),
-            Op::I64GtS => Ok(LessThan64Opcode::SLT.global_opcode()),
-            Op::I64GtU => Ok(LessThan64Opcode::SLTU.global_opcode()),
-            op => Err(op),
-        };
-
-        let op = match op {
-            Ok(op) => {
-                let op = op.as_usize();
-                let output = output.unwrap().start as usize;
-                match inputs.as_slice() {
-                    [
-                        WasmOpInput::Register(greater_side),
-                        WasmOpInput::Register(lesser_side),
-                    ] => {
-                        // Case of two register inputs
-                        return Directive::Instruction(ib::instr_r(
-                            op,
-                            output,
-                            lesser_side.start as usize,
-                            greater_side.start as usize,
-                        ))
-                        .into();
-                    }
-                    [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
-                        // Case of one register input and one constant input.
-                        //
-                        // The constant is only allowed to be on the left side, because GT
-                        // is just LT with the operands reversed, and LT expects the immediate as
-                        // the greater side.
-                        let c = const_i16_as_field(c);
-                        return Directive::Instruction(ib::instr_i(
-                            op,
-                            output,
-                            reg.start as usize,
-                            c,
-                        ))
-                        .into();
-                    }
-                    [WasmOpInput::Register(reg), WasmOpInput::Constant(c)] => {
-                        // This can only be the case where you can turn "r > 0" into "r != 0".
-                        assert!(matches!(c, WasmValue::I32(0) | WasmValue::I64(0)));
-
-                        return Directive::Instruction(ib::neq_imm(
-                            output,
-                            reg.start as usize,
-                            AluImm::from(0),
-                        ))
-                        .into();
-                    }
-                    _ => unreachable!("combination of inputs not possible for GT op"),
-                }
-            }
-            Err(op) => op,
-        };
 
         // Handle the complex instructions that supports constant inlining
         match &op {
@@ -1977,10 +1920,61 @@ fn translate_less_than_ops<'a, F: PrimeField32>(
             WasmOpInput::Constant(WasmValue::I32(0) | WasmValue::I64(0)),
             WasmOpInput::Register(reg),
         ] => {
-            // This is the case of "0 < reg", where we turn it into "reg != 0".
+            // This must be the case of unsigned "0 < reg", where we turn it into "reg != 0".
             ib::neq_imm(output, reg.start as usize, AluImm::from(0))
         }
         _ => unreachable!("combination of inputs not possible for binary op"),
+    })
+}
+
+fn translate_greater_than_ops<'a, F: PrimeField32>(
+    op: &Op<'a>,
+    inputs: &[WasmOpInput],
+    output: &Range<u32>,
+) -> Option<Instruction<F>> {
+    use openvm_instructions::LocalOpcode;
+
+    // GT instructions are just reversed LT
+    let op = match op {
+        Op::I32GtS => LessThanOpcode::SLT.global_opcode(),
+        Op::I32GtU => LessThanOpcode::SLTU.global_opcode(),
+        Op::I64GtS => LessThan64Opcode::SLT.global_opcode(),
+        Op::I64GtU => LessThan64Opcode::SLTU.global_opcode(),
+        _ => return None,
+    };
+
+    let op = op.as_usize();
+    let output = output.start as usize;
+    Some(match inputs {
+        [
+            WasmOpInput::Register(greater_side),
+            WasmOpInput::Register(lesser_side),
+        ] => {
+            // Case of two register inputs
+            ib::instr_r(
+                op,
+                output,
+                lesser_side.start as usize,
+                greater_side.start as usize,
+            )
+        }
+        [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
+            // Case of one register input and one constant input.
+            //
+            // The constant is only allowed to be on the left side, because GT
+            // is just LT with the operands reversed, and LT expects the immediate as
+            // the greater side.
+            let c = const_i16_as_field(c);
+            ib::instr_i(op, output, reg.start as usize, c)
+        }
+        [
+            WasmOpInput::Register(reg),
+            WasmOpInput::Constant(WasmValue::I32(0) | WasmValue::I64(0)),
+        ] => {
+            // This must be the case of unsigned "reg > 0", where we turn it into "reg != 0".
+            ib::neq_imm(output, reg.start as usize, AluImm::from(0))
+        }
+        _ => unreachable!("combination of inputs not possible for GT op"),
     })
 }
 
