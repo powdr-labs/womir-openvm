@@ -788,7 +788,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         // Case of one register input and one constant input.
 
                         // If this is the case of unsigned "0 < reg", turn into "reg != 0"
-                        if op == LessThanOpcode::SLTU.global_opcode()
+                        if (op == LessThanOpcode::SLTU.global_opcode()
+                            || op == LessThan64Opcode::SLTU.global_opcode())
                             && let WasmOpInput::Constant(WasmValue::I32(0) | WasmValue::I64(0)) =
                                 inputs[0]
                         {
@@ -800,8 +801,8 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                             .into();
                         }
 
-                        // The order doesn't matter, because only commutative operations will
-                        // have the constant operand on the left side, as const folding ensures.
+                        // The general case below is for commutative operations, so the order
+                        // of the operands doesn't matter.
 
                         // The constant folding step guarantees that the constant can be safely
                         // truncated to i16.
