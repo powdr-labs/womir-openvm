@@ -767,13 +767,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
         let op: Op<'_> = match binary_op {
             Ok(op) => {
-                let op = op.as_usize();
+                let opcode = op.as_usize();
                 let output = output.unwrap().start as usize;
                 match inputs.as_slice() {
                     [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
                         // Case of two register inputs
                         return Directive::Instruction(ib::instr_r(
-                            op,
+                            opcode,
                             output,
                             input1.start as usize,
                             input2.start as usize,
@@ -783,16 +783,30 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
                     | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
                         // Case of one register input and one constant input.
-                        //
-                        // The order doesn't matter, because only commutative operations will
-                        // have the constant operand on the left side, as const folding ensures.
+
+                        // If this is the case of unsigned "0 < reg", turn into "reg != 0"
+                        if (op == LessThanOpcode::SLTU.global_opcode()
+                            || op == LessThan64Opcode::SLTU.global_opcode())
+                            && let WasmOpInput::Constant(WasmValue::I32(0) | WasmValue::I64(0)) =
+                                inputs[0]
+                        {
+                            return Directive::Instruction(ib::neq_imm(
+                                output,
+                                reg.start as usize,
+                                F::ZERO,
+                            ))
+                            .into();
+                        }
+
+                        // The general case below is for commutative operations, so the order
+                        // of the operands doesn't matter.
 
                         // The constant folding step guarantees that the constant can be safely
                         // truncated to i16.
                         let c = const_i16_as_field(c);
 
                         return Directive::Instruction(ib::instr_i(
-                            op,
+                            opcode,
                             output,
                             reg.start as usize,
                             c,
@@ -847,6 +861,17 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                         ))
                         .into();
                     }
+                    [WasmOpInput::Register(reg), WasmOpInput::Constant(c)] => {
+                        // This can only be the case where you can turn "r > 0" into "r != 0".
+                        assert!(matches!(c, WasmValue::I32(0) | WasmValue::I64(0)));
+
+                        return Directive::Instruction(ib::neq_imm(
+                            output,
+                            reg.start as usize,
+                            F::ZERO,
+                        ))
+                        .into();
+                    }
                     _ => unreachable!("combination of inputs not possible for GT op"),
                 }
             }
@@ -888,6 +913,28 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     }
                     [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
                     | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
+                        // Handle the cases where unsigned "reg >= 1" and "1 <= reg" can be turned into "reg != 0"
+                        if matches!(
+                            (&op, &inputs[1]),
+                            (
+                                Op::I32GeU | Op::I64GeU,
+                                WasmOpInput::Constant(WasmValue::I32(1) | WasmValue::I64(1))
+                            )
+                        ) || matches!(
+                            (&op, &inputs[0]),
+                            (
+                                Op::I32LeU | Op::I64LeU,
+                                WasmOpInput::Constant(WasmValue::I32(1) | WasmValue::I64(1))
+                            )
+                        ) {
+                            return Directive::Instruction(ib::neq_imm(
+                                output,
+                                reg.start as usize,
+                                F::ZERO,
+                            ))
+                            .into();
+                        }
+
                         let opcode = match op {
                             Op::I32GeS | Op::I32LeS => LessThanOpcode::SLT.global_opcode(),
                             Op::I32GeU | Op::I32LeU => LessThanOpcode::SLTU.global_opcode(),

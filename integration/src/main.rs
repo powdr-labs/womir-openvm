@@ -1926,6 +1926,17 @@ mod wast_tests {
     }
 
     #[test]
+    fn test_n_first_sums() {
+        run_single_wasm_test(
+            "../sample-programs/n_first_sum.wasm",
+            "n_first_sum",
+            &[42, 0],
+            &[903, 0],
+        )
+        .unwrap()
+    }
+
+    #[test]
     fn test_call_indirect_wasm() {
         run_single_wasm_test("../sample-programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
         run_single_wasm_test(
