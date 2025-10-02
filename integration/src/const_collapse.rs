@@ -1,88 +1,49 @@
-use wasmparser::Operator;
-use womir::loader::{dag::WasmValue, settings::MaybeConstant};
+use wasmparser::Operator as Op;
+use womir::loader::{dag::WasmValue as Val, settings};
 
-pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
-    // Handle the cases where we can turn unsigned "reg > 0", "reg >= 1", "0 < reg" and "1 <= reg" into "reg != 0"
+pub fn collapse_const_if_possible(op: &Op, inputs: &[settings::MaybeConstant]) {
+    use settings::MaybeConstant::{NonConstant, ReferenceConstant};
+
+    if inputs.len() < 2 {
+        // Not enough inputs to consider collapsing
+        return;
+    }
+
+    // Handle the cases where unsigned "reg >= 1" and "reg > 0" can be turned into "reg != 0"
     if let (
-        Operator::I32GtU,
-        [
-            _,
-            MaybeConstant::ReferenceConstant {
-                value: WasmValue::I32(0),
-                must_collapse,
-            },
-        ],
+        Op::I32GeU | Op::I64GeU,
+        ReferenceConstant {
+            value: Val::I32(1) | Val::I64(1),
+            must_collapse,
+        },
     )
     | (
-        Operator::I64GtU,
-        [
-            _,
-            MaybeConstant::ReferenceConstant {
-                value: WasmValue::I64(0),
-                must_collapse,
-            },
-        ],
+        Op::I32GtU | Op::I64GtU,
+        ReferenceConstant {
+            value: Val::I32(0) | Val::I64(0),
+            must_collapse,
+        },
+    ) = (&op, &inputs[1])
+    {
+        must_collapse.replace(true);
+        return;
+    }
+
+    // Handle the cases where unsigned "0 < reg" and "1 <= reg" can be turned into "reg != 0"
+    if let (
+        Op::I32LeU | Op::I64LeU,
+        ReferenceConstant {
+            value: Val::I32(1) | Val::I64(1),
+            must_collapse,
+        },
     )
     | (
-        Operator::I32GeU,
-        [
-            _,
-            MaybeConstant::ReferenceConstant {
-                value: WasmValue::I32(1),
-                must_collapse,
-            },
-        ],
-    )
-    | (
-        Operator::I64GeU,
-        [
-            _,
-            MaybeConstant::ReferenceConstant {
-                value: WasmValue::I64(1),
-                must_collapse,
-            },
-        ],
-    )
-    | (
-        Operator::I32LtU,
-        [
-            MaybeConstant::ReferenceConstant {
-                value: WasmValue::I32(0),
-                must_collapse,
-            },
-            _,
-        ],
-    )
-    | (
-        Operator::I64LtU,
-        [
-            MaybeConstant::ReferenceConstant {
-                value: WasmValue::I64(0),
-                must_collapse,
-            },
-            _,
-        ],
-    )
-    | (
-        Operator::I32LeU,
-        [
-            MaybeConstant::ReferenceConstant {
-                value: WasmValue::I32(1),
-                must_collapse,
-            },
-            _,
-        ],
-    )
-    | (
-        Operator::I64LeU,
-        [
-            MaybeConstant::ReferenceConstant {
-                value: WasmValue::I64(1),
-                must_collapse,
-            },
-            _,
-        ],
-    ) = (op, inputs)
+        Op::I32LtU | Op::I64LtU,
+        ReferenceConstant {
+            value: Val::I32(0) | Val::I64(0),
+            must_collapse,
+        },
+    ) = (&op, &inputs[0])
     {
         must_collapse.replace(true);
         return;
@@ -90,41 +51,41 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
 
     match op {
         // All the operations using the alu adapter, thus supporting immediate operands
-        Operator::I32Add
-        | Operator::I64Add
-        | Operator::I32Sub
-        | Operator::I64Sub
-        | Operator::I32Mul
-        | Operator::I64Mul
-        | Operator::I32DivS
-        | Operator::I64DivS
-        | Operator::I32DivU
-        | Operator::I64DivU
-        | Operator::I32RemS
-        | Operator::I64RemS
-        | Operator::I32RemU
-        | Operator::I64RemU
-        | Operator::I32Xor
-        | Operator::I64Xor
-        | Operator::I32Or
-        | Operator::I64Or
-        | Operator::I32And
-        | Operator::I64And
-        | Operator::I32LtS
-        | Operator::I64LtS
-        | Operator::I32LtU
-        | Operator::I64LtU
-        | Operator::I32GeS
-        | Operator::I64GeS
-        | Operator::I32GeU
-        | Operator::I64GeU
-        | Operator::I32Eq
-        | Operator::I64Eq
-        | Operator::I32Ne
-        | Operator::I64Ne => {
+        Op::I32Add
+        | Op::I64Add
+        | Op::I32Sub
+        | Op::I64Sub
+        | Op::I32Mul
+        | Op::I64Mul
+        | Op::I32DivS
+        | Op::I64DivS
+        | Op::I32DivU
+        | Op::I64DivU
+        | Op::I32RemS
+        | Op::I64RemS
+        | Op::I32RemU
+        | Op::I64RemU
+        | Op::I32Xor
+        | Op::I64Xor
+        | Op::I32Or
+        | Op::I64Or
+        | Op::I32And
+        | Op::I64And
+        | Op::I32LtS
+        | Op::I64LtS
+        | Op::I32LtU
+        | Op::I64LtU
+        | Op::I32GeS
+        | Op::I64GeS
+        | Op::I32GeU
+        | Op::I64GeU
+        | Op::I32Eq
+        | Op::I64Eq
+        | Op::I32Ne
+        | Op::I64Ne => {
             if let [
                 _,
-                MaybeConstant::ReferenceConstant {
+                ReferenceConstant {
                     value,
                     must_collapse,
                 },
@@ -134,11 +95,11 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
                 // Right operand is constant and can be immediate
                 must_collapse.replace(true);
             } else if let [
-                MaybeConstant::ReferenceConstant {
+                ReferenceConstant {
                     value,
                     must_collapse,
                 },
-                MaybeConstant::NonConstant,
+                NonConstant,
             ] = inputs
                 && ((is_commutative(op) && can_be_i16(value))
                     || can_turn_to_lt(op, value).is_some())
@@ -152,33 +113,33 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
 
         // Shift and rot operations are special because they can handle immediates
         // outside of i16 range, as the value is masked to the bitwidth of the type.
-        Operator::I32Shl
-        | Operator::I64Shl
-        | Operator::I32ShrS
-        | Operator::I64ShrS
-        | Operator::I32ShrU
-        | Operator::I64ShrU
-        | Operator::I32Rotl
-        | Operator::I64Rotl
-        | Operator::I32Rotr
-        | Operator::I64Rotr => {
-            if let [_, MaybeConstant::ReferenceConstant { must_collapse, .. }] = inputs {
+        Op::I32Shl
+        | Op::I64Shl
+        | Op::I32ShrS
+        | Op::I64ShrS
+        | Op::I32ShrU
+        | Op::I64ShrU
+        | Op::I32Rotl
+        | Op::I64Rotl
+        | Op::I32Rotr
+        | Op::I64Rotr => {
+            if let [_, ReferenceConstant { must_collapse, .. }] = inputs {
                 must_collapse.replace(true);
             }
         }
 
         // GT is special because the left operand is the one that can be immediate
         // LE is implemented in terms of GT, so the same applies.
-        Operator::I32GtS
-        | Operator::I32GtU
-        | Operator::I64GtS
-        | Operator::I64GtU
-        | Operator::I32LeS
-        | Operator::I64LeS
-        | Operator::I32LeU
-        | Operator::I64LeU => {
+        Op::I32GtS
+        | Op::I32GtU
+        | Op::I64GtS
+        | Op::I64GtU
+        | Op::I32LeS
+        | Op::I64LeS
+        | Op::I32LeU
+        | Op::I64LeU => {
             if let [
-                MaybeConstant::ReferenceConstant {
+                ReferenceConstant {
                     value,
                     must_collapse,
                 },
@@ -190,7 +151,7 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
                 must_collapse.replace(true);
             } else if let [
                 _,
-                MaybeConstant::ReferenceConstant {
+                ReferenceConstant {
                     value,
                     must_collapse,
                 },
@@ -205,9 +166,9 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
 
         // In Select, both value inputs can be immediates.
         // The condition can not, assuming an optimized wasm.
-        Operator::Select | Operator::TypedSelect { .. } => {
+        Op::Select | Op::TypedSelect { .. } => {
             for input in &inputs[..2] {
-                if let MaybeConstant::ReferenceConstant { must_collapse, .. } = input {
+                if let ReferenceConstant { must_collapse, .. } = input {
                     must_collapse.replace(true);
                 }
             }
@@ -218,33 +179,33 @@ pub fn collapse_const_if_possible(op: &Operator, inputs: &[MaybeConstant]) {
     }
 }
 
-fn is_commutative(op: &Operator) -> bool {
+fn is_commutative(op: &Op) -> bool {
     matches!(
         op,
-        Operator::I32Add
-            | Operator::I64Add
-            | Operator::I32Mul
-            | Operator::I64Mul
-            | Operator::I32Xor
-            | Operator::I64Xor
-            | Operator::I32Or
-            | Operator::I64Or
-            | Operator::I32And
-            | Operator::I64And
-            | Operator::I32Eq
-            | Operator::I64Eq
-            | Operator::I32Ne
-            | Operator::I64Ne
+        Op::I32Add
+            | Op::I64Add
+            | Op::I32Mul
+            | Op::I64Mul
+            | Op::I32Xor
+            | Op::I64Xor
+            | Op::I32Or
+            | Op::I64Or
+            | Op::I32And
+            | Op::I64And
+            | Op::I32Eq
+            | Op::I64Eq
+            | Op::I32Ne
+            | Op::I64Ne
     )
 }
 
 /// If op is a GE or LE, can we turn "c >= x" or "x <= c" into "x < c + 1", where c + 1 fits in i16?
-pub fn can_turn_to_lt(op: &Operator, value: &WasmValue) -> Option<i16> {
+pub fn can_turn_to_lt(op: &Op, value: &Val) -> Option<i16> {
     match op {
         // Signed case:
-        Operator::I32GeS | Operator::I64GeS | Operator::I32LeS | Operator::I64LeS => match value {
-            WasmValue::I32(v) => v.checked_add(1).and_then(|v| i16::try_from(v).ok()),
-            WasmValue::I64(v) => v.checked_add(1).and_then(|v| i16::try_from(v).ok()),
+        Op::I32GeS | Op::I64GeS | Op::I32LeS | Op::I64LeS => match value {
+            Val::I32(v) => v.checked_add(1).and_then(|v| i16::try_from(v).ok()),
+            Val::I64(v) => v.checked_add(1).and_then(|v| i16::try_from(v).ok()),
             _ => None,
         },
         // Unsigned case:
@@ -252,12 +213,12 @@ pub fn can_turn_to_lt(op: &Operator, value: &WasmValue) -> Option<i16> {
         // So, we can represent (c+1) if it falls in the ranges:
         // [0..0x7FFF] or [0xFFFF8000..0xFFFFFFFF], for u32
         // [0..0x7FFF] or [0xFFFFFFFFFFFF8000..0xFFFFFFFFFFFFFFFF], for u64
-        Operator::I32GeU | Operator::I64GeU | Operator::I32LeU | Operator::I64LeU => match value {
-            WasmValue::I32(v) => {
+        Op::I32GeU | Op::I64GeU | Op::I32LeU | Op::I64LeU => match value {
+            Val::I32(v) => {
                 let uv = *v as u32;
                 uv.checked_add(1).and_then(|v| i16::try_from(v as i32).ok())
             }
-            WasmValue::I64(v) => {
+            Val::I64(v) => {
                 let uv = *v as u64;
                 uv.checked_add(1).and_then(|v| i16::try_from(v as i64).ok())
             }
@@ -267,10 +228,10 @@ pub fn can_turn_to_lt(op: &Operator, value: &WasmValue) -> Option<i16> {
     }
 }
 
-fn can_be_i16(value: &WasmValue) -> bool {
+fn can_be_i16(value: &Val) -> bool {
     match value {
-        WasmValue::I32(v) => i16::try_from(*v).is_ok(),
-        WasmValue::I64(v) => i16::try_from(*v).is_ok(),
+        Val::I32(v) => i16::try_from(*v).is_ok(),
+        Val::I64(v) => i16::try_from(*v).is_ok(),
         _ => false,
     }
 }
