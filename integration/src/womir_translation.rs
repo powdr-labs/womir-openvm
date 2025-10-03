@@ -868,7 +868,7 @@ fn translate_most_binary_ops<'a, F: PrimeField32>(
         Op::F64Max => todo!(),
         Op::F64Copysign => todo!(),
 
-        // If not a binary operation, return the operator directly
+        // Not an operation we handle here
         _ => return None,
     };
 
