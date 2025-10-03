@@ -23,7 +23,7 @@ use openvm_instructions::{
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
-    p3_field::{Field, PrimeField32},
+    p3_field::{Field, PrimeField32, FieldAlgebra},
     rap::ColumnsAir,
 };
 use serde::{Deserialize, Serialize};
@@ -119,8 +119,6 @@ pub struct WomBaseAluAdapterCols<T, const READ_32BIT_WORDS: usize, const WRITE_B
     pub rs2: T,
     /// 1 if rs2 was a read, 0 if an immediate
     pub rs2_as: T,
-    pub reads_aux: [[T; 2]; READ_32BIT_WORDS],
-    pub writes_aux: [T; WRITE_BYTES],
     pub write_mult: T,
 }
 
@@ -192,6 +190,27 @@ impl<
         self.wom_bridge
             .write(local.rd_ptr, ctx.writes[0].clone(), local.write_mult)
             .eval(builder, ctx.instruction.is_valid.clone());
+
+        // we don't read memory, but ovm expects a timestamp increase
+        let timestamp_change = AB::Expr::ONE;
+
+        self.execution_bridge
+            .execute_and_increment_or_set_pc(
+                ctx.instruction.opcode,
+                [
+                    local.rd_ptr.into(),
+                    local.rs1_ptr.into(),
+                    local.rs2.into(),
+                    AB::Expr::from_canonical_u32(RV32_REGISTER_AS),
+                    local.rs2_as.into(),
+                ],
+                local.from_state,
+                timestamp_change,
+                (DEFAULT_PC_STEP, ctx.to_pc),
+            )
+            .eval(builder, ctx.instruction.is_valid);
+
+
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -270,12 +289,6 @@ where
         let rd = wom.write(*a + fp_f, output.writes[0]);
 
         memory.increment_timestamp();
-
-        // let timestamp_delta = memory.timestamp() - from_state.timestamp;
-        // debug_assert!(
-        //     timestamp_delta == 3,
-        //     "timestamp delta is {timestamp_delta}, expected 3"
-        // );
 
         Ok((
             ExecutionState {

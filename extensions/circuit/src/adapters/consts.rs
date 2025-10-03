@@ -15,7 +15,7 @@ use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, PrimeField32},
+    p3_field::{Field, PrimeField32, FieldAlgebra},
     rap::ColumnsAir,
 };
 use serde::{Deserialize, Serialize};
@@ -41,7 +41,7 @@ impl<F: PrimeField32> ConstsAdapterChipWom<F> {
     ) -> Self {
         Self {
             air: ConstsAdapterAirWom {
-                _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
                 wom_bridge,
@@ -64,7 +64,7 @@ pub struct ConstsWriteRecord<F> {
 pub struct ConstsAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
-    pub value_reg_ptr: T,
+    pub target_reg: T,
     pub lo: T,
     pub hi: T,
     pub write_mult: T,
@@ -74,7 +74,7 @@ pub struct ConstsAdapterColsWom<T> {
 pub struct ConstsAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
     pub(super) wom_bridge: WomBridge,
-    pub(super) _execution_bridge: ExecutionBridge,
+    pub(super) execution_bridge: ExecutionBridge,
     pub(super) _frame_bus: FrameBus,
 }
 
@@ -108,8 +108,24 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
     ) {
         let local: &ConstsAdapterColsWom<_> = local.borrow();
         self.wom_bridge
-            .write(local.value_reg_ptr, ctx.writes[0].clone(), local.write_mult)
+            .write(local.target_reg + local.from_frame.fp, ctx.writes[0].clone(), local.write_mult)
             .eval(builder, ctx.instruction.is_valid.clone());
+
+        let timestamp_change = AB::Expr::ONE;
+
+        self.execution_bridge.execute_and_increment_pc::<AB>(
+            ctx.instruction.opcode,
+            [
+                local.target_reg.into(),
+                local.lo.into(),
+                local.hi.into(),
+                AB::Expr::ZERO,
+                AB::Expr::ZERO,
+                // TODO: is this always one?
+                AB::Expr::ONE,
+            ],
+            local.from_state,
+            timestamp_change);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -164,6 +180,9 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
 
         let mut write_result = None;
 
+        // TODO: should this only happen if enabled?
+        memory.increment_timestamp();
+
         if enabled != F::ZERO {
             let imm_lo = b.as_canonical_u32();
             let imm_hi = c.as_canonical_u32();
@@ -173,7 +192,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
             );
             let imm = imm_hi << 16 | imm_lo;
             let fp_f = F::from_canonical_u32(from_frame.fp);
-            memory.increment_timestamp();
             write_result = Some(wom.write(a + fp_f, decompose(imm)));
         }
 

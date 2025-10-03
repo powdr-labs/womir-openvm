@@ -10,6 +10,7 @@ use openvm_circuit::{
         program::ProgramBus,
     },
 };
+use openvm_circuit_primitives::utils::{compose, select};
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
@@ -24,7 +25,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord};
 
-use super::{RV32_REGISTER_NUM_LIMBS, compose, decompose};
+use super::{RV32_REGISTER_NUM_LIMBS, compose as compose_as_u32, decompose};
 
 #[derive(Debug)]
 pub struct CopyIntoFrameAdapterChipWom<F: Field> {
@@ -73,9 +74,9 @@ pub struct CopyIntoFrameWriteRecord<F> {
 pub struct CopyIntoFrameAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
-    pub value_reg_ptr: T,     // rs1 pointer (register containing value to copy)
-    pub frame_ptr_reg_ptr: T, // rs2 pointer (register containing frame pointer)
-    pub destination_ptr: T,   // Where we write: frame_pointer + offset
+    pub target_reg: T,
+    pub src_reg: T,
+    pub other_fp_reg: T,
     /// 0 if copy_from_frame
     /// 1 if copy_into_frame
     pub is_copy_into: T,
@@ -120,20 +121,26 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
     ) {
         let local: &CopyIntoFrameAdapterColsWom<_> = local.borrow();
 
+        // fp read from register
+        let other_fp: AB::Expr = compose(&ctx.reads[1], RV32_REGISTER_NUM_LIMBS);
+
+        let src_fp = select(local.is_copy_into, local.from_frame.fp, other_fp.clone());
+        let target_fp = select(local.is_copy_into, other_fp, local.from_frame.fp);
+
         // read other fp
         self.wom_bridge
-            .read(local.frame_ptr_reg_ptr, ctx.reads[1].clone())
+            .read(local.other_fp_reg, ctx.reads[1].clone())
             .eval(builder, ctx.instruction.is_valid.clone());
 
         // read src reg
         self.wom_bridge
-            .read(local.value_reg_ptr, ctx.reads[0].clone())
+            .read(local.src_reg + src_fp, ctx.reads[0].clone())
             .eval(builder, ctx.instruction.is_valid.clone());
 
         // write dest reg
         self.wom_bridge
             .write(
-                local.destination_ptr,
+                local.target_reg + target_fp,
                 ctx.writes[0].clone(),
                 local.write_mult,
             )
@@ -182,7 +189,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
 
         let other_fp = wom.read::<RV32_REGISTER_NUM_LIMBS>(c + fp_f);
 
-        let other_fp_u32 = compose(other_fp.1);
+        let other_fp_u32 = compose_as_u32(other_fp.1);
         let other_fp_f = F::from_canonical_u32(other_fp_u32);
 
         memory.increment_timestamp();
@@ -197,8 +204,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
         Ok((
             [value_to_copy.1, other_fp.1],
             CopyIntoFrameReadRecord {
-                rs1: Some((value_to_copy.0, compose(value_to_copy.1))),
-                rs2: Some((other_fp.0, compose(other_fp.1))),
+                rs1: Some((value_to_copy.0, compose_as_u32(value_to_copy.1))),
+                rs2: Some((other_fp.0, compose_as_u32(other_fp.1))),
             },
         ))
     }
