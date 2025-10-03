@@ -64,13 +64,13 @@ where
         AdapterAirContext {
             to_pc: None,
             reads: [
-                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS],
-                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS],
+                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS], // pc
+                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS], // fp
             ]
             .into(),
             writes: [
-                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS],
-                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS],
+                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS], // pc
+                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS], // fp
             ]
             .into(),
             instruction: MinimalInstruction {

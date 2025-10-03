@@ -111,13 +111,13 @@ impl WomBridge {
         &self,
         address: impl Into<T>,
         data: [impl Into<T>; N],
-        mult: T,
+        mult: impl Into<T>,
     ) -> WomWriteOperation<T, N> {
         WomWriteOperation {
             bus: self.bus,
             address: address.into(),
             data: data.map(Into::into),
-            mult,
+            mult: mult.into(),
         }
     }
 }
