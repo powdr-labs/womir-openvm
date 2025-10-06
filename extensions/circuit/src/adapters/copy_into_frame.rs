@@ -16,7 +16,7 @@ use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAUL
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, PrimeField32, FieldAlgebra},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
 use openvm_womir_transpiler::CopyIntoFrameOpcode;
@@ -150,19 +150,19 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
 
         let timestamp_change = AB::Expr::ONE;
 
-        self.execution_bridge
-            .execute_and_increment_pc::<AB>(
-                ctx.instruction.opcode,
-                [
-                    local.target_reg.into(),
-                    local.src_reg.into(),
-                    local.other_fp_reg.into(),
-                    AB::Expr::ZERO,
-                    AB::Expr::ZERO,
-                    AB::Expr::ONE,
-                ],
-                local.from_state,
-                timestamp_change);
+        self.execution_bridge.execute_and_increment_pc::<AB>(
+            ctx.instruction.opcode,
+            [
+                local.target_reg.into(),
+                local.src_reg.into(),
+                local.other_fp_reg.into(),
+                AB::Expr::ZERO,
+                AB::Expr::ZERO,
+                AB::Expr::ONE,
+            ],
+            local.from_state,
+            timestamp_change,
+        );
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
