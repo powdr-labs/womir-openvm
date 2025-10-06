@@ -651,42 +651,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         ))
     }
 
-    fn emit_table_get(
-        &self,
-        c: &mut Ctx<F>,
-        table_idx: u32,
-        entry_idx_ptr: Range<u32>,
-        dest_ptr: Range<u32>,
-    ) -> Vec<Directive<F>> {
-        const TABLE_ENTRY_SIZE: i16 = 12;
-        const TABLE_SEGMENT_HEADER_SIZE: u32 = 8;
-
-        let table_segment = c.program.tables[table_idx as usize];
-
-        let mul_result = c.register_gen.allocate_type(ValType::I32).start as usize;
-
-        let base_addr = table_segment.start + TABLE_SEGMENT_HEADER_SIZE;
-
-        // Read the 3 words of the reference into contiguous registers
-        assert_eq!(dest_ptr.len(), 3);
-
-        let mut instrs = vec![Directive::Instruction(ib::mul_imm::<F>(
-            mul_result,
-            entry_idx_ptr.start as usize,
-            TABLE_ENTRY_SIZE.into(),
-        ))];
-
-        instrs.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
-            Directive::Instruction(ib::loadw(
-                dest_reg as usize,
-                mul_result,
-                base_addr as i32 + (i as i32) * 4,
-            ))
-        }));
-
-        instrs
-    }
-
     fn emit_wasm_op(
         &self,
         c: &mut Ctx<F>,
@@ -1751,9 +1715,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 src_table: _,
             } => todo!(),
             Op::TableFill { table: _ } => todo!(),
-            Op::TableGet { table } => self
-                .emit_table_get(c, table, inputs[0].clone(), output.unwrap())
-                .into(),
+            Op::TableGet { table } => {
+                emit_table_get(c, table, inputs[0].clone(), output.unwrap()).into()
+            }
             Op::TableSet { table: _ } => todo!(),
             Op::TableGrow { table: _ } => todo!(),
             Op::TableSize { table: _ } => todo!(),
@@ -1961,6 +1925,41 @@ impl<F: PrimeField32> Directive<F> {
             Directive::Instruction(i) => Some(i),
         }
     }
+}
+
+fn emit_table_get<F: PrimeField32>(
+    c: &mut Ctx<F>,
+    table_idx: u32,
+    entry_idx_ptr: Range<u32>,
+    dest_ptr: Range<u32>,
+) -> Vec<Directive<F>> {
+    const TABLE_ENTRY_SIZE: i16 = 12;
+    const TABLE_SEGMENT_HEADER_SIZE: u32 = 8;
+
+    let table_segment = c.program.tables[table_idx as usize];
+
+    let mul_result = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+    let base_addr = table_segment.start + TABLE_SEGMENT_HEADER_SIZE;
+
+    // Read the 3 words of the reference into contiguous registers
+    assert_eq!(dest_ptr.len(), 3);
+
+    let mut instrs = vec![Directive::Instruction(ib::mul_imm::<F>(
+        mul_result,
+        entry_idx_ptr.start as usize,
+        TABLE_ENTRY_SIZE.into(),
+    ))];
+
+    instrs.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
+        Directive::Instruction(ib::loadw(
+            dest_reg as usize,
+            mul_result,
+            base_addr as i32 + (i as i32) * 4,
+        ))
+    }));
+
+    instrs
 }
 
 enum RotDirection {
