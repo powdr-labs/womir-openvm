@@ -3,7 +3,6 @@ use std::borrow::{Borrow, BorrowMut};
 use openvm_circuit::arch::{
     AdapterAirContext, AdapterRuntimeContext, Result, VmAdapterInterface, VmCoreAir, VmCoreChip,
 };
-use openvm_circuit_primitives::utils::or;
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{LocalOpcode, instruction::Instruction};
 use openvm_stark_backend::{
@@ -85,9 +84,10 @@ where
             ),
         );
 
-        let save_pc = or(cols.opcode_call_flag, cols.opcode_call_indirect_flag);
-        let save_fp = or(cols.opcode_jaaf_save_flag, save_pc.clone());
-        let read_pc = or(cols.opcode_ret_flag, cols.opcode_call_indirect_flag);
+        let save_pc = cols.opcode_call_flag + cols.opcode_call_indirect_flag;
+        let save_fp =
+            cols.opcode_call_flag + cols.opcode_call_indirect_flag + cols.opcode_jaaf_save_flag;
+        let read_pc = cols.opcode_ret_flag + cols.opcode_call_indirect_flag;
 
         AdapterAirContext {
             to_pc: None,

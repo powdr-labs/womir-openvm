@@ -106,8 +106,6 @@ pub struct JaafAdapterColsWom<T> {
     pub fp_read_reg: T,
     pub fp_save_reg: T,
     pub fp_write_mult: T,
-    // just to lower degree
-    pub fp_needs_save: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
@@ -176,14 +174,13 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
             .eval(builder, ctx.instruction.save_pc);
 
         // save fp
-        builder.assert_eq(local.fp_needs_save, ctx.instruction.save_fp);
         self.wom_bridge
             .write(
                 local.fp_save_reg + to_fp,
                 ctx.writes[1].clone(),
                 local.fp_write_mult,
             )
-            .eval(builder, local.fp_needs_save);
+            .eval(builder, ctx.instruction.save_fp);
 
         let timestamp_change = AB::Expr::ONE;
 

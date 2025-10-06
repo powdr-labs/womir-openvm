@@ -10,7 +10,6 @@ use openvm_circuit::{
         program::ProgramBus,
     },
 };
-use openvm_circuit_primitives::utils::or;
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
@@ -124,11 +123,8 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAirWom {
     ) {
         let cols: &JumpAdapterColsWom<AB::Var> = local.borrow();
 
-        let is_cond_jump: AB::Expr = or(
-            ctx.instruction.is_jump_if.clone(),
-            ctx.instruction.is_jump_if_zero.clone(),
-        );
-        let needs_read_reg: AB::Expr = or(is_cond_jump, ctx.instruction.is_skip.clone());
+        let needs_read_reg =
+            ctx.instruction.is_jump_if + ctx.instruction.is_jump_if_zero + ctx.instruction.is_skip;
 
         // read cond or offset from register
         self.wom_bridge
