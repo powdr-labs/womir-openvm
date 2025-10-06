@@ -16,7 +16,7 @@ use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAUL
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, PrimeField32},
+    p3_field::{Field, PrimeField32, FieldAlgebra},
     rap::ColumnsAir,
 };
 use openvm_womir_transpiler::CopyIntoFrameOpcode;
@@ -43,7 +43,7 @@ impl<F: PrimeField32> CopyIntoFrameAdapterChipWom<F> {
     ) -> Self {
         Self {
             air: CopyIntoFrameAdapterAirWom {
-                _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
                 wom_bridge,
@@ -87,7 +87,7 @@ pub struct CopyIntoFrameAdapterColsWom<T> {
 pub struct CopyIntoFrameAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
     pub(super) wom_bridge: WomBridge,
-    pub(super) _execution_bridge: ExecutionBridge,
+    pub(super) execution_bridge: ExecutionBridge,
     pub(super) _frame_bus: FrameBus,
 }
 
@@ -124,6 +124,8 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
         // fp read from register
         let other_fp: AB::Expr = compose(&ctx.reads[1], RV32_REGISTER_NUM_LIMBS);
 
+        // TODO: constrain is_copy_into from opcode
+
         let src_fp = select(local.is_copy_into, local.from_frame.fp, other_fp.clone());
         let target_fp = select(local.is_copy_into, other_fp, local.from_frame.fp);
 
@@ -145,6 +147,22 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
                 local.write_mult,
             )
             .eval(builder, ctx.instruction.is_valid.clone());
+
+        let timestamp_change = AB::Expr::ONE;
+
+        self.execution_bridge
+            .execute_and_increment_pc::<AB>(
+                ctx.instruction.opcode,
+                [
+                    local.target_reg.into(),
+                    local.src_reg.into(),
+                    local.other_fp_reg.into(),
+                    AB::Expr::ZERO,
+                    AB::Expr::ZERO,
+                    AB::Expr::ONE,
+                ],
+                local.from_state,
+                timestamp_change);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
