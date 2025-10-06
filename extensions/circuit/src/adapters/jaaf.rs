@@ -21,7 +21,7 @@ use openvm_instructions::{
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, PrimeField32, FieldAlgebra},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
 use openvm_womir_transpiler::JaafOpcode::{self, *};
@@ -29,13 +29,12 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord
+    FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
 };
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose as compose_as_u32, decompose};
 
 const RV32_LIMB_MAX: u32 = (1 << RV32_CELL_BITS) - 1;
-
 
 #[repr(C)]
 #[derive(AlignedBorrow)]
@@ -151,12 +150,18 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
 
         // read fp
         self.wom_bridge
-            .read(local.fp_read_reg + local.from_frame.fp, ctx.reads[1].clone())
+            .read(
+                local.fp_read_reg + local.from_frame.fp,
+                ctx.reads[1].clone(),
+            )
             .eval(builder, ctx.instruction.is_valid.clone());
 
         // read pc
         self.wom_bridge
-            .read(local.pc_read_reg + local.from_frame.fp, ctx.reads[0].clone())
+            .read(
+                local.pc_read_reg + local.from_frame.fp,
+                ctx.reads[0].clone(),
+            )
             .eval(builder, ctx.instruction.read_pc.clone());
 
         let to_fp: AB::Expr = compose(&ctx.reads[1], RV32_REGISTER_NUM_LIMBS);
@@ -184,9 +189,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
 
         let pc_from_reg: AB::Expr = compose(&ctx.reads[0], RV32_REGISTER_NUM_LIMBS);
 
-        let to_pc = select(ctx.instruction.read_pc,
-                           pc_from_reg,
-                           local.pc_imm);
+        let to_pc = select(ctx.instruction.read_pc, pc_from_reg, local.pc_imm);
 
         self.execution_bridge.execute_and_increment_or_set_pc::<AB>(
             ctx.instruction.opcode,
@@ -200,7 +203,8 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
             ],
             local.from_state,
             timestamp_change,
-            (DEFAULT_PC_STEP, Some(to_pc)));
+            (DEFAULT_PC_STEP, Some(to_pc)),
+        );
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -247,9 +251,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
                 let pc_source = wom.read::<RV32_REGISTER_NUM_LIMBS>(c + fp_f);
                 (Some(pc_source.0), pc_source.1)
             }
-            _ => {
-                (None, [F::ZERO; RV32_REGISTER_NUM_LIMBS])
-            }
+            _ => (None, [F::ZERO; RV32_REGISTER_NUM_LIMBS]),
         };
 
         // All opcodes always read fp_source (e field) for target FP

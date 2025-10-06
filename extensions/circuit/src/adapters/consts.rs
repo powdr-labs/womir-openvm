@@ -15,7 +15,7 @@ use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, PrimeField32, FieldAlgebra},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
 use serde::{Deserialize, Serialize};
@@ -108,7 +108,11 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
     ) {
         let local: &ConstsAdapterColsWom<_> = local.borrow();
         self.wom_bridge
-            .write(local.target_reg + local.from_frame.fp, ctx.writes[0].clone(), local.write_mult)
+            .write(
+                local.target_reg + local.from_frame.fp,
+                ctx.writes[0].clone(),
+                local.write_mult,
+            )
             .eval(builder, ctx.instruction.is_valid.clone());
 
         let timestamp_change = AB::Expr::ONE;
@@ -125,7 +129,8 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
                 AB::Expr::ONE,
             ],
             local.from_state,
-            timestamp_change);
+            timestamp_change,
+        );
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

@@ -1,8 +1,7 @@
 use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::arch::{
-    AdapterAirContext, AdapterRuntimeContext, Result, VmAdapterInterface,
-    VmCoreAir, VmCoreChip,
+    AdapterAirContext, AdapterRuntimeContext, Result, VmAdapterInterface, VmCoreAir, VmCoreChip,
 };
 use openvm_circuit_primitives::utils::or;
 use openvm_circuit_primitives_derive::AlignedBorrow;

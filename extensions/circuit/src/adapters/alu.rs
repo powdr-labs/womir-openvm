@@ -23,7 +23,7 @@ use openvm_instructions::{
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
-    p3_field::{Field, PrimeField32, FieldAlgebra},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
 use serde::{Deserialize, Serialize};
@@ -209,8 +209,6 @@ impl<
                 (DEFAULT_PC_STEP, ctx.to_pc),
             )
             .eval(builder, ctx.instruction.is_valid);
-
-
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

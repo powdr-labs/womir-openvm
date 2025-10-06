@@ -15,7 +15,7 @@ use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
-    p3_field::{Field, PrimeField32, FieldAlgebra},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
 use serde::{Deserialize, Serialize};
@@ -159,7 +159,8 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
                 AB::Expr::ONE,
             ],
             local.from_state,
-            timestamp_change);
+            timestamp_change,
+        );
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -215,10 +216,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
 
         let amount_bytes = decompose(amount_bytes);
 
-        Ok((
-            [amount_bytes],
-            AllocateFrameReadRecord { allocated_ptr },
-        ))
+        Ok(([amount_bytes], AllocateFrameReadRecord { allocated_ptr }))
     }
 
     fn postprocess(

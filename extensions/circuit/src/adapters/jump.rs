@@ -16,7 +16,7 @@ use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAUL
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, PrimeField32, FieldAlgebra},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
 use openvm_womir_transpiler::JumpOpcode::{self, *};
@@ -124,7 +124,10 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAirWom {
     ) {
         let cols: &JumpAdapterColsWom<AB::Var> = local.borrow();
 
-        let is_cond_jump: AB::Expr = or(ctx.instruction.is_jump_if.clone(), ctx.instruction.is_jump_if_zero.clone());
+        let is_cond_jump: AB::Expr = or(
+            ctx.instruction.is_jump_if.clone(),
+            ctx.instruction.is_jump_if_zero.clone(),
+        );
         let needs_read_reg: AB::Expr = or(is_cond_jump, ctx.instruction.is_skip.clone());
 
         // read cond or offset from register
@@ -149,7 +152,8 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAirWom {
             ],
             cols.from_state,
             timestamp_change,
-            (DEFAULT_PC_STEP, Some(to_pc)));
+            (DEFAULT_PC_STEP, Some(to_pc)),
+        );
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

@@ -64,10 +64,7 @@ where
 
         AdapterAirContext {
             to_pc: None,
-            reads: [
-                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS],
-            ]
-            .into(),
+            reads: [[AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS]].into(),
             writes: [].into(),
             instruction: MinimalInstruction {
                 is_valid: core_cols.is_valid.into(),
