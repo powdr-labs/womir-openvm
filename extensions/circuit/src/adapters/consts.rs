@@ -67,6 +67,8 @@ pub struct ConstsAdapterColsWom<T> {
     pub target_reg: T,
     pub lo: T,
     pub hi: T,
+    // composed value
+    pub val: [T; RV32_REGISTER_NUM_LIMBS],
     pub write_mult: T,
 }
 
@@ -107,10 +109,13 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
         ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
         let local: &ConstsAdapterColsWom<_> = local.borrow();
+
+        // TODO: compose val from hi/lo
+
         self.wom_bridge
             .write(
                 local.target_reg + local.from_frame.fp,
-                ctx.writes[0].clone(),
+                local.val,
                 local.write_mult,
             )
             .eval(builder, ctx.instruction.is_valid.clone());

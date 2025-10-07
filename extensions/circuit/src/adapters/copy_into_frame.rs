@@ -76,7 +76,9 @@ pub struct CopyIntoFrameAdapterColsWom<T> {
     pub from_frame: FrameState<T>,
     pub target_reg: T,
     pub src_reg: T,
+    pub src: [T; RV32_REGISTER_NUM_LIMBS],
     pub other_fp_reg: T,
+    pub other_fp: [T; RV32_REGISTER_NUM_LIMBS],
     /// 0 if copy_from_frame
     /// 1 if copy_into_frame
     pub is_copy_into: T,
@@ -122,7 +124,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
         let local: &CopyIntoFrameAdapterColsWom<_> = local.borrow();
 
         // fp read from register
-        let other_fp: AB::Expr = compose(&ctx.reads[1], RV32_REGISTER_NUM_LIMBS);
+        let other_fp: AB::Expr = compose(&local.other_fp, RV32_REGISTER_NUM_LIMBS);
 
         // TODO: constrain is_copy_into from opcode
 
@@ -131,19 +133,19 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
 
         // read other fp
         self.wom_bridge
-            .read(local.other_fp_reg, ctx.reads[1].clone())
+            .read(local.other_fp_reg, local.other_fp)
             .eval(builder, ctx.instruction.is_valid.clone());
 
         // read src reg
         self.wom_bridge
-            .read(local.src_reg + src_fp, ctx.reads[0].clone())
+            .read(local.src_reg + src_fp, local.src)
             .eval(builder, ctx.instruction.is_valid.clone());
 
         // write dest reg
         self.wom_bridge
             .write(
                 local.target_reg + target_fp,
-                ctx.writes[0].clone(),
+                local.src,
                 local.write_mult,
             )
             .eval(builder, ctx.instruction.is_valid.clone());

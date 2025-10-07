@@ -82,6 +82,7 @@ pub struct JumpAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     /// register containing condition for jumps or offset for skip
     pub cond_or_offset_reg: T,
+    pub cond_or_offset: [T; RV32_REGISTER_NUM_LIMBS],
     /// immediate PC value for jumps
     pub pc_imm: T,
 }
@@ -128,7 +129,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAirWom {
 
         // read cond or offset from register
         self.wom_bridge
-            .read(cols.cond_or_offset_reg, ctx.reads[0].clone())
+            .read(cols.cond_or_offset_reg, cols.cond_or_offset)
             .eval(builder, needs_read_reg);
 
         // TODO: calculate to_pc based on instruction

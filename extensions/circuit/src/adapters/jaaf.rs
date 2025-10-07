@@ -99,12 +99,16 @@ pub struct JaafAdapterColsWom<T> {
     pub from_frame: FrameState<T>,
 
     pub pc_read_reg: T,
+    pub pc_read_val: [T; RV32_REGISTER_NUM_LIMBS],
     pub pc_save_reg: T,
+    pub pc_save_val: [T; RV32_REGISTER_NUM_LIMBS],
     pub pc_write_mult: T,
     pub pc_imm: T,
 
     pub fp_read_reg: T,
+    pub fp_read_val: [T; RV32_REGISTER_NUM_LIMBS],
     pub fp_save_reg: T,
+    pub fp_save_val: [T; RV32_REGISTER_NUM_LIMBS],
     pub fp_write_mult: T,
 }
 
@@ -150,7 +154,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
         self.wom_bridge
             .read(
                 local.fp_read_reg + local.from_frame.fp,
-                ctx.reads[1].clone(),
+                local.fp_read_val,
             )
             .eval(builder, ctx.instruction.is_valid.clone());
 

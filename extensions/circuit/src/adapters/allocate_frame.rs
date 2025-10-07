@@ -77,6 +77,9 @@ pub struct AllocateFrameAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
     pub amount_reg: T,
+    // amount from register
+    pub amount: [T; RV32_REGISTER_NUM_LIMBS],
+    // immediate amount
     pub amount_imm: T,
     // 0 if imm, 1 if reg
     pub amount_imm_or_reg: T,
@@ -133,7 +136,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
             .assert_one(ctx.instruction.is_valid.clone());
 
         self.wom_bridge
-            .read(local.amount_reg + local.from_frame.fp, ctx.reads[0].clone())
+            .read(local.amount_reg + local.from_frame.fp, local.amount)
             .eval(builder, local.amount_imm_or_reg);
 
         // write fp
