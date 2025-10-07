@@ -4731,12 +4731,13 @@ dependencies = [
 [[package]]
 name = "womir"
 version = "0.0.0"
-source = "git+https://github.com/powdr-labs/womir.git?rev=901017e042#901017e04289ded8f8e69ff848260cd11cfac3de"
+source = "git+https://github.com/powdr-labs/womir.git?rev=16128d16157cff#16128d16157cff78b4258ce40eb9f32f0e213348"
 dependencies = [
  "derive-where",
  "env_logger",
  "itertools 0.14.0",
  "log",
+ "num_cpus",
  "wasmparser",
 ]
 

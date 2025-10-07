@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::RangeFrom};
+use std::{collections::HashMap, sync::atomic::AtomicU32};
 
 use itertools::Itertools;
 use openvm_stark_backend::p3_field::PrimeField32;
@@ -92,7 +92,7 @@ impl<F: PrimeField32> Tracker<F> {
     pub fn replace_with_builtins(
         &mut self,
         module: &mut Module,
-        label_gen: &mut RangeFrom<u32>,
+        label_gen: &AtomicU32,
         dag: &mut BlocklessDag,
     ) {
         for node in &mut dag.nodes {
@@ -151,7 +151,7 @@ impl<F: PrimeField32> Tracker<F> {
     fn get_builtin_function(
         &mut self,
         module: &mut Module,
-        label_gen: &mut RangeFrom<u32>,
+        label_gen: &AtomicU32,
         builtin: &BuiltinDefinition,
     ) -> &BuiltinFunction<F> {
         let key = builtin.wasm_bytes.as_ptr();

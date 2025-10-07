@@ -15,6 +15,7 @@ use openvm_stark_sdk::bench::serialize_metric_snapshot;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::AtomicU32;
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
@@ -271,7 +272,8 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>)
     } = womir::loader::load_wasm(OpenVMSettings::<F>::new(), wasm_bytes).unwrap();
 
     // Compile the functions.
-    let mut label_gen = 0..;
+    // TODO: do it in parallel, like Womir does it.
+    let label_gen = AtomicU32::new(0);
     let mut stats = Statistics::default();
     let mut tracker = builtin_functions::Tracker::new();
     let mut functions = functions
@@ -286,16 +288,16 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>)
                     break dag;
                 }
                 func = func
-                    .advance_stage(&settings, &module, idx, &mut label_gen, Some(&mut stats))
+                    .advance_stage(&settings, &module, idx, &label_gen, Some(&mut stats))
                     .unwrap();
             };
 
             // In the BlocklessDag stage, we need to find instructions we don't implement and replace
             // them with function calls to built-in functions.
-            tracker.replace_with_builtins(&mut module, &mut label_gen, dag);
+            tracker.replace_with_builtins(&mut module, &label_gen, dag);
 
             // Advance to final stage
-            func.advance_all_stages(&settings, &module, idx, &mut label_gen, Some(&mut stats))
+            func.advance_all_stages(&settings, &module, idx, &label_gen, Some(&mut stats))
                 .unwrap()
         })
         .collect_vec();
