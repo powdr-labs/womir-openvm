@@ -143,11 +143,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
 
         // write dest reg
         self.wom_bridge
-            .write(
-                local.target_reg + target_fp,
-                local.src,
-                local.write_mult,
-            )
+            .write(local.target_reg + target_fp, local.src, local.write_mult)
             .eval(builder, ctx.instruction.is_valid.clone());
 
         let timestamp_change = AB::Expr::ONE;

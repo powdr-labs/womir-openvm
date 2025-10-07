@@ -152,10 +152,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
 
         // read fp
         self.wom_bridge
-            .read(
-                local.fp_read_reg + local.from_frame.fp,
-                local.fp_read_val,
-            )
+            .read(local.fp_read_reg + local.from_frame.fp, local.fp_read_val)
             .eval(builder, ctx.instruction.is_valid.clone());
 
         // read pc
