@@ -658,1184 +658,16 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         inputs: Vec<WasmOpInput>,
         output: Option<Range<u32>>,
     ) -> Tree<Directive<F>> {
-        use openvm_instructions::LocalOpcode;
-
-        // First handle single-instruction binary operations.
-        let binary_op = match op {
-            // 32-bit integer instructions
-            Op::I32Eq => Ok(EqOpcode::EQ.global_opcode()),
-            Op::I32Ne => Ok(EqOpcode::NEQ.global_opcode()),
-            Op::I32LtS => Ok(LessThanOpcode::SLT.global_opcode()),
-            Op::I32LtU => Ok(LessThanOpcode::SLTU.global_opcode()),
-            Op::I32Add => Ok(BaseAluOpcode::ADD.global_opcode()),
-            Op::I32Sub => Ok(BaseAluOpcode::SUB.global_opcode()),
-            Op::I32And => Ok(BaseAluOpcode::AND.global_opcode()),
-            Op::I32Or => Ok(BaseAluOpcode::OR.global_opcode()),
-            Op::I32Xor => Ok(BaseAluOpcode::XOR.global_opcode()),
-            Op::I32Mul => Ok(MulOpcode::MUL.global_opcode()),
-            Op::I32DivS => Ok(DivRemOpcode::DIV.global_opcode()),
-            Op::I32DivU => Ok(DivRemOpcode::DIVU.global_opcode()),
-            Op::I32RemS => Ok(DivRemOpcode::REM.global_opcode()),
-            Op::I32RemU => Ok(DivRemOpcode::REMU.global_opcode()),
-            Op::I32Shl => Ok(ShiftOpcode::SLL.global_opcode()),
-            Op::I32ShrS => Ok(ShiftOpcode::SRA.global_opcode()),
-            Op::I32ShrU => Ok(ShiftOpcode::SRL.global_opcode()),
-
-            // 64-bit integer instructions
-            Op::I64Eq => Ok(Eq64Opcode::EQ.global_opcode()),
-            Op::I64Ne => Ok(Eq64Opcode::NEQ.global_opcode()),
-            Op::I64LtS => Ok(LessThan64Opcode::SLT.global_opcode()),
-            Op::I64LtU => Ok(LessThan64Opcode::SLTU.global_opcode()),
-            Op::I64Add => Ok(BaseAlu64Opcode::ADD.global_opcode()),
-            Op::I64Sub => Ok(BaseAlu64Opcode::SUB.global_opcode()),
-            Op::I64And => Ok(BaseAlu64Opcode::AND.global_opcode()),
-            Op::I64Or => Ok(BaseAlu64Opcode::OR.global_opcode()),
-            Op::I64Xor => Ok(BaseAlu64Opcode::XOR.global_opcode()),
-            Op::I64Mul => Ok(Mul64Opcode::MUL.global_opcode()),
-            Op::I64DivS => Ok(DivRem64Opcode::DIV.global_opcode()),
-            Op::I64DivU => Ok(DivRem64Opcode::DIVU.global_opcode()),
-            Op::I64RemS => Ok(DivRem64Opcode::REM.global_opcode()),
-            Op::I64RemU => Ok(DivRem64Opcode::REMU.global_opcode()),
-            Op::I64Shl => Ok(Shift64Opcode::SLL.global_opcode()),
-            Op::I64ShrS => Ok(Shift64Opcode::SRA.global_opcode()),
-            Op::I64ShrU => Ok(Shift64Opcode::SRL.global_opcode()),
-
-            // Float instructions
-            Op::F32Eq => todo!(),
-            Op::F32Ne => todo!(),
-            Op::F32Lt => todo!(),
-            Op::F32Gt => todo!(),
-            Op::F32Le => todo!(),
-            Op::F32Ge => todo!(),
-            Op::F64Eq => todo!(),
-            Op::F64Ne => todo!(),
-            Op::F64Lt => todo!(),
-            Op::F64Gt => todo!(),
-            Op::F64Le => todo!(),
-            Op::F64Ge => todo!(),
-            Op::F32Add => todo!(),
-            Op::F32Sub => todo!(),
-            Op::F32Mul => todo!(),
-            Op::F32Div => todo!(),
-            Op::F32Min => todo!(),
-            Op::F32Max => todo!(),
-            Op::F32Copysign => todo!(),
-            Op::F64Add => todo!(),
-            Op::F64Sub => todo!(),
-            Op::F64Mul => todo!(),
-            Op::F64Div => todo!(),
-            Op::F64Min => todo!(),
-            Op::F64Max => todo!(),
-            Op::F64Copysign => todo!(),
-
-            // If not a binary operation, return the operator directly
-            op => Err(op),
-        };
-
-        let op: Op<'_> = match binary_op {
-            Ok(op) => {
-                let opcode = op.as_usize();
-                let output = output.unwrap().start as usize;
-                match inputs.as_slice() {
-                    [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
-                        // Case of two register inputs
-                        return Directive::Instruction(ib::instr_r(
-                            opcode,
-                            output,
-                            input1.start as usize,
-                            input2.start as usize,
-                        ))
-                        .into();
-                    }
-                    [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
-                    | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
-                        // Case of one register input and one constant input.
-
-                        // If this is the case of unsigned "0 < reg", turn into "reg != 0"
-                        if (op == LessThanOpcode::SLTU.global_opcode()
-                            || op == LessThan64Opcode::SLTU.global_opcode())
-                            && let WasmOpInput::Constant(WasmValue::I32(0) | WasmValue::I64(0)) =
-                                inputs[0]
-                        {
-                            return Directive::Instruction(ib::neq_imm(
-                                output,
-                                reg.start as usize,
-                                AluImm::from(0),
-                            ))
-                            .into();
-                        }
-
-                        // The general case below is for commutative operations, so the order
-                        // of the operands doesn't matter.
-
-                        // The constant folding step guarantees that the constant can be safely
-                        // truncated to i16.
-                        let c = const_i16_as_field(c);
-
-                        return Directive::Instruction(ib::instr_i(
-                            opcode,
-                            output,
-                            reg.start as usize,
-                            c,
-                        ))
-                        .into();
-                    }
-                    _ => unreachable!("combination of inputs not possible for binary op"),
-                }
-            }
-            Err(op) => op,
-        };
-
-        // Handle the GT instructions, which are just reversed LT
-        let op = match op {
-            Op::I32GtS => Ok(LessThanOpcode::SLT.global_opcode()),
-            Op::I32GtU => Ok(LessThanOpcode::SLTU.global_opcode()),
-            Op::I64GtS => Ok(LessThan64Opcode::SLT.global_opcode()),
-            Op::I64GtU => Ok(LessThan64Opcode::SLTU.global_opcode()),
-            op => Err(op),
-        };
-
-        let op = match op {
-            Ok(op) => {
-                let op = op.as_usize();
-                let output = output.unwrap().start as usize;
-                match inputs.as_slice() {
-                    [
-                        WasmOpInput::Register(greater_side),
-                        WasmOpInput::Register(lesser_side),
-                    ] => {
-                        // Case of two register inputs
-                        return Directive::Instruction(ib::instr_r(
-                            op,
-                            output,
-                            lesser_side.start as usize,
-                            greater_side.start as usize,
-                        ))
-                        .into();
-                    }
-                    [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
-                        // Case of one register input and one constant input.
-                        //
-                        // The constant is only allowed to be on the left side, because GT
-                        // is just LT with the operands reversed, and LT expects the immediate as
-                        // the greater side.
-                        let c = const_i16_as_field(c);
-                        return Directive::Instruction(ib::instr_i(
-                            op,
-                            output,
-                            reg.start as usize,
-                            c,
-                        ))
-                        .into();
-                    }
-                    [WasmOpInput::Register(reg), WasmOpInput::Constant(c)] => {
-                        // This can only be the case where you can turn "r > 0" into "r != 0".
-                        assert!(matches!(c, WasmValue::I32(0) | WasmValue::I64(0)));
-
-                        return Directive::Instruction(ib::neq_imm(
-                            output,
-                            reg.start as usize,
-                            AluImm::from(0),
-                        ))
-                        .into();
-                    }
-                    _ => unreachable!("combination of inputs not possible for GT op"),
-                }
-            }
-            Err(op) => op,
-        };
-
-        // Handle the complex instructions that supports constant inlining
-        match &op {
-            Op::I32GeS
-            | Op::I32GeU
-            | Op::I64GeS
-            | Op::I64GeU
-            | Op::I32LeS
-            | Op::I32LeU
-            | Op::I64LeS
-            | Op::I64LeU => {
-                let inverse_result = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let output = output.unwrap().start as usize;
-
-                let comp_instruction = match [&inputs[0], &inputs[1]] {
-                    [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
-                        let inverse_op = match op {
-                            Op::I32GeS => ib::lt_s,
-                            Op::I32GeU => ib::lt_u,
-                            Op::I64GeS => ib::lt_s_64,
-                            Op::I64GeU => ib::lt_u_64,
-                            Op::I32LeS => ib::gt_s,
-                            Op::I32LeU => ib::gt_u,
-                            Op::I64LeS => ib::gt_s_64,
-                            Op::I64LeU => ib::gt_u_64,
-                            _ => unreachable!(),
-                        };
-
-                        let input1 = input1.start as usize;
-                        let input2 = input2.start as usize;
-
-                        // Perform the inverse operation and invert the result
-                        inverse_op(inverse_result, input1, input2)
-                    }
-                    [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
-                    | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
-                        // Handle the cases where unsigned "reg >= 1" and "1 <= reg" can be turned into "reg != 0"
-                        if matches!(
-                            (&op, &inputs[1]),
-                            (
-                                Op::I32GeU | Op::I64GeU,
-                                WasmOpInput::Constant(WasmValue::I32(1) | WasmValue::I64(1))
-                            )
-                        ) || matches!(
-                            (&op, &inputs[0]),
-                            (
-                                Op::I32LeU | Op::I64LeU,
-                                WasmOpInput::Constant(WasmValue::I32(1) | WasmValue::I64(1))
-                            )
-                        ) {
-                            return Directive::Instruction(ib::neq_imm(
-                                output,
-                                reg.start as usize,
-                                AluImm::from(0),
-                            ))
-                            .into();
-                        }
-
-                        let opcode = match op {
-                            Op::I32GeS | Op::I32LeS => LessThanOpcode::SLT.global_opcode(),
-                            Op::I32GeU | Op::I32LeU => LessThanOpcode::SLTU.global_opcode(),
-                            Op::I64GeS | Op::I64LeS => LessThan64Opcode::SLT.global_opcode(),
-                            Op::I64GeU | Op::I64LeU => LessThan64Opcode::SLTU.global_opcode(),
-                            _ => unreachable!(),
-                        };
-
-                        // Check whether this is the case where "c >= r" or "r <= c" can be turned into "r < c + 1".
-                        if ((matches!(op, Op::I32GeS | Op::I32GeU | Op::I64GeS | Op::I64GeU)
-                            && matches!(&inputs[0], WasmOpInput::Constant(_)))
-                            || (matches!(op, Op::I32LeS | Op::I32LeU | Op::I64LeS | Op::I64LeU)
-                                && matches!(&inputs[0], WasmOpInput::Register(_))))
-                            && let Some(inc_c) = can_turn_to_lt(&op, c)
-                        {
-                            // The operation can be turned into a single less-than comparison with incremented constant.
-                            // There is no need to do the inverse operation and invert the result.
-                            return Directive::Instruction(ib::instr_i(
-                                opcode.as_usize(),
-                                output,
-                                reg.start as usize,
-                                inc_c.into(),
-                            ))
-                            .into();
-                        }
-
-                        let c = const_i16_as_field(c);
-                        ib::instr_i(opcode.as_usize(), inverse_result, reg.start as usize, c)
-                    }
-                    _ => unreachable!("combination of inputs not possible for GE/LE operations"),
-                };
-
-                // Perform the inverse operation and invert the result
-                return vec![
-                    Directive::Instruction(comp_instruction),
-                    Directive::Instruction(ib::eq_imm(output, inverse_result, AluImm::from(0))),
-                ]
-                .into();
-            }
-            Op::I32Rotl => {
-                return translate_rot::<F, I32Rot>(c, RotDirection::Left, inputs, output);
-            }
-            Op::I32Rotr => {
-                return translate_rot::<F, I32Rot>(c, RotDirection::Right, inputs, output);
-            }
-            Op::I64Rotl => {
-                return translate_rot::<F, I64Rot>(c, RotDirection::Left, inputs, output);
-            }
-            Op::I64Rotr => {
-                return translate_rot::<F, I64Rot>(c, RotDirection::Right, inputs, output);
-            }
-            Op::Select | Op::TypedSelect { .. } => {
-                // Works like a ternary operator: if the condition (3rd input) is non-zero,
-                // select the 1st input, otherwise select the 2nd input.
-                let output = output.unwrap();
-                let condition = inputs[2].as_register().unwrap().start;
-
-                // The directives to set the output to either of the alternatives
-                let [if_non_zero, if_zero] =
-                    [&inputs[0], &inputs[1]].map(|alternative| match alternative {
-                        // This input is a register, so we issue register to register copy instructions
-                        WasmOpInput::Register(r) => r
-                            .clone()
-                            .zip(output.clone())
-                            .map(|(src, dest)| {
-                                Directive::Instruction(ib::add_imm(
-                                    dest as usize,
-                                    src as usize,
-                                    AluImm::from(0),
-                                ))
-                            })
-                            .collect_vec(),
-                        // This input is a constant, so we issue const to register instructions
-                        WasmOpInput::Constant(value) => {
-                            const_wasm_value(c.program, value, output.clone())
-                        }
-                    });
-
-                let non_zero_label = c.new_label(LabelType::Local);
-                let continuation_label = c.new_label(LabelType::Local);
-
-                return Tree::Node(vec![
-                    // if condition != 0 jump to non_zero_label
-                    Tree::Leaf(Directive::JumpIf {
-                        target: non_zero_label.clone(),
-                        condition_reg: condition,
-                    }),
-                    // if jump is not taken, copy the value for "if zero"
-                    if_zero.into(),
-                    // jump to continuation
-                    Directive::Jump {
-                        target: continuation_label.clone(),
-                    }
-                    .into(),
-                    // alternative label
-                    Directive::Label {
-                        id: non_zero_label,
-                        frame_size: None,
-                    }
-                    .into(),
-                    // if jump is taken, copy the value for "if set"
-                    if_non_zero.into(),
-                    // continuation label
-                    Directive::Label {
-                        id: continuation_label,
-                        frame_size: None,
-                    }
-                    .into(),
-                ]);
-            }
-            _ => (),
-        }
-
-        // Handle the remaining operations, whose inputs are all registers
-        let inputs = inputs
-            .into_iter()
-            .map(|input| {
-                input
-                    .as_register()
-                    .expect("input must be a register")
-                    .clone()
+        output
+            .as_ref()
+            .and_then(|output| {
+                translate_most_binary_ops(&op, &inputs, output)
+                    .or_else(|| translate_less_than_ops(&op, &inputs, output))
+                    .or_else(|| translate_greater_than_ops(&op, &inputs, output))
+                    .map(|instruction| Directive::Instruction(instruction).into())
+                    .or_else(|| translate_complex_ins_with_const(c, &op, &inputs, output))
             })
-            .collect_vec();
-        match op {
-            // 32-bit integer instructions
-            Op::I32Const { value } => {
-                let output = output.unwrap().start as usize;
-                let value_u = value as u32;
-                let imm_lo: u16 = (value_u & 0xffff) as u16;
-                let imm_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
-                Directive::Instruction(ib::const_32_imm(output, imm_lo, imm_hi)).into()
-            }
-            Op::I64Const { value } => {
-                let output = output.unwrap().start as usize;
-                let lower = value as u32;
-                let lower_lo: u16 = (lower & 0xffff) as u16;
-                let lower_hi: u16 = ((lower >> 16) & 0xffff) as u16;
-                let upper = (value >> 32) as u32;
-                let upper_lo: u16 = (upper & 0xffff) as u16;
-                let upper_hi: u16 = ((upper >> 16) & 0xffff) as u16;
-                vec![
-                    Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
-                    Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
-                ]
-                .into()
-            }
-            Op::I32Eqz => {
-                let input = inputs[0].start as usize;
-                let output = output.unwrap().start as usize;
-                Directive::Instruction(ib::eq_imm(output, input, AluImm::from(0))).into()
-            }
-            Op::I64Eqz => {
-                let input = inputs[0].start as usize;
-                let output = output.unwrap().start as usize;
-                Directive::Instruction(ib::eq_imm_64(output, input, AluImm::from(0))).into()
-            }
-
-            Op::I32WrapI64 => {
-                // TODO: considering we are using a single address space for both i32 and i64,
-                // this instruction could be elided at womir level.
-
-                let lower_limb = inputs[0].start as usize;
-                // The higher limb is ignored.
-                let output = output.unwrap().start as usize;
-
-                // Just copy the lower limb to the output.
-                Directive::Instruction(ib::add_imm(output, lower_limb, AluImm::from(0))).into()
-            }
-            Op::I32Extend8S | Op::I32Extend16S => {
-                let input = inputs[0].start as usize;
-                let output = output.unwrap().start as usize;
-
-                let tmp = c.register_gen.allocate_type(ValType::I32).start as usize;
-
-                let shift = match op {
-                    Op::I32Extend8S => 24_i16,
-                    Op::I32Extend16S => 16_i16,
-                    _ => unreachable!(),
-                }
-                .into();
-
-                // Left shift followed by arithmetic right shift
-                vec![
-                    Directive::Instruction(ib::shl_imm(tmp, input, shift)),
-                    Directive::Instruction(ib::shr_s_imm(output, tmp, shift)),
-                ]
-                .into()
-            }
-            Op::I64Extend8S | Op::I64Extend16S | Op::I64Extend32S => {
-                let input = inputs[0].start as usize;
-                let output = output.unwrap().start as usize;
-
-                let tmp = c.register_gen.allocate_type(ValType::I64).start as usize;
-
-                let shift = match op {
-                    Op::I64Extend8S => 56_i16,
-                    Op::I64Extend16S => 48_i16,
-                    Op::I64Extend32S => 32_i16,
-                    _ => unreachable!(),
-                }
-                .into();
-
-                // Left shift followed by arithmetic right shift
-                vec![
-                    Directive::Instruction(ib::shl_imm_64(tmp, input, shift)),
-                    Directive::Instruction(ib::shr_s_imm_64(output, tmp, shift)),
-                ]
-                .into()
-            }
-
-            // 64-bit integer instructions
-            Op::I64ExtendI32S => {
-                let input = inputs[0].start as usize;
-                let output = output.unwrap().start as usize;
-
-                let high_shifted = c.register_gen.allocate_type(ValType::I64).start as usize;
-
-                vec![
-                    // Copy the 32 bit values to the high 32 bits of the temporary value.
-                    // Leave the low bits undefined.
-                    Directive::Instruction(ib::add_imm(high_shifted + 1, input, AluImm::from(0))),
-                    // shr will read 64 bits, so we need to zero the other half due to WOM
-                    Directive::Instruction(ib::const_32_imm(high_shifted, 0, 0)),
-                    // Arithmetic shift right to fill the high bits with the sign bit.
-                    Directive::Instruction(ib::shr_s_imm_64(output, high_shifted, 32_i16.into())),
-                ]
-                .into()
-            }
-            Op::I64ExtendI32U => {
-                let input = inputs[0].start as usize;
-                let output = output.unwrap().start as usize;
-
-                vec![
-                    // Copy the 32 bit value to the low 32 bits of the output.
-                    Directive::Instruction(ib::add_imm(output, input, AluImm::from(0))),
-                    // Zero the high 32 bits.
-                    Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)),
-                ]
-                .into()
-            }
-
-            // Global instructions
-            Op::GlobalSet { global_index } => {
-                let Global::Mutable(allocated_var) = &c.program.globals[global_index as usize]
-                else {
-                    unreachable!()
-                };
-
-                store_to_const_addr(c, allocated_var.address, inputs[0].clone()).into()
-            }
-            Op::GlobalGet { global_index } => {
-                let global = &c.program.globals[global_index as usize];
-                match global {
-                    Global::Mutable(allocated_var) => {
-                        load_from_const_addr(c, allocated_var.address, output.unwrap())
-                            .0
-                            .into()
-                    }
-                    Global::Immutable(op) => self.emit_wasm_op(c, op.clone(), Vec::new(), output),
-                }
-            }
-
-            Op::I32Load { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let output = output.unwrap().start as usize;
-                match memarg.align {
-                    0 => {
-                        // read four bytes
-                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        vec![
-                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
-                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
-                            Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
-                            Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
-                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
-                            Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
-                            Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
-                            Directive::Instruction(ib::or(lo, b0, b1_shifted)),
-                            Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
-                            Directive::Instruction(ib::or(output, lo, hi)),
-                        ]
-                        .into()
-                    }
-                    1 => {
-                        // read two half words
-                        let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let hi_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        vec![
-                            Directive::Instruction(ib::loadhu(lo, base_addr, imm)),
-                            Directive::Instruction(ib::loadhu(hi, base_addr, imm + 2)),
-                            Directive::Instruction(ib::shl_imm(hi_shifted, hi, 16_i16.into())),
-                            Directive::Instruction(ib::or(output, lo, hi_shifted)),
-                        ]
-                        .into()
-                    }
-                    2.. => Directive::Instruction(ib::loadw(output, base_addr, imm)).into(),
-                }
-            }
-
-            Op::I32Load16U { memarg } | Op::I32Load16S { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let output = output.unwrap().start as usize;
-
-                match memarg.align {
-                    0 => {
-                        // read four bytes
-                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        vec![
-                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
-                            if let Op::I32Load16S { .. } = op {
-                                Directive::Instruction(ib::loadb(b1, base_addr, imm + 1))
-                            } else {
-                                Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
-                            },
-                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
-                            Directive::Instruction(ib::or(output, b0, b1_shifted)),
-                        ]
-                        .into()
-                    }
-                    1.. => if let Op::I32Load16S { .. } = op {
-                        Directive::Instruction(ib::loadh(output, base_addr, imm))
-                    } else {
-                        Directive::Instruction(ib::loadhu(output, base_addr, imm))
-                    }
-                    .into(),
-                }
-            }
-            Op::I32Load8U { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let output = output.unwrap().start as usize;
-
-                Directive::Instruction(ib::loadbu(output, base_addr, imm)).into()
-            }
-            Op::I32Load8S { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let output = output.unwrap().start as usize;
-
-                Directive::Instruction(ib::loadb(output, base_addr, imm)).into()
-            }
-            Op::I64Load { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let output = (output.unwrap().start) as usize;
-
-                match memarg.align {
-                    0 => {
-                        // read byte by byte
-                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b4 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b5 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b6 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b7 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b5_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b6_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b7_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-
-                        let hi0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let hi1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let lo0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let lo1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-
-                        vec![
-                            // load each byte
-                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
-                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
-                            Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
-                            Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
-                            Directive::Instruction(ib::loadbu(b4, base_addr, imm + 4)),
-                            Directive::Instruction(ib::loadbu(b5, base_addr, imm + 5)),
-                            Directive::Instruction(ib::loadbu(b6, base_addr, imm + 6)),
-                            Directive::Instruction(ib::loadbu(b7, base_addr, imm + 7)),
-                            // build lo 32 bits
-                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
-                            Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
-                            Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
-                            Directive::Instruction(ib::or(lo0, b0, b1_shifted)),
-                            Directive::Instruction(ib::or(lo1, b2_shifted, b3_shifted)),
-                            Directive::Instruction(ib::or(output, lo0, lo1)),
-                            // build hi 32 bits
-                            Directive::Instruction(ib::shl_imm(b5_shifted, b5, 8_i16.into())),
-                            Directive::Instruction(ib::shl_imm(b6_shifted, b6, 16_i16.into())),
-                            Directive::Instruction(ib::shl_imm(b7_shifted, b7, 24_i16.into())),
-                            Directive::Instruction(ib::or(hi0, b4, b5_shifted)),
-                            Directive::Instruction(ib::or(hi1, b6_shifted, b7_shifted)),
-                            Directive::Instruction(ib::or(output + 1, hi0, hi1)),
-                        ]
-                    }
-                    1 => {
-                        // read four halfwords
-                        let h0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let h2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let h3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let h1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let h3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-
-                        vec![
-                            Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
-                            Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
-                            Directive::Instruction(ib::loadhu(h2, base_addr, imm + 4)),
-                            Directive::Instruction(ib::loadhu(h3, base_addr, imm + 6)),
-                            Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16.into())),
-                            Directive::Instruction(ib::shl_imm(h3_shifted, h3, 16_i16.into())),
-                            Directive::Instruction(ib::or(output, h0, h1_shifted)),
-                            Directive::Instruction(ib::or(output + 1, h2, h3_shifted)),
-                        ]
-                    }
-                    2.. => {
-                        // read two words
-                        vec![
-                            Directive::Instruction(ib::loadw(output, base_addr, imm)),
-                            Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4)),
-                        ]
-                    }
-                }
-                .into()
-            }
-            Op::I64Load8U { memarg } | Op::I64Load8S { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let output = (output.unwrap().start) as usize;
-                let val = c.register_gen.allocate_type(ValType::I64).start as usize;
-
-                vec![
-                    // load signed or unsigned byte as i32 hi part
-                    if let Op::I64Load8S { .. } = op {
-                        Directive::Instruction(ib::loadb(val + 1, base_addr, imm))
-                    } else {
-                        Directive::Instruction(ib::loadbu(val + 1, base_addr, imm))
-                    },
-                    // shr will read 64 bits, so we need to zero the other half due to WOM
-                    Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                    // shift i64 val right, keeping the sign
-                    Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into())),
-                ]
-                .into()
-            }
-            Op::I64Load16U { memarg } | Op::I64Load16S { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let output = (output.unwrap().start) as usize;
-                let val = c.register_gen.allocate_type(ValType::I64).start as usize;
-
-                match memarg.align {
-                    0 => {
-                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        vec![
-                            // load b1 signed/unsigned
-                            if let Op::I64Load16S { .. } = op {
-                                Directive::Instruction(ib::loadb(b1, base_addr, imm + 1))
-                            } else {
-                                Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
-                            },
-                            // shift b1
-                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
-                            // load b0
-                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
-                            // combine b0 and b1
-                            Directive::Instruction(ib::or(val + 1, b0, b1_shifted)),
-                            // shr will read 64 bits, so we need to zero the other half due to WOM
-                            Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                            // shift i64 val right, keeping the sign
-                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into())),
-                        ]
-                    }
-                    1.. => {
-                        if let Op::I64Load16S { .. } = op {
-                            vec![
-                                // load signed halfword as i32 on the hi part of the i64 val
-                                Directive::Instruction(ib::loadh(val + 1, base_addr, imm)),
-                                // shr will read 64 bits, so we need to zero the other half due to WOM
-                                Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                                // shift i64 val right, keeping the sign
-                                Directive::Instruction(ib::shr_s_imm_64(
-                                    output,
-                                    val,
-                                    32_i16.into(),
-                                )),
-                            ]
-                        } else {
-                            vec![
-                                // load unsigned lo i32
-                                Directive::Instruction(ib::loadhu(output, base_addr, imm)),
-                                // zero out hi i32
-                                Directive::Instruction(ib::const_32_imm(output + 1, 0x0, 0x0)),
-                            ]
-                        }
-                    }
-                }
-                .into()
-            }
-            Op::I64Load32U { memarg } | Op::I64Load32S { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let output = (output.unwrap().start) as usize;
-                let val = c.register_gen.allocate_type(ValType::I64).start as usize;
-
-                match memarg.align {
-                    0 => {
-                        let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        vec![
-                            Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
-                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
-                            Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
-                            Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
-                            // shifts
-                            Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
-                            Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
-                            Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
-                            // build hi and lo
-                            Directive::Instruction(ib::or(lo, b0, b1_shifted)),
-                            Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
-                            // build hi i32 in val
-                            Directive::Instruction(ib::or(val + 1, lo, hi)),
-                            // shr will read 64 bits, so we need to zero the other half due to WOM
-                            Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                            // shift signed/unsigned
-                            if let Op::I64Load32S { .. } = op {
-                                Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
-                            } else {
-                                Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
-                            },
-                        ]
-                    }
-                    1 => {
-                        let h0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let h1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        vec![
-                            // load h0, h1
-                            Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
-                            Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
-                            // shift h1
-                            Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16.into())),
-                            // combine h0 and h1
-                            Directive::Instruction(ib::or(val + 1, h0, h1_shifted)),
-                            // shr will read 64 bits, so we need to zero the other half due to WOM
-                            Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                            // shift signed/unsigned
-                            if let Op::I64Load32S { .. } = op {
-                                Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
-                            } else {
-                                Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
-                            },
-                        ]
-                    }
-                    2.. => {
-                        vec![
-                            // load word
-                            Directive::Instruction(ib::loadw(val + 1, base_addr, imm)),
-                            // shr will read 64 bits, so we need to zero the other half due to WOM
-                            Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                            // shift signed/unsigned
-                            if let Op::I64Load32S { .. } = op {
-                                Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
-                            } else {
-                                Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
-                            },
-                        ]
-                    }
-                }
-                .into()
-            }
-            Op::I32Store { memarg } | Op::I64Store32 { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let value = inputs[1].start as usize;
-
-                match memarg.align {
-                    0 => {
-                        // write byte by byte
-                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        vec![
-                            // store byte 0
-                            Directive::Instruction(ib::storeb(value, base_addr, imm)),
-                            // shift and store byte 1
-                            Directive::Instruction(ib::shr_u_imm(b1, value, 8_i16.into())),
-                            Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
-                            // shift and store byte 2
-                            Directive::Instruction(ib::shr_u_imm(b2, value, 16_i16.into())),
-                            Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
-                            // shift and store byte 3
-                            Directive::Instruction(ib::shr_u_imm(b3, value, 24_i16.into())),
-                            Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
-                        ]
-                        .into()
-                    }
-                    1 => {
-                        let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        vec![
-                            // store halfword 0
-                            Directive::Instruction(ib::storeh(value, base_addr, imm)),
-                            // shift and store halfword 1
-                            Directive::Instruction(ib::shr_u_imm(h1, value, 16_i16.into())),
-                            Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
-                        ]
-                        .into()
-                    }
-                    2.. => Directive::Instruction(ib::storew(value, base_addr, imm)).into(),
-                }
-            }
-            Op::I32Store8 { memarg } | Op::I64Store8 { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let value = inputs[1].start as usize;
-
-                Directive::Instruction(ib::storeb(value, base_addr, imm)).into()
-            }
-            Op::I32Store16 { memarg } | Op::I64Store16 { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let value = inputs[1].start as usize;
-
-                match memarg.align {
-                    0 => {
-                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        vec![
-                            // store byte 0
-                            Directive::Instruction(ib::storeb(value, base_addr, imm)),
-                            // shift and store byte 1
-                            Directive::Instruction(ib::shr_u_imm(b1, value, 8_i16.into())),
-                            Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
-                        ]
-                        .into()
-                    }
-                    1.. => Directive::Instruction(ib::storeh(value, base_addr, imm)).into(),
-                }
-            }
-            Op::I64Store { memarg } => {
-                let imm = mem_offset(memarg, c);
-                let base_addr = inputs[0].start as usize;
-                let value_lo = inputs[1].start as usize;
-                let value_hi = (inputs[1].start + 1) as usize;
-
-                match memarg.align {
-                    0 => {
-                        // write byte by byte
-                        let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b5 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b6 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let b7 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        vec![
-                            // store byte 0
-                            Directive::Instruction(ib::storeb(value_lo, base_addr, imm)),
-                            // shift and store byte 1
-                            Directive::Instruction(ib::shr_u_imm(b1, value_lo, 8_i16.into())),
-                            Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
-                            // shift and store byte 2
-                            Directive::Instruction(ib::shr_u_imm(b2, value_lo, 16_i16.into())),
-                            Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
-                            // shift and store byte 3
-                            Directive::Instruction(ib::shr_u_imm(b3, value_lo, 24_i16.into())),
-                            Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
-                            // store byte 4
-                            Directive::Instruction(ib::storeb(value_hi, base_addr, imm + 4)),
-                            // shift and store byte 5
-                            Directive::Instruction(ib::shr_u_imm(b5, value_hi, 8_i16.into())),
-                            Directive::Instruction(ib::storeb(b5, base_addr, imm + 5)),
-                            // shift and store byte 6
-                            Directive::Instruction(ib::shr_u_imm(b6, value_hi, 16_i16.into())),
-                            Directive::Instruction(ib::storeb(b6, base_addr, imm + 6)),
-                            // shift and store byte 7
-                            Directive::Instruction(ib::shr_u_imm(b7, value_hi, 24_i16.into())),
-                            Directive::Instruction(ib::storeb(b7, base_addr, imm + 7)),
-                        ]
-                    }
-                    1 => {
-                        // write by halfwords
-                        let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        let h3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                        vec![
-                            // store halfword 0
-                            Directive::Instruction(ib::storeh(value_lo, base_addr, imm)),
-                            // shift and store halfword 1
-                            Directive::Instruction(ib::shr_u_imm(h1, value_lo, 16_i16.into())),
-                            Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
-                            // store halfword 2
-                            Directive::Instruction(ib::storeh(value_hi, base_addr, imm + 4)),
-                            // shift and store halfword 3
-                            Directive::Instruction(ib::shr_u_imm(h3, value_hi, 16_i16.into())),
-                            Directive::Instruction(ib::storeh(h3, base_addr, imm + 6)),
-                        ]
-                    }
-                    2.. => {
-                        vec![
-                            Directive::Instruction(ib::storew(value_lo, base_addr, imm)),
-                            Directive::Instruction(ib::storew(value_hi, base_addr, imm + 4)),
-                        ]
-                    }
-                }
-                .into()
-            }
-
-            Op::MemorySize { mem } => {
-                assert_eq!(mem, 0, "Only a single linear memory is supported");
-                load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap())
-                    .0
-                    .into()
-            }
-            Op::MemoryGrow { mem } => {
-                assert_eq!(mem, 0, "Only a single linear memory is supported");
-                let header_addr = c.program.memory.unwrap().start;
-
-                let output = output.unwrap().start as usize;
-
-                let header_regs = c.register_gen.allocate_type(ValType::I64);
-                let size_reg = header_regs.start as usize;
-                let max_size_reg = (header_regs.start + 1) as usize;
-
-                let new_size = c.register_gen.allocate_type(ValType::I32).start as usize;
-                let is_gt_max = c.register_gen.allocate_type(ValType::I32).start;
-                let is_lt_curr = c.register_gen.allocate_type(ValType::I32).start;
-
-                let error_label = c.new_label(LabelType::Local);
-                let continuation_label = c.new_label(LabelType::Local);
-
-                // Load the current size and max size.
-                let (mut directives, header_addr_reg) =
-                    load_from_const_addr(c, header_addr, header_regs);
-
-                directives.extend([
-                    // Calculate the new size:
-                    Directive::Instruction(ib::add(new_size, size_reg, inputs[0].start as usize)),
-                    // Check if the new size is greater than the max size.
-                    Directive::Instruction(ib::gt_u(is_gt_max as usize, new_size, max_size_reg)),
-                    // If the new size is greater than the max size, branch to the error label.
-                    Directive::JumpIf {
-                        target: error_label.clone(),
-                        condition_reg: is_gt_max,
-                    },
-                    // Check if the new size is less than to the current size (which means an overflow occurred),
-                    // which means the requested size is too large.
-                    Directive::Instruction(ib::lt_u::<F>(is_lt_curr as usize, new_size, size_reg)),
-                    // If the requested size overflows, branch to the error label.
-                    Directive::JumpIf {
-                        target: error_label.clone(),
-                        condition_reg: is_lt_curr,
-                    },
-                    // Success case:
-                    // - write new size to header.
-                    Directive::Instruction(ib::storew(new_size, header_addr_reg.start as usize, 0)),
-                    // - write old size to output.
-                    Directive::Instruction(ib::add_imm(output, size_reg, AluImm::from(0))),
-                    // - jump to continuation label.
-                    Directive::Jump {
-                        target: continuation_label.clone(),
-                    },
-                    // Error case: write 0xFFFFFFFF to output.
-                    Directive::Label {
-                        id: error_label,
-                        frame_size: None,
-                    },
-                    Directive::Instruction(ib::const_32_imm(output, 0xFFFF, 0xFFFF)),
-                    // Continue:
-                    Directive::Label {
-                        id: continuation_label,
-                        frame_size: None,
-                    },
-                ]);
-
-                directives.into()
-            }
-            Op::MemoryInit {
-                data_index: _,
-                mem: _,
-            } => todo!(),
-            Op::DataDrop { data_index: _ } => todo!(),
-
-            // Table instructions
-            Op::TableInit {
-                elem_index: _,
-                table: _,
-            } => todo!(),
-            Op::TableCopy {
-                dst_table: _,
-                src_table: _,
-            } => todo!(),
-            Op::TableFill { table: _ } => todo!(),
-            Op::TableGet { table } => {
-                emit_table_get(c, table, inputs[0].clone(), output.unwrap()).into()
-            }
-            Op::TableSet { table: _ } => todo!(),
-            Op::TableGrow { table: _ } => todo!(),
-            Op::TableSize { table: _ } => todo!(),
-            Op::ElemDrop { elem_index: _ } => todo!(),
-
-            // Reference instructions
-            Op::RefNull { hty: _ } => NULL_REF
-                .iter()
-                .zip_eq(output.unwrap())
-                .map(|(v, reg)| {
-                    Directive::Instruction(ib::const_32_imm(
-                        reg as usize,
-                        *v as u16,
-                        (*v >> 16) as u16,
-                    ))
-                })
-                .collect_vec()
-                .into(),
-            Op::RefIsNull => todo!(),
-            Op::RefFunc { function_index } => {
-                const_function_reference(c.program, function_index, output.unwrap()).into()
-            }
-
-            // Float instructions
-            Op::F32Load { memarg: _ } => todo!(),
-            Op::F64Load { memarg: _ } => todo!(),
-            Op::F32Store { memarg: _ } => todo!(),
-            Op::F64Store { memarg: _ } => todo!(),
-            Op::F32Const { value } => {
-                let output = output.unwrap().start as usize;
-                let value_u = value.bits();
-                let value_lo: u16 = (value_u & 0xffff) as u16;
-                let value_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
-                Directive::Instruction(ib::const_32_imm(output, value_lo, value_hi)).into()
-            }
-            Op::F64Const { value } => {
-                let output = output.unwrap().start as usize;
-                let value = value.bits();
-                let lower = value as u32;
-                let lower_lo: u16 = (lower & 0xffff) as u16;
-                let lower_hi: u16 = ((lower >> 16) & 0xffff) as u16;
-                let upper = (value >> 32) as u32;
-                let upper_lo: u16 = (upper & 0xffff) as u16;
-                let upper_hi: u16 = ((upper >> 16) & 0xffff) as u16;
-                vec![
-                    Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
-                    Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
-                ]
-                .into()
-            }
-            Op::F32Abs => todo!(),
-            Op::F32Neg => todo!(),
-            Op::F32Ceil => todo!(),
-            Op::F32Floor => todo!(),
-            Op::F32Trunc => todo!(),
-            Op::F32Nearest => todo!(),
-            Op::F32Sqrt => todo!(),
-            Op::F64Abs => todo!(),
-            Op::F64Neg => todo!(),
-            Op::F64Ceil => todo!(),
-            Op::F64Floor => todo!(),
-            Op::F64Trunc => todo!(),
-            Op::F64Nearest => todo!(),
-            Op::F64Sqrt => todo!(),
-            Op::I32TruncF32S => todo!(),
-            Op::I32TruncF32U => todo!(),
-            Op::I32TruncF64S => todo!(),
-            Op::I32TruncF64U => todo!(),
-            Op::I64TruncF32S => todo!(),
-            Op::I64TruncF32U => todo!(),
-            Op::I64TruncF64S => todo!(),
-            Op::I64TruncF64U => todo!(),
-            Op::F32ConvertI32S => todo!(),
-            Op::F32ConvertI32U => todo!(),
-            Op::F32ConvertI64S => todo!(),
-            Op::F32ConvertI64U => todo!(),
-            Op::F32DemoteF64 => todo!(),
-            Op::F64ConvertI32S => todo!(),
-            Op::F64ConvertI32U => todo!(),
-            Op::F64ConvertI64S => todo!(),
-            Op::F64ConvertI64U => todo!(),
-            Op::F64PromoteF32 => todo!(),
-
-            Op::I32ReinterpretF32
-            | Op::F32ReinterpretI32
-            | Op::I64ReinterpretF64
-            | Op::F64ReinterpretI64 => {
-                // TODO: considering we are using a single address space for all types,
-                // these reinterpret instruction could be elided at womir level.
-
-                // Just copy the input to the output.
-                inputs[0]
-                    .clone()
-                    .zip(output.unwrap())
-                    .map(|(input, output)| {
-                        Directive::Instruction(ib::add_imm(
-                            output as usize,
-                            input as usize,
-                            AluImm::from(0),
-                        ))
-                    })
-                    .collect_vec()
-                    .into()
-            }
-
-            // Instructions that are implemented as function calls
-            Op::MemoryCopy { .. }
-            | Op::MemoryFill { .. }
-            | Op::I32Popcnt
-            | Op::I64Popcnt
-            | Op::I32Ctz
-            | Op::I64Ctz
-            | Op::I32Clz
-            | Op::I64Clz => {
-                unreachable!("These ops should have been replaced with function calls")
-            }
-            _ => todo!("{op:?}"),
-        }
+            .unwrap_or_else(|| translate_complex_ins(c, op, inputs, output))
     }
 }
 
@@ -1924,6 +756,1191 @@ impl<F: PrimeField32> Directive<F> {
             }
             Directive::Instruction(i) => Some(i),
         }
+    }
+}
+
+/// Translate most binary operations (those with two inputs and one output).
+///
+/// Except for relational operations, which are handled separately.
+fn translate_most_binary_ops<'a, F: PrimeField32>(
+    op: &Op<'a>,
+    inputs: &[WasmOpInput],
+    output: &Range<u32>,
+) -> Option<Instruction<F>> {
+    use openvm_instructions::LocalOpcode;
+
+    let binary_op = match op {
+        // 32-bit integer instructions
+        Op::I32Eq => EqOpcode::EQ.global_opcode(),
+        Op::I32Ne => EqOpcode::NEQ.global_opcode(),
+        Op::I32Add => BaseAluOpcode::ADD.global_opcode(),
+        Op::I32Sub => BaseAluOpcode::SUB.global_opcode(),
+        Op::I32And => BaseAluOpcode::AND.global_opcode(),
+        Op::I32Or => BaseAluOpcode::OR.global_opcode(),
+        Op::I32Xor => BaseAluOpcode::XOR.global_opcode(),
+        Op::I32Mul => MulOpcode::MUL.global_opcode(),
+        Op::I32DivS => DivRemOpcode::DIV.global_opcode(),
+        Op::I32DivU => DivRemOpcode::DIVU.global_opcode(),
+        Op::I32RemS => DivRemOpcode::REM.global_opcode(),
+        Op::I32RemU => DivRemOpcode::REMU.global_opcode(),
+        Op::I32Shl => ShiftOpcode::SLL.global_opcode(),
+        Op::I32ShrS => ShiftOpcode::SRA.global_opcode(),
+        Op::I32ShrU => ShiftOpcode::SRL.global_opcode(),
+
+        // 64-bit integer instructions
+        Op::I64Eq => Eq64Opcode::EQ.global_opcode(),
+        Op::I64Ne => Eq64Opcode::NEQ.global_opcode(),
+        Op::I64Add => BaseAlu64Opcode::ADD.global_opcode(),
+        Op::I64Sub => BaseAlu64Opcode::SUB.global_opcode(),
+        Op::I64And => BaseAlu64Opcode::AND.global_opcode(),
+        Op::I64Or => BaseAlu64Opcode::OR.global_opcode(),
+        Op::I64Xor => BaseAlu64Opcode::XOR.global_opcode(),
+        Op::I64Mul => Mul64Opcode::MUL.global_opcode(),
+        Op::I64DivS => DivRem64Opcode::DIV.global_opcode(),
+        Op::I64DivU => DivRem64Opcode::DIVU.global_opcode(),
+        Op::I64RemS => DivRem64Opcode::REM.global_opcode(),
+        Op::I64RemU => DivRem64Opcode::REMU.global_opcode(),
+        Op::I64Shl => Shift64Opcode::SLL.global_opcode(),
+        Op::I64ShrS => Shift64Opcode::SRA.global_opcode(),
+        Op::I64ShrU => Shift64Opcode::SRL.global_opcode(),
+
+        // Float instructions
+        Op::F32Eq => todo!(),
+        Op::F32Ne => todo!(),
+        Op::F32Lt => todo!(),
+        Op::F32Gt => todo!(),
+        Op::F32Le => todo!(),
+        Op::F32Ge => todo!(),
+        Op::F64Eq => todo!(),
+        Op::F64Ne => todo!(),
+        Op::F64Lt => todo!(),
+        Op::F64Gt => todo!(),
+        Op::F64Le => todo!(),
+        Op::F64Ge => todo!(),
+        Op::F32Add => todo!(),
+        Op::F32Sub => todo!(),
+        Op::F32Mul => todo!(),
+        Op::F32Div => todo!(),
+        Op::F32Min => todo!(),
+        Op::F32Max => todo!(),
+        Op::F32Copysign => todo!(),
+        Op::F64Add => todo!(),
+        Op::F64Sub => todo!(),
+        Op::F64Mul => todo!(),
+        Op::F64Div => todo!(),
+        Op::F64Min => todo!(),
+        Op::F64Max => todo!(),
+        Op::F64Copysign => todo!(),
+
+        // Not an operation we handle here
+        _ => return None,
+    };
+
+    let opcode = binary_op.as_usize();
+    let output = output.start as usize;
+
+    Some(match inputs {
+        [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
+            // Case of two register inputs
+            ib::instr_r(opcode, output, input1.start as usize, input2.start as usize)
+        }
+        [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
+        | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
+            // Case of one register input and one constant input.
+
+            // The order doesn't matter, because only commutative operations will
+            // have the constant operand on the left side, as const folding ensures.
+
+            // The constant folding step guarantees that the constant can be safely
+            // truncated to i16.
+            let c = const_i16_as_field(c);
+            ib::instr_i(opcode, output, reg.start as usize, c)
+        }
+        _ => unreachable!("combination of inputs not possible for binary op"),
+    })
+}
+
+fn translate_less_than_ops<'a, F: PrimeField32>(
+    op: &Op<'a>,
+    inputs: &[WasmOpInput],
+    output: &Range<u32>,
+) -> Option<Instruction<F>> {
+    use openvm_instructions::LocalOpcode;
+
+    let rel_op = match op {
+        Op::I32LtS => LessThanOpcode::SLT.global_opcode(),
+        Op::I32LtU => LessThanOpcode::SLTU.global_opcode(),
+        Op::I64LtS => LessThan64Opcode::SLT.global_opcode(),
+        Op::I64LtU => LessThan64Opcode::SLTU.global_opcode(),
+        _ => return None,
+    };
+
+    let opcode = rel_op.as_usize();
+    let output = output.start as usize;
+
+    Some(match inputs {
+        [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
+            ib::instr_r(opcode, output, input1.start as usize, input2.start as usize)
+        }
+        [WasmOpInput::Register(reg), WasmOpInput::Constant(c)] => {
+            // The constant folding step guarantees that the constant can be safely
+            // truncated to i16.
+            let c = const_i16_as_field(c);
+            ib::instr_i(opcode, output, reg.start as usize, c)
+        }
+        [
+            WasmOpInput::Constant(WasmValue::I32(0) | WasmValue::I64(0)),
+            WasmOpInput::Register(reg),
+        ] => {
+            // This must be the case of unsigned "0 < reg", where we turn it into "reg != 0".
+            ib::neq_imm(output, reg.start as usize, AluImm::from(0))
+        }
+        _ => unreachable!("combination of inputs not possible for binary op"),
+    })
+}
+
+fn translate_greater_than_ops<'a, F: PrimeField32>(
+    op: &Op<'a>,
+    inputs: &[WasmOpInput],
+    output: &Range<u32>,
+) -> Option<Instruction<F>> {
+    use openvm_instructions::LocalOpcode;
+
+    // GT instructions are just reversed LT
+    let op = match op {
+        Op::I32GtS => LessThanOpcode::SLT.global_opcode(),
+        Op::I32GtU => LessThanOpcode::SLTU.global_opcode(),
+        Op::I64GtS => LessThan64Opcode::SLT.global_opcode(),
+        Op::I64GtU => LessThan64Opcode::SLTU.global_opcode(),
+        _ => return None,
+    };
+
+    let op = op.as_usize();
+    let output = output.start as usize;
+    Some(match inputs {
+        [
+            WasmOpInput::Register(greater_side),
+            WasmOpInput::Register(lesser_side),
+        ] => {
+            // Case of two register inputs
+            ib::instr_r(
+                op,
+                output,
+                lesser_side.start as usize,
+                greater_side.start as usize,
+            )
+        }
+        [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
+            // Case of one register input and one constant input.
+            //
+            // The constant is only allowed to be on the left side, because GT
+            // is just LT with the operands reversed, and LT expects the immediate as
+            // the greater side.
+            let c = const_i16_as_field(c);
+            ib::instr_i(op, output, reg.start as usize, c)
+        }
+        [
+            WasmOpInput::Register(reg),
+            WasmOpInput::Constant(WasmValue::I32(0) | WasmValue::I64(0)),
+        ] => {
+            // This must be the case of unsigned "reg > 0", where we turn it into "reg != 0".
+            ib::neq_imm(output, reg.start as usize, AluImm::from(0))
+        }
+        _ => unreachable!("combination of inputs not possible for GT op"),
+    })
+}
+
+/// Translates the complex instructions that supports constant inlining
+fn translate_complex_ins_with_const<F: PrimeField32>(
+    c: &mut Ctx<F>,
+    op: &Op,
+    inputs: &[WasmOpInput],
+    output: &Range<u32>,
+) -> Option<Tree<Directive<F>>> {
+    use openvm_instructions::LocalOpcode;
+
+    Some(match op {
+        Op::I32GeS
+        | Op::I32GeU
+        | Op::I64GeS
+        | Op::I64GeU
+        | Op::I32LeS
+        | Op::I32LeU
+        | Op::I64LeS
+        | Op::I64LeU => {
+            let inverse_result = c.register_gen.allocate_type(ValType::I32).start as usize;
+            let output = output.start as usize;
+
+            let comp_instruction = match [&inputs[0], &inputs[1]] {
+                [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
+                    let inverse_op = match op {
+                        Op::I32GeS => ib::lt_s,
+                        Op::I32GeU => ib::lt_u,
+                        Op::I64GeS => ib::lt_s_64,
+                        Op::I64GeU => ib::lt_u_64,
+                        Op::I32LeS => ib::gt_s,
+                        Op::I32LeU => ib::gt_u,
+                        Op::I64LeS => ib::gt_s_64,
+                        Op::I64LeU => ib::gt_u_64,
+                        _ => unreachable!(),
+                    };
+
+                    let input1 = input1.start as usize;
+                    let input2 = input2.start as usize;
+
+                    // Perform the inverse operation and invert the result
+                    inverse_op(inverse_result, input1, input2)
+                }
+                [WasmOpInput::Register(reg), WasmOpInput::Constant(c)]
+                | [WasmOpInput::Constant(c), WasmOpInput::Register(reg)] => {
+                    // Handle the cases where unsigned "reg >= 1" and "1 <= reg" can be turned into "reg != 0"
+                    if matches!(
+                        (&op, &inputs[1]),
+                        (
+                            Op::I32GeU | Op::I64GeU,
+                            WasmOpInput::Constant(WasmValue::I32(1) | WasmValue::I64(1))
+                        )
+                    ) || matches!(
+                        (&op, &inputs[0]),
+                        (
+                            Op::I32LeU | Op::I64LeU,
+                            WasmOpInput::Constant(WasmValue::I32(1) | WasmValue::I64(1))
+                        )
+                    ) {
+                        return Some(
+                            Directive::Instruction(ib::neq_imm(
+                                output,
+                                reg.start as usize,
+                                AluImm::from(0),
+                            ))
+                            .into(),
+                        );
+                    }
+
+                    let opcode = match op {
+                        Op::I32GeS | Op::I32LeS => LessThanOpcode::SLT.global_opcode(),
+                        Op::I32GeU | Op::I32LeU => LessThanOpcode::SLTU.global_opcode(),
+                        Op::I64GeS | Op::I64LeS => LessThan64Opcode::SLT.global_opcode(),
+                        Op::I64GeU | Op::I64LeU => LessThan64Opcode::SLTU.global_opcode(),
+                        _ => unreachable!(),
+                    };
+
+                    // Check whether this is the case where "c >= r" or "r <= c" can be turned into "r < c + 1".
+                    if ((matches!(op, Op::I32GeS | Op::I32GeU | Op::I64GeS | Op::I64GeU)
+                        && matches!(&inputs[0], WasmOpInput::Constant(_)))
+                        || (matches!(op, Op::I32LeS | Op::I32LeU | Op::I64LeS | Op::I64LeU)
+                            && matches!(&inputs[0], WasmOpInput::Register(_))))
+                        && let Some(inc_c) = can_turn_to_lt(op, c)
+                    {
+                        // The operation can be turned into a single less-than comparison with incremented constant.
+                        // There is no need to do the inverse operation and invert the result.
+                        return Some(
+                            Directive::Instruction(ib::instr_i(
+                                opcode.as_usize(),
+                                output,
+                                reg.start as usize,
+                                inc_c.into(),
+                            ))
+                            .into(),
+                        );
+                    }
+
+                    let c = const_i16_as_field(c);
+                    ib::instr_i(opcode.as_usize(), inverse_result, reg.start as usize, c)
+                }
+                _ => unreachable!("combination of inputs not possible for GE/LE operations"),
+            };
+
+            // Perform the inverse operation and invert the result
+            vec![
+                Directive::Instruction(comp_instruction),
+                Directive::Instruction(ib::eq_imm(output, inverse_result, AluImm::from(0))),
+            ]
+            .into()
+        }
+        Op::I32Rotl => translate_rot::<F, I32Rot>(c, RotDirection::Left, inputs, output),
+        Op::I32Rotr => translate_rot::<F, I32Rot>(c, RotDirection::Right, inputs, output),
+        Op::I64Rotl => translate_rot::<F, I64Rot>(c, RotDirection::Left, inputs, output),
+        Op::I64Rotr => translate_rot::<F, I64Rot>(c, RotDirection::Right, inputs, output),
+        Op::Select | Op::TypedSelect { .. } => {
+            // Works like a ternary operator: if the condition (3rd input) is non-zero,
+            // select the 1st input, otherwise select the 2nd input.
+            let condition = inputs[2].as_register().unwrap().start;
+
+            // The directives to set the output to either of the alternatives
+            let [if_non_zero, if_zero] =
+                [&inputs[0], &inputs[1]].map(|alternative| match alternative {
+                    // This input is a register, so we issue register to register copy instructions
+                    WasmOpInput::Register(r) => r
+                        .clone()
+                        .zip(output.clone())
+                        .map(|(src, dest)| {
+                            Directive::Instruction(ib::add_imm(
+                                dest as usize,
+                                src as usize,
+                                AluImm::from(0),
+                            ))
+                        })
+                        .collect_vec(),
+                    // This input is a constant, so we issue const to register instructions
+                    WasmOpInput::Constant(value) => {
+                        const_wasm_value(c.program, value, output.clone())
+                    }
+                });
+
+            let non_zero_label = c.new_label(LabelType::Local);
+            let continuation_label = c.new_label(LabelType::Local);
+
+            Tree::Node(vec![
+                // if condition != 0 jump to non_zero_label
+                Tree::Leaf(Directive::JumpIf {
+                    target: non_zero_label.clone(),
+                    condition_reg: condition,
+                }),
+                // if jump is not taken, copy the value for "if zero"
+                if_zero.into(),
+                // jump to continuation
+                Directive::Jump {
+                    target: continuation_label.clone(),
+                }
+                .into(),
+                // alternative label
+                Directive::Label {
+                    id: non_zero_label,
+                    frame_size: None,
+                }
+                .into(),
+                // if jump is taken, copy the value for "if set"
+                if_non_zero.into(),
+                // continuation label
+                Directive::Label {
+                    id: continuation_label,
+                    frame_size: None,
+                }
+                .into(),
+            ])
+        }
+        _ => return None,
+    })
+}
+
+fn translate_complex_ins<F: PrimeField32>(
+    c: &mut Ctx<F>,
+    op: Op,
+    inputs: Vec<WasmOpInput>,
+    output: Option<Range<u32>>,
+) -> Tree<Directive<F>> {
+    // Handle the remaining operations, whose inputs are all registers
+    let inputs = inputs
+        .into_iter()
+        .map(|input| {
+            input
+                .as_register()
+                .expect("input must be a register")
+                .clone()
+        })
+        .collect_vec();
+    match op {
+        Op::I32Const { value } => {
+            let output = output.unwrap().start as usize;
+            let value_u = value as u32;
+            let imm_lo: u16 = (value_u & 0xffff) as u16;
+            let imm_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
+            Directive::Instruction(ib::const_32_imm(output, imm_lo, imm_hi)).into()
+        }
+        Op::I64Const { value } => {
+            let output = output.unwrap().start as usize;
+            let lower = value as u32;
+            let lower_lo: u16 = (lower & 0xffff) as u16;
+            let lower_hi: u16 = ((lower >> 16) & 0xffff) as u16;
+            let upper = (value >> 32) as u32;
+            let upper_lo: u16 = (upper & 0xffff) as u16;
+            let upper_hi: u16 = ((upper >> 16) & 0xffff) as u16;
+            vec![
+                Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
+                Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
+            ]
+            .into()
+        }
+
+        Op::I32Eqz => {
+            let input = inputs[0].start as usize;
+            let output = output.unwrap().start as usize;
+            Directive::Instruction(ib::eq_imm(output, input, AluImm::from(0))).into()
+        }
+        Op::I64Eqz => {
+            let input = inputs[0].start as usize;
+            let output = output.unwrap().start as usize;
+            Directive::Instruction(ib::eq_imm_64(output, input, AluImm::from(0))).into()
+        }
+
+        Op::I32WrapI64 => {
+            // TODO: considering we are using a single address space for both i32 and i64,
+            // this instruction could be elided at womir level.
+
+            let lower_limb = inputs[0].start as usize;
+            // The higher limb is ignored.
+            let output = output.unwrap().start as usize;
+
+            // Just copy the lower limb to the output.
+            Directive::Instruction(ib::add_imm(output, lower_limb, AluImm::from(0))).into()
+        }
+        Op::I32Extend8S | Op::I32Extend16S => {
+            let input = inputs[0].start as usize;
+            let output = output.unwrap().start as usize;
+
+            let tmp = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+            let shift = match op {
+                Op::I32Extend8S => 24_i16,
+                Op::I32Extend16S => 16_i16,
+                _ => unreachable!(),
+            }
+            .into();
+
+            // Left shift followed by arithmetic right shift
+            vec![
+                Directive::Instruction(ib::shl_imm(tmp, input, shift)),
+                Directive::Instruction(ib::shr_s_imm(output, tmp, shift)),
+            ]
+            .into()
+        }
+        Op::I64Extend8S | Op::I64Extend16S | Op::I64Extend32S => {
+            let input = inputs[0].start as usize;
+            let output = output.unwrap().start as usize;
+
+            let tmp = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+            let shift = match op {
+                Op::I64Extend8S => 56_i16,
+                Op::I64Extend16S => 48_i16,
+                Op::I64Extend32S => 32_i16,
+                _ => unreachable!(),
+            }
+            .into();
+
+            // Left shift followed by arithmetic right shift
+            vec![
+                Directive::Instruction(ib::shl_imm_64(tmp, input, shift)),
+                Directive::Instruction(ib::shr_s_imm_64(output, tmp, shift)),
+            ]
+            .into()
+        }
+
+        // 64-bit integer instructions
+        Op::I64ExtendI32S => {
+            let input = inputs[0].start as usize;
+            let output = output.unwrap().start as usize;
+
+            let high_shifted = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+            vec![
+                // Copy the 32 bit values to the high 32 bits of the temporary value.
+                // Leave the low bits undefined.
+                Directive::Instruction(ib::add_imm(high_shifted + 1, input, AluImm::from(0))),
+                // shr will read 64 bits, so we need to zero the other half due to WOM
+                Directive::Instruction(ib::const_32_imm(high_shifted, 0, 0)),
+                // Arithmetic shift right to fill the high bits with the sign bit.
+                Directive::Instruction(ib::shr_s_imm_64(output, high_shifted, 32_i16.into())),
+            ]
+            .into()
+        }
+        Op::I64ExtendI32U => {
+            let input = inputs[0].start as usize;
+            let output = output.unwrap().start as usize;
+
+            vec![
+                // Copy the 32 bit value to the low 32 bits of the output.
+                Directive::Instruction(ib::add_imm(output, input, AluImm::from(0))),
+                // Zero the high 32 bits.
+                Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)),
+            ]
+            .into()
+        }
+
+        // Global instructions
+        Op::GlobalSet { global_index } => {
+            let Global::Mutable(allocated_var) = &c.program.globals[global_index as usize] else {
+                unreachable!()
+            };
+
+            store_to_const_addr(c, allocated_var.address, inputs[0].clone()).into()
+        }
+        Op::GlobalGet { global_index } => {
+            let global = &c.program.globals[global_index as usize];
+            match global {
+                Global::Mutable(allocated_var) => {
+                    load_from_const_addr(c, allocated_var.address, output.unwrap())
+                        .0
+                        .into()
+                }
+                Global::Immutable(op) => translate_complex_ins(c, op.clone(), Vec::new(), output),
+            }
+        }
+
+        Op::I32Load { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let output = output.unwrap().start as usize;
+            match memarg.align {
+                0 => {
+                    // read four bytes
+                    let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    vec![
+                        Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                        Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
+                        Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
+                        Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
+                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
+                        Directive::Instruction(ib::or(lo, b0, b1_shifted)),
+                        Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
+                        Directive::Instruction(ib::or(output, lo, hi)),
+                    ]
+                    .into()
+                }
+                1 => {
+                    // read two half words
+                    let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let hi_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    vec![
+                        Directive::Instruction(ib::loadhu(lo, base_addr, imm)),
+                        Directive::Instruction(ib::loadhu(hi, base_addr, imm + 2)),
+                        Directive::Instruction(ib::shl_imm(hi_shifted, hi, 16_i16.into())),
+                        Directive::Instruction(ib::or(output, lo, hi_shifted)),
+                    ]
+                    .into()
+                }
+                2.. => Directive::Instruction(ib::loadw(output, base_addr, imm)).into(),
+            }
+        }
+
+        Op::I32Load16U { memarg } | Op::I32Load16S { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let output = output.unwrap().start as usize;
+
+            match memarg.align {
+                0 => {
+                    // read four bytes
+                    let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    vec![
+                        Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                        if let Op::I32Load16S { .. } = op {
+                            Directive::Instruction(ib::loadb(b1, base_addr, imm + 1))
+                        } else {
+                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
+                        },
+                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
+                        Directive::Instruction(ib::or(output, b0, b1_shifted)),
+                    ]
+                    .into()
+                }
+                1.. => if let Op::I32Load16S { .. } = op {
+                    Directive::Instruction(ib::loadh(output, base_addr, imm))
+                } else {
+                    Directive::Instruction(ib::loadhu(output, base_addr, imm))
+                }
+                .into(),
+            }
+        }
+        Op::I32Load8U { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let output = output.unwrap().start as usize;
+
+            Directive::Instruction(ib::loadbu(output, base_addr, imm)).into()
+        }
+        Op::I32Load8S { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let output = output.unwrap().start as usize;
+
+            Directive::Instruction(ib::loadb(output, base_addr, imm)).into()
+        }
+        Op::I64Load { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let output = (output.unwrap().start) as usize;
+
+            match memarg.align {
+                0 => {
+                    // read byte by byte
+                    let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b4 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b5 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b6 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b7 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b5_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b6_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b7_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+                    let hi0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let hi1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let lo0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let lo1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+                    vec![
+                        // load each byte
+                        Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                        Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
+                        Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
+                        Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
+                        Directive::Instruction(ib::loadbu(b4, base_addr, imm + 4)),
+                        Directive::Instruction(ib::loadbu(b5, base_addr, imm + 5)),
+                        Directive::Instruction(ib::loadbu(b6, base_addr, imm + 6)),
+                        Directive::Instruction(ib::loadbu(b7, base_addr, imm + 7)),
+                        // build lo 32 bits
+                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
+                        Directive::Instruction(ib::or(lo0, b0, b1_shifted)),
+                        Directive::Instruction(ib::or(lo1, b2_shifted, b3_shifted)),
+                        Directive::Instruction(ib::or(output, lo0, lo1)),
+                        // build hi 32 bits
+                        Directive::Instruction(ib::shl_imm(b5_shifted, b5, 8_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b6_shifted, b6, 16_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b7_shifted, b7, 24_i16.into())),
+                        Directive::Instruction(ib::or(hi0, b4, b5_shifted)),
+                        Directive::Instruction(ib::or(hi1, b6_shifted, b7_shifted)),
+                        Directive::Instruction(ib::or(output + 1, hi0, hi1)),
+                    ]
+                }
+                1 => {
+                    // read four halfwords
+                    let h0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+
+                    vec![
+                        Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
+                        Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
+                        Directive::Instruction(ib::loadhu(h2, base_addr, imm + 4)),
+                        Directive::Instruction(ib::loadhu(h3, base_addr, imm + 6)),
+                        Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16.into())),
+                        Directive::Instruction(ib::shl_imm(h3_shifted, h3, 16_i16.into())),
+                        Directive::Instruction(ib::or(output, h0, h1_shifted)),
+                        Directive::Instruction(ib::or(output + 1, h2, h3_shifted)),
+                    ]
+                }
+                2.. => {
+                    // read two words
+                    vec![
+                        Directive::Instruction(ib::loadw(output, base_addr, imm)),
+                        Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4)),
+                    ]
+                }
+            }
+            .into()
+        }
+        Op::I64Load8U { memarg } | Op::I64Load8S { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let output = (output.unwrap().start) as usize;
+            let val = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+            vec![
+                // load signed or unsigned byte as i32 hi part
+                if let Op::I64Load8S { .. } = op {
+                    Directive::Instruction(ib::loadb(val + 1, base_addr, imm))
+                } else {
+                    Directive::Instruction(ib::loadbu(val + 1, base_addr, imm))
+                },
+                // shr will read 64 bits, so we need to zero the other half due to WOM
+                Directive::Instruction(ib::const_32_imm(val, 0, 0)),
+                // shift i64 val right, keeping the sign
+                Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into())),
+            ]
+            .into()
+        }
+        Op::I64Load16U { memarg } | Op::I64Load16S { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let output = (output.unwrap().start) as usize;
+            let val = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+            match memarg.align {
+                0 => {
+                    let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    vec![
+                        // load b1 signed/unsigned
+                        if let Op::I64Load16S { .. } = op {
+                            Directive::Instruction(ib::loadb(b1, base_addr, imm + 1))
+                        } else {
+                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
+                        },
+                        // shift b1
+                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
+                        // load b0
+                        Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                        // combine b0 and b1
+                        Directive::Instruction(ib::or(val + 1, b0, b1_shifted)),
+                        // shr will read 64 bits, so we need to zero the other half due to WOM
+                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
+                        // shift i64 val right, keeping the sign
+                        Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into())),
+                    ]
+                }
+                1.. => {
+                    if let Op::I64Load16S { .. } = op {
+                        vec![
+                            // load signed halfword as i32 on the hi part of the i64 val
+                            Directive::Instruction(ib::loadh(val + 1, base_addr, imm)),
+                            // shr will read 64 bits, so we need to zero the other half due to WOM
+                            Directive::Instruction(ib::const_32_imm(val, 0, 0)),
+                            // shift i64 val right, keeping the sign
+                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into())),
+                        ]
+                    } else {
+                        vec![
+                            // load unsigned lo i32
+                            Directive::Instruction(ib::loadhu(output, base_addr, imm)),
+                            // zero out hi i32
+                            Directive::Instruction(ib::const_32_imm(output + 1, 0x0, 0x0)),
+                        ]
+                    }
+                }
+            }
+            .into()
+        }
+        Op::I64Load32U { memarg } | Op::I64Load32S { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let output = (output.unwrap().start) as usize;
+            let val = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+            match memarg.align {
+                0 => {
+                    let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    vec![
+                        Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                        Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
+                        Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
+                        Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
+                        // shifts
+                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
+                        // build hi and lo
+                        Directive::Instruction(ib::or(lo, b0, b1_shifted)),
+                        Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
+                        // build hi i32 in val
+                        Directive::Instruction(ib::or(val + 1, lo, hi)),
+                        // shr will read 64 bits, so we need to zero the other half due to WOM
+                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
+                        // shift signed/unsigned
+                        if let Op::I64Load32S { .. } = op {
+                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
+                        } else {
+                            Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
+                        },
+                    ]
+                }
+                1 => {
+                    let h0 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    vec![
+                        // load h0, h1
+                        Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
+                        Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
+                        // shift h1
+                        Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16.into())),
+                        // combine h0 and h1
+                        Directive::Instruction(ib::or(val + 1, h0, h1_shifted)),
+                        // shr will read 64 bits, so we need to zero the other half due to WOM
+                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
+                        // shift signed/unsigned
+                        if let Op::I64Load32S { .. } = op {
+                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
+                        } else {
+                            Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
+                        },
+                    ]
+                }
+                2.. => {
+                    vec![
+                        // load word
+                        Directive::Instruction(ib::loadw(val + 1, base_addr, imm)),
+                        // shr will read 64 bits, so we need to zero the other half due to WOM
+                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
+                        // shift signed/unsigned
+                        if let Op::I64Load32S { .. } = op {
+                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
+                        } else {
+                            Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
+                        },
+                    ]
+                }
+            }
+            .into()
+        }
+        Op::I32Store { memarg } | Op::I64Store32 { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let value = inputs[1].start as usize;
+
+            match memarg.align {
+                0 => {
+                    // write byte by byte
+                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    vec![
+                        // store byte 0
+                        Directive::Instruction(ib::storeb(value, base_addr, imm)),
+                        // shift and store byte 1
+                        Directive::Instruction(ib::shr_u_imm(b1, value, 8_i16.into())),
+                        Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
+                        // shift and store byte 2
+                        Directive::Instruction(ib::shr_u_imm(b2, value, 16_i16.into())),
+                        Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
+                        // shift and store byte 3
+                        Directive::Instruction(ib::shr_u_imm(b3, value, 24_i16.into())),
+                        Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
+                    ]
+                    .into()
+                }
+                1 => {
+                    let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    vec![
+                        // store halfword 0
+                        Directive::Instruction(ib::storeh(value, base_addr, imm)),
+                        // shift and store halfword 1
+                        Directive::Instruction(ib::shr_u_imm(h1, value, 16_i16.into())),
+                        Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
+                    ]
+                    .into()
+                }
+                2.. => Directive::Instruction(ib::storew(value, base_addr, imm)).into(),
+            }
+        }
+        Op::I32Store8 { memarg } | Op::I64Store8 { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let value = inputs[1].start as usize;
+
+            Directive::Instruction(ib::storeb(value, base_addr, imm)).into()
+        }
+        Op::I32Store16 { memarg } | Op::I64Store16 { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let value = inputs[1].start as usize;
+
+            match memarg.align {
+                0 => {
+                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    vec![
+                        // store byte 0
+                        Directive::Instruction(ib::storeb(value, base_addr, imm)),
+                        // shift and store byte 1
+                        Directive::Instruction(ib::shr_u_imm(b1, value, 8_i16.into())),
+                        Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
+                    ]
+                    .into()
+                }
+                1.. => Directive::Instruction(ib::storeh(value, base_addr, imm)).into(),
+            }
+        }
+        Op::I64Store { memarg } => {
+            let imm = mem_offset(memarg, c);
+            let base_addr = inputs[0].start as usize;
+            let value_lo = inputs[1].start as usize;
+            let value_hi = (inputs[1].start + 1) as usize;
+
+            match memarg.align {
+                0 => {
+                    // write byte by byte
+                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b5 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b6 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b7 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    vec![
+                        // store byte 0
+                        Directive::Instruction(ib::storeb(value_lo, base_addr, imm)),
+                        // shift and store byte 1
+                        Directive::Instruction(ib::shr_u_imm(b1, value_lo, 8_i16.into())),
+                        Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
+                        // shift and store byte 2
+                        Directive::Instruction(ib::shr_u_imm(b2, value_lo, 16_i16.into())),
+                        Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
+                        // shift and store byte 3
+                        Directive::Instruction(ib::shr_u_imm(b3, value_lo, 24_i16.into())),
+                        Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
+                        // store byte 4
+                        Directive::Instruction(ib::storeb(value_hi, base_addr, imm + 4)),
+                        // shift and store byte 5
+                        Directive::Instruction(ib::shr_u_imm(b5, value_hi, 8_i16.into())),
+                        Directive::Instruction(ib::storeb(b5, base_addr, imm + 5)),
+                        // shift and store byte 6
+                        Directive::Instruction(ib::shr_u_imm(b6, value_hi, 16_i16.into())),
+                        Directive::Instruction(ib::storeb(b6, base_addr, imm + 6)),
+                        // shift and store byte 7
+                        Directive::Instruction(ib::shr_u_imm(b7, value_hi, 24_i16.into())),
+                        Directive::Instruction(ib::storeb(b7, base_addr, imm + 7)),
+                    ]
+                }
+                1 => {
+                    // write by halfwords
+                    let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    vec![
+                        // store halfword 0
+                        Directive::Instruction(ib::storeh(value_lo, base_addr, imm)),
+                        // shift and store halfword 1
+                        Directive::Instruction(ib::shr_u_imm(h1, value_lo, 16_i16.into())),
+                        Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
+                        // store halfword 2
+                        Directive::Instruction(ib::storeh(value_hi, base_addr, imm + 4)),
+                        // shift and store halfword 3
+                        Directive::Instruction(ib::shr_u_imm(h3, value_hi, 16_i16.into())),
+                        Directive::Instruction(ib::storeh(h3, base_addr, imm + 6)),
+                    ]
+                }
+                2.. => {
+                    vec![
+                        Directive::Instruction(ib::storew(value_lo, base_addr, imm)),
+                        Directive::Instruction(ib::storew(value_hi, base_addr, imm + 4)),
+                    ]
+                }
+            }
+            .into()
+        }
+
+        Op::MemorySize { mem } => {
+            assert_eq!(mem, 0, "Only a single linear memory is supported");
+            load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap())
+                .0
+                .into()
+        }
+        Op::MemoryGrow { mem } => {
+            assert_eq!(mem, 0, "Only a single linear memory is supported");
+            let header_addr = c.program.memory.unwrap().start;
+
+            let output = output.unwrap().start as usize;
+
+            let header_regs = c.register_gen.allocate_type(ValType::I64);
+            let size_reg = header_regs.start as usize;
+            let max_size_reg = (header_regs.start + 1) as usize;
+
+            let new_size = c.register_gen.allocate_type(ValType::I32).start as usize;
+            let is_gt_max = c.register_gen.allocate_type(ValType::I32).start;
+            let is_lt_curr = c.register_gen.allocate_type(ValType::I32).start;
+
+            let error_label = c.new_label(LabelType::Local);
+            let continuation_label = c.new_label(LabelType::Local);
+
+            // Load the current size and max size.
+            let (mut directives, header_addr_reg) =
+                load_from_const_addr(c, header_addr, header_regs);
+
+            directives.extend([
+                // Calculate the new size:
+                Directive::Instruction(ib::add(new_size, size_reg, inputs[0].start as usize)),
+                // Check if the new size is greater than the max size.
+                Directive::Instruction(ib::gt_u(is_gt_max as usize, new_size, max_size_reg)),
+                // If the new size is greater than the max size, branch to the error label.
+                Directive::JumpIf {
+                    target: error_label.clone(),
+                    condition_reg: is_gt_max,
+                },
+                // Check if the new size is less than to the current size (which means an overflow occurred),
+                // which means the requested size is too large.
+                Directive::Instruction(ib::lt_u::<F>(is_lt_curr as usize, new_size, size_reg)),
+                // If the requested size overflows, branch to the error label.
+                Directive::JumpIf {
+                    target: error_label.clone(),
+                    condition_reg: is_lt_curr,
+                },
+                // Success case:
+                // - write new size to header.
+                Directive::Instruction(ib::storew(new_size, header_addr_reg.start as usize, 0)),
+                // - write old size to output.
+                Directive::Instruction(ib::add_imm(output, size_reg, AluImm::from(0))),
+                // - jump to continuation label.
+                Directive::Jump {
+                    target: continuation_label.clone(),
+                },
+                // Error case: write 0xFFFFFFFF to output.
+                Directive::Label {
+                    id: error_label,
+                    frame_size: None,
+                },
+                Directive::Instruction(ib::const_32_imm(output, 0xFFFF, 0xFFFF)),
+                // Continue:
+                Directive::Label {
+                    id: continuation_label,
+                    frame_size: None,
+                },
+            ]);
+
+            directives.into()
+        }
+        Op::MemoryInit {
+            data_index: _,
+            mem: _,
+        } => todo!(),
+        Op::DataDrop { data_index: _ } => todo!(),
+
+        // Table instructions
+        Op::TableInit {
+            elem_index: _,
+            table: _,
+        } => todo!(),
+        Op::TableCopy {
+            dst_table: _,
+            src_table: _,
+        } => todo!(),
+        Op::TableFill { table: _ } => todo!(),
+        Op::TableGet { table } => {
+            emit_table_get(c, table, inputs[0].clone(), output.unwrap()).into()
+        }
+        Op::TableSet { table: _ } => todo!(),
+        Op::TableGrow { table: _ } => todo!(),
+        Op::TableSize { table: _ } => todo!(),
+        Op::ElemDrop { elem_index: _ } => todo!(),
+
+        // Reference instructions
+        Op::RefNull { hty: _ } => NULL_REF
+            .iter()
+            .zip_eq(output.unwrap())
+            .map(|(v, reg)| {
+                Directive::Instruction(ib::const_32_imm(reg as usize, *v as u16, (*v >> 16) as u16))
+            })
+            .collect_vec()
+            .into(),
+        Op::RefIsNull => todo!(),
+        Op::RefFunc { function_index } => {
+            const_function_reference(c.program, function_index, output.unwrap()).into()
+        }
+
+        // Float instructions
+        Op::F32Load { memarg: _ } => todo!(),
+        Op::F64Load { memarg: _ } => todo!(),
+        Op::F32Store { memarg: _ } => todo!(),
+        Op::F64Store { memarg: _ } => todo!(),
+        Op::F32Const { value } => {
+            let output = output.unwrap().start as usize;
+            let value_u = value.bits();
+            let value_lo: u16 = (value_u & 0xffff) as u16;
+            let value_hi: u16 = ((value_u >> 16) & 0xffff) as u16;
+            Directive::Instruction(ib::const_32_imm(output, value_lo, value_hi)).into()
+        }
+        Op::F64Const { value } => {
+            let output = output.unwrap().start as usize;
+            let value = value.bits();
+            let lower = value as u32;
+            let lower_lo: u16 = (lower & 0xffff) as u16;
+            let lower_hi: u16 = ((lower >> 16) & 0xffff) as u16;
+            let upper = (value >> 32) as u32;
+            let upper_lo: u16 = (upper & 0xffff) as u16;
+            let upper_hi: u16 = ((upper >> 16) & 0xffff) as u16;
+            vec![
+                Directive::Instruction(ib::const_32_imm(output, lower_lo, lower_hi)),
+                Directive::Instruction(ib::const_32_imm(output + 1, upper_lo, upper_hi)),
+            ]
+            .into()
+        }
+        Op::F32Abs => todo!(),
+        Op::F32Neg => todo!(),
+        Op::F32Ceil => todo!(),
+        Op::F32Floor => todo!(),
+        Op::F32Trunc => todo!(),
+        Op::F32Nearest => todo!(),
+        Op::F32Sqrt => todo!(),
+        Op::F64Abs => todo!(),
+        Op::F64Neg => todo!(),
+        Op::F64Ceil => todo!(),
+        Op::F64Floor => todo!(),
+        Op::F64Trunc => todo!(),
+        Op::F64Nearest => todo!(),
+        Op::F64Sqrt => todo!(),
+        Op::I32TruncF32S => todo!(),
+        Op::I32TruncF32U => todo!(),
+        Op::I32TruncF64S => todo!(),
+        Op::I32TruncF64U => todo!(),
+        Op::I64TruncF32S => todo!(),
+        Op::I64TruncF32U => todo!(),
+        Op::I64TruncF64S => todo!(),
+        Op::I64TruncF64U => todo!(),
+        Op::F32ConvertI32S => todo!(),
+        Op::F32ConvertI32U => todo!(),
+        Op::F32ConvertI64S => todo!(),
+        Op::F32ConvertI64U => todo!(),
+        Op::F32DemoteF64 => todo!(),
+        Op::F64ConvertI32S => todo!(),
+        Op::F64ConvertI32U => todo!(),
+        Op::F64ConvertI64S => todo!(),
+        Op::F64ConvertI64U => todo!(),
+        Op::F64PromoteF32 => todo!(),
+
+        Op::I32ReinterpretF32
+        | Op::F32ReinterpretI32
+        | Op::I64ReinterpretF64
+        | Op::F64ReinterpretI64 => {
+            // TODO: considering we are using a single address space for all types,
+            // these reinterpret instruction could be elided at womir level.
+
+            // Just copy the input to the output.
+            inputs[0]
+                .clone()
+                .zip(output.unwrap())
+                .map(|(input, output)| {
+                    Directive::Instruction(ib::add_imm(
+                        output as usize,
+                        input as usize,
+                        AluImm::from(0),
+                    ))
+                })
+                .collect_vec()
+                .into()
+        }
+
+        // Instructions that are implemented as function calls
+        Op::MemoryCopy { .. }
+        | Op::MemoryFill { .. }
+        | Op::I32Popcnt
+        | Op::I64Popcnt
+        | Op::I32Ctz
+        | Op::I64Ctz
+        | Op::I32Clz
+        | Op::I64Clz => {
+            unreachable!("These ops should have been replaced with function calls")
+        }
+        _ => todo!("{op:?}"),
     }
 }
 
@@ -2058,12 +2075,12 @@ impl<F: PrimeField32> RotOps<F> for I64Rot {
 fn translate_rot<F: PrimeField32, R: RotOps<F>>(
     c: &mut Ctx<F>,
     direction: RotDirection,
-    inputs: Vec<WasmOpInput>,
-    output: Option<Range<u32>>,
+    inputs: &[WasmOpInput],
+    output: &Range<u32>,
 ) -> Tree<Directive<F>> {
     // Const collapse ensures input[0] is always a register.
     let value = inputs[0].as_register().unwrap().start as usize;
-    let output = output.unwrap().start as usize;
+    let output = output.start as usize;
 
     let shift_ref = c.register_gen.allocate_type(R::val_type()).start as usize;
     let shift_back = c.register_gen.allocate_type(R::val_type()).start as usize;
