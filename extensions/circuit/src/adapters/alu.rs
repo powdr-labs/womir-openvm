@@ -40,24 +40,21 @@ use super::RV32_CELL_BITS;
 /// is an immediate).
 pub struct WomBaseAluAdapterChip<
     F: Field,
-    // How many 32-bit words we need to read in total. In 32-bit arch we need 2, in 64-bit arch we need 4.
-    const READ_32BIT_WORDS: usize,
     // How many bytes we need to read per register.
     const READ_BYTES: usize,
     // How many bytes we need to write per register.
     const WRITE_BYTES: usize,
 > {
-    pub air: WomBaseAluAdapterAir<READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>,
+    pub air: WomBaseAluAdapterAir<READ_BYTES, WRITE_BYTES>,
     _bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
     _marker: PhantomData<F>,
 }
 
 impl<
     F: PrimeField32,
-    const READ_32BIT_WORDS: usize,
     const READ_BYTES: usize,
     const WRITE_BYTES: usize,
-> WomBaseAluAdapterChip<F, READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
+> WomBaseAluAdapterChip<F, READ_BYTES, WRITE_BYTES>
 {
     pub fn new(
         execution_bus: ExecutionBus,
@@ -110,7 +107,7 @@ pub struct WomBaseAluWriteRecord<F: Field, const WRITE_BYTES: usize> {
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct WomBaseAluAdapterCols<T, const READ_32BIT_WORDS: usize, const WRITE_BYTES: usize> {
+pub struct WomBaseAluAdapterCols<T, const WRITE_BYTES: usize> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
     pub rd_ptr: T,
@@ -125,7 +122,6 @@ pub struct WomBaseAluAdapterCols<T, const READ_32BIT_WORDS: usize, const WRITE_B
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct WomBaseAluAdapterAir<
-    const READ_32BIT_WORDS: usize,
     const READ_BYTES: usize,
     const WRITE_BYTES: usize,
 > {
@@ -136,28 +132,27 @@ pub struct WomBaseAluAdapterAir<
     bitwise_lookup_bus: BitwiseOperationLookupBus,
 }
 
-impl<F: Field, const N: usize, const M: usize, const T: usize> BaseAir<F>
-    for WomBaseAluAdapterAir<N, M, T>
+impl<F: Field, const N: usize, const M: usize> BaseAir<F>
+    for WomBaseAluAdapterAir<N, M>
 {
     fn width(&self) -> usize {
-        WomBaseAluAdapterCols::<F, N, T>::width()
+        WomBaseAluAdapterCols::<F, N>::width()
     }
 }
 
-impl<F: Field, const N: usize, const M: usize, const T: usize> ColumnsAir<F>
-    for WomBaseAluAdapterAir<N, M, T>
+impl<F: Field, const N: usize, const M: usize> ColumnsAir<F>
+    for WomBaseAluAdapterAir<N, M>
 {
     fn columns(&self) -> Option<Vec<String>> {
-        WomBaseAluAdapterCols::<F, N, T>::struct_reflection()
+        WomBaseAluAdapterCols::<F, N>::struct_reflection()
     }
 }
 
 impl<
     AB: InteractionBuilder,
-    const READ_32BIT_WORDS: usize,
     const READ_BYTES: usize,
     const WRITE_BYTES: usize,
-> VmAdapterAir<AB> for WomBaseAluAdapterAir<READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
+> VmAdapterAir<AB> for WomBaseAluAdapterAir<READ_BYTES, WRITE_BYTES>
 {
     type Interface = BasicAdapterInterface<
         AB::Expr,
@@ -174,7 +169,7 @@ impl<
         local: &[AB::Var],
         ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local: &WomBaseAluAdapterCols<_, READ_32BIT_WORDS, WRITE_BYTES> = local.borrow();
+        let local: &WomBaseAluAdapterCols<_, WRITE_BYTES> = local.borrow();
 
         builder.assert_bool(local.rs2_as);
 
@@ -209,23 +204,22 @@ impl<
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &WomBaseAluAdapterCols<_, READ_32BIT_WORDS, WRITE_BYTES> = local.borrow();
+        let cols: &WomBaseAluAdapterCols<_, WRITE_BYTES> = local.borrow();
         cols.from_state.pc
     }
 }
 
 impl<
     F: PrimeField32,
-    const READ_32BIT_WORDS: usize,
     const READ_BYTES: usize,
     const WRITE_BYTES: usize,
-> VmAdapterChipWom<F> for WomBaseAluAdapterChip<F, READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
+> VmAdapterChipWom<F> for WomBaseAluAdapterChip<F, READ_BYTES, WRITE_BYTES>
 where
     [F; WRITE_BYTES]: Serialize + for<'de> Deserialize<'de>,
 {
     type ReadRecord = WomBaseAluReadRecord<F>;
     type WriteRecord = WomBaseAluWriteRecord<F, WRITE_BYTES>;
-    type Air = WomBaseAluAdapterAir<READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>;
+    type Air = WomBaseAluAdapterAir<READ_BYTES, WRITE_BYTES>;
     type Interface = BasicAdapterInterface<F, MinimalInstruction<F>, 2, 1, READ_BYTES, WRITE_BYTES>;
 
     fn preprocess(

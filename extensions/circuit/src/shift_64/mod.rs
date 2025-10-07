@@ -6,6 +6,6 @@ use openvm_rv32im_circuit::ShiftCoreChip;
 
 pub type WomShift64Chip<F> = VmChipWrapperWom<
     F,
-    WomBaseAluAdapterChip<F, 4, { RV32_REGISTER_NUM_LIMBS * 2 }, { RV32_REGISTER_NUM_LIMBS * 2 }>,
+    WomBaseAluAdapterChip<F, { RV32_REGISTER_NUM_LIMBS * 2 }, { RV32_REGISTER_NUM_LIMBS * 2 }>,
     ShiftCoreChip<{ RV32_REGISTER_NUM_LIMBS * 2 }, RV32_CELL_BITS>,
 >;
