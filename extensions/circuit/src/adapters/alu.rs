@@ -39,7 +39,7 @@ use super::RV32_CELL_BITS;
 /// Operand d can only be 1, and e can be either 1 (for register reads) or 0 (when c
 /// is an immediate).
 pub struct WomBaseAluAdapterChip<
-        F: Field,
+    F: Field,
     // How many limbs we need to read per register.
     const READ_NUM_LIMBS: usize,
     // How many limbs we need to write per register.
@@ -47,7 +47,7 @@ pub struct WomBaseAluAdapterChip<
     // This is just WRITE_NUM_LIMBS / RV32_REGISTER_NUM_LIMBS, but we can't use the
     // expression due to const generics limitations
     const WRITE_NUM_RV32: usize,
-    > {
+> {
     pub air: WomBaseAluAdapterAir<READ_NUM_LIMBS, WRITE_NUM_LIMBS, WRITE_NUM_RV32>,
     _bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
     _marker: PhantomData<F>,
@@ -184,7 +184,6 @@ impl<
 
         builder.assert_bool(local.rs2_as);
 
-
         // we need the following to handle the 64-bit case: wom bridge works in
         // 32-bit words, so we need 2 interactions per operation.
         let read_ops = READ_NUM_LIMBS / RV32_REGISTER_NUM_LIMBS;
@@ -192,20 +191,20 @@ impl<
 
         for r in 0..read_ops {
             let reads0: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
-                std::array::from_fn(|i| ctx.reads[0][r*RV32_REGISTER_NUM_LIMBS + i].clone());
+                std::array::from_fn(|i| ctx.reads[0][r * RV32_REGISTER_NUM_LIMBS + i].clone());
             self.wom_bridge
                 .read(local.rs1_ptr, reads0)
                 .eval(builder, ctx.instruction.is_valid.clone());
 
             let reads1: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
-                std::array::from_fn(|i| ctx.reads[1][r*RV32_REGISTER_NUM_LIMBS + i].clone());
+                std::array::from_fn(|i| ctx.reads[1][r * RV32_REGISTER_NUM_LIMBS + i].clone());
             self.wom_bridge
                 .read(local.rs2, reads1)
                 .eval(builder, local.rs2_as);
         }
         for w in 0..write_ops {
             let writes0: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
-                std::array::from_fn(|i| ctx.writes[0][w*RV32_REGISTER_NUM_LIMBS + i].clone());
+                std::array::from_fn(|i| ctx.writes[0][w * RV32_REGISTER_NUM_LIMBS + i].clone());
             self.wom_bridge
                 .write(local.rd_ptr, writes0, local.write_mult[w])
                 .eval(builder, ctx.instruction.is_valid.clone());
@@ -249,7 +248,8 @@ where
     type ReadRecord = WomBaseAluReadRecord<F>;
     type WriteRecord = WomBaseAluWriteRecord<F, WRITE_NUM_LIMBS>;
     type Air = WomBaseAluAdapterAir<READ_NUM_LIMBS, WRITE_NUM_LIMBS, WRITE_NUM_RV32>;
-    type Interface = BasicAdapterInterface<F, MinimalInstruction<F>, 2, 1, READ_NUM_LIMBS, WRITE_NUM_LIMBS>;
+    type Interface =
+        BasicAdapterInterface<F, MinimalInstruction<F>, 2, 1, READ_NUM_LIMBS, WRITE_NUM_LIMBS>;
 
     fn preprocess(
         &mut self,
