@@ -5,6 +5,6 @@ use crate::eq::EqCoreChip;
 
 pub type Eq64ChipWom<F> = VmChipWrapperWom<
     F,
-    WomBaseAluAdapterChip<F, { RV32_REGISTER_NUM_LIMBS * 2 }, RV32_REGISTER_NUM_LIMBS>,
+    WomBaseAluAdapterChip<F, { RV32_REGISTER_NUM_LIMBS * 2 }, RV32_REGISTER_NUM_LIMBS, 2>,
     EqCoreChip<{ RV32_REGISTER_NUM_LIMBS * 2 }, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;
