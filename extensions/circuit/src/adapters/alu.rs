@@ -181,9 +181,6 @@ impl<
         self.wom_bridge
             .read(local.rs1_ptr, ctx.reads[0].clone())
             .eval(builder, ctx.instruction.is_valid.clone());
-        builder
-            .when(local.rs2_as)
-            .assert_one(ctx.instruction.is_valid.clone());
         self.wom_bridge
             .read(local.rs2, ctx.reads[1].clone())
             .eval(builder, local.rs2_as);

@@ -131,9 +131,6 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
 
         // read amount bytes
         builder.assert_bool(local.amount_imm_or_reg);
-        builder
-            .when(local.amount_imm_or_reg)
-            .assert_one(ctx.instruction.is_valid.clone());
 
         self.wom_bridge
             .read(local.amount_reg + local.from_frame.fp, local.amount)
