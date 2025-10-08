@@ -25,3 +25,5 @@ wast_target/
 # Added by cargo
 
 /target
+
+**/__pycache__
