@@ -86,8 +86,6 @@ pub struct AllocateFrameAdapterColsWom<T> {
     // new frame pointer: provided by the prover
     pub next_frame_ptr: [T; RV32_REGISTER_NUM_LIMBS],
     pub dest_reg: T,
-    // TODO: needed?
-    pub allocation_size: T,
     pub write_mult: T,
 }
 
