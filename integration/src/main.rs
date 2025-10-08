@@ -6,7 +6,6 @@ mod womir_translation;
 use clap::{Parser, Subcommand};
 use derive_more::From;
 use eyre::Result;
-use itertools::Itertools;
 use metrics_tracing_context::{MetricsLayer, TracingContextLayer};
 use metrics_util::{debugging::DebuggingRecorder, layers::Layer};
 use openvm_sdk::StdIn;
@@ -15,12 +14,11 @@ use openvm_stark_sdk::bench::serialize_metric_snapshot;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::AtomicU32;
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
 use womir::loader::flattening::WriteOnceAsm;
-use womir::loader::{FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics};
+use womir::loader::{FunctionProcessingStage, Module, Program, Statistics};
 
 use openvm_circuit::arch::{
     InitFileGenerator, SystemConfig, VmChipComplex, VmConfig, VmInventoryError,
@@ -265,44 +263,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>) {
-    let PartiallyParsedProgram {
-        s: settings,
-        m: mut module,
-        functions,
-    } = womir::loader::load_wasm(OpenVMSettings::<F>::new(), wasm_bytes).unwrap();
+    let program = womir::loader::load_wasm(OpenVMSettings::<F>::new(), wasm_bytes).unwrap();
+    let tracker = builtin_functions::Tracker::new(program.functions.len() as u32);
 
-    // Compile the functions.
-    // TODO: do it in parallel, like Womir does it.
-    let label_gen = AtomicU32::new(0);
     let mut stats = Statistics::default();
-    let mut tracker = builtin_functions::Tracker::new();
-    let mut functions = functions
-        .into_iter()
-        .enumerate()
-        .map(|(idx, mut func)| {
-            let idx = idx as u32;
+    let program = program
+        .parallel_process_all_functions(
+            |func_idx, mut func, settings, module, label_gen, mut stats| {
+                // Advance to BlocklessDag stage
+                let dag = loop {
+                    if let FunctionProcessingStage::BlocklessDag(dag) = &mut func {
+                        break dag;
+                    }
+                    func = func
+                        .advance_stage(settings, module, func_idx, label_gen, stats.as_deref_mut())
+                        .unwrap();
+                };
 
-            // Advance to BlocklessDag stage
-            let dag = loop {
-                if let FunctionProcessingStage::BlocklessDag(dag) = &mut func {
-                    break dag;
-                }
-                func = func
-                    .advance_stage(&settings, &module, idx, &label_gen, Some(&mut stats))
-                    .unwrap();
-            };
+                // In the BlocklessDag stage, we need to find instructions we don't implement and replace
+                // them with function calls to built-in functions.
+                tracker.replace_with_builtins(label_gen, dag);
 
-            // In the BlocklessDag stage, we need to find instructions we don't implement and replace
-            // them with function calls to built-in functions.
-            tracker.replace_with_builtins(&mut module, &label_gen, dag);
+                // Advance to final stage
+                func.advance_all_stages(settings, module, func_idx, label_gen, stats)
+                    .unwrap()
+            },
+            Some(&mut stats),
+        )
+        .unwrap();
 
-            // Advance to final stage
-            func.advance_all_stages(&settings, &module, idx, &label_gen, Some(&mut stats))
-                .unwrap()
-        })
-        .collect_vec();
-
-    functions.extend(tracker.into_used_builtins());
+    // Append the built-in functions we used to the module.
+    let Program {
+        m: mut module,
+        mut functions,
+    } = program;
+    for bf in tracker.into_used_builtins() {
+        module.append_function(bf.definition.params, bf.definition.results);
+        functions.push(bf.function_definition);
+    }
 
     println!("WOMIR loading statistics: {stats}");
 
