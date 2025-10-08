@@ -22,7 +22,7 @@ use openvm_womir_transpiler::JumpOpcode::{self, *};
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{VmAdapterChipWom, WomBridge, WomController, WomRecord};
+use crate::{FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord};
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose as compose_as_u32};
 
@@ -48,6 +48,7 @@ impl<F: PrimeField32> JumpAdapterChipWom<F> {
     pub fn new(
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
+        frame_bus: FrameBus,
         memory_bridge: MemoryBridge,
         wom_bridge: WomBridge,
     ) -> Self {
@@ -56,6 +57,7 @@ impl<F: PrimeField32> JumpAdapterChipWom<F> {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 _memory_bridge: memory_bridge,
                 wom_bridge,
+                frame_bridge: FrameBridge::new(frame_bus),
             },
             _marker: PhantomData,
         }
@@ -79,6 +81,7 @@ pub struct JumpWriteRecord {
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
 pub struct JumpAdapterColsWom<T> {
+    pub from_frame: FrameState<T>,
     pub from_state: ExecutionState<T>,
     /// register containing condition for jumps or offset for skip
     pub cond_or_offset_reg: T,
@@ -92,6 +95,7 @@ pub struct JumpAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
     pub(super) wom_bridge: WomBridge,
     pub(super) execution_bridge: ExecutionBridge,
+    pub(super) frame_bridge: FrameBridge,
 }
 
 impl<F: Field> BaseAir<F> for JumpAdapterAirWom {
@@ -137,20 +141,26 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAirWom {
 
         let timestamp_change = AB::Expr::ONE;
 
-        self.execution_bridge.execute_and_increment_or_set_pc::<AB>(
-            ctx.instruction.opcode,
-            [
-                cols.pc_imm.into(),
-                cols.cond_or_offset_reg.into(),
-                AB::Expr::ZERO,
-                AB::Expr::ZERO,
-                AB::Expr::ZERO,
-                AB::Expr::ONE,
-            ],
-            cols.from_state,
-            timestamp_change,
-            (DEFAULT_PC_STEP, Some(to_pc)),
-        );
+        self.execution_bridge
+            .execute_and_increment_or_set_pc::<AB>(
+                ctx.instruction.opcode,
+                [
+                    cols.pc_imm.into(),
+                    cols.cond_or_offset_reg.into(),
+                    AB::Expr::ZERO,
+                    AB::Expr::ZERO,
+                    AB::Expr::ZERO,
+                    AB::Expr::ONE,
+                ],
+                cols.from_state,
+                timestamp_change.clone(),
+                (DEFAULT_PC_STEP, Some(to_pc)),
+            )
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        self.frame_bridge
+            .keep_fp(cols.from_frame, timestamp_change)
+            .eval(builder, ctx.instruction.is_valid);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

@@ -224,9 +224,13 @@ impl<
                     local.rs2_as.into(),
                 ],
                 local.from_state,
-                timestamp_change,
+                timestamp_change.clone(),
                 (DEFAULT_PC_STEP, ctx.to_pc),
             )
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        self.frame_bridge
+            .keep_fp(local.from_frame, timestamp_change)
             .eval(builder, ctx.instruction.is_valid);
     }
 

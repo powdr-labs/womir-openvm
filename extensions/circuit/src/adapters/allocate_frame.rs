@@ -22,8 +22,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
-    adapters::{compose, decompose},
+    adapters::{compose, decompose}, FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord
 };
 
 use super::RV32_REGISTER_NUM_LIMBS;
@@ -46,7 +45,7 @@ impl AllocateFrameAdapterChipWom {
             air: AllocateFrameAdapterAirWom {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 wom_bridge,
-                _frame_bus: frame_bus,
+                frame_bridge: FrameBridge::new(frame_bus),
                 _memory_bridge: memory_bridge,
             },
             // Start from 8 because 0 and 4 are used by the startup code.
@@ -94,7 +93,7 @@ pub struct AllocateFrameAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
     pub(super) wom_bridge: WomBridge,
     pub(super) execution_bridge: ExecutionBridge,
-    pub(super) _frame_bus: FrameBus,
+    pub(super) frame_bridge: FrameBridge,
 }
 
 impl<F: Field> BaseAir<F> for AllocateFrameAdapterAirWom {
@@ -145,20 +144,26 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
 
         let timestamp_change = AB::Expr::ONE;
 
-        self.execution_bridge.execute_and_increment_pc::<AB>(
-            ctx.instruction.opcode,
-            [
-                local.dest_reg.into(),
-                local.amount_imm.into(),
-                local.amount_reg.into(),
-                local.amount_imm_or_reg.into(),
-                AB::Expr::ZERO,
-                // TODO: is this always one?
-                AB::Expr::ONE,
-            ],
-            local.from_state,
-            timestamp_change,
-        );
+        self.execution_bridge
+            .execute_and_increment_pc::<AB>(
+                ctx.instruction.opcode,
+                [
+                    local.dest_reg.into(),
+                    local.amount_imm.into(),
+                    local.amount_reg.into(),
+                    local.amount_imm_or_reg.into(),
+                    AB::Expr::ZERO,
+                    // TODO: is this always one?
+                    AB::Expr::ONE,
+                ],
+                local.from_state,
+                timestamp_change.clone(),
+            )
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        self.frame_bridge
+            .keep_fp(local.from_frame, timestamp_change)
+            .eval(builder, ctx.instruction.is_valid);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

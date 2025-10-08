@@ -65,7 +65,7 @@ impl<F: PrimeField32> JaafAdapterChipWom<F> {
         Self {
             air: JaafAdapterAirWom {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
-                _frame_bridge: FrameBridge::new(frame_bus),
+                frame_bridge: FrameBridge::new(frame_bus),
                 _memory_bridge: memory_bridge,
                 wom_bridge,
             },
@@ -117,7 +117,7 @@ pub struct JaafAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
     pub(super) wom_bridge: WomBridge,
     pub(super) execution_bridge: ExecutionBridge,
-    pub(super) _frame_bridge: FrameBridge,
+    pub(super) frame_bridge: FrameBridge,
 }
 
 impl<F: Field> BaseAir<F> for JaafAdapterAirWom {
@@ -177,7 +177,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
         // save fp
         self.wom_bridge
             .write(
-                local.fp_save_reg + to_fp,
+                local.fp_save_reg + to_fp.clone(),
                 ctx.writes[1].clone(),
                 local.fp_write_mult,
             )
@@ -189,20 +189,27 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
 
         let to_pc = select(ctx.instruction.read_pc, pc_from_reg, local.pc_imm);
 
-        self.execution_bridge.execute_and_increment_or_set_pc::<AB>(
-            ctx.instruction.opcode,
-            [
-                local.pc_save_reg.into(),
-                local.fp_save_reg.into(),
-                local.pc_read_reg.into(),
-                local.pc_imm.into(),
-                local.fp_read_reg.into(),
-                AB::Expr::ONE,
-            ],
-            local.from_state,
-            timestamp_change,
-            (DEFAULT_PC_STEP, Some(to_pc)),
-        );
+        self.execution_bridge
+            .execute_and_increment_or_set_pc::<AB>(
+                ctx.instruction.opcode,
+                [
+                    local.pc_save_reg.into(),
+                    local.fp_save_reg.into(),
+                    local.pc_read_reg.into(),
+                    local.pc_imm.into(),
+                    local.fp_read_reg.into(),
+                    AB::Expr::ONE,
+                ],
+                local.from_state,
+                timestamp_change.clone(),
+                (DEFAULT_PC_STEP, Some(to_pc)),
+            )
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        self.frame_bridge
+            .set_fp(local.from_frame, timestamp_change, to_fp)
+            .eval(builder, ctx.instruction.is_valid);
+
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -297,7 +304,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
         let pc_source_data = read_record.rs1_data;
         let pc_source_val = compose_as_u32(pc_source_data);
 
-        let (to_pc, rd_data) = run_jalr(local_opcode, from_frame.pc, imm, pc_source_val);
+        let (to_pc, rd_data) = run_jalr(local_opcode, from_state.pc, imm, pc_source_val);
 
         // For all JAAF instructions, we also need to handle fp
         let fp_source_data = read_record.rs2_data;
