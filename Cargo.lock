@@ -4753,6 +4753,7 @@ dependencies = [
  "metrics",
  "metrics-tracing-context",
  "metrics-util",
+ "num_cpus",
  "openvm-circuit",
  "openvm-circuit-derive",
  "openvm-instructions",
