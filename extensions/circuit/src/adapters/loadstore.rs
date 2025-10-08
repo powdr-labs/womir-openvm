@@ -333,7 +333,10 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             .eval(builder, is_valid.clone());
 
         self.frame_bridge
-            .keep_fp(local_cols.from_frame, AB::F::from_canonical_usize(timestamp_delta))
+            .keep_fp(
+                local_cols.from_frame,
+                AB::F::from_canonical_usize(timestamp_delta),
+            )
             .eval(builder, is_valid);
     }
 

@@ -234,7 +234,13 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         inventory.add_executor(jaaf_chip, JaafOpcode::iter().map(|x| x.global_opcode()))?;
 
         let jump_chip = JumpChipWom::new(
-            JumpAdapterChipWom::new(execution_bus, program_bus, frame_bus, memory_bridge, wom_bridge),
+            JumpAdapterChipWom::new(
+                execution_bus,
+                program_bus,
+                frame_bus,
+                memory_bridge,
+                wom_bridge,
+            ),
             JumpCoreChipWom::default(),
             offline_memory.clone(),
             shared_fp.clone(),

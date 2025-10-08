@@ -209,7 +209,6 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
         self.frame_bridge
             .set_fp(local.from_frame, timestamp_change, to_fp)
             .eval(builder, ctx.instruction.is_valid);
-
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

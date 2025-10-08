@@ -22,7 +22,9 @@ use openvm_womir_transpiler::JumpOpcode::{self, *};
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord};
+use crate::{
+    FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
+};
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose as compose_as_u32};
 
