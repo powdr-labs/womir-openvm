@@ -55,7 +55,7 @@ rustc-hash = "2.0.0"
 rrs-lib = "0.1.0"
 tracing = "0.1.40"
 
-womir = { git = "https://github.com/powdr-labs/womir.git", rev = "901017e042" }
+womir = { git = "https://github.com/powdr-labs/womir.git", rev = "d71e4c0" }
 wasmparser = { version = "0.235", default-features = false }
 
 # [patch."https://github.com/powdr-labs/openvm.git"]

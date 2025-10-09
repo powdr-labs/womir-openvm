@@ -14,7 +14,9 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::atomic::AtomicU32;
+use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex, RwLock};
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
@@ -36,6 +38,7 @@ type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use openvm_womir_circuit::{self, WomirI, WomirIExecutor, WomirIPeriphery};
 
+use crate::builtin_functions::BuiltinFunction;
 use crate::womir_translation::{Directive, LinkedProgram, OpenVMSettings};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -264,47 +267,146 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>) {
-    let PartiallyParsedProgram {
-        s: settings,
-        m: mut module,
-        functions,
-    } = womir::loader::load_wasm(OpenVMSettings::<F>::new(), wasm_bytes).unwrap();
+    let PartiallyParsedProgram { s: _, m, functions } =
+        womir::loader::load_wasm(OpenVMSettings::<F>::new(), wasm_bytes).unwrap();
 
-    // Compile the functions.
-    let mut label_gen = 0..;
-    let mut stats = Statistics::default();
-    let mut tracker = builtin_functions::Tracker::new();
-    let mut functions = functions
-        .into_iter()
-        .enumerate()
-        .map(|(idx, mut func)| {
-            let idx = idx as u32;
+    let num_functions = functions.len() as u32;
+    let tracker = RwLock::new(Some(builtin_functions::Tracker::new(num_functions)));
+    let global_stats = Mutex::new(Statistics::default());
+    let module = RwLock::new(m);
+    let label_gen = AtomicU32::new(0);
+    let (jobs_s, jobs_r) = channel();
+    let jobs_r = Mutex::new(jobs_r);
 
-            // Advance to BlocklessDag stage
-            let dag = loop {
-                if let FunctionProcessingStage::BlocklessDag(dag) = &mut func {
-                    break dag;
+    let functions = std::thread::scope(|scope| {
+        type FunctionInProcessinng<'a> = FunctionProcessingStage<'a, OpenVMSettings<F>>;
+        enum Job<'a> {
+            PatchFunc(u32, FunctionInProcessinng<'a>),
+            FinishFunc(u32, FunctionInProcessinng<'a>),
+            LoadBuiltin(BuiltinFunction),
+        }
+
+        let (patched_s, patched_r) = channel();
+        let (final_s, final_r) = channel();
+
+        let num_threads = num_cpus::get().max(1);
+        for _ in 0..num_threads {
+            let tracker = &tracker;
+            let global_stats = &global_stats;
+            let label_gen = &label_gen;
+            let module = &module;
+            let jobs_r = &jobs_r;
+            let patched_s = patched_s.clone();
+            let final_s = final_s.clone();
+            scope.spawn(move || {
+                let mut stats = Statistics::default();
+                while let Ok(job) = {
+                    // This extra scope is needed to release the lock before processing the function.
+                    jobs_r.lock().unwrap().recv()
+                } {
+                    match job {
+                        Job::PatchFunc(func_idx, mut func) => {
+                            // Advance to BlocklessDag stage
+                            let module = module.read().unwrap();
+                            let dag = loop {
+                                if let FunctionProcessingStage::BlocklessDag(dag) = &mut func {
+                                    break dag;
+                                }
+                                func = func
+                                    .advance_stage(
+                                        &OpenVMSettings::<F>::new(),
+                                        &module,
+                                        func_idx,
+                                        label_gen,
+                                        Some(&mut stats),
+                                    )
+                                    .unwrap();
+                            };
+
+                            // In the BlocklessDag stage, we need to find instructions we don't
+                            // implement and replace them with function calls to built-in functions.
+                            tracker
+                                .read()
+                                .unwrap()
+                                .as_ref()
+                                .unwrap()
+                                .replace_with_builtins(dag);
+
+                            patched_s.send((func_idx, func)).unwrap();
+                        }
+                        Job::FinishFunc(func_idx, func) => {
+                            let func = func
+                                .advance_all_stages(
+                                    &OpenVMSettings::<F>::new(),
+                                    &module.read().unwrap(),
+                                    func_idx,
+                                    label_gen,
+                                    Some(&mut stats),
+                                )
+                                .unwrap();
+                            final_s.send((func_idx, func)).unwrap();
+                        }
+                        Job::LoadBuiltin(builtin) => {
+                            let func_idx = builtin.function_index;
+                            let func = builtin.load(&module.read().unwrap(), label_gen);
+                            final_s.send((func_idx, func)).unwrap();
+                        }
+                    }
                 }
-                func = func
-                    .advance_stage(&settings, &module, idx, &mut label_gen, Some(&mut stats))
-                    .unwrap();
-            };
+                *global_stats.lock().unwrap() += stats;
+            });
+        }
+        // Drop the channel endpoints this thread will no longer use.
+        drop(final_s);
+        drop(patched_s);
 
-            // In the BlocklessDag stage, we need to find instructions we don't implement and replace
-            // them with function calls to built-in functions.
-            tracker.replace_with_builtins(&mut module, &mut label_gen, dag);
+        // Send the functions for processing.
+        for (idx, func) in functions.into_iter().enumerate() {
+            jobs_s.send(Job::PatchFunc(idx as u32, func)).unwrap();
+        }
 
-            // Advance to final stage
-            func.advance_all_stages(&settings, &module, idx, &mut label_gen, Some(&mut stats))
-                .unwrap()
-        })
-        .collect_vec();
+        // Received the patched functions, update the module, and resend for processing.
+        let patched_functions = patched_r
+            .into_iter()
+            .take(num_functions as usize)
+            .collect_vec();
+        let tracker = tracker.write().unwrap().take().unwrap();
+        let used_builtins = tracker.into_used_builtins().collect_vec();
+        {
+            let mut module = module.write().unwrap();
+            for bf in &used_builtins {
+                let given_idx = module.append_function(bf.definition.params, bf.definition.results);
+                assert_eq!(given_idx, bf.function_index);
+            }
+        }
 
-    functions.extend(tracker.into_used_builtins());
+        // Now that module was updated, send the functions back to resume processing.
+        for (idx, func) in patched_functions {
+            jobs_s.send(Job::FinishFunc(idx, func)).unwrap();
+        }
 
-    println!("WOMIR loading statistics: {stats}");
+        // And also send the built-in functions to be loaded
+        for bf in used_builtins {
+            jobs_s.send(Job::LoadBuiltin(bf)).unwrap();
+        }
 
-    (module, functions)
+        // Signal threads there are no more jobs.
+        drop(jobs_s);
+
+        // Receive the fully processed functions, which included the loaded builtins.
+        final_r
+            .into_iter()
+            .sorted_unstable_by_key(|f| f.0)
+            .map(|f| f.1)
+            .collect_vec()
+    });
+
+    println!(
+        "WOMIR loading statistics: {}",
+        global_stats.into_inner().unwrap()
+    );
+
+    (module.into_inner().unwrap(), functions)
 }
 
 pub fn setup_tracing_with_log_level(level: Level) {

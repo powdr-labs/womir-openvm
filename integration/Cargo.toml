@@ -26,6 +26,7 @@ serde_json = { workspace = true }
 clap = { version = "4.5.43", features = ["derive"] }
 itertools = "0.14"
 arrayvec = "0.7"
+num_cpus = "1.17.0"
 
 tracing-subscriber = { version = "0.3.17", features = ["std", "env-filter"] }
 tracing-forest = "0.1"
