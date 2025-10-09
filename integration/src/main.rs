@@ -116,7 +116,7 @@ struct CliArgs {
     command: Commands,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 enum Commands {
     /// Just prints the program WOM listing
     PrintWom {
@@ -132,13 +132,25 @@ enum Commands {
         /// Arguments to pass to the function
         args: Vec<String>,
     },
-    /// Proves execution of a function from the program with the given arguments
+    /// Proves execution of a function from the WASM program with the given arguments
     Prove {
         /// Path to the WASM program
         program: String,
         /// Function name
         function: String,
         /// Arguments to pass to the function
+        args: Vec<String>,
+        /// Path to output metrics JSON file
+        #[arg(long)]
+        metrics: Option<PathBuf>,
+    },
+    /// Proves execution of a function from the RISC-V program with the given arguments.
+    /// Even though not the main goal of this crate, this is useful for benchmarking against
+    /// womir-openvm.
+    ProveRiscv {
+        /// Path to the Rust crate
+        program: String,
+        /// Arguments to pass to OpenVM RISC-V StdIn
         args: Vec<String>,
         /// Path to output metrics JSON file
         #[arg(long)]
@@ -152,6 +164,7 @@ impl Commands {
             Commands::PrintWom { program } => program,
             Commands::Run { program, .. } => program,
             Commands::Prove { program, .. } => program,
+            Commands::ProveRiscv { program, .. } => program,
         }
     }
 }
@@ -161,14 +174,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Parse command line arguments
     let cli_args = CliArgs::parse();
-    let wasm_path = cli_args.command.get_program_path();
-
-    // Load the module
-    let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-    let (module, functions) = load_wasm(&wasm_bytes);
+    let cmd = cli_args.command.clone();
+    let program_path = cmd.get_program_path();
 
     match cli_args.command {
         Commands::PrintWom { .. } => {
+            // Load the module
+            let wasm_bytes = std::fs::read(program_path).expect("Failed to read WASM file");
+            let (_module, functions) = load_wasm(&wasm_bytes);
+
             for func in &functions {
                 println!("Function {}:", func.func_idx);
                 for directive in &func.directives {
@@ -177,6 +191,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Commands::Run { function, args, .. } => {
+            // Load the module
+            let wasm_bytes = std::fs::read(program_path).expect("Failed to read WASM file");
+            let (module, functions) = load_wasm(&wasm_bytes);
+
             // Create VM configuration
             let vm_config = SdkVmConfig::builder()
                 .system(Default::default())
@@ -202,6 +220,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             metrics,
             ..
         } => {
+            // Load the module
+            let wasm_bytes = std::fs::read(program_path).expect("Failed to read WASM file");
+            let (module, functions) = load_wasm(&wasm_bytes);
+
             // Create program
             let linked_program = LinkedProgram::new(module, functions);
             let exe = linked_program.program_with_entry_point(&function);
@@ -249,6 +271,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "Public values: {:?}",
                     app_proof.user_public_values.public_values
                 );
+
+                Ok(())
+            };
+            if let Some(metrics_path) = metrics {
+                run_with_metric_collection_to_file(
+                    std::fs::File::create(metrics_path).expect("Failed to create metrics file"),
+                    prove,
+                )?;
+            } else {
+                prove()?
+            }
+        }
+        Commands::ProveRiscv {
+            program,
+            args,
+            metrics,
+            ..
+        } => {
+            let prove = || -> Result<()> {
+                let compiled_program = powdr_openvm::compile_guest(
+                    &program,
+                    Default::default(),
+                    powdr_autoprecompiles::PowdrConfig::new(
+                        0,
+                        0,
+                        powdr_openvm::DegreeBound {
+                            identities: 3,
+                            bus_interactions: 2,
+                        },
+                    ),
+                    Default::default(),
+                    Default::default(),
+                )
+                .unwrap();
+
+                let mut stdin = StdIn::default();
+                for arg in args {
+                    let val = arg.parse::<u32>().unwrap();
+                    stdin.write(&val);
+                }
+
+                powdr_openvm::prove(&compiled_program, false, false, stdin, None).unwrap();
 
                 Ok(())
             };
