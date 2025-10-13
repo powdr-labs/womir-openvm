@@ -124,7 +124,6 @@ pub struct WomBaseAluAdapterCols<T, const NUM_WRITES_RV32: usize> {
     pub rs2: T,
     /// 1 if rs2 was a read, 0 if an immediate
     pub rs2_as: T,
-    /// TODO: needs generic NUM_WRITES parameter!
     pub write_mult: [T; NUM_WRITES_RV32],
 }
 
