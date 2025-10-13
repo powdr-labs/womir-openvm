@@ -194,7 +194,10 @@ impl<
             let reads0: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
                 std::array::from_fn(|i| ctx.reads[0][offset + i].clone());
             self.wom_bridge
-                .read(local.rs1_ptr + AB::Expr::from_canonical_usize(offset), reads0)
+                .read(
+                    local.rs1_ptr + AB::Expr::from_canonical_usize(offset),
+                    reads0,
+                )
                 .eval(builder, ctx.instruction.is_valid.clone());
 
             let reads1: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
@@ -208,7 +211,11 @@ impl<
             let writes0: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
                 std::array::from_fn(|i| ctx.writes[0][offset + i].clone());
             self.wom_bridge
-                .write(local.rd_ptr + AB::Expr::from_canonical_usize(offset), writes0, local.write_mult[w])
+                .write(
+                    local.rd_ptr + AB::Expr::from_canonical_usize(offset),
+                    writes0,
+                    local.write_mult[w],
+                )
                 .eval(builder, ctx.instruction.is_valid.clone());
         }
 
