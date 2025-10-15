@@ -96,7 +96,7 @@ impl<F: PrimeField32> Rv32LoadStoreAdapterChip<F> {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 frame_bridge: FrameBridge::new(frame_bus),
                 memory_bridge,
-                _wom_bridge: wom_bridge,
+                wom_bridge,
                 range_bus: range_checker_chip.bus(),
                 pointer_max_bits,
             },
@@ -156,13 +156,8 @@ pub struct Rv32LoadStoreAdapterCols<T> {
     pub mem_as: T,
     /// prev_data will be provided by the core chip to make a complete MemoryWriteAuxCols
     pub write_base_aux: MemoryBaseAuxCols<T>,
-    /// Only writes if `needs_write`.
-    /// If the instruction is a Load:
-    /// - Sets `needs_write` to 0 iff `rd == x0`
-    ///
-    /// Otherwise:
-    /// - Sets `needs_write` to 1
-    pub needs_write: T,
+    /// on LOADs, multiplicity of the write to WOM register
+    pub write_mult: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
@@ -170,7 +165,7 @@ pub struct Rv32LoadStoreAdapterAir {
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) frame_bridge: FrameBridge,
     pub(super) memory_bridge: MemoryBridge,
-    pub(super) _wom_bridge: WomBridge,
+    pub(super) wom_bridge: WomBridge,
     pub range_bus: VariableRangeCheckerBus,
     pointer_max_bits: usize,
 }
@@ -211,31 +206,11 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
         let store_shift_amount = ctx.instruction.store_shift_amount;
         let shift_amount = load_shift_amount.clone() + store_shift_amount.clone();
 
-        let write_count = local_cols.needs_write;
-
-        // This constraint ensures that the memory write only occurs when `is_valid == 1`.
-        builder.assert_bool(write_count);
-        builder.when(write_count).assert_one(is_valid.clone());
-
-        // Constrain that if `is_valid == 1` and `write_count == 0`, then `is_load == 1` and
-        // `rd_rs2_ptr == x0`
-        builder
-            .when(is_valid.clone() - write_count)
-            .assert_one(is_load.clone());
-        builder
-            .when(is_valid.clone() - write_count)
-            .assert_zero(local_cols.rd_rs2_ptr);
-
         // read rs1 with fp offset
-        self.memory_bridge
+        self.wom_bridge
             .read(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.rs1_ptr + local_cols.from_frame.fp,
-                ),
+                local_cols.rs1_ptr + local_cols.from_frame.fp,
                 local_cols.rs1_data,
-                timestamp_pp(),
-                &local_cols.rs1_aux_cols,
             )
             .eval(builder, is_valid.clone());
 
@@ -280,17 +255,10 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
         let is_store = is_valid.clone() - is_load.clone();
         // constrain mem_as to be in {0, 1, 2} if the instruction is a load,
         // and in {2, 3, 4} if the instruction is a store
-        builder.assert_tern(local_cols.mem_as - is_store * AB::Expr::TWO);
+        builder.assert_tern(local_cols.mem_as - is_store.clone() * AB::Expr::TWO);
         builder
             .when(not::<AB::Expr>(is_valid.clone()))
             .assert_zero(local_cols.mem_as);
-
-        // read_as is [local_cols.mem_as] for loads and 1 for stores
-        let read_as = select::<AB::Expr>(
-            is_load.clone(),
-            local_cols.mem_as,
-            AB::F::from_canonical_u32(RV32_REGISTER_AS),
-        );
 
         // read_ptr is mem_ptr for loads and rd_rs2_ptr + fp for stores
         // Note: shift_amount is expected to have degree 2, thus we can't put it in the select
@@ -303,23 +271,20 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             local_cols.rd_rs2_ptr + local_cols.from_frame.fp,
         ) - load_shift_amount;
 
+        // LOAD: read from memory
         self.memory_bridge
             .read(
-                MemoryAddress::new(read_as, read_ptr),
-                ctx.reads.1,
+                MemoryAddress::new(local_cols.mem_as, read_ptr.clone()),
+                ctx.reads.1.clone(),
                 timestamp_pp(),
                 &local_cols.read_data_aux,
             )
-            .eval(builder, is_valid.clone());
+            .eval(builder, is_load.clone());
 
-        let write_aux_cols = MemoryWriteAuxCols::from_base(local_cols.write_base_aux, ctx.reads.0);
-
-        // write_as is 1 for loads and [local_cols.mem_as] for stores
-        let write_as = select::<AB::Expr>(
-            is_load.clone(),
-            AB::F::from_canonical_u32(RV32_REGISTER_AS),
-            local_cols.mem_as,
-        );
+        // STORE: read from wom
+        self.wom_bridge
+            .read(read_ptr, ctx.reads.1)
+            .eval(builder, is_store.clone());
 
         // write_ptr is rd_rs2_ptr + fp for loads and mem_ptr for stores
         let write_ptr = select::<AB::Expr>(
@@ -328,14 +293,25 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             mem_ptr.clone(),
         ) - store_shift_amount;
 
+        // LOAD: write to wom
+        self.wom_bridge
+            .write(
+                write_ptr.clone(),
+                ctx.writes[0].clone(),
+                local_cols.write_mult,
+            )
+            .eval(builder, is_load);
+
+        // STORE: write to memory
+        let write_aux_cols = MemoryWriteAuxCols::from_base(local_cols.write_base_aux, ctx.reads.0);
         self.memory_bridge
             .write(
-                MemoryAddress::new(write_as, write_ptr),
+                MemoryAddress::new(local_cols.mem_as, write_ptr),
                 ctx.writes[0].clone(),
                 timestamp_pp(),
                 &write_aux_cols,
             )
-            .eval(builder, write_count);
+            .eval(builder, is_store);
 
         let to_pc = ctx
             .to_pc
@@ -349,7 +325,9 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
                     local_cols.imm.into(),
                     AB::Expr::from_canonical_u32(RV32_REGISTER_AS),
                     local_cols.mem_as.into(),
-                    local_cols.needs_write.into(),
+                    // TODO: this was `cols.needs_write` before, which was only 0 on load and `rd == x0`.
+                    // With wom `x0` is not special, so needs_write is always 1?
+                    AB::Expr::ONE,
                     local_cols.imm_sign.into(),
                 ],
                 local_cols.from_state,

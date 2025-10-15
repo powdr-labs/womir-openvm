@@ -3,7 +3,7 @@ use std::{borrow::Borrow, marker::PhantomData};
 use openvm_circuit::{
     arch::{
         AdapterAirContext, AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge,
-        ExecutionBus, ExecutionState, MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
+        ExecutionBus, ExecutionState, Result, VmAdapterAir, VmAdapterInterface,
     },
     system::{
         memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
@@ -15,7 +15,7 @@ use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAUL
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, PrimeField32},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
 use openvm_womir_transpiler::JumpOpcode::{self, *};
@@ -24,7 +24,19 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{VmAdapterChipWom, WomBridge, WomController, WomRecord};
 
-use super::{RV32_REGISTER_NUM_LIMBS, compose};
+use super::{RV32_REGISTER_NUM_LIMBS, compose as compose_as_u32};
+
+#[repr(C)]
+#[derive(AlignedBorrow)]
+pub struct JumpInstruction<T> {
+    pub is_valid: T,
+    /// Absolute opcode number
+    pub opcode: T,
+    pub is_jump: T,
+    pub is_jump_if_zero: T,
+    pub is_jump_if: T,
+    pub is_skip: T,
+}
 
 #[derive(Debug)]
 pub struct JumpAdapterChipWom<F: Field> {
@@ -41,9 +53,9 @@ impl<F: PrimeField32> JumpAdapterChipWom<F> {
     ) -> Self {
         Self {
             air: JumpAdapterAirWom {
-                _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 _memory_bridge: memory_bridge,
-                _wom_bridge: wom_bridge,
+                wom_bridge,
             },
             _marker: PhantomData,
         }
@@ -68,20 +80,18 @@ pub struct JumpWriteRecord {
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
 pub struct JumpAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
-    pub condition_or_skip_offset_ptr: T,
-    pub condition_or_skip_offset_aux_cols: T,
-    pub immediate: T,
-    pub opcode_jump: T,
-    pub opcode_jump_if_zero: T,
-    pub opcode_jump_if: T,
-    pub opcode_skip: T,
+    /// register containing condition for jumps or offset for skip
+    pub cond_or_offset_reg: T,
+    pub cond_or_offset: [T; RV32_REGISTER_NUM_LIMBS],
+    /// immediate PC value for jumps
+    pub pc_imm: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct JumpAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
-    pub(super) _wom_bridge: WomBridge,
-    pub(super) _execution_bridge: ExecutionBridge,
+    pub(super) wom_bridge: WomBridge,
+    pub(super) execution_bridge: ExecutionBridge,
 }
 
 impl<F: Field> BaseAir<F> for JumpAdapterAirWom {
@@ -99,7 +109,7 @@ impl<F: Field> ColumnsAir<F> for JumpAdapterAirWom {
 impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAirWom {
     type Interface = BasicAdapterInterface<
         AB::Expr,
-        MinimalInstruction<AB::Expr>,
+        JumpInstruction<AB::Expr>,
         1,
         0,
         RV32_REGISTER_NUM_LIMBS,
@@ -110,12 +120,37 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAirWom {
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local_cols: &JumpAdapterColsWom<AB::Var> = local.borrow();
-        let opcode_skip = local_cols.opcode_skip;
+        let cols: &JumpAdapterColsWom<AB::Var> = local.borrow();
 
-        builder.assert_bool(opcode_skip);
+        let needs_read_reg =
+            ctx.instruction.is_jump_if + ctx.instruction.is_jump_if_zero + ctx.instruction.is_skip;
+
+        // read cond or offset from register
+        self.wom_bridge
+            .read(cols.cond_or_offset_reg, cols.cond_or_offset)
+            .eval(builder, needs_read_reg);
+
+        // TODO: calculate to_pc based on instruction
+        let to_pc = Default::default();
+
+        let timestamp_change = AB::Expr::ONE;
+
+        self.execution_bridge.execute_and_increment_or_set_pc::<AB>(
+            ctx.instruction.opcode,
+            [
+                cols.pc_imm.into(),
+                cols.cond_or_offset_reg.into(),
+                AB::Expr::ZERO,
+                AB::Expr::ZERO,
+                AB::Expr::ZERO,
+                AB::Expr::ONE,
+            ],
+            cols.from_state,
+            timestamp_change,
+            (DEFAULT_PC_STEP, Some(to_pc)),
+        );
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -130,7 +165,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
     type Air = JumpAdapterAirWom;
     type Interface = BasicAdapterInterface<
         F,
-        MinimalInstruction<F>,
+        JumpInstruction<F>,
         1,
         0,
         RV32_REGISTER_NUM_LIMBS,
@@ -197,7 +232,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         let local_opcode =
             JumpOpcode::from_usize(opcode.local_opcode_idx(JumpOpcode::CLASS_OFFSET));
 
-        let register_val = compose(read_record.reg_data);
+        let register_val = compose_as_u32(read_record.reg_data);
 
         let target_pc = if let SKIP = local_opcode {
             // Skip register_val instructions

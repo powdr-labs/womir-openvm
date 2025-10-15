@@ -5,6 +5,6 @@ use crate::less_than::LessThanCoreChip;
 
 pub type LessThan64ChipWom<F> = VmChipWrapperWom<
     F,
-    WomBaseAluAdapterChip<F, 4, { RV32_REGISTER_NUM_LIMBS * 2 }, RV32_REGISTER_NUM_LIMBS>,
+    WomBaseAluAdapterChip<F, { RV32_REGISTER_NUM_LIMBS * 2 }, RV32_REGISTER_NUM_LIMBS, 1>,
     LessThanCoreChip<{ RV32_REGISTER_NUM_LIMBS * 2 }, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;

@@ -10,12 +10,13 @@ use openvm_circuit::{
         program::ProgramBus,
     },
 };
+use openvm_circuit_primitives::utils::{compose, select};
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, PrimeField32},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
 use openvm_womir_transpiler::CopyIntoFrameOpcode;
@@ -24,7 +25,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord};
 
-use super::{RV32_REGISTER_NUM_LIMBS, compose, decompose};
+use super::{RV32_REGISTER_NUM_LIMBS, compose as compose_as_u32, decompose};
 
 #[derive(Debug)]
 pub struct CopyIntoFrameAdapterChipWom<F: Field> {
@@ -42,10 +43,10 @@ impl<F: PrimeField32> CopyIntoFrameAdapterChipWom<F> {
     ) -> Self {
         Self {
             air: CopyIntoFrameAdapterAirWom {
-                _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
-                _wom_bridge: wom_bridge,
+                wom_bridge,
             },
             _marker: PhantomData,
         }
@@ -73,22 +74,22 @@ pub struct CopyIntoFrameWriteRecord<F> {
 pub struct CopyIntoFrameAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
-    pub value_reg_ptr: T, // rs1 pointer (register containing value to copy)
-    pub value_reg_aux_cols: [T; 2],
-    pub frame_ptr_reg_ptr: T, // rs2 pointer (register containing frame pointer)
-    pub frame_ptr_reg_aux_cols: T,
-    pub destination_ptr: T, // Where we write: frame_pointer + offset
-    /// 0 if copy_into_frame
-    /// 1 if copy_from_frame
-    pub copy_into_or_from: T,
+    pub target_reg: T,
+    pub src_reg: T,
+    pub src: [T; RV32_REGISTER_NUM_LIMBS],
+    pub other_fp_reg: T,
+    pub other_fp: [T; RV32_REGISTER_NUM_LIMBS],
+    /// 0 if copy_from_frame
+    /// 1 if copy_into_frame
+    pub is_copy_into: T,
     pub write_mult: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct CopyIntoFrameAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
-    pub(super) _wom_bridge: WomBridge,
-    pub(super) _execution_bridge: ExecutionBridge,
+    pub(super) wom_bridge: WomBridge,
+    pub(super) execution_bridge: ExecutionBridge,
     pub(super) _frame_bus: FrameBus,
 }
 
@@ -105,16 +106,61 @@ impl<F: Field> ColumnsAir<F> for CopyIntoFrameAdapterAirWom {
 }
 
 impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
-    type Interface = BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 0, 0, 0, 0>;
+    type Interface = BasicAdapterInterface<
+        AB::Expr,
+        MinimalInstruction<AB::Expr>,
+        2,
+        1,
+        RV32_REGISTER_NUM_LIMBS,
+        RV32_REGISTER_NUM_LIMBS,
+    >;
 
     fn eval(
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        // Need at least one constraint otherwise stark-backend complains.
-        builder.assert_bool(local[0]);
+        let local: &CopyIntoFrameAdapterColsWom<_> = local.borrow();
+
+        // fp read from register
+        let other_fp: AB::Expr = compose(&local.other_fp, RV32_REGISTER_NUM_LIMBS);
+
+        // TODO: constrain is_copy_into from opcode
+
+        let src_fp = select(local.is_copy_into, local.from_frame.fp, other_fp.clone());
+        let target_fp = select(local.is_copy_into, other_fp, local.from_frame.fp);
+
+        // read other fp
+        self.wom_bridge
+            .read(local.other_fp_reg, local.other_fp)
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        // read src reg
+        self.wom_bridge
+            .read(local.src_reg + src_fp, local.src)
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        // write dest reg
+        self.wom_bridge
+            .write(local.target_reg + target_fp, local.src, local.write_mult)
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        let timestamp_change = AB::Expr::ONE;
+
+        self.execution_bridge.execute_and_increment_pc::<AB>(
+            ctx.instruction.opcode,
+            [
+                local.target_reg.into(),
+                local.src_reg.into(),
+                local.other_fp_reg.into(),
+                AB::Expr::ZERO,
+                AB::Expr::ZERO,
+                AB::Expr::ONE,
+            ],
+            local.from_state,
+            timestamp_change,
+        );
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -159,7 +205,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
 
         let other_fp = wom.read::<RV32_REGISTER_NUM_LIMBS>(c + fp_f);
 
-        let other_fp_u32 = compose(other_fp.1);
+        let other_fp_u32 = compose_as_u32(other_fp.1);
         let other_fp_f = F::from_canonical_u32(other_fp_u32);
 
         memory.increment_timestamp();
@@ -174,8 +220,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
         Ok((
             [value_to_copy.1, other_fp.1],
             CopyIntoFrameReadRecord {
-                rs1: Some((value_to_copy.0, compose(value_to_copy.1))),
-                rs2: Some((other_fp.0, compose(other_fp.1))),
+                rs1: Some((value_to_copy.0, compose_as_u32(value_to_copy.1))),
+                rs2: Some((other_fp.0, compose_as_u32(other_fp.1))),
             },
         ))
     }

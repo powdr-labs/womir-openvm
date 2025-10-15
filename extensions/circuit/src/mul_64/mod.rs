@@ -5,6 +5,6 @@ use openvm_rv32im_circuit::MultiplicationCoreChip;
 
 pub type WomMultiplication64Chip<F> = VmChipWrapperWom<
     F,
-    WomBaseAluAdapterChip<F, 4, { RV32_REGISTER_NUM_LIMBS * 2 }, { RV32_REGISTER_NUM_LIMBS * 2 }>,
+    WomBaseAluAdapterChip<F, { RV32_REGISTER_NUM_LIMBS * 2 }, { RV32_REGISTER_NUM_LIMBS * 2 }, 2>,
     MultiplicationCoreChip<{ RV32_REGISTER_NUM_LIMBS * 2 }, RV32_CELL_BITS>,
 >;

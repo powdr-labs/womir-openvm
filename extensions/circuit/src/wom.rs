@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use openvm_instructions::riscv::RV32_REGISTER_NUM_LIMBS;
 use openvm_stark_backend::{
     interaction::{BusIndex, InteractionBuilder, PermutationCheckBus},
     p3_field::{FieldAlgebra, PrimeField32},
@@ -95,11 +96,11 @@ impl WomBridge {
         }
     }
 
-    pub fn read<T, const N: usize>(
+    pub fn read<T>(
         &self,
         address: impl Into<T>,
-        data: [impl Into<T>; N],
-    ) -> WomReadOperation<T, N> {
+        data: [impl Into<T>; RV32_REGISTER_NUM_LIMBS],
+    ) -> WomReadOperation<T> {
         WomReadOperation {
             bus: self.bus,
             address: address.into(),
@@ -107,28 +108,28 @@ impl WomBridge {
         }
     }
 
-    pub fn write<T, const N: usize>(
+    pub fn write<T>(
         &self,
         address: impl Into<T>,
-        data: [impl Into<T>; N],
-        mult: T,
-    ) -> WomWriteOperation<T, N> {
+        data: [impl Into<T>; RV32_REGISTER_NUM_LIMBS],
+        mult: impl Into<T>,
+    ) -> WomWriteOperation<T> {
         WomWriteOperation {
             bus: self.bus,
             address: address.into(),
             data: data.map(Into::into),
-            mult,
+            mult: mult.into(),
         }
     }
 }
 
-pub struct WomReadOperation<T, const N: usize> {
+pub struct WomReadOperation<T> {
     bus: PermutationCheckBus,
     address: T,
-    data: [T; N],
+    data: [T; RV32_REGISTER_NUM_LIMBS],
 }
 
-impl<F: FieldAlgebra, const N: usize> WomReadOperation<F, N> {
+impl<F: FieldAlgebra> WomReadOperation<F> {
     pub fn eval<AB>(self, builder: &mut AB, enabled: impl Into<AB::Expr>)
     where
         AB: InteractionBuilder<Expr = F>,
@@ -138,14 +139,14 @@ impl<F: FieldAlgebra, const N: usize> WomReadOperation<F, N> {
     }
 }
 
-pub struct WomWriteOperation<T, const N: usize> {
+pub struct WomWriteOperation<T> {
     bus: PermutationCheckBus,
     address: T,
-    data: [T; N],
+    data: [T; RV32_REGISTER_NUM_LIMBS],
     mult: T,
 }
 
-impl<F: FieldAlgebra, const N: usize> WomWriteOperation<F, N> {
+impl<F: FieldAlgebra> WomWriteOperation<F> {
     pub fn eval<AB>(self, builder: &mut AB, enabled: impl Into<AB::Expr>)
     where
         AB: InteractionBuilder<Expr = F>,

@@ -15,7 +15,7 @@ use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, PrimeField32},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
 use serde::{Deserialize, Serialize};
@@ -44,8 +44,8 @@ impl AllocateFrameAdapterChipWom {
     ) -> Self {
         Self {
             air: AllocateFrameAdapterAirWom {
-                _execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
-                _wom_bridge: wom_bridge,
+                execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
+                wom_bridge,
                 _frame_bus: frame_bus,
                 _memory_bridge: memory_bridge,
             },
@@ -76,18 +76,24 @@ pub struct AllocateFrameWriteRecord<F> {
 pub struct AllocateFrameAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
-    pub target_reg_ptr: T,  // Pointer to target register
-    pub allocation_size: T, // amount_imm field from instruction (b)
-    pub src_reg_ptr: T,     // if reading from register
-    pub result: T,
-    pub read_imm_or_reg: T,
+    pub amount_reg: T,
+    // amount from register
+    pub amount: [T; RV32_REGISTER_NUM_LIMBS],
+    // immediate amount
+    pub amount_imm: T,
+    // 0 if imm, 1 if reg
+    pub amount_imm_or_reg: T,
+    // new frame pointer: provided by the prover
+    pub next_frame_ptr: [T; RV32_REGISTER_NUM_LIMBS],
+    pub dest_reg: T,
+    pub write_mult: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct AllocateFrameAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
-    pub(super) _wom_bridge: WomBridge,
-    pub(super) _execution_bridge: ExecutionBridge,
+    pub(super) wom_bridge: WomBridge,
+    pub(super) execution_bridge: ExecutionBridge,
     pub(super) _frame_bus: FrameBus,
 }
 
@@ -107,8 +113,8 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
     type Interface = BasicAdapterInterface<
         AB::Expr,
         MinimalInstruction<AB::Expr>,
-        0,
         1,
+        0,
         RV32_REGISTER_NUM_LIMBS,
         RV32_REGISTER_NUM_LIMBS,
     >;
@@ -117,10 +123,42 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        // Need at least one constraint otherwise stark-backend complains.
-        builder.assert_bool(local[0]);
+        let local: &AllocateFrameAdapterColsWom<_> = local.borrow();
+
+        // read amount bytes
+        builder.assert_bool(local.amount_imm_or_reg);
+
+        self.wom_bridge
+            .read(local.amount_reg + local.from_frame.fp, local.amount)
+            .eval(builder, local.amount_imm_or_reg);
+
+        // write fp
+        self.wom_bridge
+            .write(
+                local.dest_reg + local.from_frame.fp,
+                local.next_frame_ptr,
+                local.write_mult,
+            )
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        let timestamp_change = AB::Expr::ONE;
+
+        self.execution_bridge.execute_and_increment_pc::<AB>(
+            ctx.instruction.opcode,
+            [
+                local.dest_reg.into(),
+                local.amount_imm.into(),
+                local.amount_reg.into(),
+                local.amount_imm_or_reg.into(),
+                AB::Expr::ZERO,
+                // TODO: is this always one?
+                AB::Expr::ONE,
+            ],
+            local.from_state,
+            timestamp_change,
+        );
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
@@ -136,8 +174,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
     type Interface = BasicAdapterInterface<
         F,
         MinimalInstruction<F>,
-        2,
         1,
+        0,
         RV32_REGISTER_NUM_LIMBS,
         RV32_REGISTER_NUM_LIMBS,
     >;
@@ -174,13 +212,9 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
 
         self.next_fp += amount_bytes;
 
-        let allocated_ptr_f = decompose(self.next_fp);
         let amount_bytes = decompose(amount_bytes);
 
-        Ok((
-            [allocated_ptr_f, amount_bytes],
-            AllocateFrameReadRecord { allocated_ptr },
-        ))
+        Ok(([amount_bytes], AllocateFrameReadRecord { allocated_ptr }))
     }
 
     fn postprocess(

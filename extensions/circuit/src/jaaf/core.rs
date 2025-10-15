@@ -1,8 +1,7 @@
 use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::arch::{
-    AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, Result, VmAdapterInterface,
-    VmCoreAir, VmCoreChip,
+    AdapterAirContext, AdapterRuntimeContext, Result, VmAdapterInterface, VmCoreAir, VmCoreChip,
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{LocalOpcode, instruction::Instruction};
@@ -12,15 +11,21 @@ use openvm_stark_backend::{
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
-use openvm_womir_transpiler::JaafOpcode::{self, *};
+use openvm_womir_transpiler::JaafOpcode;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::adapters::RV32_REGISTER_NUM_LIMBS;
+use crate::adapters::{JaafInstruction, RV32_REGISTER_NUM_LIMBS};
+
+use strum::IntoEnumIterator;
 
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
 pub struct JaafCoreCols<T> {
-    pub is_valid: T,
+    pub opcode_jaaf_flag: T,
+    pub opcode_jaaf_save_flag: T,
+    pub opcode_ret_flag: T,
+    pub opcode_call_flag: T,
+    pub opcode_call_indirect_flag: T,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -46,7 +51,7 @@ where
     I: VmAdapterInterface<AB::Expr>,
     I::Reads: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 2]>,
     I::Writes: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 2]>,
-    I::ProcessedInstruction: From<MinimalInstruction<AB::Expr>>,
+    I::ProcessedInstruction: From<JaafInstruction<AB::Expr>>,
 {
     fn eval(
         &self,
@@ -55,27 +60,53 @@ where
         _from_pc: AB::Var,
     ) -> AdapterAirContext<AB::Expr, I> {
         let cols: &JaafCoreCols<AB::Var> = (*local_core).borrow();
-        let JaafCoreCols::<AB::Var> { is_valid } = *cols;
+        let flags = [
+            cols.opcode_jaaf_flag,
+            cols.opcode_jaaf_save_flag,
+            cols.opcode_ret_flag,
+            cols.opcode_call_flag,
+            cols.opcode_call_indirect_flag,
+        ];
 
-        builder.assert_bool(is_valid);
+        let is_valid = flags.iter().fold(AB::Expr::ZERO, |acc, &flag| {
+            builder.assert_bool(flag);
+            acc + flag.into()
+        });
+        builder.assert_bool(is_valid.clone());
 
-        let expected_opcode = VmCoreAir::<AB, I>::opcode_to_global_expr(self, JAAF);
+        let expected_opcode = VmCoreAir::<AB, I>::expr_to_global_expr(
+            self,
+            flags.iter().zip(JaafOpcode::iter()).fold(
+                AB::Expr::ZERO,
+                |acc, (flag, local_opcode)| {
+                    acc + (*flag).into() * AB::Expr::from_canonical_u8(local_opcode as u8)
+                },
+            ),
+        );
+
+        let save_pc = cols.opcode_call_flag + cols.opcode_call_indirect_flag;
+        let save_fp =
+            cols.opcode_call_flag + cols.opcode_call_indirect_flag + cols.opcode_jaaf_save_flag;
+        let read_pc = cols.opcode_ret_flag + cols.opcode_call_indirect_flag;
 
         AdapterAirContext {
             to_pc: None,
             reads: [
-                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS],
-                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS],
+                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS], // pc
+                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS], // fp
             ]
             .into(),
             writes: [
-                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS],
-                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS],
+                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS], // pc
+                [AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS], // fp
             ]
             .into(),
-            instruction: MinimalInstruction {
-                is_valid: is_valid.into(),
+            instruction: JaafInstruction {
+                is_valid,
                 opcode: expected_opcode,
+                save_pc,
+                save_fp,
+                read_pc,
             }
             .into(),
         }
@@ -126,8 +157,7 @@ where
     }
 
     fn generate_trace_row(&self, row_slice: &mut [F], _record: Self::Record) {
-        let core_cols: &mut JaafCoreCols<F> = row_slice.borrow_mut();
-        core_cols.is_valid = F::ONE;
+        let _core_cols: &mut JaafCoreCols<F> = row_slice.borrow_mut();
     }
 
     fn air(&self) -> &Self::Air {

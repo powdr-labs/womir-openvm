@@ -18,12 +18,12 @@ use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
-    riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
+    riscv::{RV32_IMM_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
 };
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, PrimeField32},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
 use serde::{Deserialize, Serialize};
@@ -40,24 +40,25 @@ use super::RV32_CELL_BITS;
 /// is an immediate).
 pub struct WomBaseAluAdapterChip<
     F: Field,
-    // How many 32-bit words we need to read in total. In 32-bit arch we need 2, in 64-bit arch we need 4.
-    const READ_32BIT_WORDS: usize,
-    // How many bytes we need to read per register.
-    const READ_BYTES: usize,
-    // How many bytes we need to write per register.
-    const WRITE_BYTES: usize,
+    // How many limbs we need to read per register.
+    const READ_NUM_LIMBS: usize,
+    // How many limbs we need to write per register.
+    const WRITE_NUM_LIMBS: usize,
+    // This is just WRITE_NUM_LIMBS / RV32_REGISTER_NUM_LIMBS, but we can't use the
+    // expression due to const generics limitations
+    const NUM_WRITES_RV32: usize,
 > {
-    pub air: WomBaseAluAdapterAir<READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>,
+    pub air: WomBaseAluAdapterAir<READ_NUM_LIMBS, WRITE_NUM_LIMBS, NUM_WRITES_RV32>,
     _bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
     _marker: PhantomData<F>,
 }
 
 impl<
     F: PrimeField32,
-    const READ_32BIT_WORDS: usize,
-    const READ_BYTES: usize,
-    const WRITE_BYTES: usize,
-> WomBaseAluAdapterChip<F, READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
+    const READ_NUM_LIMBS: usize,
+    const WRITE_NUM_LIMBS: usize,
+    const NUM_WRITES_RV32: usize,
+> WomBaseAluAdapterChip<F, READ_NUM_LIMBS, WRITE_NUM_LIMBS, NUM_WRITES_RV32>
 {
     pub fn new(
         execution_bus: ExecutionBus,
@@ -67,6 +68,10 @@ impl<
         wom_bridge: WomBridge,
         bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
     ) -> Self {
+        assert_eq!(READ_NUM_LIMBS % RV32_REGISTER_NUM_LIMBS, 0);
+        assert_eq!(WRITE_NUM_LIMBS % RV32_REGISTER_NUM_LIMBS, 0);
+        assert_eq!(NUM_WRITES_RV32 * RV32_REGISTER_NUM_LIMBS, WRITE_NUM_LIMBS);
+
         Self {
             air: WomBaseAluAdapterAir {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
@@ -98,10 +103,10 @@ pub struct WomBaseAluReadRecord<F: Field> {
 #[repr(C)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound(
-    serialize = "[F; WRITE_BYTES]: Serialize",
-    deserialize = "[F; WRITE_BYTES]: Deserialize<'de>"
+    serialize = "[F; WRITE_NUM_LIMBS]: Serialize",
+    deserialize = "[F; WRITE_NUM_LIMBS]: Deserialize<'de>"
 ))]
-pub struct WomBaseAluWriteRecord<F: Field, const WRITE_BYTES: usize> {
+pub struct WomBaseAluWriteRecord<F: Field, const WRITE_NUM_LIMBS: usize> {
     pub from_state: ExecutionState<u32>,
     pub from_frame: FrameState<u32>,
     /// Write to destination register
@@ -110,7 +115,7 @@ pub struct WomBaseAluWriteRecord<F: Field, const WRITE_BYTES: usize> {
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct WomBaseAluAdapterCols<T, const READ_32BIT_WORDS: usize, const WRITE_BYTES: usize> {
+pub struct WomBaseAluAdapterCols<T, const NUM_WRITES_RV32: usize> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
     pub rd_ptr: T,
@@ -119,16 +124,15 @@ pub struct WomBaseAluAdapterCols<T, const READ_32BIT_WORDS: usize, const WRITE_B
     pub rs2: T,
     /// 1 if rs2 was a read, 0 if an immediate
     pub rs2_as: T,
-    pub reads_aux: [[T; 2]; READ_32BIT_WORDS],
-    pub writes_aux: [T; WRITE_BYTES],
+    pub write_mult: [T; NUM_WRITES_RV32],
 }
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct WomBaseAluAdapterAir<
-    const READ_32BIT_WORDS: usize,
-    const READ_BYTES: usize,
-    const WRITE_BYTES: usize,
+    const READ_NUM_LIMBS: usize,
+    const WRITE_NUM_LIMBS: usize,
+    const NUM_WRITES_RV32: usize,
 > {
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) frame_bridge: FrameBridge,
@@ -141,7 +145,7 @@ impl<F: Field, const N: usize, const M: usize, const T: usize> BaseAir<F>
     for WomBaseAluAdapterAir<N, M, T>
 {
     fn width(&self) -> usize {
-        WomBaseAluAdapterCols::<F, N, T>::width()
+        WomBaseAluAdapterCols::<F, N>::width()
     }
 }
 
@@ -149,56 +153,111 @@ impl<F: Field, const N: usize, const M: usize, const T: usize> ColumnsAir<F>
     for WomBaseAluAdapterAir<N, M, T>
 {
     fn columns(&self) -> Option<Vec<String>> {
-        WomBaseAluAdapterCols::<F, N, T>::struct_reflection()
+        WomBaseAluAdapterCols::<F, N>::struct_reflection()
     }
 }
 
 impl<
     AB: InteractionBuilder,
-    const READ_32BIT_WORDS: usize,
-    const READ_BYTES: usize,
-    const WRITE_BYTES: usize,
-> VmAdapterAir<AB> for WomBaseAluAdapterAir<READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
+    const READ_NUM_LIMBS: usize,
+    const WRITE_NUM_LIMBS: usize,
+    const NUM_WRITES_RV32: usize,
+> VmAdapterAir<AB> for WomBaseAluAdapterAir<READ_NUM_LIMBS, WRITE_NUM_LIMBS, NUM_WRITES_RV32>
 {
     type Interface = BasicAdapterInterface<
         AB::Expr,
         MinimalInstruction<AB::Expr>,
         2,
         1,
-        READ_BYTES,
-        WRITE_BYTES,
+        READ_NUM_LIMBS,
+        WRITE_NUM_LIMBS,
     >;
 
     fn eval(
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local: &WomBaseAluAdapterCols<_, READ_32BIT_WORDS, WRITE_BYTES> = local.borrow();
+        let local: &WomBaseAluAdapterCols<_, NUM_WRITES_RV32> = local.borrow();
 
         builder.assert_bool(local.rs2_as);
+
+        // we need the following to handle the 64-bit case: wom bridge works in
+        // 32-bit words, so we need 2 interactions per operation.
+        let read_ops = READ_NUM_LIMBS / RV32_REGISTER_NUM_LIMBS;
+        let write_ops = NUM_WRITES_RV32;
+
+        for r in 0..read_ops {
+            let offset = r * RV32_REGISTER_NUM_LIMBS;
+            let reads0: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
+                std::array::from_fn(|i| ctx.reads[0][offset + i].clone());
+            self.wom_bridge
+                .read(
+                    local.rs1_ptr + AB::Expr::from_canonical_usize(offset),
+                    reads0,
+                )
+                .eval(builder, ctx.instruction.is_valid.clone());
+
+            let reads1: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
+                std::array::from_fn(|i| ctx.reads[1][r * RV32_REGISTER_NUM_LIMBS + i].clone());
+            self.wom_bridge
+                .read(local.rs2 + AB::Expr::from_canonical_usize(offset), reads1)
+                .eval(builder, local.rs2_as);
+        }
+        for w in 0..write_ops {
+            let offset = w * RV32_REGISTER_NUM_LIMBS;
+            let writes0: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
+                std::array::from_fn(|i| ctx.writes[0][offset + i].clone());
+            self.wom_bridge
+                .write(
+                    local.rd_ptr + AB::Expr::from_canonical_usize(offset),
+                    writes0,
+                    local.write_mult[w],
+                )
+                .eval(builder, ctx.instruction.is_valid.clone());
+        }
+
+        // we don't read memory, but ovm expects a timestamp increase
+        let timestamp_change = AB::Expr::ONE;
+
+        self.execution_bridge
+            .execute_and_increment_or_set_pc(
+                ctx.instruction.opcode,
+                [
+                    local.rd_ptr.into(),
+                    local.rs1_ptr.into(),
+                    local.rs2.into(),
+                    AB::Expr::from_canonical_u32(RV32_REGISTER_AS),
+                    local.rs2_as.into(),
+                ],
+                local.from_state,
+                timestamp_change,
+                (DEFAULT_PC_STEP, ctx.to_pc),
+            )
+            .eval(builder, ctx.instruction.is_valid);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &WomBaseAluAdapterCols<_, READ_32BIT_WORDS, WRITE_BYTES> = local.borrow();
+        let cols: &WomBaseAluAdapterCols<_, WRITE_NUM_LIMBS> = local.borrow();
         cols.from_state.pc
     }
 }
 
 impl<
     F: PrimeField32,
-    const READ_32BIT_WORDS: usize,
-    const READ_BYTES: usize,
-    const WRITE_BYTES: usize,
-> VmAdapterChipWom<F> for WomBaseAluAdapterChip<F, READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>
+    const READ_NUM_LIMBS: usize,
+    const WRITE_NUM_LIMBS: usize,
+    const NUM_WRITES_RV32: usize,
+> VmAdapterChipWom<F> for WomBaseAluAdapterChip<F, READ_NUM_LIMBS, WRITE_NUM_LIMBS, NUM_WRITES_RV32>
 where
-    [F; WRITE_BYTES]: Serialize + for<'de> Deserialize<'de>,
+    [F; WRITE_NUM_LIMBS]: Serialize + for<'de> Deserialize<'de>,
 {
     type ReadRecord = WomBaseAluReadRecord<F>;
-    type WriteRecord = WomBaseAluWriteRecord<F, WRITE_BYTES>;
-    type Air = WomBaseAluAdapterAir<READ_32BIT_WORDS, READ_BYTES, WRITE_BYTES>;
-    type Interface = BasicAdapterInterface<F, MinimalInstruction<F>, 2, 1, READ_BYTES, WRITE_BYTES>;
+    type WriteRecord = WomBaseAluWriteRecord<F, WRITE_NUM_LIMBS>;
+    type Air = WomBaseAluAdapterAir<READ_NUM_LIMBS, WRITE_NUM_LIMBS, NUM_WRITES_RV32>;
+    type Interface =
+        BasicAdapterInterface<F, MinimalInstruction<F>, 2, 1, READ_NUM_LIMBS, WRITE_NUM_LIMBS>;
 
     fn preprocess(
         &mut self,
@@ -219,11 +278,11 @@ where
 
         let fp_f = F::from_canonical_u32(fp);
         assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
-        let (rs1, rs1_data) = wom.read::<READ_BYTES>(b + fp_f);
+        let (rs1, rs1_data) = wom.read::<READ_NUM_LIMBS>(b + fp_f);
         let (rs2, rs2_data, rs2_imm) = if e.is_zero() {
             let c_u32 = c.as_canonical_u32();
             debug_assert_eq!(c_u32 >> 24, 0);
-            let mut c_bytes = [0u8; READ_BYTES];
+            let mut c_bytes = [0u8; READ_NUM_LIMBS];
             c_bytes[0] = c_u32 as u8;
             c_bytes[1] = (c_u32 >> 8) as u8;
             let bit_extension = (c_u32 >> 16) as u8;
@@ -233,7 +292,7 @@ where
             (None, c_bytes.map(F::from_canonical_u8), c)
         } else {
             assert_eq!(e.as_canonical_u32(), RV32_REGISTER_AS);
-            let (rs2, rs2_data) = wom.read::<READ_BYTES>(c + fp_f);
+            let (rs2, rs2_data) = wom.read::<READ_NUM_LIMBS>(c + fp_f);
             (Some(rs2), rs2_data, F::ZERO)
         };
 
@@ -256,12 +315,6 @@ where
         let rd = wom.write(*a + fp_f, output.writes[0]);
 
         memory.increment_timestamp();
-
-        // let timestamp_delta = memory.timestamp() - from_state.timestamp;
-        // debug_assert!(
-        //     timestamp_delta == 3,
-        //     "timestamp delta is {timestamp_delta}, expected 3"
-        // );
 
         Ok((
             ExecutionState {

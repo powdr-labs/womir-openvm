@@ -44,8 +44,8 @@ impl<AB, I> VmCoreAir<AB, I> for AllocateFrameCoreAir
 where
     AB: InteractionBuilder,
     I: VmAdapterInterface<AB::Expr>,
-    I::Reads: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 0]>,
-    I::Writes: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 1]>,
+    I::Reads: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 1]>,
+    I::Writes: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 0]>,
     I::ProcessedInstruction: From<MinimalInstruction<AB::Expr>>,
 {
     fn eval(
@@ -64,8 +64,8 @@ where
 
         AdapterAirContext {
             to_pc: None,
-            reads: [].into(),
-            writes: [[AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS]].into(),
+            reads: [[AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS]].into(),
+            writes: [].into(),
             instruction: MinimalInstruction {
                 is_valid: core_cols.is_valid.into(),
                 opcode,
@@ -86,8 +86,8 @@ pub struct AllocateFrameCoreChipWom {
 
 impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChip<F, I> for AllocateFrameCoreChipWom
 where
-    I::Reads: Into<[[F; RV32_REGISTER_NUM_LIMBS]; 2]>,
-    I::Writes: From<[[F; RV32_REGISTER_NUM_LIMBS]; 1]>,
+    I::Reads: Into<[[F; RV32_REGISTER_NUM_LIMBS]; 1]>,
+    I::Writes: From<[[F; RV32_REGISTER_NUM_LIMBS]; 0]>,
 {
     type Record = ();
     type Air = AllocateFrameCoreAir;
@@ -101,7 +101,7 @@ where
     ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
         let output = AdapterRuntimeContext {
             to_pc: None,
-            writes: [[F::ZERO; RV32_REGISTER_NUM_LIMBS]].into(),
+            writes: [].into(),
         };
 
         Ok((output, ()))
