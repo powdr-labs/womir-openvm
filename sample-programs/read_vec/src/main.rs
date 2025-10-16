@@ -6,7 +6,6 @@ unsafe extern "C" {
     pub safe fn read_u32() -> u32;
     pub safe fn __hint_input();
     pub unsafe fn __hint_store_vec(ptr: *mut u8, num_words: u32);
-    // pub unsafe fn __hint_store_u32(ptr: *mut u32);
 }
 
 // len in bytes
@@ -30,7 +29,6 @@ pub fn read_word() -> u32 {
     u32::from_le_bytes(bytes)
 }
 
-// Shared bench
 pub fn main() {
     __hint_input();
     let len = read_word();
