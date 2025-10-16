@@ -64,12 +64,12 @@ impl FrameBus {
         let enabled = enabled.into();
         self.inner.receive(
             builder,
-            [prev_state.pc.into(), prev_state.fp.into()],
+            [prev_state.timestamp.into(), prev_state.fp.into()],
             enabled.clone(),
         );
         self.inner.send(
             builder,
-            [next_state.pc.into(), next_state.fp.into()],
+            [next_state.timestamp.into(), next_state.fp.into()],
             enabled,
         );
     }
@@ -80,14 +80,14 @@ impl FrameBus {
     Clone, Copy, Debug, PartialEq, Default, AlignedBorrow, Serialize, Deserialize, StructReflection,
 )]
 pub struct FrameState<T> {
-    pub pc: T,
+    pub timestamp: T,
     pub fp: T,
 }
 
 impl<T> FrameState<T> {
-    pub fn new(pc: impl Into<T>, fp: impl Into<T>) -> Self {
+    pub fn new(timestamp: impl Into<T>, fp: impl Into<T>) -> Self {
         Self {
-            pc: pc.into(),
+            timestamp: timestamp.into(),
             fp: fp.into(),
         }
     }
@@ -96,13 +96,13 @@ impl<T> FrameState<T> {
     pub fn from_iter<I: Iterator<Item = T>>(iter: &mut I) -> Self {
         let mut next = || iter.next().unwrap();
         Self {
-            pc: next(),
+            timestamp: next(),
             fp: next(),
         }
     }
 
     pub fn flatten(self) -> [T; 2] {
-        [self.pc, self.fp]
+        [self.timestamp, self.fp]
     }
 
     pub fn get_width() -> usize {
@@ -116,12 +116,47 @@ impl<T> FrameState<T> {
 
 #[derive(Copy, Clone, Debug)]
 pub struct FrameBridge {
-    pub frame_bus: FrameBus,
+    frame_bus: FrameBus,
 }
 
 impl FrameBridge {
     pub fn new(frame_bus: FrameBus) -> Self {
         Self { frame_bus }
+    }
+
+    pub fn keep_fp<AB: InteractionBuilder>(
+        &self,
+        from_state: FrameState<impl Into<AB::Expr> + Clone>,
+        timestamp_change: impl Into<AB::Expr>,
+    ) -> FrameBridgeInteractor<AB> {
+        let to_state = FrameState {
+            timestamp: from_state.timestamp.clone().into() + timestamp_change.into(),
+            fp: from_state.fp.clone().into(),
+        };
+
+        FrameBridgeInteractor {
+            frame_bus: self.frame_bus,
+            to_state,
+            from_state: from_state.map(Into::into),
+        }
+    }
+
+    pub fn set_fp<AB: InteractionBuilder>(
+        &self,
+        from_state: FrameState<impl Into<AB::Expr> + Clone>,
+        timestamp_change: impl Into<AB::Expr>,
+        to_fp: impl Into<AB::Expr>,
+    ) -> FrameBridgeInteractor<AB> {
+        let to_state = FrameState {
+            timestamp: from_state.timestamp.clone().into() + timestamp_change.into(),
+            fp: to_fp.into(),
+        };
+
+        FrameBridgeInteractor {
+            frame_bus: self.frame_bus,
+            to_state,
+            from_state: from_state.map(Into::into),
+        }
     }
 }
 
@@ -129,6 +164,14 @@ pub struct FrameBridgeInteractor<AB: InteractionBuilder> {
     pub frame_bus: FrameBus,
     pub from_state: FrameState<AB::Expr>,
     pub to_state: FrameState<AB::Expr>,
+}
+
+impl<AB: InteractionBuilder> FrameBridgeInteractor<AB> {
+    /// Caller must constrain that `enabled` is boolean.
+    pub fn eval(self, builder: &mut AB, enabled: impl Into<AB::Expr>) {
+        self.frame_bus
+            .execute(builder, enabled, self.from_state, self.to_state);
+    }
 }
 
 // ============ Wom VM Chip Wrapper ============
