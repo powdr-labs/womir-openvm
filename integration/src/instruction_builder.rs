@@ -10,6 +10,30 @@ use openvm_rv32im_transpiler::Rv32LoadStoreOpcode as LoadStoreOpcode;
 
 use crate::womir_translation::{ERROR_ABORT_CODE, ERROR_CODE_OFFSET};
 
+/// Immediate in the format expected by the ALU adapter.
+#[derive(Debug, Clone, Copy)]
+pub struct AluImm(u32);
+
+impl From<i16> for AluImm {
+    fn from(value: i16) -> Self {
+        // ALU adapter expects the 16 bits value in the lower 2 bytes,
+        // the sign extension on the 3rd byte, and the 4th byte to
+        // be zeroed.
+        let value = value as i32 as u32 & 0xff_ff_ff;
+        AluImm(value)
+    }
+}
+
+impl TryFrom<u32> for AluImm {
+    type Error = ();
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        i16::try_from(value as i32)
+            .map(AluImm::from)
+            .map_err(|_| ())
+    }
+}
+
 pub fn instr_r<F: PrimeField32>(
     opcode: usize,
     rd: usize,
@@ -28,12 +52,17 @@ pub fn instr_r<F: PrimeField32>(
     )
 }
 
-pub fn instr_i<F: PrimeField32>(opcode: usize, rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn instr_i<F: PrimeField32>(
+    opcode: usize,
+    rd: usize,
+    rs1: usize,
+    imm: AluImm,
+) -> Instruction<F> {
     Instruction::new(
         VmOpcode::from_usize(opcode),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1),
-        imm,
+        F::from_canonical_u32(imm.0),
         F::ONE,
         F::ZERO,
         F::ZERO,
@@ -46,7 +75,7 @@ pub fn add<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
 }
 
 #[allow(dead_code)]
-pub fn add_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn add_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(BaseAluOpcode::ADD.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -59,7 +88,7 @@ pub fn mul<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(MulOpcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-pub fn mul_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn mul_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(MulOpcode::MUL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -83,7 +112,7 @@ pub fn and<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(BaseAluOpcode::AND.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-pub fn and_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn and_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(BaseAluOpcode::AND.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -91,7 +120,7 @@ pub fn shl<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F>
     instr_r(ShiftOpcode::SLL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-pub fn shl_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn shl_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(ShiftOpcode::SLL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -99,11 +128,11 @@ pub fn shr_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<
     instr_r(ShiftOpcode::SRL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-pub fn shr_u_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn shr_u_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(ShiftOpcode::SRL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
-pub fn shr_s_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn shr_s_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(ShiftOpcode::SRA.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -111,7 +140,7 @@ pub fn shl_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction
     instr_r(Shift64Opcode::SLL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-pub fn shl_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn shl_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(Shift64Opcode::SLL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -119,11 +148,11 @@ pub fn shr_u_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instructi
     instr_r(Shift64Opcode::SRL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-pub fn shr_s_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn shr_s_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(Shift64Opcode::SRA.global_opcode().as_usize(), rd, rs1, imm)
 }
 
-pub fn shr_u_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn shr_u_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(Shift64Opcode::SRL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -136,7 +165,7 @@ pub fn lt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F
     )
 }
 
-pub fn lt_u_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn lt_u_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(
         LessThanOpcode::SLTU.global_opcode().as_usize(),
         rd,
@@ -191,12 +220,16 @@ pub fn eq<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> 
     instr_r(EqOpcode::EQ.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-pub fn eq_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn eq_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(EqOpcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
 }
 
-pub fn eq_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn eq_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
+}
+
+pub fn neq_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
+    instr_i(EqOpcode::NEQ.global_opcode().as_usize(), rd, rs1, imm)
 }
 
 pub fn const_32_imm<F: PrimeField32>(
@@ -219,7 +252,7 @@ pub fn const_32_imm<F: PrimeField32>(
 }
 
 #[cfg(test)]
-pub fn add_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn add_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(
         BaseAlu64Opcode::ADD.global_opcode().as_usize(),
         rd,
@@ -241,7 +274,7 @@ pub fn or_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<
     instr_r(BaseAlu64Opcode::OR.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
-pub fn and_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: F) -> Instruction<F> {
+pub fn and_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(
         BaseAlu64Opcode::AND.global_opcode().as_usize(),
         rd,
