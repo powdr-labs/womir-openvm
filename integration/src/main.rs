@@ -3,10 +3,7 @@ mod const_collapse;
 mod instruction_builder;
 mod womir_translation;
 
-use std::{
-    fs::{self, File},
-    io::{self, BufWriter, Write},
-};
+use std::{fs, io};
 
 use clap::{Parser, Subcommand};
 use derive_more::From;
