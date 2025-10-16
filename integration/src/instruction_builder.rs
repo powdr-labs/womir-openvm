@@ -718,7 +718,7 @@ pub fn halt<F: PrimeField32>() -> Instruction<F> {
     )
 }
 
-pub fn pre_read_u32<F: PrimeField32>() -> Instruction<F> {
+pub fn prepare_hint<F: PrimeField32>() -> Instruction<F> {
     Instruction::new(
         SystemOpcode::PHANTOM.global_opcode(),
         F::ZERO,
@@ -738,6 +738,21 @@ pub fn read_u32<F: PrimeField32>(rd: usize) -> Instruction<F> {
         0,
         0,
         1,
+        0,
+    )
+}
+
+pub fn read_buffer<F: PrimeField32>(
+    num_words_reg: usize,
+    mem_ptr_reg: usize,
+    mem_imm: usize,
+) -> Instruction<F> {
+    Instruction::from_isize(
+        HintStoreOpcode::HINT_BUFFER.global_opcode(),
+        0, // dest reg, not used here
+        (riscv::RV32_REGISTER_NUM_LIMBS * num_words_reg) as isize,
+        (riscv::RV32_REGISTER_NUM_LIMBS * mem_ptr_reg) as isize,
+        mem_imm as isize, // immediate memory offset
         0,
     )
 }

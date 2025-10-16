@@ -222,7 +222,7 @@ where
     for _ in 0..num_input_words {
         //code.push(ib::read32(ptr as usize));
         // code.push(ib::const_32_imm(ptr as usize, 10, 0));
-        code.push(ib::pre_read_u32::<F>());
+        code.push(ib::prepare_hint::<F>());
         code.push(ib::read_u32::<F>(ptr as usize));
         ptr += 1;
     }
@@ -594,19 +594,37 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_imported_call(
         &self,
-        _c: &mut Ctx<F>,
+        c: &mut Ctx<F>,
         module: &'a str,
         function: &'a str,
-        _inputs: Vec<Range<u32>>,
+        inputs: Vec<Range<u32>>,
         outputs: Vec<Range<u32>>,
     ) -> Vec<Directive<F>> {
         match (module, function) {
             ("env", "read_u32") => {
                 let output = outputs[0].start as usize;
                 vec![
-                    Directive::Instruction(ib::pre_read_u32()),
+                    Directive::Instruction(ib::prepare_hint()),
                     Directive::Instruction(ib::read_u32(output)),
                 ]
+            }
+            ("env", "__hint_input") => {
+                // prepare an object to be read
+                vec![Directive::Instruction(ib::prepare_hint())]
+            }
+            ("env", "__hint_store_vec") => {
+                let mem_start = c
+                    .program
+                    .linear_memory_start()
+                    .expect("no memory allocated");
+
+                let mem_ptr = inputs[0].start as usize;
+                let num_words = inputs[1].start as usize;
+                vec![Directive::Instruction(ib::read_buffer(
+                    num_words,
+                    mem_ptr,
+                    mem_start as usize,
+                ))]
             }
             ("env", "abort") => {
                 vec![Directive::Instruction(ib::abort())]

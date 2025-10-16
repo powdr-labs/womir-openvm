@@ -629,23 +629,22 @@ mod phantom {
             _: F,
             _: u16,
         ) -> eyre::Result<()> {
-            let hint = match streams.input_stream.pop_front() {
+            let mut hint = match streams.input_stream.pop_front() {
                 Some(hint) => hint,
                 None => {
                     bail!("EndOfInputStream");
                 }
             };
             streams.hint_stream.clear();
-            // TODO add this back when we support generic read over serialized data.
-            // streams.hint_stream.extend(
-            //     (hint.len() as u32)
-            //         .to_le_bytes()
-            //         .iter()
-            //         .map(|b| F::from_canonical_u8(*b)),
-            // );
-            // // Extend by 0 for 4 byte alignment
-            // let capacity = hint.len().div_ceil(4) * 4;
-            // hint.resize(capacity, F::ZERO);
+            streams.hint_stream.extend(
+                (hint.len() as u32)
+                    .to_le_bytes()
+                    .iter()
+                    .map(|b| F::from_canonical_u8(*b)),
+            );
+            // Extend by 0 for 4 byte alignment
+            let capacity = hint.len().div_ceil(4) * 4;
+            hint.resize(capacity, F::ZERO);
             streams.hint_stream.extend(hint);
             Ok(())
         }
