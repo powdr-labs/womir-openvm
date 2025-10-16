@@ -731,6 +731,23 @@ pub fn prepare_hint<F: PrimeField32>() -> Instruction<F> {
     )
 }
 
+pub fn debug_print<F: PrimeField32>(
+    mem_ptr_reg: usize,
+    amount_reg: usize,
+    mem_imm: u16,
+) -> Instruction<F> {
+    // OpenVM execution splits c into c_hi and c_lo which are passed separately to the trait impl.
+    let c = ((mem_imm as usize) << 16) | (Phantom::PrintStr as usize);
+    Instruction::from_isize(
+        SystemOpcode::PHANTOM.global_opcode(),
+        (riscv::RV32_REGISTER_NUM_LIMBS * mem_ptr_reg) as isize,
+        (riscv::RV32_REGISTER_NUM_LIMBS * amount_reg) as isize,
+        c as isize,
+        0,
+        0,
+    )
+}
+
 pub fn read_u32<F: PrimeField32>(rd: usize) -> Instruction<F> {
     Instruction::from_isize(
         HintStoreOpcode::HINT_STOREW.global_opcode(),

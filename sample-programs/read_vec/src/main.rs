@@ -1,11 +1,15 @@
-use std::alloc;
-use std::alloc::Layout;
-
 #[link(wasm_import_module = "env")]
 unsafe extern "C" {
-    pub safe fn read_u32() -> u32;
     pub safe fn __hint_input();
     pub unsafe fn __hint_store_vec(ptr: *mut u8, num_words: u32);
+    pub unsafe fn __debug_print(ptr: *const u8, num_bytes: u32);
+}
+
+pub fn read_vec() -> Vec<u8> {
+    __hint_input();
+    let len = read_word();
+    assert_eq!(len, 4);
+    read_vec_by_len(len as usize)
 }
 
 // len in bytes
@@ -30,22 +34,19 @@ pub fn read_word() -> u32 {
 }
 
 pub fn main() {
-    __hint_input();
-    let len = read_word();
-    assert_eq!(len, 4);
-    let v = read_vec_by_len(len as usize);
+    let s = "Hello, world!";
+    unsafe {
+        __debug_print(s.as_ptr(), s.len() as u32);
+    }
 
+    let v = read_vec();
     assert_eq!(v.len(), 4);
     assert_eq!(v[0], 0xcc);
     assert_eq!(v[1], 0xbb);
     assert_eq!(v[2], 0xaa);
     assert_eq!(v[3], 0xff);
 
-    __hint_input();
-    let len = read_word();
-    assert_eq!(len, 4);
-    let v = read_vec_by_len(len as usize);
-
+    let v = read_vec();
     assert_eq!(v.len(), 4);
     assert_eq!(v[0], 0x66);
     assert_eq!(v[1], 0x00);

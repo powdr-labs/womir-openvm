@@ -608,6 +608,21 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                     Directive::Instruction(ib::read_u32(output)),
                 ]
             }
+            ("env", "__debug_print") => {
+                let mem_start = c
+                    .program
+                    .linear_memory_start()
+                    .expect("no memory allocated");
+
+                assert!(mem_start < (1 << 16));
+                let mem_ptr = inputs[0].start as usize;
+                let num_bytes = inputs[1].start as usize;
+                vec![Directive::Instruction(ib::debug_print(
+                    mem_ptr,
+                    num_bytes,
+                    mem_start as u16,
+                ))]
+            }
             ("env", "__hint_input") => {
                 // prepare an object to be read
                 vec![Directive::Instruction(ib::prepare_hint())]
