@@ -358,7 +358,6 @@ impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
         let mut wom = self.wom.lock().unwrap();
 
         let (rd, num_words, num_words_read, mem_ptr) = if local_opcode == HINT_STOREW {
-            memory.increment_timestamp();
             (Some(rd), 1, None, None)
         } else {
             let (num_words_read, num_words_limbs) =
@@ -395,6 +394,7 @@ impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
         if local_opcode == HINT_BUFFER {
             let mem_ptr = mem_ptr.unwrap();
             for word_index in 0..num_words {
+                // TODO Don't fully understand why these are needed. They were copied from OpenVM.
                 if word_index != 0 {
                     memory.increment_timestamp();
                     memory.increment_timestamp();
@@ -411,6 +411,8 @@ impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
                 record.hints.push(data);
             }
         } else {
+            memory.increment_timestamp();
+
             let rd = rd.unwrap();
             // Read a single word directly into a register.
 

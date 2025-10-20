@@ -222,7 +222,7 @@ where
     for _ in 0..num_input_words {
         //code.push(ib::read32(ptr as usize));
         // code.push(ib::const_32_imm(ptr as usize, 10, 0));
-        code.push(ib::prepare_hint::<F>());
+        code.push(ib::prepare_read::<F>());
         code.push(ib::read_u32::<F>(ptr as usize));
         ptr += 1;
     }
@@ -604,7 +604,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             ("env", "read_u32") => {
                 let output = outputs[0].start as usize;
                 vec![
-                    Directive::Instruction(ib::prepare_hint()),
+                    Directive::Instruction(ib::prepare_read()),
                     Directive::Instruction(ib::read_u32(output)),
                 ]
             }
@@ -625,9 +625,9 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             }
             ("env", "__hint_input") => {
                 // prepare an object to be read
-                vec![Directive::Instruction(ib::prepare_hint())]
+                vec![Directive::Instruction(ib::prepare_read())]
             }
-            ("env", "__hint_store_vec") => {
+            ("env", "__hint_buffer") => {
                 let mem_start = c
                     .program
                     .linear_memory_start()

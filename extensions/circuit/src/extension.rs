@@ -682,6 +682,7 @@ mod phantom {
             b: F,
             mem_start_imm: u16,
         ) -> eyre::Result<()> {
+            // TODO mem_start_imm may be larger than u16 in some cases.
             let mem_start_imm = mem_start_imm as u32;
             let fp = self.fp.lock().unwrap();
             let fp_f = F::from_canonical_u32(*fp);

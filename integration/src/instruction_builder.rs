@@ -718,7 +718,7 @@ pub fn halt<F: PrimeField32>() -> Instruction<F> {
     )
 }
 
-pub fn prepare_hint<F: PrimeField32>() -> Instruction<F> {
+pub fn prepare_read<F: PrimeField32>() -> Instruction<F> {
     Instruction::new(
         SystemOpcode::PHANTOM.global_opcode(),
         F::ZERO,
