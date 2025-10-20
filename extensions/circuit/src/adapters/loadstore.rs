@@ -313,11 +313,8 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             )
             .eval(builder, is_store);
 
-        let to_pc = ctx
-            .to_pc
-            .unwrap_or(local_cols.from_state.pc + AB::F::from_canonical_u32(DEFAULT_PC_STEP));
         self.execution_bridge
-            .execute(
+            .execute_and_increment_pc(
                 ctx.instruction.opcode,
                 [
                     local_cols.rd_rs2_ptr.into(),
@@ -331,20 +328,16 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
                     local_cols.imm_sign.into(),
                 ],
                 local_cols.from_state,
-                ExecutionState {
-                    pc: to_pc.clone(),
-                    timestamp: timestamp + AB::F::from_canonical_usize(timestamp_delta),
-                },
+                AB::F::from_canonical_usize(timestamp_delta),
             )
             .eval(builder, is_valid.clone());
 
-        // Handle frame transitions - loadstore doesn't change fp
-        self.frame_bridge.frame_bus.execute(
-            builder,
-            is_valid,
-            local_cols.from_frame,
-            FrameState::new(to_pc.clone(), local_cols.from_frame.fp),
-        );
+        self.frame_bridge
+            .keep_fp(
+                local_cols.from_frame,
+                AB::F::from_canonical_usize(timestamp_delta),
+            )
+            .eval(builder, is_valid);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {

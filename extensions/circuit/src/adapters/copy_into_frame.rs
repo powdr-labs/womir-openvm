@@ -23,7 +23,9 @@ use openvm_womir_transpiler::CopyIntoFrameOpcode;
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord};
+use crate::{
+    FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
+};
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose as compose_as_u32, decompose};
 
@@ -44,7 +46,7 @@ impl<F: PrimeField32> CopyIntoFrameAdapterChipWom<F> {
         Self {
             air: CopyIntoFrameAdapterAirWom {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
-                _frame_bus: frame_bus,
+                frame_bridge: FrameBridge::new(frame_bus),
                 _memory_bridge: memory_bridge,
                 wom_bridge,
             },
@@ -90,7 +92,7 @@ pub struct CopyIntoFrameAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
     pub(super) wom_bridge: WomBridge,
     pub(super) execution_bridge: ExecutionBridge,
-    pub(super) _frame_bus: FrameBus,
+    pub(super) frame_bridge: FrameBridge,
 }
 
 impl<F: Field> BaseAir<F> for CopyIntoFrameAdapterAirWom {
@@ -148,19 +150,25 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CopyIntoFrameAdapterAirWom {
 
         let timestamp_change = AB::Expr::ONE;
 
-        self.execution_bridge.execute_and_increment_pc::<AB>(
-            ctx.instruction.opcode,
-            [
-                local.target_reg.into(),
-                local.src_reg.into(),
-                local.other_fp_reg.into(),
-                AB::Expr::ZERO,
-                AB::Expr::ZERO,
-                AB::Expr::ONE,
-            ],
-            local.from_state,
-            timestamp_change,
-        );
+        self.execution_bridge
+            .execute_and_increment_pc::<AB>(
+                ctx.instruction.opcode,
+                [
+                    local.target_reg.into(),
+                    local.src_reg.into(),
+                    local.other_fp_reg.into(),
+                    AB::Expr::ZERO,
+                    AB::Expr::ZERO,
+                    AB::Expr::ONE,
+                ],
+                local.from_state,
+                timestamp_change.clone(),
+            )
+            .eval(builder, ctx.instruction.is_valid.clone());
+
+        self.frame_bridge
+            .keep_fp(local.from_frame, timestamp_change)
+            .eval(builder, ctx.instruction.is_valid);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
