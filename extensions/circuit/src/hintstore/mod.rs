@@ -275,11 +275,12 @@ impl<AB: InteractionBuilder> Air<AB> for HintStoreAir {
 pub struct HintStoreRecord<F: Field> {
     pub from_state: ExecutionState<u32>,
     pub instruction: Instruction<F>,
-    pub rd: u32,
+    pub num_words_reg: u32,
     pub num_words: u32,
+    pub mem_ptr_reg: u32,
 
     pub num_words_read: Option<WomRecord<F>>,
-    pub hints: Vec<WomRecord<F>>,
+    pub hints: Vec<[F; RV32_REGISTER_NUM_LIMBS]>,
 }
 
 pub struct HintStoreChip<F: Field> {
@@ -347,22 +348,30 @@ impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
             opcode,
             a: rd,
             b: num_words_reg,
-            d,
+            c: mem_ptr_reg,
+            d: mem_imm,
             ..
         } = instruction;
-        debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+
         let local_opcode = HintStoreOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
         let mut wom = self.wom.lock().unwrap();
 
-        memory.increment_timestamp();
-
-        let (num_words, num_words_read) = if local_opcode == HINT_STOREW {
-            (1, None)
+        let (rd, num_words, num_words_read, mem_ptr) = if local_opcode == HINT_STOREW {
+            (Some(rd), 1, None, None)
         } else {
             let (num_words_read, num_words_limbs) =
                 wom.read::<RV32_REGISTER_NUM_LIMBS>(num_words_reg + fp_f);
-            (compose(num_words_limbs), Some(num_words_read))
+            let (_mem_ptr_read, mem_ptr_limbs) =
+                wom.read::<RV32_REGISTER_NUM_LIMBS>(mem_ptr_reg + fp_f);
+            let mem_ptr = compose(mem_ptr_limbs);
+            debug_assert!(mem_ptr <= (1 << self.air.pointer_max_bits));
+            (
+                None,
+                compose(num_words_limbs),
+                Some(num_words_read),
+                Some(mem_ptr),
+            )
         };
         debug_assert_ne!(num_words, 0);
         debug_assert!(num_words <= (1 << self.air.pointer_max_bits));
@@ -375,16 +384,51 @@ impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
         let mut record = HintStoreRecord {
             from_state,
             instruction: instruction.clone(),
-            rd: rd.as_canonical_u32(),
+            num_words_reg: num_words_reg.as_canonical_u32(),
             num_words,
+            mem_ptr_reg: num_words_reg.as_canonical_u32(),
             num_words_read,
             hints: vec![],
         };
 
-        let data: [F; RV32_REGISTER_NUM_LIMBS] =
-            std::array::from_fn(|_| streams.hint_stream.pop_front().unwrap());
-        let write = wom.write(rd + fp_f, data);
-        record.hints.push(write);
+        if local_opcode == HINT_BUFFER {
+            let mem_ptr = mem_ptr.unwrap();
+            for word_index in 0..num_words {
+                // TODO Don't fully understand why these are needed. They were copied from OpenVM.
+                if word_index != 0 {
+                    memory.increment_timestamp();
+                    memory.increment_timestamp();
+                }
+
+                let data: [F; RV32_REGISTER_NUM_LIMBS] =
+                    std::array::from_fn(|_| streams.hint_stream.pop_front().unwrap());
+                let mem_ptr = mem_ptr + mem_imm.as_canonical_u32();
+                let (_write, _) = memory.write(
+                    F::from_canonical_u32(RV32_MEMORY_AS),
+                    F::from_canonical_u32(mem_ptr + (RV32_REGISTER_NUM_LIMBS as u32 * word_index)),
+                    data,
+                );
+                record.hints.push(data);
+            }
+        } else {
+            memory.increment_timestamp();
+
+            let rd = rd.unwrap();
+            // Read a single word directly into a register.
+
+            // The length of the read data always comes first.
+            let data: [F; RV32_REGISTER_NUM_LIMBS * 2] =
+                std::array::from_fn(|_| streams.hint_stream.pop_front().unwrap());
+
+            assert_eq!(data[0].as_canonical_u32(), 4);
+            assert_eq!(data[1].as_canonical_u32(), 0);
+            assert_eq!(data[2].as_canonical_u32(), 0);
+            assert_eq!(data[3].as_canonical_u32(), 0);
+
+            let value = [data[4], data[5], data[6], data[7]];
+            wom.write(rd + fp_f, value);
+            record.hints.push(value);
+        }
 
         self.height += record.hints.len();
         self.records.push(record);

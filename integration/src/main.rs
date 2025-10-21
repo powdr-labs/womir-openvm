@@ -3,6 +3,8 @@ mod const_collapse;
 mod instruction_builder;
 mod womir_translation;
 
+use std::fs;
+
 use clap::{Parser, Subcommand};
 use derive_more::From;
 use eyre::Result;
@@ -130,7 +132,11 @@ enum Commands {
         /// Function name
         function: String,
         /// Arguments to pass to the function
+        #[arg(long)]
         args: Vec<String>,
+        /// Files to be read as bytes.
+        #[arg(long)]
+        binary_input_files: Vec<String>,
     },
     /// Proves execution of a function from the WASM program with the given arguments
     Prove {
@@ -190,7 +196,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        Commands::Run { function, args, .. } => {
+        Commands::Run {
+            function,
+            args,
+            binary_input_files,
+            ..
+        } => {
             // Load the module
             let wasm_bytes = std::fs::read(program_path).expect("Failed to read WASM file");
             let (module, functions) = load_wasm(&wasm_bytes);
@@ -210,6 +221,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let val = arg.parse::<u32>().unwrap();
                 stdin.write(&val);
             }
+
+            for binary_input_file in &binary_input_files {
+                stdin.write_bytes(&fs::read(binary_input_file).unwrap());
+            }
+
             let output = linked_program.execute(vm_config, &function, stdin)?;
 
             println!("output: {output:?}");
@@ -1618,7 +1634,7 @@ mod tests {
     fn test_input_hint() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::pre_read_u32::<F>(),
+            wom::prepare_read::<F>(),
             wom::read_u32::<F>(10),
             wom::reveal(10, 0),
             wom::halt(),
@@ -1634,7 +1650,7 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             // Read first value into r8
-            wom::pre_read_u32::<F>(),
+            wom::prepare_read::<F>(),
             wom::read_u32::<F>(8),
             wom::allocate_frame_imm::<F>(9, 64), // Allocate frame, pointer in r9
             wom::copy_into_frame::<F>(2, 8, 9),  // Copy r8 to frame[2]
@@ -1644,7 +1660,7 @@ mod tests {
             wom::halt(),
             wom::const_32_imm(0, 0, 0), // PC = 28
             // Read second value into r3
-            wom::pre_read_u32::<F>(),
+            wom::prepare_read::<F>(),
             wom::read_u32::<F>(3),
             // Xor the two read values
             wom::xor::<F>(4, 2, 3),
@@ -2135,6 +2151,11 @@ mod wast_tests {
             &[1, 41],
             &[],
         )
+    }
+
+    #[test]
+    fn test_keccak_rust_read_vec() {
+        run_womir_guest("read_vec", "main", &[0, 0], &[0xffaabbcc, 0xeedd0066], &[])
     }
 
     #[test]

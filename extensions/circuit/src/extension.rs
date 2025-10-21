@@ -576,6 +576,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         builder.add_phantom_sub_executor(
             phantom::PrintStrSubEx {
                 wom: wom_controller.clone(),
+                fp: shared_fp.clone(),
             },
             PhantomDiscriminant(Phantom::PrintStr as u16),
         )?;
@@ -619,6 +620,7 @@ mod phantom {
 
     pub struct PrintStrSubEx<F> {
         pub wom: Arc<Mutex<WomController<F>>>,
+        pub fp: Arc<Mutex<u32>>,
     }
 
     pub struct HintLoadByKeySubEx<F> {
@@ -635,23 +637,22 @@ mod phantom {
             _: F,
             _: u16,
         ) -> eyre::Result<()> {
-            let hint = match streams.input_stream.pop_front() {
+            let mut hint = match streams.input_stream.pop_front() {
                 Some(hint) => hint,
                 None => {
                     bail!("EndOfInputStream");
                 }
             };
             streams.hint_stream.clear();
-            // TODO add this back when we support generic read over serialized data.
-            // streams.hint_stream.extend(
-            //     (hint.len() as u32)
-            //         .to_le_bytes()
-            //         .iter()
-            //         .map(|b| F::from_canonical_u8(*b)),
-            // );
-            // // Extend by 0 for 4 byte alignment
-            // let capacity = hint.len().div_ceil(4) * 4;
-            // hint.resize(capacity, F::ZERO);
+            streams.hint_stream.extend(
+                (hint.len() as u32)
+                    .to_le_bytes()
+                    .iter()
+                    .map(|b| F::from_canonical_u8(*b)),
+            );
+            // Extend by 0 for 4 byte alignment
+            let capacity = hint.len().div_ceil(4) * 4;
+            hint.resize(capacity, F::ZERO);
             streams.hint_stream.extend(hint);
             Ok(())
         }
@@ -685,13 +686,18 @@ mod phantom {
             _: PhantomDiscriminant,
             a: F,
             b: F,
-            _: u16,
+            mem_start_imm: u16,
         ) -> eyre::Result<()> {
-            let rd = unsafe_read_wom_register(&self.wom.lock().unwrap(), a);
-            let rs1 = unsafe_read_wom_register(&self.wom.lock().unwrap(), b);
+            // TODO mem_start_imm may be larger than u16 in some cases.
+            let mem_start_imm = mem_start_imm as u32;
+            let fp = self.fp.lock().unwrap();
+            let fp_f = F::from_canonical_u32(*fp);
+            let rd = unsafe_read_wom_register(&self.wom.lock().unwrap(), a + fp_f);
+            let rs1 = unsafe_read_wom_register(&self.wom.lock().unwrap(), b + fp_f);
             let bytes = (0..rs1)
                 .map(|i| -> eyre::Result<u8> {
-                    let val = memory.unsafe_read_cell(F::TWO, F::from_canonical_u32(rd + i));
+                    let val = memory
+                        .unsafe_read_cell(F::TWO, F::from_canonical_u32(mem_start_imm + rd + i));
                     let byte: u8 = val.as_canonical_u32().try_into()?;
                     Ok(byte)
                 })
