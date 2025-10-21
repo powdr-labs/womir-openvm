@@ -398,6 +398,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         src_ptr: Range<u32>,
         dest_ptr: Range<u32>,
     ) -> Directive<F> {
+        // TODO: will this be used to copy PC/FP?
         Directive::Instruction(ib::add_imm(
             dest_ptr.start as usize,
             src_ptr.start as usize,
@@ -781,6 +782,7 @@ impl<F: PrimeField32> Directive<F> {
             Directive::ConstFuncAddr { func_idx, reg_dest } => {
                 let label = func_idx_to_label(func_idx);
                 let pc = label_map.get(&label)?.pc;
+                // TODO: think we need to store the PC as a single F here
                 Some(ib::const_32_imm(
                     reg_dest as usize,
                     pc as u16,
