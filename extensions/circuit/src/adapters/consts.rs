@@ -11,7 +11,7 @@ use openvm_circuit::{
     },
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode};
+use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
@@ -181,14 +181,10 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
-        let Instruction {
-            opcode,
-            b,
-            c,
-            ..
-        } = *instruction;
+        let Instruction { opcode, b, c, .. } = *instruction;
 
-        let local_opcode = ConstOpcodes::from_usize(opcode.local_opcode_idx(ConstOpcodes::CLASS_OFFSET));
+        let local_opcode =
+            ConstOpcodes::from_usize(opcode.local_opcode_idx(ConstOpcodes::CLASS_OFFSET));
 
         let fp_f = F::from_canonical_u32(fp);
 
@@ -201,9 +197,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
         let imm = imm_hi << 16 | imm_lo;
 
         let val = match local_opcode {
-            ConstOpcodes::CONST32 => {
-                decompose(imm)
-            }
+            ConstOpcodes::CONST32 => decompose(imm),
             ConstOpcodes::CONST_FIELD => {
                 assert!(imm < F::ORDER_U32);
                 [F::from_canonical_u32(imm), F::ZERO, F::ZERO, F::ZERO]
@@ -214,10 +208,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
             }
         };
 
-
-        Ok(([], ConstsReadRecord {
-            val,
-        }))
+        Ok(([], ConstsReadRecord { val }))
     }
 
     fn postprocess(
@@ -230,11 +221,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
         _output: AdapterRuntimeContext<F, Self::Interface>,
         read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
-        let Instruction {
-            a,
-            f: enabled,
-            ..
-        } = *instruction;
+        let Instruction { a, f: enabled, .. } = *instruction;
 
         let mut write_result = None;
 

@@ -1109,10 +1109,7 @@ fn translate_complex_ins_with_const<F: PrimeField32>(
                         .clone()
                         .zip(output.clone())
                         .map(|(src, dest)| {
-                            Directive::Instruction(ib::copy_reg(
-                                dest as usize,
-                                src as usize,
-                            ))
+                            Directive::Instruction(ib::copy_reg(dest as usize, src as usize))
                         })
                         .collect_vec(),
                     // This input is a constant, so we issue const to register instructions
@@ -1952,10 +1949,7 @@ fn translate_complex_ins<F: PrimeField32>(
                 .clone()
                 .zip(output.unwrap())
                 .map(|(input, output)| {
-                    Directive::Instruction(ib::copy_reg(
-                        output as usize,
-                        input as usize,
-                    ))
+                    Directive::Instruction(ib::copy_reg(output as usize, input as usize))
                 })
                 .collect_vec()
                 .into()
