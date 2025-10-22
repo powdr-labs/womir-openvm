@@ -11,13 +11,14 @@ use openvm_circuit::{
     },
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP};
+use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
+use openvm_womir_transpiler::ConstOpcodes;
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
@@ -62,14 +63,19 @@ pub struct ConstsWriteRecord<F> {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConstsReadRecord<F> {
+    pub val: [F; RV32_REGISTER_NUM_LIMBS],
+}
+
+#[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
 pub struct ConstsAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
     pub target_reg: T,
-    pub lo: T,
+    pub lo_or_from_reg: T,
     pub hi: T,
-    // composed value
     pub val: [T; RV32_REGISTER_NUM_LIMBS],
     pub write_mult: T,
 }
@@ -129,7 +135,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
                 ctx.instruction.opcode,
                 [
                     local.target_reg.into(),
-                    local.lo.into(),
+                    local.lo_or_from_reg.into(),
                     local.hi.into(),
                     AB::Expr::ZERO,
                     AB::Expr::ZERO,
@@ -153,7 +159,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
 }
 
 impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
-    type ReadRecord = ();
+    type ReadRecord = ConstsReadRecord<F>;
     type WriteRecord = ConstsWriteRecord<F>;
     type Air = ConstsAdapterAirWom;
     type Interface = BasicAdapterInterface<
@@ -168,14 +174,50 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
     fn preprocess(
         &mut self,
         _memory: &mut MemoryController<F>,
-        _wom: &mut WomController<F>,
-        _fp: u32,
-        _instruction: &Instruction<F>,
+        wom: &mut WomController<F>,
+        fp: u32,
+        instruction: &Instruction<F>,
     ) -> Result<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
-        Ok(([], ()))
+        let Instruction {
+            opcode,
+            b,
+            c,
+            ..
+        } = *instruction;
+
+        let local_opcode = ConstOpcodes::from_usize(opcode.local_opcode_idx(ConstOpcodes::CLASS_OFFSET));
+
+        let fp_f = F::from_canonical_u32(fp);
+
+        let imm_lo = b.as_canonical_u32();
+        let imm_hi = c.as_canonical_u32();
+        assert!(
+            imm_lo < (1 << 16) && imm_hi < (1 << 16),
+            "Immediate values out of range",
+        );
+        let imm = imm_hi << 16 | imm_lo;
+
+        let val = match local_opcode {
+            ConstOpcodes::CONST32 => {
+                decompose(imm)
+            }
+            ConstOpcodes::CONST_FIELD => {
+                assert!(imm < F::ORDER_U32);
+                [F::from_canonical_u32(imm), F::ZERO, F::ZERO, F::ZERO]
+            }
+            ConstOpcodes::COPY_REG => {
+                let from_reg = b;
+                wom.read(from_reg + fp_f).1
+            }
+        };
+
+
+        Ok(([], ConstsReadRecord {
+            val,
+        }))
     }
 
     fn postprocess(
@@ -186,12 +228,10 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
         _output: AdapterRuntimeContext<F, Self::Interface>,
-        _read_record: &Self::ReadRecord,
+        read_record: &Self::ReadRecord,
     ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction {
             a,
-            b,
-            c,
             f: enabled,
             ..
         } = *instruction;
@@ -201,16 +241,10 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
         // TODO: should this only happen if enabled?
         memory.increment_timestamp();
 
+        let fp_f = F::from_canonical_u32(from_frame.fp);
+
         if enabled != F::ZERO {
-            let imm_lo = b.as_canonical_u32();
-            let imm_hi = c.as_canonical_u32();
-            assert!(
-                imm_lo < (1 << 16) && imm_hi < (1 << 16),
-                "Immediate values out of range",
-            );
-            let imm = imm_hi << 16 | imm_lo;
-            let fp_f = F::from_canonical_u32(from_frame.fp);
-            write_result = Some(wom.write(a + fp_f, decompose(imm)));
+            write_result = Some(wom.write(a + fp_f, read_record.val))
         }
 
         Ok((

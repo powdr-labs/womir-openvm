@@ -251,6 +251,38 @@ pub fn const_32_imm<F: PrimeField32>(
     )
 }
 
+pub fn const_field<F: PrimeField32>(
+    target_reg: usize,
+    imm_lo: u16,
+    imm_hi: u16,
+) -> Instruction<F> {
+    Instruction::new(
+        ConstOpcodes::CONST_FIELD.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
+        F::from_canonical_usize(imm_lo as usize),                             // b: low 16 bits
+        // of the immediate
+        F::from_canonical_usize(imm_hi as usize), // c: high 16 bits
+        // of the immediate
+        F::ZERO, // d: (not used)
+        F::ZERO, // e: (not used)
+        F::ONE,  // f: enabled
+        F::ZERO, // g: (not used)
+    )
+}
+
+pub fn copy_reg<F: PrimeField32>(target_reg: usize, from_reg: usize) -> Instruction<F> {
+    Instruction::new(
+        ConstOpcodes::COPY_REG.global_opcode(),
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * from_reg),   // b: from_reg
+        F::ZERO,                                                              // c: (not used)
+        F::ZERO, // d: (not used)
+        F::ZERO, // e: (not used)
+        F::ONE,  // f: enabled
+        F::ZERO, // g: (not used)
+    )
+}
+
 #[cfg(test)]
 pub fn add_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(
