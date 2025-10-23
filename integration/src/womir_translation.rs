@@ -130,16 +130,14 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
                     NullFuncAddr => decompose(NULL_REF[2]),
                 };
 
-                limbs.into_iter()
-                    .enumerate()
-                    .filter_map(move |(i, byte)| {
-                        const ROM_ID: u32 = 2;
-                        if byte != 0 {
-                            Some(((ROM_ID, addr + i as u32), F::from_canonical_u32(byte)))
-                        } else {
-                            None
-                        }
-                    })
+                limbs.into_iter().enumerate().filter_map(move |(i, byte)| {
+                    const ROM_ID: u32 = 2;
+                    if byte != 0 {
+                        Some(((ROM_ID, addr + i as u32), F::from_canonical_u32(byte)))
+                    } else {
+                        None
+                    }
+                })
             })
             .collect();
 

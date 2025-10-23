@@ -367,7 +367,12 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
                     // Save both pc to rd1 (a field) and fp to rd2 (b field)
                     let rd1 = wom.write(
                         a + F::from_canonical_u32(to_fp),
-                        [F::from_canonical_u32(from_pc + DEFAULT_PC_STEP), F::ZERO, F::ZERO, F::ZERO],
+                        [
+                            F::from_canonical_u32(from_pc + DEFAULT_PC_STEP),
+                            F::ZERO,
+                            F::ZERO,
+                            F::ZERO,
+                        ],
                     );
                     let rd2 = wom.write(
                         b + F::from_canonical_u32(to_fp),

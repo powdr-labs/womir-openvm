@@ -27,7 +27,7 @@ use crate::{
     FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
 };
 
-use super::{RV32_REGISTER_NUM_LIMBS, compose as compose_as_u32, decompose};
+use super::RV32_REGISTER_NUM_LIMBS;
 
 #[derive(Debug)]
 pub struct CopyIntoFrameAdapterChipWom<F: Field> {
@@ -58,7 +58,7 @@ impl<F: PrimeField32> CopyIntoFrameAdapterChipWom<F> {
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CopyIntoFrameReadRecord<F> {
-    pub rs1: Option<WomRecord<F>>, // Value to copy
+    pub rs1: Option<WomRecord<F>>,        // Value to copy
     pub rs2: Option<(WomRecord<F>, u32)>, // Frame pointer
 }
 

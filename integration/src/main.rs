@@ -1048,7 +1048,7 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 99_i16.into()),  // x8 = 99
-            wom::const_field::<F>(9, 10, 0),          // x9 = 10 (new frame pointer)
+            wom::const_field::<F>(9, 10, 0),         // x9 = 10 (new frame pointer)
             wom::add_imm::<F>(11, 0, 99_i16.into()), // x11 = 99 (to show it gets overwritten)
             wom::jaaf_save::<F>(11, 28, 9),          // Jump to PC=24, set FP=x9, save old FP to x11
             wom::halt(),                             // This should be skipped
@@ -1067,11 +1067,11 @@ mod tests {
         // Test RET: return to saved PC and FP
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::const_field::<F>(10, 24, 0),        // x10 = 24 (return PC)
-            wom::const_field::<F>(11, 0, 0),         // x11 = 0 (saved FP)
-            wom::add_imm::<F>(8, 0, 88_i16.into()),  // x8 = 88
-            wom::ret::<F>(10, 11),                   // Return to PC=x10, FP=x11
-            wom::halt(),                             // This should be skipped
+            wom::const_field::<F>(10, 24, 0), // x10 = 24 (return PC)
+            wom::const_field::<F>(11, 0, 0),  // x11 = 0 (saved FP)
+            wom::add_imm::<F>(8, 0, 88_i16.into()), // x8 = 88
+            wom::ret::<F>(10, 11),            // Return to PC=x10, FP=x11
+            wom::halt(),                      // This should be skipped
             // PC = 24 (where x10 points)
             wom::reveal(8, 0), // wom::reveal x8 (should be 88)
             wom::halt(),
@@ -1085,8 +1085,8 @@ mod tests {
         // Test CALL: save PC and FP, then jump
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::const_field::<F>(9, 16, 0),        // x9 = 16 (new frame pointer)
-            wom::call::<F>(10, 11, 24, 9), // Call to PC=24, FP=x9, save PC to x10, FP to x11
+            wom::const_field::<F>(9, 16, 0), // x9 = 16 (new frame pointer)
+            wom::call::<F>(10, 11, 24, 9),   // Call to PC=24, FP=x9, save PC to x10, FP to x11
             wom::add_imm::<F>(8, 0, 123_i16.into()), // x8 = 123 (after return) - this should NOT execute
             wom::reveal(8, 0),                       // wom::reveal x8 - this should NOT execute
             wom::halt(),                             // Padding
@@ -1104,8 +1104,8 @@ mod tests {
         // Test CALL_INDIRECT: save PC and FP, jump to register value
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::const_field::<F>(12, 32, 0),       // x12 = 32 (target PC)
-            wom::const_field::<F>(9, 0x100, 0),     // x9 = 256 (new frame pointer)
+            wom::const_field::<F>(12, 32, 0), // x12 = 32 (target PC)
+            wom::const_field::<F>(9, 0x100, 0), // x9 = 256 (new frame pointer)
             wom::add_imm::<F>(11, 0, 999_i16.into()), // x11 = 999
             wom::call_indirect::<F>(10, 11, 12, 9), // Call to PC=x12, FP=x9, save PC to x10, FP to x11
             wom::add_imm::<F>(8, 0, 456_i16.into()), // x8 = 456 (after return) - this should NOT execute
@@ -1274,10 +1274,10 @@ mod tests {
         // Test COPY_INTO_FRAME instruction
         // This test verifies that copy_into_frame actually writes to memory
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),                 // PC=0
-            wom::add_imm::<F>(8, 0, 42_i16.into()),     // PC=4: x8 = 42 (value to copy)
-            wom::const_field::<F>(9, 0x1000, 0),        // PC=8: x9 = 0x1000 (mock frame pointer)
-            wom::add_imm::<F>(10, 0, 0_i16.into()),     // PC=12: x10 = 0 (register to read into)
+            wom::const_32_imm(0, 0, 0),             // PC=0
+            wom::add_imm::<F>(8, 0, 42_i16.into()), // PC=4: x8 = 42 (value to copy)
+            wom::const_field::<F>(9, 0x1000, 0),    // PC=8: x9 = 0x1000 (mock frame pointer)
+            wom::add_imm::<F>(10, 0, 0_i16.into()), // PC=12: x10 = 0 (register to read into)
             wom::copy_into_frame::<F>(10, 8, 9), // PC=16: Copy x8 to [x9[x10]], which writes to address pointed by x10
             wom::jaaf::<F>(24, 9),               // Jump to PC=24, set FP=x9
             // Since copy_into_frame writes x8's value to memory at [x9[x10]],
