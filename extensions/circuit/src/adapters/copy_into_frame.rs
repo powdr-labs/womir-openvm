@@ -58,7 +58,7 @@ impl<F: PrimeField32> CopyIntoFrameAdapterChipWom<F> {
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CopyIntoFrameReadRecord<F> {
-    pub rs1: Option<(WomRecord<F>, u32)>, // Value to copy
+    pub rs1: Option<WomRecord<F>>, // Value to copy
     pub rs2: Option<(WomRecord<F>, u32)>, // Frame pointer
 }
 
@@ -237,7 +237,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
         Ok((
             [value_to_copy.1, [other_fp_f, F::ZERO, F::ZERO, F::ZERO]],
             CopyIntoFrameReadRecord {
-                rs1: Some((value_to_copy.0, compose_as_u32(value_to_copy.1))),
+                rs1: Some(value_to_copy.0),
                 rs2: Some((other_fp_read.0, other_fp_u32)),
             },
         ))
@@ -269,13 +269,14 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
         let fp_f = F::from_canonical_u32(from_frame.fp);
 
         if enabled != F::ZERO {
-            let value = read_record.rs1.as_ref().unwrap().1;
+            let value_data = read_record.rs1.as_ref().unwrap().data.clone();
+            let value: [F; RV32_REGISTER_NUM_LIMBS] = value_data.try_into().unwrap();
             let other_fp = read_record.rs2.as_ref().unwrap().1;
             let other_fp_f = F::from_canonical_u32(other_fp);
 
             write_result = Some(match local_opcode {
-                CopyIntoFrameOpcode::COPY_INTO_FRAME => wom.write(a + other_fp_f, decompose(value)),
-                CopyIntoFrameOpcode::COPY_FROM_FRAME => wom.write(a + fp_f, decompose(value)),
+                CopyIntoFrameOpcode::COPY_INTO_FRAME => wom.write(a + other_fp_f, value),
+                CopyIntoFrameOpcode::COPY_FROM_FRAME => wom.write(a + fp_f, value),
             });
         }
 

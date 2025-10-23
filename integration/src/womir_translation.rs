@@ -101,41 +101,45 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         // We assume that the loop above removes a single `nop` introduced by the linker.
         assert_eq!(linked_instructions.len(), start_offset - 1);
 
+        fn decompose(v: u32) -> [u32; 4] {
+            [
+                v & 0xff,
+                (v >> 8) & 0xff,
+                (v >> 16) & 0xff,
+                (v >> 24) & 0xff,
+            ]
+        }
+
         let memory_image = std::mem::take(&mut module.initial_memory)
             .into_iter()
             .flat_map(|(addr, value)| {
                 use womir::loader::MemoryEntry::*;
-                let v = match value {
-                    Value(v) => v,
+                let limbs = match value {
+                    Value(v) => decompose(v),
                     FuncAddr(idx) => {
                         let label = func_idx_to_label(idx);
-                        label_map[&label].pc
+                        // PC/FP values are stored as a full F in the least significant limb
+                        [label_map[&label].pc, 0, 0, 0]
                     }
                     FuncFrameSize(func_idx) => {
                         let label = func_idx_to_label(func_idx);
-                        label_map[&label].frame_size.unwrap()
+                        decompose(label_map[&label].frame_size.unwrap())
                     }
-                    NullFuncType => NULL_REF[0],
-                    NullFuncFrameSize => NULL_REF[1],
-                    NullFuncAddr => NULL_REF[2],
+                    NullFuncType => decompose(NULL_REF[0]),
+                    NullFuncFrameSize => decompose(NULL_REF[1]),
+                    NullFuncAddr => decompose(NULL_REF[2]),
                 };
 
-                [
-                    v & 0xff,
-                    (v >> 8) & 0xff,
-                    (v >> 16) & 0xff,
-                    (v >> 24) & 0xff,
-                ]
-                .into_iter()
-                .enumerate()
-                .filter_map(move |(i, byte)| {
-                    const ROM_ID: u32 = 2;
-                    if byte != 0 {
-                        Some(((ROM_ID, addr + i as u32), F::from_canonical_u32(byte)))
-                    } else {
-                        None
-                    }
-                })
+                limbs.into_iter()
+                    .enumerate()
+                    .filter_map(move |(i, byte)| {
+                        const ROM_ID: u32 = 2;
+                        if byte != 0 {
+                            Some(((ROM_ID, addr + i as u32), F::from_canonical_u32(byte)))
+                        } else {
+                            None
+                        }
+                    })
             })
             .collect();
 
