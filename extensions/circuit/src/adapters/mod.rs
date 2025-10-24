@@ -3,7 +3,7 @@ use openvm_stark_backend::p3_field::PrimeField32;
 
 mod allocate_frame;
 mod alu;
-mod consts;
+mod reg_write;
 mod copy_into_frame;
 mod jaaf;
 mod jump;
@@ -11,7 +11,7 @@ mod loadstore;
 
 pub use allocate_frame::*;
 pub use alu::*;
-pub use consts::*;
+pub use reg_write::*;
 pub use copy_into_frame::*;
 pub use jaaf::*;
 pub use jump::*;

@@ -1,9 +1,9 @@
 use openvm_instructions::{LocalOpcode, SystemOpcode, VmOpcode, instruction::Instruction, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
-    Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
-    LessThanOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
+    AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, CopyIntoFrameOpcode, Eq64Opcode, EqOpcode,
+    HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, MulOpcode, Phantom,
+    RegWriteOpcode, Shift64Opcode, ShiftOpcode,
 };
 
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode as LoadStoreOpcode;
@@ -238,7 +238,7 @@ pub fn const_32_imm<F: PrimeField32>(
     imm_hi: u16,
 ) -> Instruction<F> {
     Instruction::new(
-        ConstOpcodes::CONST32.global_opcode(),
+        RegWriteOpcode::CONST32.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
         F::from_canonical_usize(imm_lo as usize),                             // b: low 16 bits
         // of the immediate
@@ -253,7 +253,7 @@ pub fn const_32_imm<F: PrimeField32>(
 
 pub fn const_field<F: PrimeField32>(target_reg: usize, imm_lo: u16, imm_hi: u16) -> Instruction<F> {
     Instruction::new(
-        ConstOpcodes::CONST_FIELD.global_opcode(),
+        RegWriteOpcode::CONST_FIELD.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
         F::from_canonical_usize(imm_lo as usize),                             // b: low 16 bits
         // of the immediate
@@ -268,7 +268,7 @@ pub fn const_field<F: PrimeField32>(target_reg: usize, imm_lo: u16, imm_hi: u16)
 
 pub fn copy_reg<F: PrimeField32>(target_reg: usize, from_reg: usize) -> Instruction<F> {
     Instruction::new(
-        ConstOpcodes::COPY_REG.global_opcode(),
+        RegWriteOpcode::COPY_REG.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * from_reg),   // b: from_reg
         F::ZERO,                                                              // c: (not used)

@@ -327,7 +327,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
 
         let pc_source_val = F::as_canonical_u32(&read_record.rs1_data);
 
-        let to_pc = run_jalr(local_opcode, imm, pc_source_val);
+        let to_pc = run_jaaf_op(local_opcode, imm, pc_source_val);
 
         // For all JAAF instructions, we also need to handle fp
         let to_fp = F::as_canonical_u32(&read_record.rs2_data);
@@ -415,7 +415,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
     }
 }
 
-pub(super) fn run_jalr(opcode: JaafOpcode, imm: u32, pc_source: u32) -> u32 {
+pub(super) fn run_jaaf_op(opcode: JaafOpcode, imm: u32, pc_source: u32) -> u32 {
     let to_pc = match opcode {
         JAAF | JAAF_SAVE | CALL => {
             // Use immediate for PC

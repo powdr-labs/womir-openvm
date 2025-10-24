@@ -306,7 +306,7 @@ pub enum CopyIntoFrameOpcode {
 #[opcode_offset = 0x127A]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
-pub enum ConstOpcodes {
+pub enum RegWriteOpcode {
     /// stores an immediate into a register
     CONST32,
     /// stores an immediate into the least significant field element of a register.

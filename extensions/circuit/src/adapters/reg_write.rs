@@ -18,9 +18,11 @@ use openvm_stark_backend::{
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
-use openvm_womir_transpiler::ConstOpcodes;
+use openvm_womir_transpiler::RegWriteOpcode;
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
+
+use strum::IntoEnumIterator;
 
 use crate::{
     FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
@@ -29,12 +31,12 @@ use crate::{
 use super::{RV32_REGISTER_NUM_LIMBS, decompose};
 
 #[derive(Debug)]
-pub struct ConstsAdapterChipWom<F: Field> {
-    pub air: ConstsAdapterAirWom,
+pub struct RegWriteAdapterChipWom<F: Field> {
+    pub air: RegWriteAdapterAirWom,
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField32> ConstsAdapterChipWom<F> {
+impl<F: PrimeField32> RegWriteAdapterChipWom<F> {
     pub fn new(
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
@@ -43,7 +45,7 @@ impl<F: PrimeField32> ConstsAdapterChipWom<F> {
         wom_bridge: WomBridge,
     ) -> Self {
         Self {
-            air: ConstsAdapterAirWom {
+            air: RegWriteAdapterAirWom {
                 execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
                 frame_bridge: FrameBridge::new(frame_bus),
                 _memory_bridge: memory_bridge,
@@ -56,7 +58,7 @@ impl<F: PrimeField32> ConstsAdapterChipWom<F> {
 
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConstsWriteRecord<F> {
+pub struct RegWriteWriteRecord<F> {
     pub from_state: ExecutionState<u32>,
     pub from_frame: FrameState<u32>,
     pub rd: Option<WomRecord<F>>,
@@ -64,13 +66,13 @@ pub struct ConstsWriteRecord<F> {
 
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConstsReadRecord<F> {
+pub struct RegWriteReadRecord<F> {
     pub val: [F; RV32_REGISTER_NUM_LIMBS],
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
-pub struct ConstsAdapterColsWom<T> {
+pub struct RegWriteAdapterColsWom<T> {
     pub from_state: ExecutionState<T>,
     pub from_frame: FrameState<T>,
     pub target_reg: T,
@@ -78,29 +80,33 @@ pub struct ConstsAdapterColsWom<T> {
     pub hi: T,
     pub val: [T; RV32_REGISTER_NUM_LIMBS],
     pub write_mult: T,
+
+    pub is_opcode_const32: T,
+    pub is_opcode_const_field: T,
+    pub is_opcode_copy_reg: T,
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
-pub struct ConstsAdapterAirWom {
+pub struct RegWriteAdapterAirWom {
     pub(super) _memory_bridge: MemoryBridge,
     pub(super) wom_bridge: WomBridge,
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) frame_bridge: FrameBridge,
 }
 
-impl<F: Field> BaseAir<F> for ConstsAdapterAirWom {
+impl<F: Field> BaseAir<F> for RegWriteAdapterAirWom {
     fn width(&self) -> usize {
-        ConstsAdapterColsWom::<F>::width()
+        RegWriteAdapterColsWom::<F>::width()
     }
 }
 
-impl<F: Field> ColumnsAir<F> for ConstsAdapterAirWom {
+impl<F: Field> ColumnsAir<F> for RegWriteAdapterAirWom {
     fn columns(&self) -> Option<Vec<String>> {
-        ConstsAdapterColsWom::<F>::struct_reflection()
+        RegWriteAdapterColsWom::<F>::struct_reflection()
     }
 }
 
-impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
+impl<AB: InteractionBuilder> VmAdapterAir<AB> for RegWriteAdapterAirWom {
     type Interface = BasicAdapterInterface<
         AB::Expr,
         MinimalInstruction<AB::Expr>,
@@ -114,11 +120,41 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
         &self,
         builder: &mut AB,
         local: &[AB::Var],
-        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local: &ConstsAdapterColsWom<_> = local.borrow();
+        let local: &RegWriteAdapterColsWom<_> = local.borrow();
 
-        // TODO: compose val from hi/lo
+        // TODO: to follow OVM conventions, we should probably move opcode based constraints to the core chip
+
+        let flags = [
+            local.is_opcode_const32,
+            local.is_opcode_const_field,
+            local.is_opcode_copy_reg,
+        ];
+
+        let is_valid = flags.iter().fold(AB::Expr::ZERO, |acc, &flag| {
+            builder.assert_bool(flag);
+            acc + flag.into()
+        });
+        builder.assert_bool(is_valid.clone());
+
+        let opcode_offset = AB::Expr::from_canonical_usize(RegWriteOpcode::CLASS_OFFSET);
+        let expected_opcode =
+            opcode_offset +
+            flags.iter().zip(RegWriteOpcode::iter()).fold(
+                AB::Expr::ZERO,
+                |acc, (flag, local_opcode)| {
+                    acc + (*flag).into() * AB::Expr::from_canonical_u8(local_opcode as u8)
+                },
+            );
+
+        // TODO: constrain local.val based on the opcode
+
+        ///////////////////////////////////////////////////
+
+        self.wom_bridge
+            .read(local.lo_or_from_reg, local.val)
+            .eval(builder, local.is_opcode_copy_reg);
 
         self.wom_bridge
             .write(
@@ -126,13 +162,13 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
                 local.val,
                 local.write_mult,
             )
-            .eval(builder, ctx.instruction.is_valid.clone());
+            .eval(builder, is_valid.clone());
 
         let timestamp_change = AB::Expr::ONE;
 
         self.execution_bridge
             .execute_and_increment_pc::<AB>(
-                ctx.instruction.opcode,
+                expected_opcode,
                 [
                     local.target_reg.into(),
                     local.lo_or_from_reg.into(),
@@ -145,23 +181,23 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for ConstsAdapterAirWom {
                 local.from_state,
                 timestamp_change.clone(),
             )
-            .eval(builder, ctx.instruction.is_valid.clone());
+            .eval(builder, is_valid.clone());
 
         self.frame_bridge
             .keep_fp(local.from_frame, timestamp_change)
-            .eval(builder, ctx.instruction.is_valid);
+            .eval(builder, is_valid);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &ConstsAdapterColsWom<_> = local.borrow();
+        let cols: &RegWriteAdapterColsWom<_> = local.borrow();
         cols.from_state.pc
     }
 }
 
-impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
-    type ReadRecord = ConstsReadRecord<F>;
-    type WriteRecord = ConstsWriteRecord<F>;
-    type Air = ConstsAdapterAirWom;
+impl<F: PrimeField32> VmAdapterChipWom<F> for RegWriteAdapterChipWom<F> {
+    type ReadRecord = RegWriteReadRecord<F>;
+    type WriteRecord = RegWriteWriteRecord<F>;
+    type Air = RegWriteAdapterAirWom;
     type Interface = BasicAdapterInterface<
         F,
         MinimalInstruction<F>,
@@ -184,7 +220,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
         let Instruction { opcode, b, c, .. } = *instruction;
 
         let local_opcode =
-            ConstOpcodes::from_usize(opcode.local_opcode_idx(ConstOpcodes::CLASS_OFFSET));
+            RegWriteOpcode::from_usize(opcode.local_opcode_idx(RegWriteOpcode::CLASS_OFFSET));
 
         let fp_f = F::from_canonical_u32(fp);
 
@@ -197,18 +233,18 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for ConstsAdapterChipWom<F> {
         let imm = imm_hi << 16 | imm_lo;
 
         let val = match local_opcode {
-            ConstOpcodes::CONST32 => decompose(imm),
-            ConstOpcodes::CONST_FIELD => {
+            RegWriteOpcode::CONST32 => decompose(imm),
+            RegWriteOpcode::CONST_FIELD => {
                 assert!(imm < F::ORDER_U32);
                 [F::from_canonical_u32(imm), F::ZERO, F::ZERO, F::ZERO]
             }
-            ConstOpcodes::COPY_REG => {
+            RegWriteOpcode::COPY_REG => {
                 let from_reg = b;
                 wom.read(from_reg + fp_f).1
             }
         };
 
-        Ok(([], ConstsReadRecord { val }))
+        Ok(([], RegWriteReadRecord { val }))
     }
 
     fn postprocess(
