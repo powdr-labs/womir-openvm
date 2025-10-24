@@ -368,18 +368,15 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
         {
             let mut frame_stack = self.frame_stack.lock().unwrap();
             match local_opcode {
-                JAAF => {
+                RET | JAAF => {
                     // We have to find if the newly activate frame is an old one from the stack
                     // (breaking out of a loop), or a new one (new loop iteration or tail call).
-                    'frame_search: {
-                        for (idx, stacked_frame) in frame_stack.iter().enumerate().rev() {
-                            if to_fp == *stacked_frame {
-                                // Found an old frame, truncate the stack to this frame
-                                frame_stack.truncate(idx + 1);
-                                break 'frame_search;
-                            }
-                        }
+                    if let Some(idx) = frame_stack.iter().rposition(|x| x == &to_fp) {
+                        // Found an old frame, truncate the stack to this frame
+                        frame_stack.truncate(idx + 1);
+                    } else {
                         // Didn't find an old frame, so this is a new frame.
+                        assert_ne!(local_opcode, RET);
 
                         // The current frame can be safely popped, since this opcode doesn't save it.
                         frame_stack.pop();
@@ -390,11 +387,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
                 CALL | CALL_INDIRECT | JAAF_SAVE => {
                     // This is always a new frame, so push it onto the stack
                     frame_stack.push(to_fp);
-                }
-                RET => {
-                    // The new frame must necessarily be on the stack, so we truncate to its position.
-                    let idx = frame_stack.iter().rposition(|x| x == &to_fp).unwrap();
-                    frame_stack.truncate(idx + 1);
                 }
             }
             println!("STACK: {:?}", *frame_stack);
