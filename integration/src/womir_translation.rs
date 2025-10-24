@@ -400,7 +400,6 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         src_ptr: Range<u32>,
         dest_ptr: Range<u32>,
     ) -> Directive<F> {
-        // TODO: will this be used to copy PC/FP?
         Directive::Instruction(ib::copy_reg(
             dest_ptr.start as usize,
             src_ptr.start as usize,
