@@ -139,9 +139,8 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for RegWriteAdapterAirWom {
         builder.assert_bool(is_valid.clone());
 
         let opcode_offset = AB::Expr::from_canonical_usize(RegWriteOpcode::CLASS_OFFSET);
-        let expected_opcode =
-            opcode_offset +
-            flags.iter().zip(RegWriteOpcode::iter()).fold(
+        let expected_opcode = opcode_offset
+            + flags.iter().zip(RegWriteOpcode::iter()).fold(
                 AB::Expr::ZERO,
                 |acc, (flag, local_opcode)| {
                     acc + (*flag).into() * AB::Expr::from_canonical_u8(local_opcode as u8)

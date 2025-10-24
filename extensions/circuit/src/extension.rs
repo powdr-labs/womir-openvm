@@ -21,9 +21,9 @@ use openvm_rv32im_circuit::{
 };
 use openvm_stark_backend::{interaction::PermutationCheckBus, p3_field::PrimeField32};
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, RegWriteOpcode, CopyIntoFrameOpcode,
-    DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode,
-    LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom,
+    AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, CopyIntoFrameOpcode, DivRem64Opcode,
+    DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
+    LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom, RegWriteOpcode,
     Shift64Opcode, ShiftOpcode,
 };
 
@@ -31,9 +31,9 @@ use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use crate::allocate_frame::AllocateFrameCoreChipWom;
-use crate::reg_write::RegWriteCoreChipWom;
 use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
 use crate::loadstore::LoadStoreChip;
+use crate::reg_write::RegWriteCoreChipWom;
 use crate::{adapters::*, wom_traits::*, *};
 
 const DEFAULT_INIT_FP: u32 = 0;
@@ -297,7 +297,10 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
             shared_fp.clone(),
             wom_controller.clone(),
         );
-        inventory.add_executor(consts_chip, RegWriteOpcode::iter().map(|x| x.global_opcode()))?;
+        inventory.add_executor(
+            consts_chip,
+            RegWriteOpcode::iter().map(|x| x.global_opcode()),
+        )?;
 
         let lt_chip = LessThanChipWom::new(
             WomBaseAluAdapterChip::new(

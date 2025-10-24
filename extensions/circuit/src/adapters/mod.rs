@@ -3,20 +3,20 @@ use openvm_stark_backend::p3_field::PrimeField32;
 
 mod allocate_frame;
 mod alu;
-mod reg_write;
 mod copy_into_frame;
 mod jaaf;
 mod jump;
 mod loadstore;
+mod reg_write;
 
 pub use allocate_frame::*;
 pub use alu::*;
-pub use reg_write::*;
 pub use copy_into_frame::*;
 pub use jaaf::*;
 pub use jump::*;
 pub use loadstore::*;
 pub use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+pub use reg_write::*;
 
 use crate::WomController;
 
