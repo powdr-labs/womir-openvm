@@ -85,16 +85,19 @@ impl WomirIConfig {
 
 // ============ Extension Implementations ============
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WomirI {
     #[serde(default = "default_range_tuple_checker_sizes")]
     pub range_tuple_checker_sizes: [u32; 2],
+    frame_stack: Arc<Mutex<Vec<u32>>>,
 }
 
 impl Default for WomirI {
     fn default() -> Self {
         Self {
             range_tuple_checker_sizes: default_range_tuple_checker_sizes(),
+            // The entry frame starts at fp=0:
+            frame_stack: Arc::new(Mutex::new(vec![0])),
         }
     }
 }
@@ -223,6 +226,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 execution_bus,
                 program_bus,
                 frame_bus,
+                self.frame_stack.clone(),
                 memory_bridge,
                 wom_bridge,
             ),

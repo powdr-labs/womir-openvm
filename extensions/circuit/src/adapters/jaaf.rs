@@ -1,4 +1,9 @@
-use std::{array, borrow::Borrow, marker::PhantomData};
+use std::{
+    array,
+    borrow::Borrow,
+    marker::PhantomData,
+    sync::{Arc, Mutex},
+};
 
 use openvm_circuit::{
     arch::{
@@ -51,6 +56,7 @@ pub struct JaafInstruction<T> {
 #[derive(Debug)]
 pub struct JaafAdapterChipWom<F: Field> {
     pub air: JaafAdapterAirWom,
+    frame_stack: Arc<Mutex<Vec<u32>>>,
     _marker: PhantomData<F>,
 }
 
@@ -59,6 +65,7 @@ impl<F: PrimeField32> JaafAdapterChipWom<F> {
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
         frame_bus: FrameBus,
+        frame_stack: Arc<Mutex<Vec<u32>>>,
         memory_bridge: MemoryBridge,
         wom_bridge: WomBridge,
     ) -> Self {
@@ -69,6 +76,7 @@ impl<F: PrimeField32> JaafAdapterChipWom<F> {
                 _memory_bridge: memory_bridge,
                 wom_bridge,
             },
+            frame_stack,
             _marker: PhantomData,
         }
     }
@@ -355,6 +363,42 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
         } else {
             (None, None)
         };
+
+        // Update the frame stack according to the opcode
+        {
+            let mut frame_stack = self.frame_stack.lock().unwrap();
+            match local_opcode {
+                JAAF => {
+                    // We have to find if the newly activate frame is an old one from the stack
+                    // (breaking out of a loop), or a new one (new loop iteration or tail call).
+                    'frame_search: {
+                        for (idx, stacked_frame) in frame_stack.iter().enumerate().rev() {
+                            if to_fp == *stacked_frame {
+                                // Found an old frame, truncate the stack to this frame
+                                frame_stack.truncate(idx + 1);
+                                break 'frame_search;
+                            }
+                        }
+                        // Didn't find an old frame, so this is a new frame.
+
+                        // The current frame can be safely popped, since this opcode doesn't save it.
+                        frame_stack.pop();
+                        // Push the new frame:
+                        frame_stack.push(to_fp);
+                    }
+                }
+                CALL | CALL_INDIRECT | JAAF_SAVE => {
+                    // This is always a new frame, so push it onto the stack
+                    frame_stack.push(to_fp);
+                }
+                RET => {
+                    // The new frame must necessarily be on the stack, so we truncate to its position.
+                    let idx = frame_stack.iter().rposition(|x| x == &to_fp).unwrap();
+                    frame_stack.truncate(idx + 1);
+                }
+            }
+            println!("STACK: {:?}", *frame_stack);
+        }
 
         Ok((
             ExecutionState {
