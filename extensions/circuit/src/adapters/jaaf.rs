@@ -375,7 +375,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
                         // Found an old frame, truncate the stack to this frame
                         frame_stack.truncate(idx + 1);
                     } else {
-                        // Didn't find an old frame, so this is a new frame.
+                        // Didn't find the FP in the list of old frames, so this must be a new
+                        // frame. Thus, the opcode can't be a RET, must be a JAAF.
                         assert_ne!(local_opcode, RET);
 
                         // The current frame can be safely popped, since this opcode doesn't save it.

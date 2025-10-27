@@ -30,10 +30,10 @@ use openvm_womir_transpiler::{
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
-use crate::allocate_frame::AllocateFrameCoreChipWom;
 use crate::consts::ConstsCoreChipWom;
 use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
 use crate::loadstore::LoadStoreChip;
+use crate::{adapters::frame_allocator::FrameAllocator, allocate_frame::AllocateFrameCoreChipWom};
 use crate::{adapters::*, wom_traits::*, *};
 
 const DEFAULT_INIT_FP: u32 = 0;
@@ -90,6 +90,7 @@ pub struct WomirI {
     #[serde(default = "default_range_tuple_checker_sizes")]
     pub range_tuple_checker_sizes: [u32; 2],
     frame_stack: Arc<Mutex<Vec<u32>>>,
+    frame_allocator: Arc<Mutex<FrameAllocator>>,
 }
 
 impl Default for WomirI {
@@ -98,6 +99,12 @@ impl Default for WomirI {
             range_tuple_checker_sizes: default_range_tuple_checker_sizes(),
             // The entry frame starts at fp=0:
             frame_stack: Arc::new(Mutex::new(vec![0])),
+            frame_allocator: Arc::new(Mutex::new(FrameAllocator::new(
+                // This is a placeholder value. The real largest address depends on F.
+                0,
+                // Reserve range 0..8 that is used by the startup code.
+                [(0, 8)].into(),
+            ))),
         }
     }
 }
@@ -252,6 +259,28 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         );
         inventory.add_executor(jump_chip, JumpOpcode::iter().map(|x| x.global_opcode()))?;
 
+        // Before creating the AllocateFrame chip, we need to create or reset the frame allocator.
+        {
+            let mut frame_allocator = self.frame_allocator.lock().unwrap();
+            let old_ranges = frame_allocator.get_allocated_ranges();
+
+            // Keep all ranges that are in the frame stack.
+            let remaining_ranges = self
+                .frame_stack
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|fp| (*fp, *old_ranges.get(fp).unwrap()))
+                .collect();
+
+            // Create the new frame allocator.
+            *frame_allocator = FrameAllocator::new(
+                // The frame pointer is a field element, so the field limits its size.
+                F::ORDER_U32 - 1,
+                remaining_ranges,
+            );
+        }
+
         let allocate_frame_chip = AllocateFrameChipWom::new(
             AllocateFrameAdapterChipWom::new(
                 execution_bus,
@@ -259,6 +288,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 frame_bus,
                 memory_bridge,
                 wom_bridge,
+                self.frame_allocator.clone(),
             ),
             AllocateFrameCoreChipWom::default(),
             offline_memory.clone(),
