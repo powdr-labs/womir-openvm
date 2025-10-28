@@ -34,6 +34,7 @@ use super::RV32_REGISTER_NUM_LIMBS;
 #[derive(Debug)]
 pub struct AllocateFrameAdapterChipWom {
     pub air: AllocateFrameAdapterAirWom,
+    frame_stack: Arc<Mutex<Vec<u32>>>,
     frame_allocator: Arc<Mutex<FrameAllocator>>,
 }
 
@@ -45,6 +46,7 @@ impl AllocateFrameAdapterChipWom {
         memory_bridge: MemoryBridge,
         wom_bridge: WomBridge,
         frame_allocator: Arc<Mutex<FrameAllocator>>,
+        frame_stack: Arc<Mutex<Vec<u32>>>,
     ) -> Self {
         Self {
             air: AllocateFrameAdapterAirWom {
@@ -54,6 +56,7 @@ impl AllocateFrameAdapterChipWom {
                 _memory_bridge: memory_bridge,
             },
             frame_allocator,
+            frame_stack,
         }
     }
 }
@@ -223,6 +226,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
             .unwrap()
             .allocate(amount_bytes)
             .expect("WOM frame allocation failed: not enough free contiguous space");
+
+        self.frame_stack.lock().unwrap().push(allocated_ptr);
 
         let amount_bytes = decompose(amount_bytes);
 

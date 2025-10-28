@@ -49,8 +49,8 @@ pub struct WomirI<F> {
     // possible for two instructions to be executed in parallel,
     // so atomic might be enough...
     fp: Arc<Mutex<u32>>,
-    frame_stack: Arc<Mutex<Vec<u32>>>,
     frame_allocator: Arc<Mutex<FrameAllocator>>,
+    frame_stack: Arc<Mutex<Vec<u32>>>,
     wom_controller: Arc<Mutex<WomController<F>>>,
 }
 
@@ -263,6 +263,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI<F> {
                 memory_bridge,
                 wom_bridge,
                 self.frame_allocator.clone(),
+                self.frame_stack.clone(),
             ),
             AllocateFrameCoreChipWom::default(),
             offline_memory.clone(),
