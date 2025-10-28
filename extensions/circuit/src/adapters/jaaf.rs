@@ -390,7 +390,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
                     frame_stack.push(to_fp);
                 }
             }
-            println!("STACK: {:?}", *frame_stack);
         }
 
         Ok((

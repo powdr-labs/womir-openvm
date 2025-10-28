@@ -2,13 +2,10 @@ use std::sync::{Arc, Mutex};
 
 use derive_more::derive::From;
 use openvm_circuit::{
-    arch::{
-        InitFileGenerator, SystemConfig, SystemPort, VmExtension, VmInventory, VmInventoryBuilder,
-        VmInventoryError,
-    },
+    arch::{SystemPort, VmExtension, VmInventory, VmInventoryBuilder, VmInventoryError},
     system::phantom::PhantomChip,
 };
-use openvm_circuit_derive::{AnyEnum, InstructionExecutor, VmConfig};
+use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
 use openvm_circuit_primitives::{
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
     range_tuple::{RangeTupleCheckerBus, SharedRangeTupleCheckerChip},
@@ -19,7 +16,7 @@ use openvm_rv32im_circuit::{
     BaseAluCoreChip, DivRemCoreChip, LoadSignExtendCoreChip, LoadStoreCoreChip,
     MultiplicationCoreChip, ShiftCoreChip,
 };
-use openvm_stark_backend::{interaction::PermutationCheckBus, p3_field::PrimeField32};
+use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
     DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode,
@@ -38,73 +35,29 @@ use crate::{adapters::*, wom_traits::*, *};
 
 const DEFAULT_INIT_FP: u32 = 0;
 
-/// Config for a VM with base extension and IO extension
-#[derive(Clone, Debug, VmConfig, derive_new::new, Serialize, Deserialize)]
-pub struct WomirIConfig {
-    #[system]
-    pub system: SystemConfig,
-    #[extension]
-    pub base: WomirI,
-}
-
-// Default implementation uses no init file
-impl InitFileGenerator for WomirIConfig {}
-
-impl Default for WomirIConfig {
-    fn default() -> Self {
-        let system = SystemConfig::default().with_continuations();
-        Self {
-            system,
-            base: Default::default(),
-        }
-    }
-}
-
-impl WomirIConfig {
-    pub fn with_public_values(public_values: usize) -> Self {
-        let system = SystemConfig::default()
-            .with_continuations()
-            .with_public_values(public_values);
-        Self {
-            system,
-            base: Default::default(),
-        }
-    }
-
-    pub fn with_public_values_and_segment_len(public_values: usize, segment_len: usize) -> Self {
-        let system = SystemConfig::default()
-            .with_continuations()
-            .with_public_values(public_values)
-            .with_max_segment_len(segment_len);
-        Self {
-            system,
-            base: Default::default(),
-        }
-    }
-}
-
 // ============ Extension Implementations ============
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WomirI {
+pub struct WomirI<F> {
     #[serde(default = "default_range_tuple_checker_sizes")]
     pub range_tuple_checker_sizes: [u32; 2],
     frame_stack: Arc<Mutex<Vec<u32>>>,
     frame_allocator: Arc<Mutex<FrameAllocator>>,
+    wom_controller: Arc<Mutex<WomController<F>>>,
 }
 
-impl Default for WomirI {
+impl<F: PrimeField32> Default for WomirI<F> {
     fn default() -> Self {
         Self {
             range_tuple_checker_sizes: default_range_tuple_checker_sizes(),
             // The entry frame starts at fp=0:
             frame_stack: Arc::new(Mutex::new(vec![0])),
             frame_allocator: Arc::new(Mutex::new(FrameAllocator::new(
-                // This is a placeholder value. The real largest address depends on F.
-                0,
+                F::ORDER_U32 - 1,
                 // Reserve range 0..8 that is used by the startup code.
                 [(0, 8)].into(),
             ))),
+            wom_controller: Arc::new(Mutex::new(WomController::new())),
         }
     }
 }
@@ -151,7 +104,7 @@ pub enum WomirIPeriphery<F: PrimeField32> {
 
 // ============ VmExtension Implementations ============
 
-impl<F: PrimeField32> VmExtension<F> for WomirI {
+impl<F: PrimeField32> VmExtension<F> for WomirI<F> {
     type Executor = WomirIExecutor<F>;
     type Periphery = WomirIPeriphery<F>;
 
@@ -173,10 +126,8 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         let pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
 
         let shared_fp = Arc::new(Mutex::new(DEFAULT_INIT_FP));
-        let wom_controller = Arc::new(Mutex::new(WomController::new(PermutationCheckBus::new(
-            builder.new_bus_idx(),
-        ))));
-        let wom_bridge = wom_controller.lock().unwrap().bridge();
+        let wom_controller = Arc::new(Mutex::new(WomController::new()));
+        let wom_bridge = WomBridge::new(builder.new_bus_idx());
 
         let bitwise_lu_chip = if let Some(&chip) = builder
             .find_chip::<SharedBitwiseOperationLookupChip<8>>()

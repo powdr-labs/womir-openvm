@@ -46,7 +46,7 @@ use crate::womir_translation::{Directive, LinkedProgram, OpenVMSettings};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SpecializedConfig {
     pub sdk_config: SdkVmConfig,
-    wom: WomirI,
+    wom: WomirI<F>,
 }
 
 impl SpecializedConfig {
