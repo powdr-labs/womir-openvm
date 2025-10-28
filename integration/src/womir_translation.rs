@@ -53,6 +53,7 @@ const NULL_REF: [u32; 3] = [u32::MAX, 0, 0];
 pub const ERROR_CODE_OFFSET: u32 = 100;
 
 pub const ERROR_ABORT_CODE: u32 = 200;
+pub const ERROR_PANIC_CODE: u32 = 201;
 
 pub struct LinkedProgram<'a, F: PrimeField32> {
     module: Module<'a>,
@@ -845,7 +846,7 @@ fn translate_most_binary_ops<'a, F: PrimeField32>(
         Op::F32Le => todo!(),
         Op::F32Ge => todo!(),
         Op::F64Eq => todo!(),
-        Op::F64Ne => todo!(),
+        // Op::F64Ne => todo!(),
         Op::F64Lt => todo!(),
         Op::F64Gt => todo!(),
         Op::F64Le => todo!(),
@@ -1881,10 +1882,16 @@ fn translate_complex_ins<F: PrimeField32>(
         }
 
         // Float instructions
-        Op::F32Load { memarg: _ } => todo!(),
-        Op::F64Load { memarg: _ } => todo!(),
+        Op::F32Load { memarg: _ } => {
+            Directive::Instruction(ib::trap(ERROR_PANIC_CODE as usize)).into()
+        }
+        Op::F64Load { memarg: _ } => {
+            Directive::Instruction(ib::trap(ERROR_PANIC_CODE as usize)).into()
+        }
         Op::F32Store { memarg: _ } => todo!(),
-        Op::F64Store { memarg: _ } => todo!(),
+        Op::F64Store { memarg: _ } => {
+            Directive::Instruction(ib::trap(ERROR_PANIC_CODE as usize)).into()
+        }
         Op::F32Const { value } => {
             let output = output.unwrap().start as usize;
             let value_u = value.bits();
@@ -1907,6 +1914,7 @@ fn translate_complex_ins<F: PrimeField32>(
             ]
             .into()
         }
+        Op::F64Ne => Directive::Instruction(ib::trap(ERROR_PANIC_CODE as usize)).into(),
         Op::F32Abs => todo!(),
         Op::F32Neg => todo!(),
         Op::F32Ceil => todo!(),
@@ -1914,7 +1922,7 @@ fn translate_complex_ins<F: PrimeField32>(
         Op::F32Trunc => todo!(),
         Op::F32Nearest => todo!(),
         Op::F32Sqrt => todo!(),
-        Op::F64Abs => todo!(),
+        Op::F64Abs => Directive::Instruction(ib::trap(ERROR_PANIC_CODE as usize)).into(),
         Op::F64Neg => todo!(),
         Op::F64Ceil => todo!(),
         Op::F64Floor => todo!(),
