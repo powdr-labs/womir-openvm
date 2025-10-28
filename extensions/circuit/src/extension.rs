@@ -44,6 +44,11 @@ const DEFAULT_INIT_FP: u32 = 0;
 pub struct WomirI<F> {
     #[serde(default = "default_range_tuple_checker_sizes")]
     pub range_tuple_checker_sizes: [u32; 2],
+    // TODO: shouldn't this be AtomicU32 instead of Mutex<u32>?
+    // technically mutex is more robust, but I don't think it is
+    // possible for two instructions to be executed in parallel,
+    // so atomic might be enough...
+    fp: Arc<Mutex<u32>>,
     frame_stack: Arc<Mutex<Vec<u32>>>,
     frame_allocator: Arc<Mutex<FrameAllocator>>,
     wom_controller: Arc<Mutex<WomController<F>>>,
@@ -54,6 +59,7 @@ impl<F: PrimeField32> Default for WomirI<F> {
         Self {
             range_tuple_checker_sizes: default_range_tuple_checker_sizes(),
             // The entry frame starts at fp=0:
+            fp: Arc::new(Mutex::new(DEFAULT_INIT_FP)),
             frame_stack: Arc::new(Mutex::new(vec![0])),
             frame_allocator: Arc::new(Mutex::new(Self::new_frame_allocator(
                 // Reserve range 0..8 that is used by the startup code.
@@ -162,7 +168,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI<F> {
         let offline_memory = builder.system_base().offline_memory();
         let pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
 
-        let shared_fp = Arc::new(Mutex::new(DEFAULT_INIT_FP));
+        let shared_fp = self.fp.clone();
         let wom_controller = self.wom_controller.clone();
         let wom_bridge = WomBridge::new(builder.new_bus_idx());
 
