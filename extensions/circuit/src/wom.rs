@@ -59,6 +59,16 @@ impl<F: PrimeField32> WomController<F> {
             data: data.into(),
         }
     }
+
+    /// Unsets all the memory entries outside of the given ranges.
+    pub fn clear_unused(&mut self, sorted_used_ranges: impl Iterator<Item = (u32, u32)>) {
+        let mut curr_addr = 0;
+        for (start, size) in sorted_used_ranges {
+            self.memory[curr_addr..start as usize].fill(None);
+            curr_addr = start as usize + size as usize;
+        }
+        self.memory.truncate(curr_addr);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]

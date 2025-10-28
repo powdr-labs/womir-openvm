@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 use derive_more::derive::From;
 use openvm_circuit::{
@@ -52,13 +55,47 @@ impl<F: PrimeField32> Default for WomirI<F> {
             range_tuple_checker_sizes: default_range_tuple_checker_sizes(),
             // The entry frame starts at fp=0:
             frame_stack: Arc::new(Mutex::new(vec![0])),
-            frame_allocator: Arc::new(Mutex::new(FrameAllocator::new(
-                F::ORDER_U32 - 1,
+            frame_allocator: Arc::new(Mutex::new(Self::new_frame_allocator(
                 // Reserve range 0..8 that is used by the startup code.
                 [(0, 8)].into(),
             ))),
             wom_controller: Arc::new(Mutex::new(WomController::new())),
         }
+    }
+}
+
+impl<F: PrimeField32> WomirI<F> {
+    fn new_frame_allocator(existing_allocations: BTreeMap<u32, u32>) -> FrameAllocator {
+        FrameAllocator::new(
+            // The frame pointer is a field element, so the field limits its size.
+            F::ORDER_U32 - 1,
+            existing_allocations,
+        )
+    }
+
+    /// Carry over the state that persists across segments.
+    fn prepare_new_segment(&self) {
+        // Reset the frame allocator.
+        let mut frame_allocator = self.frame_allocator.lock().unwrap();
+        let old_ranges = frame_allocator.get_allocated_ranges();
+
+        // Keep all ranges that are in the frame stack.
+        let remaining_ranges: BTreeMap<u32, u32> = self
+            .frame_stack
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|fp| (*fp, *old_ranges.get(fp).unwrap()))
+            .collect();
+
+        // Clear all the memory ranges outside of the remaining frames.
+        self.wom_controller
+            .lock()
+            .unwrap()
+            .clear_unused(remaining_ranges.iter().map(|(s, sz)| (*s, *sz)));
+
+        // Create the new frame allocator.
+        *frame_allocator = Self::new_frame_allocator(remaining_ranges);
     }
 }
 
@@ -126,8 +163,10 @@ impl<F: PrimeField32> VmExtension<F> for WomirI<F> {
         let pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
 
         let shared_fp = Arc::new(Mutex::new(DEFAULT_INIT_FP));
-        let wom_controller = Arc::new(Mutex::new(WomController::new()));
+        let wom_controller = self.wom_controller.clone();
         let wom_bridge = WomBridge::new(builder.new_bus_idx());
+
+        self.prepare_new_segment();
 
         let bitwise_lu_chip = if let Some(&chip) = builder
             .find_chip::<SharedBitwiseOperationLookupChip<8>>()
@@ -209,28 +248,6 @@ impl<F: PrimeField32> VmExtension<F> for WomirI<F> {
             wom_controller.clone(),
         );
         inventory.add_executor(jump_chip, JumpOpcode::iter().map(|x| x.global_opcode()))?;
-
-        // Before creating the AllocateFrame chip, we need to create or reset the frame allocator.
-        {
-            let mut frame_allocator = self.frame_allocator.lock().unwrap();
-            let old_ranges = frame_allocator.get_allocated_ranges();
-
-            // Keep all ranges that are in the frame stack.
-            let remaining_ranges = self
-                .frame_stack
-                .lock()
-                .unwrap()
-                .iter()
-                .map(|fp| (*fp, *old_ranges.get(fp).unwrap()))
-                .collect();
-
-            // Create the new frame allocator.
-            *frame_allocator = FrameAllocator::new(
-                // The frame pointer is a field element, so the field limits its size.
-                F::ORDER_U32 - 1,
-                remaining_ranges,
-            );
-        }
 
         let allocate_frame_chip = AllocateFrameChipWom::new(
             AllocateFrameAdapterChipWom::new(
@@ -567,7 +584,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI<F> {
         )?;
         builder.add_phantom_sub_executor(
             phantom::HintLoadByKeySubEx {
-                wom: wom_controller.clone(),
+                wom: wom_controller,
             },
             PhantomDiscriminant(Phantom::HintLoadByKey as u16),
         )?;
