@@ -389,6 +389,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
                         // Found an old frame, truncate the stack to that frame
                         frame_stack.truncate(idx + 1);
                     }
+                    println!("J STACK: {frame_stack:?}");
                 }
                 CALL | CALL_INDIRECT | JAAF_SAVE => {
                     // These calls always target a new frame, which is already on top of the stack.

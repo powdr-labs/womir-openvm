@@ -51,7 +51,10 @@ impl<F: PrimeField32> WomController<F> {
             .take(N)
             .zip_eq(data)
             .for_each(|(old, new)| {
-                assert!(old.is_none(), "WOM double write");
+                assert!(
+                    old.is_none(),
+                    "WOM double write at absolute address {pointer}"
+                );
                 *old = Some(new);
             });
         WomRecord {

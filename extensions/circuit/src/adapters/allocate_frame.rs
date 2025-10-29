@@ -227,7 +227,11 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
             .allocate(amount_bytes)
             .expect("WOM frame allocation failed: not enough free contiguous space");
 
-        self.frame_stack.lock().unwrap().push(allocated_ptr);
+        {
+            let mut frame_stack = self.frame_stack.lock().unwrap();
+            frame_stack.push(allocated_ptr);
+            println!("A STACK: {frame_stack:?}");
+        }
 
         let amount_bytes = decompose(amount_bytes);
 
