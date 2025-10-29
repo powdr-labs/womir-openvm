@@ -644,6 +644,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             ("env", "abort") => {
                 vec![Directive::Instruction(ib::abort())]
             }
+            ("gojs", _) => {
+                // Just NOP for GoJS intrinsics
+                vec![]
+            }
             _ => unimplemented!(
                 "Imported function `{}` from module `{}` is not supported",
                 function,
@@ -1174,6 +1178,8 @@ fn translate_complex_ins<F: PrimeField32>(
         })
         .collect_vec();
     match op {
+        Op::Nop => Tree::Empty,
+
         Op::I32Const { value } => {
             let output = output.unwrap().start as usize;
             let value_u = value as u32;
@@ -2005,7 +2011,7 @@ fn emit_table_get<F: PrimeField32>(
         Directive::Instruction(ib::loadw(
             dest_reg as usize,
             mul_result,
-            base_addr as i32 + (i as i32) * 4,
+            base_addr + (i as u32) * 4,
         ))
     }));
 
@@ -2204,16 +2210,13 @@ fn const_i16_as_field(value: &WasmValue) -> AluImm {
     c.into()
 }
 
-fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> i32 {
+fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> u32 {
     assert_eq!(memarg.memory, 0, "no multiple memories supported");
     let mem_start = c
         .program
         .linear_memory_start()
         .expect("no memory allocated");
-    let offset = mem_start + u32::try_from(memarg.offset).expect("offset too large");
-    // RISC-V requires offset immediates to have 16 bits, but for WASM we changed it to 24 bits.
-    assert!(offset < (1 << 24));
-    offset as i32
+    mem_start.wrapping_add(u32::try_from(memarg.offset).expect("offset too large"))
 }
 
 fn load_from_const_addr<F: PrimeField32>(
@@ -2232,7 +2235,7 @@ fn load_from_const_addr<F: PrimeField32>(
         Directive::Instruction(ib::loadw(
             dest_reg as usize,
             base_addr_reg.start as usize,
-            (i as i32) * 4,
+            (i as u32) * 4,
         ))
     }));
 
@@ -2255,7 +2258,7 @@ fn store_to_const_addr<F: PrimeField32>(
         Directive::Instruction(ib::storew(
             input_reg as usize,
             base_addr_reg.start as usize,
-            i as i32 * 4,
+            i as u32 * 4,
         ))
     }));
 
