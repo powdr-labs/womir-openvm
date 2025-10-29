@@ -2143,6 +2143,15 @@ mod wast_tests {
     }
 
     #[test]
+    fn test_keeper_js() {
+        // This is program is a stripped down version of geth, compiled for Go's js target.
+        // Source: https://github.com/ethereum/go-ethereum/tree/master/cmd/keeper
+        // Compile command:
+        //   GOOS=js GOARCH=wasm go -gcflags=all=-d=softfloat build -tags "example" -o keeper.wasm
+        run_single_wasm_test("../sample-programs/keeper_js.wasm", "run", &[0, 0], &[]).unwrap();
+    }
+
+    #[test]
     fn test_keccak_rust_womir() {
         run_womir_guest(
             "keccak_with_inputs",
