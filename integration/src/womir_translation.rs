@@ -54,6 +54,11 @@ pub const ERROR_CODE_OFFSET: u32 = 100;
 
 pub const ERROR_ABORT_CODE: u32 = 200;
 
+/// Error code emitted in place of unimplemented instructions.
+/// This is to allow programs that has such instruction to compile,
+/// but the runtime error only happens if they are actually executed.
+pub const ERROR_UNIMPLEMENTED_CODE: u32 = 201;
+
 pub struct LinkedProgram<'a, F: PrimeField32> {
     module: Module<'a>,
     label_map: HashMap<String, LabelValue>,
@@ -1887,10 +1892,6 @@ fn translate_complex_ins<F: PrimeField32>(
         }
 
         // Float instructions
-        Op::F32Load { memarg: _ } => todo!(),
-        Op::F64Load { memarg: _ } => todo!(),
-        Op::F32Store { memarg: _ } => todo!(),
-        Op::F64Store { memarg: _ } => todo!(),
         Op::F32Const { value } => {
             let output = output.unwrap().start as usize;
             let value_u = value.bits();
@@ -1913,38 +1914,44 @@ fn translate_complex_ins<F: PrimeField32>(
             ]
             .into()
         }
-        Op::F32Abs => todo!(),
-        Op::F32Neg => todo!(),
-        Op::F32Ceil => todo!(),
-        Op::F32Floor => todo!(),
-        Op::F32Trunc => todo!(),
-        Op::F32Nearest => todo!(),
-        Op::F32Sqrt => todo!(),
-        Op::F64Abs => todo!(),
-        Op::F64Neg => todo!(),
-        Op::F64Ceil => todo!(),
-        Op::F64Floor => todo!(),
-        Op::F64Trunc => todo!(),
-        Op::F64Nearest => todo!(),
-        Op::F64Sqrt => todo!(),
-        Op::I32TruncF32S => todo!(),
-        Op::I32TruncF32U => todo!(),
-        Op::I32TruncF64S => todo!(),
-        Op::I32TruncF64U => todo!(),
-        Op::I64TruncF32S => todo!(),
-        Op::I64TruncF32U => todo!(),
-        Op::I64TruncF64S => todo!(),
-        Op::I64TruncF64U => todo!(),
-        Op::F32ConvertI32S => todo!(),
-        Op::F32ConvertI32U => todo!(),
-        Op::F32ConvertI64S => todo!(),
-        Op::F32ConvertI64U => todo!(),
-        Op::F32DemoteF64 => todo!(),
-        Op::F64ConvertI32S => todo!(),
-        Op::F64ConvertI32U => todo!(),
-        Op::F64ConvertI64S => todo!(),
-        Op::F64ConvertI64U => todo!(),
-        Op::F64PromoteF32 => todo!(),
+        Op::F32Load { .. }
+        | Op::F64Load { .. }
+        | Op::F32Store { .. }
+        | Op::F64Store { .. }
+        | Op::F32Abs
+        | Op::F32Neg
+        | Op::F32Ceil
+        | Op::F32Floor
+        | Op::F32Trunc
+        | Op::F32Nearest
+        | Op::F32Sqrt
+        | Op::F64Abs
+        | Op::F64Neg
+        | Op::F64Ceil
+        | Op::F64Floor
+        | Op::F64Trunc
+        | Op::F64Nearest
+        | Op::F64Sqrt
+        | Op::I32TruncF32S
+        | Op::I32TruncF32U
+        | Op::I32TruncF64S
+        | Op::I32TruncF64U
+        | Op::I64TruncF32S
+        | Op::I64TruncF32U
+        | Op::I64TruncF64S
+        | Op::I64TruncF64U
+        | Op::F32ConvertI32S
+        | Op::F32ConvertI32U
+        | Op::F32ConvertI64S
+        | Op::F32ConvertI64U
+        | Op::F32DemoteF64
+        | Op::F64ConvertI32S
+        | Op::F64ConvertI32U
+        | Op::F64ConvertI64S
+        | Op::F64ConvertI64U
+        | Op::F64PromoteF32 => {
+            Directive::Instruction(ib::trap(ERROR_UNIMPLEMENTED_CODE as usize)).into()
+        }
 
         Op::I32ReinterpretF32
         | Op::F32ReinterpretI32
