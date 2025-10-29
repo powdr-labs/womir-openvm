@@ -1563,7 +1563,22 @@ fn translate_complex_ins<F: PrimeField32>(
             let imm = mem_offset(memarg, c);
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
-            let val = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+            // if signed, we need to place the loaded 32-bit value in a new register
+            // bit extend it with shr_s_imm_64, otherwise we can load directly into lo part
+            let (val_32, zeroed) = if let Op::I64Load32S { .. } = op {
+                let val = c.register_gen.allocate_type(ValType::I64).start as usize;
+                // Load the value into the hi word, and zero the lo word for the shr
+                (val + 1, val)
+            } else {
+                // Load directly into lo part, zero the hi part
+                (output, output + 1)
+            };
+
+            let mut directives = vec![
+                // zero the other half due to WOM
+                Directive::Instruction(ib::const_32_imm(zeroed, 0, 0)),
+            ];
 
             match memarg.align {
                 0 => {
@@ -1576,7 +1591,7 @@ fn translate_complex_ins<F: PrimeField32>(
                     let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
                     let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
                     let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    vec![
+                    directives.extend([
                         Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
                         Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
                         Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
@@ -1589,55 +1604,33 @@ fn translate_complex_ins<F: PrimeField32>(
                         Directive::Instruction(ib::or(lo, b0, b1_shifted)),
                         Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
                         // build hi i32 in val
-                        Directive::Instruction(ib::or(val + 1, lo, hi)),
-                        // shr will read 64 bits, so we need to zero the other half due to WOM
-                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                        // shift signed/unsigned
-                        if let Op::I64Load32S { .. } = op {
-                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
-                        } else {
-                            Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
-                        },
-                    ]
+                        Directive::Instruction(ib::or(val_32, lo, hi)),
+                    ]);
                 }
                 1 => {
                     let h0 = c.register_gen.allocate_type(ValType::I32).start as usize;
                     let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
                     let h1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    vec![
+                    directives.extend([
                         // load h0, h1
                         Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
                         Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
                         // shift h1
                         Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16.into())),
                         // combine h0 and h1
-                        Directive::Instruction(ib::or(val + 1, h0, h1_shifted)),
-                        // shr will read 64 bits, so we need to zero the other half due to WOM
-                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                        // shift signed/unsigned
-                        if let Op::I64Load32S { .. } = op {
-                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
-                        } else {
-                            Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
-                        },
-                    ]
+                        Directive::Instruction(ib::or(val_32, h0, h1_shifted)),
+                    ]);
                 }
-                2.. => {
-                    vec![
-                        // load word
-                        Directive::Instruction(ib::loadw(val + 1, base_addr, imm)),
-                        // shr will read 64 bits, so we need to zero the other half due to WOM
-                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                        // shift signed/unsigned
-                        if let Op::I64Load32S { .. } = op {
-                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
-                        } else {
-                            Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
-                        },
-                    ]
-                }
+                2.. => directives.push(Directive::Instruction(ib::loadw(val_32, base_addr, imm))),
             }
-            .into()
+
+            // In case of signed, we need to right shift the loaded value into the output
+            if let Op::I64Load32S { .. } = op {
+                let d = Directive::Instruction(ib::shr_s_imm_64(output, zeroed, 32_i16.into()));
+                directives.push(d);
+            }
+
+            directives.into()
         }
         Op::I32Store { memarg } | Op::I64Store32 { memarg } => {
             let imm = mem_offset(memarg, c);
