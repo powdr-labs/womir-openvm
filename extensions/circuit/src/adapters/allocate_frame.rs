@@ -230,7 +230,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
         {
             let mut frame_stack = self.frame_stack.lock().unwrap();
             frame_stack.push(allocated_ptr);
-            println!("A STACK: {frame_stack:?}");
+            //println!("A STACK: {frame_stack:?}");
         }
 
         let amount_bytes = decompose(amount_bytes);
