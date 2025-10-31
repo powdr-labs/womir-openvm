@@ -1048,14 +1048,14 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::allocate_frame_imm::<F>(1, 100), // Allocate entry frame
-            wom::add_imm::<F>(8, 0, 99_i16.into()), // x8 = 99
+            wom::add_imm::<F>(11, 0, 99_i16.into()), // x11 = 99
             wom::allocate_frame_imm::<F>(9, 100), // Allocate new frame of size 100, x9 = new FP
             wom::jaaf_save::<F>(11, 28, 9),       // Jump to PC=24, set FP=x9, save old FP to x11
             wom::halt(),                          // This should be skipped
             wom::halt(),                          // This should be skipped too
             // PC = 28 (byte offset, so instruction at index 6)
             wom::const_32_imm(0, 0, 0),
-            wom::reveal(11, 0), // wom::reveal x11 (should be 0, the old FP)
+            wom::reveal(11, 0), // wom::reveal x11 (should be 0, the old FP, not 99)
             wom::halt(),
         ];
 
