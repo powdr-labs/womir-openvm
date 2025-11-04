@@ -369,10 +369,11 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
             let mut frame_stack = self.frame_stack.lock().unwrap();
             match local_opcode {
                 RET | JAAF => {
-                    // We have to find if the newly activate frame in the frame stack.
+                    // The newly activated frame must be in the frame stack.
                     let idx = frame_stack.iter().rposition(|x| x == &to_fp).unwrap();
 
-                    // Test if the activated frame is the last one allocated with AllocateFrame
+                    // Test if the activated frame has just been allocated with AllocateFrame
+                    // (i.e., is at the top of the stack)
                     if idx == frame_stack.len() - 1 {
                         // Yes, so this has to be a JAAF instruction jumping to a new frame.
                         assert_eq!(local_opcode, JAAF);
@@ -380,11 +381,11 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
                         // The current frame can be safely dropped, since this opcode doesn't save it,
                         // rendering it unreachable.
                         let curr_frame_idx = idx - 1;
-                        let active_frame = frame_stack.swap_remove(curr_frame_idx);
+                        let curr_frame = frame_stack.swap_remove(curr_frame_idx);
 
                         // Since we are jumping to the last frame in the stack, which is the new
                         // frame, the current frame must be the one before it, that we just removed.
-                        assert_eq!(active_frame, from_frame.fp);
+                        assert_eq!(curr_frame, from_frame.fp);
                     } else {
                         // Found an old frame, truncate the stack to that frame
                         frame_stack.truncate(idx + 1);

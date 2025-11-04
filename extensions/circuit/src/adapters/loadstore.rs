@@ -396,7 +396,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
             self.air.pointer_max_bits
         );
 
-        let mem_ptr_limbs = array::from_fn(|i| ((ptr_val >> (i * (RV32_CELL_BITS * 2))) & 0xffff));
+        let mem_ptr_limbs = array::from_fn(|i| (ptr_val >> (i * (RV32_CELL_BITS * 2))) & 0xffff);
 
         let ptr_val = ptr_val - shift_amount;
         let (wom_read, mem_read, read_data) = match local_opcode {
