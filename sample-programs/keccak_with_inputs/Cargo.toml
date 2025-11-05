@@ -8,7 +8,7 @@ edition = "2021"
 tiny-keccak = { version = "2.0.2", features = ["keccak"] }
 
 [target.'cfg(target_os = "zkvm")'.dependencies]
-openvm = { git = "https://github.com/powdr-labs/openvm.git", rev = "62c5d26" }
+openvm = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.1-powdr" }
 
 [profile.release-with-debug]
 inherits = "release"
