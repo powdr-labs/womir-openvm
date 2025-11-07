@@ -4,21 +4,15 @@ use std::{
 };
 
 use derive_more::derive::From;
-use openvm_circuit::{
-    arch::{SystemPort, VmExtension, VmInventory, VmInventoryBuilder, VmInventoryError},
-    system::phantom::PhantomChip,
-};
-use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
+use openvm_circuit::system::phantom::PhantomChip;
+use openvm_circuit_derive::{AnyEnum, Executor, MeteredExecutor, PreflightExecutor};
 use openvm_circuit_primitives::{
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
     range_tuple::{RangeTupleCheckerBus, SharedRangeTupleCheckerChip},
 };
 use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
 use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
-use openvm_rv32im_circuit::{
-    BaseAluCoreChip, DivRemCoreChip, LoadSignExtendCoreChip, LoadStoreCoreChip,
-    MultiplicationCoreChip, ShiftCoreChip,
-};
+
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
@@ -112,28 +106,28 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 
 // ============ Executor and Periphery Enums for Extension ============
 
-#[derive(ChipUsageGetter, Chip, InstructionExecutor, From, AnyEnum)]
-pub enum WomirIExecutor<F: PrimeField32> {
-    BaseAlu(WomBaseAluChip<F>),
-    BaseAlu64(WomBaseAlu64Chip<F>),
-    Jaaf(JaafChipWom<F>),
-    Jump(JumpChipWom<F>),
-    AllocateFrame(AllocateFrameChipWom<F>),
-    CopyIntoFrame(CopyIntoFrameChipWom<F>),
-    Const32(ConstsChipWom<F>),
-    LessThan(LessThanChipWom<F>),
-    LessThan64(LessThan64ChipWom<F>),
-    HintStore(HintStoreChip<F>),
-    Multiplication(WomMultiplicationChip<F>),
-    Multiplication64(WomMultiplication64Chip<F>),
-    DivRem(WomDivRemChip<F>),
-    DivRem64(WomDivRem64Chip<F>),
-    Shift(WomShiftChip<F>),
-    Shift64(WomShift64Chip<F>),
-    LoadStore(LoadStoreChip<F>),
-    Eq(EqChipWom<F>),
-    Eq64(Eq64ChipWom<F>),
-    LoadSignExtend(LoadSignExtendChip<F>),
+#[derive(Clone, From, AnyEnum, Executor, MeteredExecutor, PreflightExecutor)]
+pub enum WomirIExecutor {
+    BaseAlu(WomBaseAluExecutor),
+    BaseAlu64(WomBaseAlu64Executor),
+    Jaaf(JaafExecutor),
+    Jump(JumpExecutor),
+    AllocateFrame(AllocateFrameExecutor),
+    CopyIntoFrame(CopyIntoFrameExecutor),
+    Const32(ConstsChipExecutor),
+    LessThan(LessThanChipExecutor),
+    LessThan64(LessThan64ChipExecutor),
+    HintStore(HintStoreChipExecutor),
+    Multiplication(WomMultiplicationChipExecutor),
+    Multiplication64(WomMultiplication64ChipExecutor),
+    DivRem(WomDivRemChipExecutor),
+    DivRem64(WomDivRem64ChipExecutor),
+    Shift(WomShiftChipExecutor),
+    Shift64(WomShift64ChipExecutor),
+    LoadStore(LoadStoreChipExecutor),
+    Eq(EqChipExecutor),
+    Eq64(Eq64ChipExecutor),
+    LoadSignExtend(LoadSignExtendChipExecutor),
 }
 
 #[derive(From, ChipUsageGetter, Chip, AnyEnum)]

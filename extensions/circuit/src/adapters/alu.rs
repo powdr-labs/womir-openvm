@@ -2,17 +2,17 @@ use std::{borrow::Borrow, marker::PhantomData};
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge,
-        ExecutionBus, ExecutionState, MinimalInstruction, Result as ResultVm, VmAdapterAir,
-        VmAdapterInterface,
+        AdapterAirContext, AdapterTraceExecutor, BasicAdapterInterface, ExecutionBridge,
+        ExecutionBus, ExecutionState, MinimalInstruction, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
+        memory::{MemoryController, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
-use openvm_circuit_primitives::bitwise_op_lookup::{
-    BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip,
+use openvm_circuit_primitives::{
+    AlignedBytesBorrow,
+    bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
@@ -32,6 +32,62 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 use crate::{
     FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
 };
+
+// Intermediate type that should not be copied or cloned and should be directly written to
+#[repr(C)]
+#[derive(AlignedBytesBorrow, Debug)]
+pub struct Rv32BaseAluAdapterRecord {
+    pub from_pc: u32,
+    pub from_fp: u32,
+
+    pub dest_reg: u32,
+    pub left_arg_reg: u32,
+    /// Pointer if right_arg was a register, immediate value otherwise
+    pub right_arg: u32,
+    /// 1 if right_arg was a register, 0 if an immediate
+    pub right_arg_as: u8,
+}
+
+#[derive(Clone, derive_new::new)]
+pub struct WomBaseAluAdapterExecutor<const NUM_LIMBS: usize>;
+
+impl<F: PrimeField32, const NUM_LIMBS: usize> AdapterTraceExecutor<F>
+    for WomBaseAluAdapterExecutor<NUM_LIMBS>
+{
+    // TODO: fix this - seems to be proportional to the number of air columns
+    const WIDTH: usize = 4;
+    type ReadData = [[u8; NUM_LIMBS]; 2];
+    type WriteData = [[u8; NUM_LIMBS]; 1];
+
+    type RecordMut<'a> = Rv32BaseAluAdapterRecord;
+
+    fn start(
+        pc: u32,
+        memory: &openvm_circuit::system::memory::online::TracingMemory,
+        record: &mut Self::RecordMut<'_>,
+    ) {
+        record.from_pc = pc;
+    }
+
+    fn read(
+        &self,
+        memory: &mut openvm_circuit::system::memory::online::TracingMemory,
+        instruction: &Instruction<F>,
+        record: &mut Self::RecordMut<'_>,
+    ) -> Self::ReadData {
+        todo!()
+    }
+
+    fn write(
+        &self,
+        memory: &mut openvm_circuit::system::memory::online::TracingMemory,
+        instruction: &Instruction<F>,
+        data: Self::WriteData,
+        record: &mut Self::RecordMut<'_>,
+    ) {
+        todo!()
+    }
+}
 
 use super::RV32_CELL_BITS;
 
