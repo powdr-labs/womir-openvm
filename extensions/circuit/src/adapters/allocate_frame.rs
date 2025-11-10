@@ -26,7 +26,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
     FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
-    adapters::{compose, decompose, frame_allocator::FrameAllocator},
+    adapters::{decompose, frame_allocator::FrameAllocator},
 };
 
 use super::RV32_REGISTER_NUM_LIMBS;
@@ -89,8 +89,9 @@ pub struct AllocateFrameAdapterColsWom<T> {
     pub amount_imm: T,
     // 0 if imm, 1 if reg
     pub amount_imm_or_reg: T,
-    // new frame pointer: provided by the prover
-    pub next_frame_ptr: [T; RV32_REGISTER_NUM_LIMBS],
+    // new frame pointer: provided by the prover.
+    // Instead of four u8 limbs, we use the full field to store the fp as a single element
+    pub next_frame_ptr: T,
     pub dest_reg: T,
     pub write_mult: T,
 }
@@ -144,7 +145,12 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
         self.wom_bridge
             .write(
                 local.dest_reg + local.from_frame.fp,
-                local.next_frame_ptr,
+                [
+                    local.next_frame_ptr.into(),
+                    AB::Expr::ZERO,
+                    AB::Expr::ZERO,
+                    AB::Expr::ZERO,
+                ],
                 local.write_mult,
             )
             .eval(builder, ctx.instruction.is_valid.clone());
@@ -216,7 +222,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
             // Otherwise, we read the value from the register
             let fp_f = F::from_canonical_u32(fp);
             let (_, reg_data) = wom.read::<RV32_REGISTER_NUM_LIMBS>(amount_reg + fp_f);
-            compose(reg_data)
+            F::as_canonical_u32(&reg_data[0])
         };
         let amount_bytes = RV32_REGISTER_NUM_LIMBS as u32 * amount;
 
@@ -260,9 +266,9 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
         let mut write_result = None;
 
         if enabled != F::ZERO {
-            write_result = Some(wom.write(
+            write_result = Some(wom.write_fe(
                 target_reg + F::from_canonical_u32(from_frame.fp),
-                decompose(read_record.allocated_ptr),
+                F::from_canonical_u32(read_record.allocated_ptr),
             ));
         }
 
