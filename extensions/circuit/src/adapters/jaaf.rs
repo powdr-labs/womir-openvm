@@ -1,4 +1,8 @@
-use std::{borrow::Borrow, marker::PhantomData};
+use std::{
+    borrow::Borrow,
+    marker::PhantomData,
+    sync::{Arc, Mutex},
+};
 
 use openvm_circuit::{
     arch::{
@@ -48,6 +52,7 @@ pub struct JaafInstruction<T> {
 #[derive(Debug)]
 pub struct JaafAdapterChipWom<F: Field> {
     pub air: JaafAdapterAirWom,
+    frame_stack: Arc<Mutex<Vec<u32>>>,
     _marker: PhantomData<F>,
 }
 
@@ -56,6 +61,7 @@ impl<F: PrimeField32> JaafAdapterChipWom<F> {
         execution_bus: ExecutionBus,
         program_bus: ProgramBus,
         frame_bus: FrameBus,
+        frame_stack: Arc<Mutex<Vec<u32>>>,
         memory_bridge: MemoryBridge,
         wom_bridge: WomBridge,
     ) -> Self {
@@ -66,6 +72,7 @@ impl<F: PrimeField32> JaafAdapterChipWom<F> {
                 _memory_bridge: memory_bridge,
                 wom_bridge,
             },
+            frame_stack,
             _marker: PhantomData,
         }
     }
@@ -384,6 +391,41 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
         } else {
             (None, None)
         };
+
+        // Update the frame stack according to the opcode
+        {
+            let mut frame_stack = self.frame_stack.lock().unwrap();
+            match local_opcode {
+                RET | JAAF => {
+                    // The newly activated frame must be in the frame stack.
+                    let idx = frame_stack.iter().rposition(|x| x == &to_fp).unwrap();
+
+                    // Test if the activated frame has just been allocated with AllocateFrame
+                    // (i.e., is at the top of the stack)
+                    if idx == frame_stack.len() - 1 {
+                        // Yes, so this has to be a JAAF instruction jumping to a new frame.
+                        assert_eq!(local_opcode, JAAF);
+
+                        // The current frame can be safely dropped, since this opcode doesn't save it,
+                        // rendering it unreachable.
+                        let curr_frame_idx = idx - 1;
+                        let curr_frame = frame_stack.swap_remove(curr_frame_idx);
+
+                        // Since we are jumping to the last frame in the stack, which is the new
+                        // frame, the current frame must be the one before it, that we just removed.
+                        assert_eq!(curr_frame, from_frame.fp);
+                    } else {
+                        // Found an old frame, truncate the stack to that frame
+                        frame_stack.truncate(idx + 1);
+                    }
+                    //println!("J STACK: {frame_stack:?}");
+                }
+                CALL | CALL_INDIRECT | JAAF_SAVE => {
+                    // These calls always target a new frame, which is already on top of the stack.
+                    assert_eq!(frame_stack.last(), Some(&to_fp));
+                }
+            }
+        }
 
         Ok((
             ExecutionState {

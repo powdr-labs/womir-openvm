@@ -531,146 +531,122 @@ pub fn jump_if_zero<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> 
 
 /// LOADW instruction: Load word from memory
 /// rd = MEM[rs1 + imm]
-pub fn loadw<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
-    let imm_unsigned = (imm & 0xFFFFFF) as usize;
-    let imm_sign = if imm < 0 { 1 } else { 0 };
-
+pub fn loadw<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::LOADW.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: rd
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1
-        F::from_canonical_usize(imm_unsigned),                        // c: imm (lower 24 bits)
+        F::from_canonical_u32(imm & 0xFFFF),                          // c: imm (lower 16 bits)
         F::ONE,                                                       // d: register address space
         F::from_canonical_usize(2), // e: memory address space (2 for word)
         F::ONE,                     // f: enabled
-        F::from_canonical_usize(imm_sign), // g: imm sign
+        F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
 
 /// STOREW instruction: Store word to memory
 /// MEM[rs1 + imm] = rs2
-pub fn storew<F: PrimeField32>(value: usize, base_address: usize, imm: i32) -> Instruction<F> {
-    let imm_unsigned = (imm & 0xFFFFFF) as usize;
-    let imm_sign = if imm < 0 { 1 } else { 0 };
-
+pub fn storew<F: PrimeField32>(value: usize, base_address: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::STOREW.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * value), // a: rs2 (data to store)
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * base_address), // b: rs1 (base address)
-        F::from_canonical_usize(imm_unsigned),                                  // c: imm (offset)
-        F::ONE,                            // d: register address space
-        F::from_canonical_usize(2),        // e: memory address space (2 for word, same as LOADW)
-        F::ONE,                            // f: enabled
-        F::from_canonical_usize(imm_sign), // g: imm sign
+        F::from_canonical_u32(imm & 0xFFFF), // c: imm (lower 16 bits)
+        F::ONE,                              // d: register address space
+        F::from_canonical_usize(2),          // e: memory address space (2 for word)
+        F::ONE,                              // f: enabled
+        F::from_canonical_u32(imm >> 16),    // g: imm (higher 16 bits)
     )
 }
 
 /// LOADB: load byte from memory
 /// rd = MEM[rs1 + imm] (sign-extended)
-pub fn loadb<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
-    let imm_unsigned = (imm & 0xFFFFFF) as usize;
-    let imm_sign = if imm < 0 { 1 } else { 0 };
-
+pub fn loadb<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::LOADB.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: rd
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1
-        F::from_canonical_usize(imm_unsigned),                        // c: imm (lower 24 bits)
+        F::from_canonical_u32(imm & 0xFFFF),                          // c: imm (lower 16 bits)
         F::ONE,                                                       // d: register address space
-        F::from_canonical_usize(2), // e: memory address space (2 for byte, same as word)
+        F::from_canonical_usize(2), // e: memory address space (2 for byte)
         F::ONE,                     // f: enabled
-        F::from_canonical_usize(imm_sign), // g: imm sign
+        F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
 
 /// LOADBU instruction: Load byte unsigned from memory
 /// rd = MEM[rs1 + imm] (zero-extended)
-pub fn loadbu<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
-    let imm_unsigned = (imm & 0xFFFFFF) as usize;
-    let imm_sign = if imm < 0 { 1 } else { 0 };
-
+pub fn loadbu<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::LOADBU.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: rd
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1
-        F::from_canonical_usize(imm_unsigned),                        // c: imm (lower 24 bits)
+        F::from_canonical_u32(imm & 0xFFFF),                          // c: imm (lower 16 bits)
         F::ONE,                                                       // d: register address space
-        F::from_canonical_usize(2), // e: memory address space (2 for byte, same as word)
+        F::from_canonical_usize(2), // e: memory address space (2 for byte)
         F::ONE,                     // f: enabled
-        F::from_canonical_usize(imm_sign), // g: imm sign
+        F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
 
 /// LOADH: load halfword from memory
 /// rd = MEM[rs1 + imm] (sign-extended)
 #[allow(unused)]
-pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
-    let imm_unsigned = (imm & 0xFFFFFF) as usize;
-    let imm_sign = if imm < 0 { 1 } else { 0 };
-
+pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::LOADH.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: rd
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1
-        F::from_canonical_usize(imm_unsigned),                        // c: imm (lower 24 bits)
+        F::from_canonical_u32(imm & 0xFFFF),                          // c: imm (lower 16 bits)
         F::ONE,                                                       // d: register address space
-        F::from_canonical_usize(2), // e: memory address space (2 for byte, same as word)
+        F::from_canonical_usize(2), // e: memory address space (2 for halfword)
         F::ONE,                     // f: enabled
-        F::from_canonical_usize(imm_sign), // g: imm sign
+        F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
 
 /// LOADHU instruction: Load halfword unsigned from memory
 /// rd = MEM[rs1 + imm] (zero-extended)
-pub fn loadhu<F: PrimeField32>(rd: usize, rs1: usize, imm: i32) -> Instruction<F> {
-    let imm_unsigned = (imm & 0xFFFFFF) as usize;
-    let imm_sign = if imm < 0 { 1 } else { 0 };
-
+pub fn loadhu<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::LOADHU.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: rd
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1
-        F::from_canonical_usize(imm_unsigned),                        // c: imm (lower 24 bits)
+        F::from_canonical_u32(imm & 0xFFFF),                          // c: imm (lower 16 bits)
         F::ONE,                                                       // d: register address space
-        F::from_canonical_usize(2), // e: memory address space (2 for halfword, same as word)
+        F::from_canonical_usize(2), // e: memory address space (2 for halfword)
         F::ONE,                     // f: enabled
-        F::from_canonical_usize(imm_sign), // g: imm sign
+        F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
 
 /// STOREB instruction: Store byte to memory
 /// MEM[rs1 + imm] = rs2 (lowest byte)
-pub fn storeb<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<F> {
-    let imm_unsigned = (imm & 0xFFFFFF) as usize;
-    let imm_sign = if imm < 0 { 1 } else { 0 };
-
+pub fn storeb<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::STOREB.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs2), // a: rs2 (data to store)
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1 (base address)
-        F::from_canonical_usize(imm_unsigned),                         // c: imm (offset)
+        F::from_canonical_u32(imm & 0xFFFF),                           // c: imm (lower 16 bits)
         F::ONE,                                                        // d: register address space
-        F::from_canonical_usize(2), // e: memory address space (2 for byte, same as word)
+        F::from_canonical_usize(2), // e: memory address space (2 for byte)
         F::ONE,                     // f: enabled
-        F::from_canonical_usize(imm_sign), // g: imm sign
+        F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
 
 /// STOREH instruction: Store halfword to memory
 /// MEM[rs1 + imm] = rs2 (lowest halfword)
-pub fn storeh<F: PrimeField32>(rs2: usize, rs1: usize, imm: i32) -> Instruction<F> {
-    let imm_unsigned = (imm & 0xFFFFFF) as usize;
-    let imm_sign = if imm < 0 { 1 } else { 0 };
-
+pub fn storeh<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::STOREH.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs2), // a: rs2 (data to store)
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: rs1 (base address)
-        F::from_canonical_usize(imm_unsigned),                         // c: imm (offset)
+        F::from_canonical_u32(imm & 0xFFFF),                           // c: imm (lower 16 bits)
         F::ONE,                                                        // d: register address space
-        F::from_canonical_usize(2), // e: memory address space (2 for halfword, same as word)
+        F::from_canonical_usize(2), // e: memory address space (2 for halfword)
         F::ONE,                     // f: enabled
-        F::from_canonical_usize(imm_sign), // g: imm sign
+        F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
 

@@ -54,6 +54,11 @@ pub const ERROR_CODE_OFFSET: u32 = 100;
 
 pub const ERROR_ABORT_CODE: u32 = 200;
 
+/// Error code emitted in place of unimplemented instructions.
+/// This is to allow programs that has such instruction to compile,
+/// but the runtime error only happens if they are actually executed.
+pub const ERROR_UNIMPLEMENTED_CODE: u32 = 201;
+
 pub struct LinkedProgram<'a, F: PrimeField32> {
     module: Module<'a>,
     label_map: HashMap<String, LabelValue>,
@@ -645,6 +650,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
             ("env", "abort") => {
                 vec![Directive::Instruction(ib::abort())]
             }
+            ("gojs", _) => {
+                // Just NOP for GoJS intrinsics
+                vec![]
+            }
             _ => unimplemented!(
                 "Imported function `{}` from module `{}` is not supported",
                 function,
@@ -1172,6 +1181,8 @@ fn translate_complex_ins<F: PrimeField32>(
         })
         .collect_vec();
     match op {
+        Op::Nop => Tree::Empty,
+
         Op::I32Const { value } => {
             let output = output.unwrap().start as usize;
             let value_u = value as u32;
@@ -1561,7 +1572,22 @@ fn translate_complex_ins<F: PrimeField32>(
             let imm = mem_offset(memarg, c);
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
-            let val = c.register_gen.allocate_type(ValType::I64).start as usize;
+
+            // if signed, we need to place the loaded 32-bit value in a new register
+            // bit extend it with shr_s_imm_64, otherwise we can load directly into lo part
+            let (val_32, zeroed) = if let Op::I64Load32S { .. } = op {
+                let val = c.register_gen.allocate_type(ValType::I64).start as usize;
+                // Load the value into the hi word, and zero the lo word for the shr
+                (val + 1, val)
+            } else {
+                // Load directly into lo part, zero the hi part
+                (output, output + 1)
+            };
+
+            let mut directives = vec![
+                // zero the other half due to WOM
+                Directive::Instruction(ib::const_32_imm(zeroed, 0, 0)),
+            ];
 
             match memarg.align {
                 0 => {
@@ -1574,7 +1600,7 @@ fn translate_complex_ins<F: PrimeField32>(
                     let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
                     let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
                     let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    vec![
+                    directives.extend([
                         Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
                         Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
                         Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
@@ -1587,55 +1613,33 @@ fn translate_complex_ins<F: PrimeField32>(
                         Directive::Instruction(ib::or(lo, b0, b1_shifted)),
                         Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
                         // build hi i32 in val
-                        Directive::Instruction(ib::or(val + 1, lo, hi)),
-                        // shr will read 64 bits, so we need to zero the other half due to WOM
-                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                        // shift signed/unsigned
-                        if let Op::I64Load32S { .. } = op {
-                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
-                        } else {
-                            Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
-                        },
-                    ]
+                        Directive::Instruction(ib::or(val_32, lo, hi)),
+                    ]);
                 }
                 1 => {
                     let h0 = c.register_gen.allocate_type(ValType::I32).start as usize;
                     let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
                     let h1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    vec![
+                    directives.extend([
                         // load h0, h1
                         Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
                         Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
                         // shift h1
                         Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16.into())),
                         // combine h0 and h1
-                        Directive::Instruction(ib::or(val + 1, h0, h1_shifted)),
-                        // shr will read 64 bits, so we need to zero the other half due to WOM
-                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                        // shift signed/unsigned
-                        if let Op::I64Load32S { .. } = op {
-                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
-                        } else {
-                            Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
-                        },
-                    ]
+                        Directive::Instruction(ib::or(val_32, h0, h1_shifted)),
+                    ]);
                 }
-                2.. => {
-                    vec![
-                        // load word
-                        Directive::Instruction(ib::loadw(val + 1, base_addr, imm)),
-                        // shr will read 64 bits, so we need to zero the other half due to WOM
-                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                        // shift signed/unsigned
-                        if let Op::I64Load32S { .. } = op {
-                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into()))
-                        } else {
-                            Directive::Instruction(ib::shr_u_imm_64(output, val, 32_i16.into()))
-                        },
-                    ]
-                }
+                2.. => directives.push(Directive::Instruction(ib::loadw(val_32, base_addr, imm))),
             }
-            .into()
+
+            // In case of signed, we need to right shift the loaded value into the output
+            if let Op::I64Load32S { .. } = op {
+                let d = Directive::Instruction(ib::shr_s_imm_64(output, zeroed, 32_i16.into()));
+                directives.push(d);
+            }
+
+            directives.into()
         }
         Op::I32Store { memarg } | Op::I64Store32 { memarg } => {
             let imm = mem_offset(memarg, c);
@@ -1879,10 +1883,6 @@ fn translate_complex_ins<F: PrimeField32>(
         }
 
         // Float instructions
-        Op::F32Load { memarg: _ } => todo!(),
-        Op::F64Load { memarg: _ } => todo!(),
-        Op::F32Store { memarg: _ } => todo!(),
-        Op::F64Store { memarg: _ } => todo!(),
         Op::F32Const { value } => {
             let output = output.unwrap().start as usize;
             let value_u = value.bits();
@@ -1905,38 +1905,44 @@ fn translate_complex_ins<F: PrimeField32>(
             ]
             .into()
         }
-        Op::F32Abs => todo!(),
-        Op::F32Neg => todo!(),
-        Op::F32Ceil => todo!(),
-        Op::F32Floor => todo!(),
-        Op::F32Trunc => todo!(),
-        Op::F32Nearest => todo!(),
-        Op::F32Sqrt => todo!(),
-        Op::F64Abs => todo!(),
-        Op::F64Neg => todo!(),
-        Op::F64Ceil => todo!(),
-        Op::F64Floor => todo!(),
-        Op::F64Trunc => todo!(),
-        Op::F64Nearest => todo!(),
-        Op::F64Sqrt => todo!(),
-        Op::I32TruncF32S => todo!(),
-        Op::I32TruncF32U => todo!(),
-        Op::I32TruncF64S => todo!(),
-        Op::I32TruncF64U => todo!(),
-        Op::I64TruncF32S => todo!(),
-        Op::I64TruncF32U => todo!(),
-        Op::I64TruncF64S => todo!(),
-        Op::I64TruncF64U => todo!(),
-        Op::F32ConvertI32S => todo!(),
-        Op::F32ConvertI32U => todo!(),
-        Op::F32ConvertI64S => todo!(),
-        Op::F32ConvertI64U => todo!(),
-        Op::F32DemoteF64 => todo!(),
-        Op::F64ConvertI32S => todo!(),
-        Op::F64ConvertI32U => todo!(),
-        Op::F64ConvertI64S => todo!(),
-        Op::F64ConvertI64U => todo!(),
-        Op::F64PromoteF32 => todo!(),
+        Op::F32Load { .. }
+        | Op::F64Load { .. }
+        | Op::F32Store { .. }
+        | Op::F64Store { .. }
+        | Op::F32Abs
+        | Op::F32Neg
+        | Op::F32Ceil
+        | Op::F32Floor
+        | Op::F32Trunc
+        | Op::F32Nearest
+        | Op::F32Sqrt
+        | Op::F64Abs
+        | Op::F64Neg
+        | Op::F64Ceil
+        | Op::F64Floor
+        | Op::F64Trunc
+        | Op::F64Nearest
+        | Op::F64Sqrt
+        | Op::I32TruncF32S
+        | Op::I32TruncF32U
+        | Op::I32TruncF64S
+        | Op::I32TruncF64U
+        | Op::I64TruncF32S
+        | Op::I64TruncF32U
+        | Op::I64TruncF64S
+        | Op::I64TruncF64U
+        | Op::F32ConvertI32S
+        | Op::F32ConvertI32U
+        | Op::F32ConvertI64S
+        | Op::F32ConvertI64U
+        | Op::F32DemoteF64
+        | Op::F64ConvertI32S
+        | Op::F64ConvertI32U
+        | Op::F64ConvertI64S
+        | Op::F64ConvertI64U
+        | Op::F64PromoteF32 => {
+            Directive::Instruction(ib::trap(ERROR_UNIMPLEMENTED_CODE as usize)).into()
+        }
 
         Op::I32ReinterpretF32
         | Op::F32ReinterpretI32
@@ -1999,7 +2005,7 @@ fn emit_table_get<F: PrimeField32>(
         Directive::Instruction(ib::loadw(
             dest_reg as usize,
             mul_result,
-            base_addr as i32 + (i as i32) * 4,
+            base_addr + (i as u32) * 4,
         ))
     }));
 
@@ -2198,16 +2204,13 @@ fn const_i16_as_field(value: &WasmValue) -> AluImm {
     c.into()
 }
 
-fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> i32 {
+fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> u32 {
     assert_eq!(memarg.memory, 0, "no multiple memories supported");
     let mem_start = c
         .program
         .linear_memory_start()
         .expect("no memory allocated");
-    let offset = mem_start + u32::try_from(memarg.offset).expect("offset too large");
-    // RISC-V requires offset immediates to have 16 bits, but for WASM we changed it to 24 bits.
-    assert!(offset < (1 << 24));
-    offset as i32
+    mem_start.wrapping_add(u32::try_from(memarg.offset).expect("offset too large"))
 }
 
 fn load_from_const_addr<F: PrimeField32>(
@@ -2226,7 +2229,7 @@ fn load_from_const_addr<F: PrimeField32>(
         Directive::Instruction(ib::loadw(
             dest_reg as usize,
             base_addr_reg.start as usize,
-            (i as i32) * 4,
+            (i as u32) * 4,
         ))
     }));
 
@@ -2249,7 +2252,7 @@ fn store_to_const_addr<F: PrimeField32>(
         Directive::Instruction(ib::storew(
             input_reg as usize,
             base_addr_reg.start as usize,
-            i as i32 * 4,
+            i as u32 * 4,
         ))
     }));
 

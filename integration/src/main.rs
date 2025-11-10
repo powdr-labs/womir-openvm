@@ -46,7 +46,7 @@ use crate::womir_translation::{Directive, LinkedProgram, OpenVMSettings};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SpecializedConfig {
     pub sdk_config: SdkVmConfig,
-    wom: WomirI,
+    wom: WomirI<F>,
 }
 
 impl SpecializedConfig {
@@ -1029,7 +1029,7 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 42_i16.into()), // x8 = 42
-            wom::const_field::<F>(9, 5, 0),         // x9 = 5 (new frame pointer)
+            wom::allocate_frame_imm::<F>(9, 100),   // Allocate new frame of size 100, x9 = new FP
             wom::copy_into_frame::<F>(10, 8, 9), // PC=12: Copy x8 to [x9[x10]], which writes to address pointed by x10
             wom::jaaf::<F>(24, 9),               // Jump to PC=24, set FP=x9
             wom::halt(),                         // This should be skipped
@@ -1047,15 +1047,15 @@ mod tests {
         // Test JAAF_SAVE: jump and save FP
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(8, 0, 99_i16.into()),  // x8 = 99
-            wom::const_field::<F>(9, 10, 0),         // x9 = 10 (new frame pointer)
-            wom::add_imm::<F>(11, 0, 99_i16.into()), // x11 = 99 (to show it gets overwritten)
-            wom::jaaf_save::<F>(11, 28, 9),          // Jump to PC=24, set FP=x9, save old FP to x11
-            wom::halt(),                             // This should be skipped
-            wom::halt(),                             // This should be skipped too
+            wom::allocate_frame_imm::<F>(1, 100), // Allocate entry frame
+            wom::add_imm::<F>(11, 0, 99_i16.into()), // x11 = 99
+            wom::allocate_frame_imm::<F>(9, 100), // Allocate new frame of size 100, x9 = new FP
+            wom::jaaf_save::<F>(11, 28, 9),       // Jump to PC=24, set FP=x9, save old FP to x11
+            wom::halt(),                          // This should be skipped
+            wom::halt(),                          // This should be skipped too
             // PC = 28 (byte offset, so instruction at index 6)
             wom::const_32_imm(0, 0, 0),
-            wom::reveal(11, 0), // wom::reveal x11 (should be 0, the old FP)
+            wom::reveal(11, 0), // wom::reveal x11 (should be 0, the old FP, not 99)
             wom::halt(),
         ];
 
@@ -1067,12 +1067,13 @@ mod tests {
         // Test RET: return to saved PC and FP
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::const_field::<F>(10, 24, 0), // x10 = 24 (return PC)
+            wom::allocate_frame_imm::<F>(1, 100), // Allocate entry frame
+            wom::const_field::<F>(10, 28, 0), // x10 = 28 (return PC)
             wom::const_field::<F>(11, 0, 0),  // x11 = 0 (saved FP)
             wom::add_imm::<F>(8, 0, 88_i16.into()), // x8 = 88
-            wom::ret::<F>(10, 11),            // Return to PC=x10, FP=x11
-            wom::halt(),                      // This should be skipped
-            // PC = 24 (where x10 points)
+            wom::ret::<F>(10, 11),                // Return to PC=x10, FP=x11
+            wom::halt(),                          // This should be skipped
+            // PC = 28 (where x10 points)
             wom::reveal(8, 0), // wom::reveal x8 (should be 88)
             wom::halt(),
         ];
@@ -1085,8 +1086,8 @@ mod tests {
         // Test CALL: save PC and FP, then jump
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::const_field::<F>(9, 16, 0), // x9 = 16 (new frame pointer)
-            wom::call::<F>(10, 11, 24, 9),   // Call to PC=24, FP=x9, save PC to x10, FP to x11
+            wom::allocate_frame_imm::<F>(9, 100), // Allocate new frame of size 100, x9 = new FP
+            wom::call::<F>(10, 11, 24, 9),        // Call to PC=24, FP=x9, save PC to x10, FP to x11
             wom::add_imm::<F>(8, 0, 123_i16.into()), // x8 = 123 (after return) - this should NOT execute
             wom::reveal(8, 0),                       // wom::reveal x8 - this should NOT execute
             wom::halt(),                             // Padding
@@ -1104,13 +1105,13 @@ mod tests {
         // Test CALL_INDIRECT: save PC and FP, jump to register value
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
+            wom::allocate_frame_imm::<F>(1, 100), // Allocate a frame at x1 just so we have some room to work
             wom::const_field::<F>(12, 32, 0), // x12 = 32 (target PC)
-            wom::const_field::<F>(9, 0x100, 0), // x9 = 256 (new frame pointer)
+            wom::allocate_frame_imm::<F>(9, 100), // Allocate new frame of size 100, x9 = new FP
             wom::add_imm::<F>(11, 0, 999_i16.into()), // x11 = 999
             wom::call_indirect::<F>(10, 11, 12, 9), // Call to PC=x12, FP=x9, save PC to x10, FP to x11
             wom::add_imm::<F>(8, 0, 456_i16.into()), // x8 = 456 (after return) - this should NOT execute
             wom::reveal(8, 0),                       // wom::reveal x8 - this should NOT execute
-            wom::halt(),                             // Padding
             // PC = 32 (function start, where x12 points)
             wom::const_32_imm(0, 0, 0),
             wom::reveal(11, 0), // wom::reveal x11 (should be 0, the saved FP)
@@ -1127,7 +1128,7 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 50_i16.into()), // x8 = 50 (at FP=0)
-            wom::const_field::<F>(9, 0x100, 0),     // x9 = 256 (new frame pointer)
+            wom::allocate_frame_imm::<F>(9, 100),   // Allocate new frame of size 100, x9 = new FP
             wom::call::<F>(10, 11, 28, 9),          // Call function at PC=28, FP=0
             wom::reveal(8, 0),                      // wom::reveal x8 after return (should be 75)
             wom::halt(),
@@ -1276,7 +1277,7 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),             // PC=0
             wom::add_imm::<F>(8, 0, 42_i16.into()), // PC=4: x8 = 42 (value to copy)
-            wom::const_field::<F>(9, 0x1000, 0),    // PC=8: x9 = 0x1000 (mock frame pointer)
+            wom::allocate_frame_imm::<F>(9, 100),   // Allocate new frame of size 100, x9 = new FP
             wom::add_imm::<F>(10, 0, 0_i16.into()), // PC=12: x10 = 0 (register to read into)
             wom::copy_into_frame::<F>(10, 8, 9), // PC=16: Copy x8 to [x9[x10]], which writes to address pointed by x10
             wom::jaaf::<F>(24, 9),               // Jump to PC=24, set FP=x9
@@ -2139,6 +2140,15 @@ mod wast_tests {
     #[test]
     fn test_keccak() {
         run_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
+    }
+
+    #[test]
+    fn test_keeper_js() {
+        // This is program is a stripped down version of geth, compiled for Go's js target.
+        // Source: https://github.com/ethereum/go-ethereum/tree/master/cmd/keeper
+        // Compile command:
+        //   GOOS=js GOARCH=wasm go -gcflags=all=-d=softfloat build -tags "example" -o keeper.wasm
+        run_single_wasm_test("../sample-programs/keeper_js.wasm", "run", &[0, 0], &[]).unwrap();
     }
 
     #[test]

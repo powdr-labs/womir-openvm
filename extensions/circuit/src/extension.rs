@@ -1,14 +1,14 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 use derive_more::derive::From;
 use openvm_circuit::{
-    arch::{
-        InitFileGenerator, SystemConfig, SystemPort, VmExtension, VmInventory, VmInventoryBuilder,
-        VmInventoryError,
-    },
+    arch::{SystemPort, VmExtension, VmInventory, VmInventoryBuilder, VmInventoryError},
     system::phantom::PhantomChip,
 };
-use openvm_circuit_derive::{AnyEnum, InstructionExecutor, VmConfig};
+use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
 use openvm_circuit_primitives::{
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
     range_tuple::{RangeTupleCheckerBus, SharedRangeTupleCheckerChip},
@@ -19,7 +19,7 @@ use openvm_rv32im_circuit::{
     BaseAluCoreChip, DivRemCoreChip, LoadSignExtendCoreChip, LoadStoreCoreChip,
     MultiplicationCoreChip, ShiftCoreChip,
 };
-use openvm_stark_backend::{interaction::PermutationCheckBus, p3_field::PrimeField32};
+use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, CopyIntoFrameOpcode, DivRem64Opcode,
     DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
@@ -30,72 +30,78 @@ use openvm_womir_transpiler::{
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
-use crate::allocate_frame::AllocateFrameCoreChipWom;
-use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
 use crate::loadstore::LoadStoreChip;
 use crate::reg_write::RegWriteCoreChipWom;
+use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
+use crate::{adapters::frame_allocator::FrameAllocator, allocate_frame::AllocateFrameCoreChipWom};
 use crate::{adapters::*, wom_traits::*, *};
 
 const DEFAULT_INIT_FP: u32 = 0;
 
-/// Config for a VM with base extension and IO extension
-#[derive(Clone, Debug, VmConfig, derive_new::new, Serialize, Deserialize)]
-pub struct WomirIConfig {
-    #[system]
-    pub system: SystemConfig,
-    #[extension]
-    pub base: WomirI,
-}
-
-// Default implementation uses no init file
-impl InitFileGenerator for WomirIConfig {}
-
-impl Default for WomirIConfig {
-    fn default() -> Self {
-        let system = SystemConfig::default().with_continuations();
-        Self {
-            system,
-            base: Default::default(),
-        }
-    }
-}
-
-impl WomirIConfig {
-    pub fn with_public_values(public_values: usize) -> Self {
-        let system = SystemConfig::default()
-            .with_continuations()
-            .with_public_values(public_values);
-        Self {
-            system,
-            base: Default::default(),
-        }
-    }
-
-    pub fn with_public_values_and_segment_len(public_values: usize, segment_len: usize) -> Self {
-        let system = SystemConfig::default()
-            .with_continuations()
-            .with_public_values(public_values)
-            .with_max_segment_len(segment_len);
-        Self {
-            system,
-            base: Default::default(),
-        }
-    }
-}
-
 // ============ Extension Implementations ============
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct WomirI {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WomirI<F> {
     #[serde(default = "default_range_tuple_checker_sizes")]
     pub range_tuple_checker_sizes: [u32; 2],
+    // TODO: shouldn't this be AtomicU32 instead of Mutex<u32>?
+    // technically mutex is more robust, but I don't think it is
+    // possible for two instructions to be executed in parallel,
+    // so atomic might be enough...
+    fp: Arc<Mutex<u32>>,
+    frame_allocator: Arc<Mutex<FrameAllocator>>,
+    frame_stack: Arc<Mutex<Vec<u32>>>,
+    wom_controller: Arc<Mutex<WomController<F>>>,
 }
 
-impl Default for WomirI {
+impl<F: PrimeField32> Default for WomirI<F> {
     fn default() -> Self {
         Self {
             range_tuple_checker_sizes: default_range_tuple_checker_sizes(),
+            // The entry frame starts at fp=0:
+            fp: Arc::new(Mutex::new(DEFAULT_INIT_FP)),
+            frame_stack: Arc::new(Mutex::new(vec![0])),
+            frame_allocator: Arc::new(Mutex::new(Self::new_frame_allocator(
+                // Reserve range 0..8 that is used by the startup code.
+                [(0, 8)].into(),
+            ))),
+            wom_controller: Arc::new(Mutex::new(WomController::new())),
         }
+    }
+}
+
+impl<F: PrimeField32> WomirI<F> {
+    fn new_frame_allocator(existing_allocations: BTreeMap<u32, u32>) -> FrameAllocator {
+        FrameAllocator::new(
+            // The frame pointer is a field element, so the field limits its size.
+            F::ORDER_U32 - 1,
+            existing_allocations,
+        )
+    }
+
+    /// Carry over the state that persists across segments.
+    fn prepare_new_segment(&self) {
+        // Reset the frame allocator.
+        let mut frame_allocator = self.frame_allocator.lock().unwrap();
+        let old_ranges = frame_allocator.get_allocated_ranges();
+
+        // Keep all ranges that are in the frame stack.
+        let remaining_ranges: BTreeMap<u32, u32> = self
+            .frame_stack
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|fp| (*fp, *old_ranges.get(fp).unwrap()))
+            .collect();
+
+        // Clear all the memory ranges outside of the remaining frames.
+        self.wom_controller
+            .lock()
+            .unwrap()
+            .clear_unused(remaining_ranges.iter().map(|(s, sz)| (*s, *sz)));
+
+        // Create the new frame allocator.
+        *frame_allocator = Self::new_frame_allocator(remaining_ranges);
     }
 }
 
@@ -141,7 +147,7 @@ pub enum WomirIPeriphery<F: PrimeField32> {
 
 // ============ VmExtension Implementations ============
 
-impl<F: PrimeField32> VmExtension<F> for WomirI {
+impl<F: PrimeField32> VmExtension<F> for WomirI<F> {
     type Executor = WomirIExecutor<F>;
     type Periphery = WomirIPeriphery<F>;
 
@@ -162,11 +168,11 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         let offline_memory = builder.system_base().offline_memory();
         let pointer_max_bits = builder.system_config().memory_config.pointer_max_bits;
 
-        let shared_fp = Arc::new(Mutex::new(DEFAULT_INIT_FP));
-        let wom_controller = Arc::new(Mutex::new(WomController::new(PermutationCheckBus::new(
-            builder.new_bus_idx(),
-        ))));
-        let wom_bridge = wom_controller.lock().unwrap().bridge();
+        let shared_fp = self.fp.clone();
+        let wom_controller = self.wom_controller.clone();
+        let wom_bridge = WomBridge::new(builder.new_bus_idx());
+
+        self.prepare_new_segment();
 
         let bitwise_lu_chip = if let Some(&chip) = builder
             .find_chip::<SharedBitwiseOperationLookupChip<8>>()
@@ -223,6 +229,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 execution_bus,
                 program_bus,
                 frame_bus,
+                self.frame_stack.clone(),
                 memory_bridge,
                 wom_bridge,
             ),
@@ -255,6 +262,8 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
                 frame_bus,
                 memory_bridge,
                 wom_bridge,
+                self.frame_allocator.clone(),
+                self.frame_stack.clone(),
             ),
             AllocateFrameCoreChipWom::default(),
             offline_memory.clone(),
@@ -585,7 +594,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI {
         )?;
         builder.add_phantom_sub_executor(
             phantom::HintLoadByKeySubEx {
-                wom: wom_controller.clone(),
+                wom: wom_controller,
             },
             PhantomDiscriminant(Phantom::HintLoadByKey as u16),
         )?;
