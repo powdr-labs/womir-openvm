@@ -30,9 +30,9 @@ use openvm_womir_transpiler::{
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
+use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
 use crate::loadstore::LoadStoreChip;
 use crate::reg_write::RegWriteCoreChipWom;
-use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
 use crate::{adapters::frame_allocator::FrameAllocator, allocate_frame::AllocateFrameCoreChipWom};
 use crate::{adapters::*, wom_traits::*, *};
 
