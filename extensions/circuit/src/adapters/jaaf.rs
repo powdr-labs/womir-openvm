@@ -281,25 +281,25 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
         let (pc_source_record, pc_source_data) = match local_opcode {
             JaafOpcode::RET | JaafOpcode::CALL_INDIRECT => {
                 // Read pc_source (c field) for target PC
-                let pc_source = wom.read::<RV32_REGISTER_NUM_LIMBS>(c + fp_f);
-                (Some(pc_source.0), pc_source.1[0])
+                let pc_source = wom.read_fe(c + fp_f);
+                (Some(pc_source.0), pc_source.1)
             }
             _ => (None, F::ZERO),
         };
 
         // All opcodes always read fp_source (e field) for target FP
-        let fp_source = wom.read::<RV32_REGISTER_NUM_LIMBS>(e + fp_f);
+        let fp_source = wom.read_fe(e + fp_f);
 
         Ok((
             [
                 [pc_source_data, F::ZERO, F::ZERO, F::ZERO],
-                [fp_source.1[0], F::ZERO, F::ZERO, F::ZERO],
+                [fp_source.1, F::ZERO, F::ZERO, F::ZERO],
             ],
             JaafReadRecord {
                 rs1: pc_source_record,
                 rs1_data: pc_source_data,
                 rs2: fp_source.0,
-                rs2_data: fp_source.1[0],
+                rs2_data: fp_source.1,
             },
         ))
     }
@@ -364,26 +364,21 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
                 }
                 JaafOpcode::JAAF_SAVE => {
                     // Save fp to rd2 (b field)
-                    let rd2 = wom.write(
+                    let rd2 = wom.write_fe(
                         b + F::from_canonical_u32(to_fp),
-                        [F::from_canonical_u32(from_fp), F::ZERO, F::ZERO, F::ZERO],
+                        F::from_canonical_u32(from_fp),
                     );
                     (None, Some(rd2))
                 }
                 JaafOpcode::CALL | JaafOpcode::CALL_INDIRECT => {
                     // Save both pc to rd1 (a field) and fp to rd2 (b field)
-                    let rd1 = wom.write(
+                    let rd1 = wom.write_fe(
                         a + F::from_canonical_u32(to_fp),
-                        [
-                            F::from_canonical_u32(from_pc + DEFAULT_PC_STEP),
-                            F::ZERO,
-                            F::ZERO,
-                            F::ZERO,
-                        ],
+                        F::from_canonical_u32(from_pc + DEFAULT_PC_STEP),
                     );
-                    let rd2 = wom.write(
+                    let rd2 = wom.write_fe(
                         b + F::from_canonical_u32(to_fp),
-                        [F::from_canonical_u32(from_fp), F::ZERO, F::ZERO, F::ZERO],
+                        F::from_canonical_u32(from_fp),
                     );
                     (Some(rd1), Some(rd2))
                 }

@@ -266,14 +266,9 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
         let mut write_result = None;
 
         if enabled != F::ZERO {
-            write_result = Some(wom.write(
+            write_result = Some(wom.write_fe(
                 target_reg + F::from_canonical_u32(from_frame.fp),
-                [
-                    F::from_canonical_u32(read_record.allocated_ptr),
-                    F::ZERO,
-                    F::ZERO,
-                    F::ZERO,
-                ],
+                F::from_canonical_u32(read_record.allocated_ptr)
             ));
         }
 

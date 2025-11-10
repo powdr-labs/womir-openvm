@@ -220,8 +220,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for CopyIntoFrameAdapterChipWom<F> {
             opcode.local_opcode_idx(CopyIntoFrameOpcode::CLASS_OFFSET),
         );
 
-        let other_fp_read = wom.read::<RV32_REGISTER_NUM_LIMBS>(c + fp_f);
-        let other_fp_f = other_fp_read.1[0];
+        let other_fp_read = wom.read_fe(c + fp_f);
+        let other_fp_f = other_fp_read.1;
 
         let other_fp_u32 = F::as_canonical_u32(&other_fp_f);
 
