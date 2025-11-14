@@ -1,11 +1,11 @@
-use crate::VmChipWrapperWom;
+use crate::adapters::WomBaseAluAdapterExecutor;
 
-use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, WomBaseAluAdapterChip};
+use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 
-use openvm_rv32im_circuit::DivRemCoreChip;
+use openvm_rv32im_circuit::DivRemExecutor;
 
-pub type WomDivRemChip<F> = VmChipWrapperWom<
-    F,
-    WomBaseAluAdapterChip<F, RV32_REGISTER_NUM_LIMBS, RV32_REGISTER_NUM_LIMBS, 1>,
-    DivRemCoreChip<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+pub type WomDivRemExecutor<F> = DivRemExecutor<
+    WomBaseAluAdapterExecutor<F, RV32_REGISTER_NUM_LIMBS>,
+    RV32_REGISTER_NUM_LIMBS,
+    RV32_CELL_BITS,
 >;

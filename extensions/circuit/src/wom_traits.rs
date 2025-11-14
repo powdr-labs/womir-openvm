@@ -7,11 +7,8 @@
 use std::sync::{Arc, Mutex};
 
 use openvm_circuit::{
-    arch::{
-        AdapterRuntimeContext, ExecutionState, InstructionExecutor as InstructionExecutorTrait,
-        Result as ResultVm, VmAdapterAir, VmAdapterInterface, VmAirWrapper, VmCoreAir, VmCoreChip,
-    },
-    system::memory::{MemoryController, OfflineMemory},
+    arch::{ExecutionState, VmAdapterAir, VmAdapterInterface, VmAirWrapper, VmCoreAir},
+    system::memory::MemoryController,
     utils::next_power_of_two_or_zero,
 };
 use openvm_circuit_primitives::AlignedBorrow;
@@ -25,7 +22,6 @@ use openvm_stark_backend::{
     p3_field::{FieldAlgebra, PrimeField32},
     p3_matrix::dense::RowMajorMatrix,
     p3_maybe_rayon::prelude::*,
-    prover::types::AirProofInput,
     rap::{BaseAirWithPublicValues, ColumnsAir, get_air_name},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};

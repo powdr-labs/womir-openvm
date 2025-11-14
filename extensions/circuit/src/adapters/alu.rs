@@ -1,12 +1,16 @@
-use std::{borrow::Borrow, marker::PhantomData};
+use std::{
+    borrow::Borrow,
+    marker::PhantomData,
+    sync::{Arc, Mutex},
+};
 
 use openvm_circuit::{
     arch::{
         AdapterAirContext, AdapterTraceExecutor, BasicAdapterInterface, ExecutionBridge,
-        ExecutionBus, ExecutionState, MinimalInstruction, VmAdapterAir, VmAdapterInterface,
+        ExecutionBus, ExecutionState, MinimalInstruction, VmAdapterAir,
     },
     system::{
-        memory::{MemoryController, offline_checker::MemoryBridge},
+        memory::{offline_checker::MemoryBridge, online::TracingMemory},
         program::ProgramBus,
     },
 };
@@ -29,53 +33,83 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{
-    FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
-};
+use crate::{FrameBridge, FrameBus, FrameState, WomBridge, WomRecord, WomState};
 
-// Intermediate type that should not be copied or cloned and should be directly written to
 #[repr(C)]
 #[derive(AlignedBytesBorrow, Debug)]
-pub struct Rv32BaseAluAdapterRecord {
-    pub from_pc: u32,
-    pub from_fp: u32,
+pub struct WomBaseAluAdapterRecord<F> {
+    pub from_pc: F,
+    // TODO: figure out what fields are actually needed here
+    /*
+        pub from_fp: F,
 
-    pub dest_reg: u32,
-    pub left_arg_reg: u32,
-    /// Pointer if right_arg was a register, immediate value otherwise
-    pub right_arg: u32,
-    /// 1 if right_arg was a register, 0 if an immediate
-    pub right_arg_as: u8,
+        pub dest_reg: F,
+        pub left_arg_reg: F,
+        /// Pointer if right_arg was a register, immediate value otherwise
+        pub right_arg: F,
+        /// 1 if right_arg was a register, 0 if an immediate
+        pub right_arg_as: u8,
+    */
 }
 
 #[derive(Clone, derive_new::new)]
-pub struct WomBaseAluAdapterExecutor<const NUM_LIMBS: usize>;
+pub struct WomBaseAluAdapterExecutor<F, const NUM_LIMBS: usize> {
+    wom_state: Arc<Mutex<WomState<F>>>,
+}
 
 impl<F: PrimeField32, const NUM_LIMBS: usize> AdapterTraceExecutor<F>
-    for WomBaseAluAdapterExecutor<NUM_LIMBS>
+    for WomBaseAluAdapterExecutor<F, NUM_LIMBS>
 {
     // TODO: fix this - seems to be proportional to the number of air columns
     const WIDTH: usize = 4;
     type ReadData = [[u8; NUM_LIMBS]; 2];
     type WriteData = [[u8; NUM_LIMBS]; 1];
 
-    type RecordMut<'a> = Rv32BaseAluAdapterRecord;
+    type RecordMut<'a> = WomBaseAluAdapterRecord<F>;
 
-    fn start(
-        pc: u32,
-        memory: &openvm_circuit::system::memory::online::TracingMemory,
-        record: &mut Self::RecordMut<'_>,
-    ) {
+    fn start(pc: u32, memory: &TracingMemory, record: &mut Self::RecordMut<'_>) {
         record.from_pc = pc;
     }
 
     fn read(
         &self,
-        memory: &mut openvm_circuit::system::memory::online::TracingMemory,
+        _memory: &mut TracingMemory,
         instruction: &Instruction<F>,
-        record: &mut Self::RecordMut<'_>,
+        _record: &mut Self::RecordMut<'_>,
     ) -> Self::ReadData {
-        todo!()
+        let Instruction { b, c, d, e, .. } = *instruction;
+
+        debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+        debug_assert!(
+            e.as_canonical_u32() == RV32_IMM_AS || e.as_canonical_u32() == RV32_REGISTER_AS
+        );
+
+        let wom_state = self.wom_state.lock().unwrap();
+
+        let fp_f = F::from_canonical_u32(wom_state.fp);
+
+        assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+        let (rs1, rs1_data) = wom_state.wom.read::<NUM_LIMBS>(b + fp_f);
+        let (rs2, rs2_data, rs2_imm) = if e.is_zero() {
+            let c_u32 = c.as_canonical_u32();
+            debug_assert_eq!(c_u32 >> 24, 0);
+            let mut c_bytes = [0u8; NUM_LIMBS];
+            c_bytes[0] = c_u32 as u8;
+            c_bytes[1] = (c_u32 >> 8) as u8;
+            let bit_extension = (c_u32 >> 16) as u8;
+            for byte in &mut c_bytes[2..] {
+                *byte = bit_extension;
+            }
+            (None, c_bytes.map(F::from_canonical_u8), c)
+        } else {
+            assert_eq!(e.as_canonical_u32(), RV32_REGISTER_AS);
+            let (rs2, rs2_data) = wom_state.wom.read::<NUM_LIMBS>(c + fp_f);
+            (Some(rs2), rs2_data, F::ZERO)
+        };
+
+        // TODO: write the record
+
+        [rs1_data, rs2_data]
     }
 
     fn write(
@@ -83,9 +117,18 @@ impl<F: PrimeField32, const NUM_LIMBS: usize> AdapterTraceExecutor<F>
         memory: &mut openvm_circuit::system::memory::online::TracingMemory,
         instruction: &Instruction<F>,
         data: Self::WriteData,
-        record: &mut Self::RecordMut<'_>,
+        _record: &mut Self::RecordMut<'_>,
     ) {
-        todo!()
+        let Instruction { a, d, .. } = instruction;
+        let wom_state = self.wom_state.lock().unwrap();
+
+        let fp_f = F::from_canonical_u32(wom_state.fp);
+        assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+        let rd = wom_state.wom.write(*a + fp_f, data[0]);
+
+        memory.increment_timestamp();
+
+        // TODO: write the record
     }
 }
 
@@ -301,105 +344,5 @@ impl<
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
         let cols: &WomBaseAluAdapterCols<_, WRITE_NUM_LIMBS> = local.borrow();
         cols.from_state.pc
-    }
-}
-
-impl<
-    F: PrimeField32,
-    const READ_NUM_LIMBS: usize,
-    const WRITE_NUM_LIMBS: usize,
-    const NUM_WRITES_RV32: usize,
-> VmAdapterChipWom<F> for WomBaseAluAdapterChip<F, READ_NUM_LIMBS, WRITE_NUM_LIMBS, NUM_WRITES_RV32>
-where
-    [F; WRITE_NUM_LIMBS]: Serialize + for<'de> Deserialize<'de>,
-{
-    type ReadRecord = WomBaseAluReadRecord<F>;
-    type WriteRecord = WomBaseAluWriteRecord<F, WRITE_NUM_LIMBS>;
-    type Air = WomBaseAluAdapterAir<READ_NUM_LIMBS, WRITE_NUM_LIMBS, NUM_WRITES_RV32>;
-    type Interface =
-        BasicAdapterInterface<F, MinimalInstruction<F>, 2, 1, READ_NUM_LIMBS, WRITE_NUM_LIMBS>;
-
-    fn preprocess(
-        &mut self,
-        _memory: &mut MemoryController<F>,
-        wom: &mut WomController<F>,
-        fp: u32,
-        instruction: &Instruction<F>,
-    ) -> ResultVm<(
-        <Self::Interface as VmAdapterInterface<F>>::Reads,
-        Self::ReadRecord,
-    )> {
-        let Instruction { b, c, d, e, .. } = *instruction;
-
-        debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
-        debug_assert!(
-            e.as_canonical_u32() == RV32_IMM_AS || e.as_canonical_u32() == RV32_REGISTER_AS
-        );
-
-        let fp_f = F::from_canonical_u32(fp);
-        assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
-        let (rs1, rs1_data) = wom.read::<READ_NUM_LIMBS>(b + fp_f);
-        let (rs2, rs2_data, rs2_imm) = if e.is_zero() {
-            let c_u32 = c.as_canonical_u32();
-            debug_assert_eq!(c_u32 >> 24, 0);
-            let mut c_bytes = [0u8; READ_NUM_LIMBS];
-            c_bytes[0] = c_u32 as u8;
-            c_bytes[1] = (c_u32 >> 8) as u8;
-            let bit_extension = (c_u32 >> 16) as u8;
-            for byte in &mut c_bytes[2..] {
-                *byte = bit_extension;
-            }
-            (None, c_bytes.map(F::from_canonical_u8), c)
-        } else {
-            assert_eq!(e.as_canonical_u32(), RV32_REGISTER_AS);
-            let (rs2, rs2_data) = wom.read::<READ_NUM_LIMBS>(c + fp_f);
-            (Some(rs2), rs2_data, F::ZERO)
-        };
-
-        Ok(([rs1_data, rs2_data], Self::ReadRecord { rs1, rs2, rs2_imm }))
-    }
-
-    fn postprocess(
-        &mut self,
-        memory: &mut MemoryController<F>,
-        wom: &mut WomController<F>,
-        instruction: &Instruction<F>,
-        from_state: ExecutionState<u32>,
-        from_frame: FrameState<u32>,
-        output: AdapterRuntimeContext<F, Self::Interface>,
-        _read_record: &Self::ReadRecord,
-    ) -> ResultVm<(ExecutionState<u32>, u32, Self::WriteRecord)> {
-        let Instruction { a, d, .. } = instruction;
-        let fp_f = F::from_canonical_u32(from_frame.fp);
-        assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
-        let rd = wom.write(*a + fp_f, output.writes[0]);
-
-        memory.increment_timestamp();
-
-        Ok((
-            ExecutionState {
-                pc: from_state.pc + DEFAULT_PC_STEP,
-                timestamp: memory.timestamp(),
-            },
-            from_frame.fp,
-            Self::WriteRecord {
-                from_state,
-                from_frame,
-                rd,
-            },
-        ))
-    }
-
-    fn generate_trace_row(
-        &self,
-        _row_slice: &mut [F],
-        _read_record: Self::ReadRecord,
-        _write_record: Self::WriteRecord,
-        _memory: &OfflineMemory<F>,
-    ) {
-    }
-
-    fn air(&self) -> &Self::Air {
-        &self.air
     }
 }

@@ -1,7 +1,5 @@
+use crate::{adapters::AllocateFrameAdapterExecutor, allocate_frame::core::AllocateFrameExecutor};
+
 mod core;
 
-use crate::adapters::AllocateFrameAdapterChipWom;
-pub use core::AllocateFrameCoreChipWom;
-
-pub type AllocateFrameChipWom<F> =
-    crate::wom_traits::VmChipWrapperWom<F, AllocateFrameAdapterChipWom, AllocateFrameCoreChipWom>;
+pub type WomAllocateFrameExecutor<F> = AllocateFrameExecutor<AllocateFrameAdapterExecutor<F>>;

@@ -1,9 +1,6 @@
 use std::borrow::{Borrow, BorrowMut};
 
-use openvm_circuit::arch::{
-    AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, Result, VmAdapterInterface,
-    VmCoreAir, VmCoreChip,
-};
+use openvm_circuit::arch::{AdapterAirContext, MinimalInstruction, VmAdapterInterface, VmCoreAir};
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{LocalOpcode, instruction::Instruction};
 use openvm_stark_backend::{
@@ -16,6 +13,11 @@ use openvm_womir_transpiler::AllocateFrameOpcode;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::adapters::RV32_REGISTER_NUM_LIMBS;
+
+#[derive(Clone, Copy, derive_new::new)]
+pub struct AllocateFrameExecutor<A> {
+    adapter: A,
+}
 
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]

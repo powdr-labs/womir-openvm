@@ -30,36 +30,40 @@ use crate::loadstore::LoadStoreChip;
 use crate::{adapters::frame_allocator::FrameAllocator, allocate_frame::AllocateFrameCoreChipWom};
 use crate::{adapters::*, wom_traits::*, *};
 
+// The entry frame starts at fp=0:
 const DEFAULT_INIT_FP: u32 = 0;
 
 // ============ Extension Implementations ============
+
+pub struct WomState<F> {
+    pub fp: u32,
+    pub frame_allocator: FrameAllocator,
+    pub frame_stack: Vec<u32>,
+    pub wom: WomController<F>,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WomirI<F> {
     #[serde(default = "default_range_tuple_checker_sizes")]
     pub range_tuple_checker_sizes: [u32; 2],
-    // TODO: shouldn't this be AtomicU32 instead of Mutex<u32>?
-    // technically mutex is more robust, but I don't think it is
-    // possible for two instructions to be executed in parallel,
-    // so atomic might be enough...
-    fp: Arc<Mutex<u32>>,
-    frame_allocator: Arc<Mutex<FrameAllocator>>,
-    frame_stack: Arc<Mutex<Vec<u32>>>,
-    wom_controller: Arc<Mutex<WomController<F>>>,
+    wom_state: Arc<Mutex<WomState<F>>>,
 }
 
 impl<F: PrimeField32> Default for WomirI<F> {
     fn default() -> Self {
-        Self {
-            range_tuple_checker_sizes: default_range_tuple_checker_sizes(),
-            // The entry frame starts at fp=0:
-            fp: Arc::new(Mutex::new(DEFAULT_INIT_FP)),
-            frame_stack: Arc::new(Mutex::new(vec![0])),
-            frame_allocator: Arc::new(Mutex::new(Self::new_frame_allocator(
+        let wom_state = Arc::new(Mutex::new(WomState {
+            fp: DEFAULT_INIT_FP,
+            frame_allocator: Self::new_frame_allocator(
                 // Reserve range 0..8 that is used by the startup code.
                 [(0, 8)].into(),
-            ))),
-            wom_controller: Arc::new(Mutex::new(WomController::new())),
+            ),
+            frame_stack: vec![0],
+            wom: WomController::new(),
+        }));
+
+        Self {
+            range_tuple_checker_sizes: default_range_tuple_checker_sizes(),
+            wom_state,
         }
     }
 }
@@ -107,8 +111,8 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 // ============ Executor and Periphery Enums for Extension ============
 
 #[derive(Clone, From, AnyEnum, Executor, MeteredExecutor, PreflightExecutor)]
-pub enum WomirIExecutor {
-    BaseAlu(WomBaseAluExecutor),
+pub enum WomirIExecutor<F> {
+    BaseAlu(WomBaseAluExecutor<F>),
     BaseAlu64(WomBaseAlu64Executor),
     Jaaf(JaafExecutor),
     Jump(JumpExecutor),

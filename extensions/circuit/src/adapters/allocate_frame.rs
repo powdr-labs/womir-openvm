@@ -5,16 +5,14 @@ use std::{
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge,
-        ExecutionBus, ExecutionState, MinimalInstruction, Result, VmAdapterAir, VmAdapterInterface,
+        AdapterAirContext, AdapterTraceExecutor, BasicAdapterInterface, ExecutionBridge,
+        ExecutionState, MinimalInstruction, VmAdapterAir,
     },
-    system::{
-        memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
-        program::ProgramBus,
-    },
+    system::memory::offline_checker::MemoryBridge,
 };
+use openvm_circuit_primitives::AlignedBytesBorrow;
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP};
+use openvm_instructions::instruction::Instruction;
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
@@ -25,38 +23,108 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
-    FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
-    adapters::{compose, decompose, frame_allocator::FrameAllocator},
+    FrameBridge, FrameState, WomBridge, WomRecord, WomState,
+    adapters::{compose, decompose},
 };
 
 use super::RV32_REGISTER_NUM_LIMBS;
 
-#[derive(Debug)]
-pub struct AllocateFrameAdapterChipWom {
-    pub air: AllocateFrameAdapterAirWom,
-    frame_stack: Arc<Mutex<Vec<u32>>>,
-    frame_allocator: Arc<Mutex<FrameAllocator>>,
+#[repr(C)]
+#[derive(AlignedBytesBorrow, Debug)]
+pub struct AllocateFrameAdapterRecord {
+    // TODO: figure out what fields are actually needed here
 }
 
-impl AllocateFrameAdapterChipWom {
-    pub fn new(
-        execution_bus: ExecutionBus,
-        program_bus: ProgramBus,
-        frame_bus: FrameBus,
-        memory_bridge: MemoryBridge,
-        wom_bridge: WomBridge,
-        frame_allocator: Arc<Mutex<FrameAllocator>>,
-        frame_stack: Arc<Mutex<Vec<u32>>>,
-    ) -> Self {
-        Self {
-            air: AllocateFrameAdapterAirWom {
-                execution_bridge: ExecutionBridge::new(execution_bus, program_bus),
-                wom_bridge,
-                frame_bridge: FrameBridge::new(frame_bus),
-                _memory_bridge: memory_bridge,
-            },
-            frame_allocator,
-            frame_stack,
+#[derive(Clone, derive_new::new)]
+pub struct AllocateFrameAdapterExecutor<F> {
+    wom_state: Arc<Mutex<WomState<F>>>,
+}
+
+impl<F: PrimeField32> AdapterTraceExecutor<F> for AllocateFrameAdapterExecutor<F> {
+    // TODO: fix this - seems to be proportional to the number of air columns
+    const WIDTH: usize = 4;
+
+    /// Number of entries to allocate
+    type ReadData = [[u8; RV32_REGISTER_NUM_LIMBS]; 1];
+
+    /// The pointer to the allocated frame
+    type WriteData = [[u8; RV32_REGISTER_NUM_LIMBS]; 1];
+
+    type RecordMut<'a> = AllocateFrameAdapterRecord;
+
+    fn start(
+        pc: u32,
+        memory: &openvm_circuit::system::memory::online::TracingMemory,
+        record: &mut Self::RecordMut<'_>,
+    ) {
+        // TODO: write some record stuff here
+    }
+
+    fn read(
+        &self,
+        memory: &mut openvm_circuit::system::memory::online::TracingMemory,
+        instruction: &Instruction<F>,
+        record: &mut Self::RecordMut<'_>,
+    ) -> Self::ReadData {
+        let Instruction {
+            b: amount_imm,
+            c: amount_reg,
+            d: use_reg,
+            ..
+        } = *instruction;
+
+        let wom_state = self.wom_state.lock().unwrap();
+
+        let amount = if use_reg == F::ZERO {
+            // If use_reg is zero, we use the immediate value
+            amount_imm.as_canonical_u32()
+        } else {
+            // Otherwise, we read the value from the register
+            let fp_f = F::from_canonical_u32(wom_state.fp);
+            let (_, reg_data) = wom_state
+                .wom
+                .read::<RV32_REGISTER_NUM_LIMBS>(amount_reg + fp_f);
+            compose(reg_data)
+        };
+        let amount_bytes = RV32_REGISTER_NUM_LIMBS as u32 * amount;
+
+        let allocated_ptr = wom_state
+            .frame_allocator
+            .lock()
+            .unwrap()
+            .allocate(amount_bytes)
+            .expect("WOM frame allocation failed: not enough free contiguous space");
+
+        wom_state.frame_stack.push(allocated_ptr);
+        //println!("A STACK: {frame_stack:?}");
+
+        let amount_bytes = decompose(amount_bytes);
+
+        [amount_bytes]
+    }
+
+    fn write(
+        &self,
+        memory: &mut openvm_circuit::system::memory::online::TracingMemory,
+        instruction: &Instruction<F>,
+        data: Self::WriteData,
+        record: &mut Self::RecordMut<'_>,
+    ) {
+        let Instruction {
+            a: target_reg,
+            b,
+            f: enabled,
+            ..
+        } = *instruction;
+
+        memory.increment_timestamp();
+
+        let wom_state = self.wom_state.lock().unwrap();
+
+        if enabled != F::ZERO {
+            wom_state
+                .wom
+                .write(target_reg + F::from_canonical_u32(wom_state.fp), data);
         }
     }
 }
@@ -176,123 +244,6 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for AllocateFrameAdapterAirWom {
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
         let cols: &AllocateFrameAdapterColsWom<_> = local.borrow();
         cols.from_state.pc
-    }
-}
-
-impl<F: PrimeField32> VmAdapterChipWom<F> for AllocateFrameAdapterChipWom {
-    type ReadRecord = AllocateFrameReadRecord;
-    type WriteRecord = AllocateFrameWriteRecord<F>;
-    type Air = AllocateFrameAdapterAirWom;
-    type Interface = BasicAdapterInterface<
-        F,
-        MinimalInstruction<F>,
-        1,
-        0,
-        RV32_REGISTER_NUM_LIMBS,
-        RV32_REGISTER_NUM_LIMBS,
-    >;
-
-    fn preprocess(
-        &mut self,
-        _memory: &mut MemoryController<F>,
-        wom: &mut WomController<F>,
-        fp: u32,
-        instruction: &Instruction<F>,
-    ) -> Result<(
-        <Self::Interface as VmAdapterInterface<F>>::Reads,
-        Self::ReadRecord,
-    )> {
-        let Instruction {
-            b: amount_imm,
-            c: amount_reg,
-            d: use_reg,
-            ..
-        } = *instruction;
-
-        let amount = if use_reg == F::ZERO {
-            // If use_reg is zero, we use the immediate value
-            amount_imm.as_canonical_u32()
-        } else {
-            // Otherwise, we read the value from the register
-            let fp_f = F::from_canonical_u32(fp);
-            let (_, reg_data) = wom.read::<RV32_REGISTER_NUM_LIMBS>(amount_reg + fp_f);
-            compose(reg_data)
-        };
-        let amount_bytes = RV32_REGISTER_NUM_LIMBS as u32 * amount;
-
-        let allocated_ptr = self
-            .frame_allocator
-            .lock()
-            .unwrap()
-            .allocate(amount_bytes)
-            .expect("WOM frame allocation failed: not enough free contiguous space");
-
-        {
-            let mut frame_stack = self.frame_stack.lock().unwrap();
-            frame_stack.push(allocated_ptr);
-            //println!("A STACK: {frame_stack:?}");
-        }
-
-        let amount_bytes = decompose(amount_bytes);
-
-        Ok(([amount_bytes], AllocateFrameReadRecord { allocated_ptr }))
-    }
-
-    fn postprocess(
-        &mut self,
-        memory: &mut MemoryController<F>,
-        wom: &mut WomController<F>,
-        instruction: &Instruction<F>,
-        from_state: ExecutionState<u32>,
-        from_frame: FrameState<u32>,
-        _output: AdapterRuntimeContext<F, Self::Interface>,
-        read_record: &Self::ReadRecord,
-    ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
-        let Instruction {
-            a: target_reg,
-            b,
-            f: enabled,
-            ..
-        } = *instruction;
-
-        memory.increment_timestamp();
-
-        let mut write_result = None;
-
-        if enabled != F::ZERO {
-            write_result = Some(wom.write(
-                target_reg + F::from_canonical_u32(from_frame.fp),
-                decompose(read_record.allocated_ptr),
-            ));
-        }
-
-        Ok((
-            ExecutionState {
-                pc: from_state.pc + DEFAULT_PC_STEP,
-                timestamp: memory.timestamp(),
-            },
-            from_frame.fp,
-            Self::WriteRecord {
-                from_state,
-                from_frame,
-                target_reg: target_reg.as_canonical_u32(),
-                amount_imm: b.as_canonical_u32(),
-                rd_write: write_result,
-            },
-        ))
-    }
-
-    fn generate_trace_row(
-        &self,
-        _row_slice: &mut [F],
-        _read_record: Self::ReadRecord,
-        _write_record: Self::WriteRecord,
-        _memory: &OfflineMemory<F>,
-    ) {
-    }
-
-    fn air(&self) -> &Self::Air {
-        &self.air
     }
 }
 
