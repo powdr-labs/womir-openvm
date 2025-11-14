@@ -149,6 +149,9 @@ enum Commands {
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
+        /// Files to be read as bytes.
+        #[arg(long)]
+        binary_input_files: Vec<String>,
     },
     /// Proves execution of a function from the RISC-V program with the given arguments.
     /// Even though not the main goal of this crate, this is useful for benchmarking against
@@ -234,6 +237,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             function,
             args,
             metrics,
+            binary_input_files,
             ..
         } => {
             // Load the module
@@ -261,7 +265,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let app_config = AppConfig::new(app_fri_params, vm_config.clone());
 
                 // Commit the exe
-                let app_committed_exe = sdk.commit_app_exe(app_fri_params, exe.clone())?;
+                let app_committed_exe = sdk.commit_app_exe(app_fri_params, exe)?;
 
                 // Generate an AppProvingKey
                 let app_pk = Arc::new(sdk.app_keygen(app_config)?);
@@ -273,14 +277,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     stdin.write(&val);
                 }
 
+                for binary_input_file in &binary_input_files {
+                    stdin.write_bytes(&fs::read(binary_input_file).unwrap());
+                }
+
                 // Generate a proof
                 tracing::info!("Generating app proof...");
                 let start = std::time::Instant::now();
-                let app_proof = sdk.generate_app_proof(
-                    app_pk.clone(),
-                    app_committed_exe.clone(),
-                    stdin.clone(),
-                )?;
+                let app_proof = sdk.generate_app_proof(app_pk, app_committed_exe, stdin)?;
                 tracing::info!("App proof took {:?}", start.elapsed());
 
                 tracing::info!(
