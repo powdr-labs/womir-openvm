@@ -6,23 +6,15 @@ use openvm_stark_backend::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct WomController<F> {
-    bus: PermutationCheckBus,
     // TODO: Vec is fine for now with single segment as frames are sequentially allocated
     memory: Vec<Option<F>>,
 }
 
 impl<F: PrimeField32> WomController<F> {
-    pub fn new(bus: PermutationCheckBus) -> Self {
-        WomController {
-            bus,
-            memory: Vec::new(),
-        }
-    }
-
-    pub fn bridge(&self) -> WomBridge {
-        WomBridge { bus: self.bus }
+    pub fn new() -> Self {
+        WomController { memory: Vec::new() }
     }
 
     pub fn read<const N: usize>(&self, pointer: F) -> (WomRecord<F>, [F; N]) {
@@ -34,14 +26,14 @@ impl<F: PrimeField32> WomController<F> {
             .take(N)
             .map(|f| f.expect("WOM read before write"))
             .collect_vec();
-        assert_eq!(data.len(), N, "WOM read before write");
-        (
-            WomRecord {
-                pointer,
-                data: data.clone(),
-            },
-            data.try_into().unwrap(),
-        )
+        let data_array: [_; N] = data.as_slice().try_into().expect("WOM read before write");
+        (WomRecord { pointer, data }, data_array)
+    }
+
+    pub fn read_fe(&self, pointer: F) -> (WomRecord<F>, F) {
+        // we still read a full rv32 width
+        let (rec, data) = self.read::<4>(pointer);
+        (rec, data[0])
     }
 
     pub fn unsafe_read_cell(&self, pointer: F) -> F {
@@ -50,6 +42,11 @@ impl<F: PrimeField32> WomController<F> {
             .get(ptr_u32 as usize)
             .expect("WOM read before write")
             .expect("WOM read before write")
+    }
+
+    pub fn write_fe(&mut self, pointer: F, data: F) -> WomRecord<F> {
+        // we still write a full rv32 width
+        self.write::<4>(pointer, [data, F::ZERO, F::ZERO, F::ZERO])
     }
 
     pub fn write<const N: usize>(&mut self, pointer: F, data: [F; N]) -> WomRecord<F> {
@@ -65,13 +62,26 @@ impl<F: PrimeField32> WomController<F> {
             .take(N)
             .zip_eq(data)
             .for_each(|(old, new)| {
-                assert!(old.is_none(), "WOM double write");
+                assert!(
+                    old.is_none(),
+                    "WOM double write at absolute address {pointer}"
+                );
                 *old = Some(new);
             });
         WomRecord {
             pointer,
             data: data.into(),
         }
+    }
+
+    /// Unsets all the memory entries outside of the given ranges.
+    pub fn clear_unused(&mut self, sorted_used_ranges: impl Iterator<Item = (u32, u32)>) {
+        let mut curr_addr = 0;
+        for (start, end) in sorted_used_ranges {
+            self.memory[curr_addr..start as usize].fill(None);
+            curr_addr = end as usize;
+        }
+        self.memory.truncate(curr_addr);
     }
 }
 
@@ -160,7 +170,6 @@ impl<F: FieldAlgebra> WomWriteOperation<F> {
 
 #[cfg(test)]
 mod test {
-    use openvm_stark_backend::interaction::PermutationCheckBus;
     use openvm_stark_backend::p3_field::FieldAlgebra;
     use openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -171,14 +180,14 @@ mod test {
     #[test]
     #[should_panic(expected = "WOM read before write")]
     fn test_wom_read_before_write1() {
-        let wom = WomController::<BabyBear>::new(PermutationCheckBus::new(0));
+        let wom = WomController::<BabyBear>::new();
         wom.read::<4>(BabyBear::from_canonical_u32(0));
     }
 
     #[test]
     #[should_panic(expected = "WOM read before write")]
     fn test_wom_read_before_write2() {
-        let mut wom = WomController::<BabyBear>::new(PermutationCheckBus::new(0));
+        let mut wom = WomController::<BabyBear>::new();
         // write to addr 4
         wom.write(
             BabyBear::from_canonical_u32(4),
@@ -196,7 +205,7 @@ mod test {
     #[test]
     #[should_panic(expected = "WOM double write")]
     fn test_wom_double_write() {
-        let mut wom = WomController::<BabyBear>::new(PermutationCheckBus::new(0));
+        let mut wom = WomController::<BabyBear>::new();
         // double write to addr 0
         wom.write(
             BabyBear::from_canonical_u32(0),
@@ -220,7 +229,7 @@ mod test {
 
     #[test]
     fn test_wom_write_read() {
-        let mut wom = WomController::<BabyBear>::new(PermutationCheckBus::new(0));
+        let mut wom = WomController::<BabyBear>::new();
         let p1 = BabyBear::from_canonical_u32(0);
         let w1 = [
             BabyBear::from_canonical_u32(1),
@@ -243,7 +252,7 @@ mod test {
             r1_rec,
             WomRecord {
                 pointer: p1,
-                data: w1.into()
+                data: w1.into(),
             }
         );
         assert_eq!(r1_data, w1);
@@ -251,7 +260,7 @@ mod test {
             r2_rec,
             WomRecord {
                 pointer: p2,
-                data: w2.into()
+                data: w2.into(),
             }
         );
         assert_eq!(r2_data, w2);

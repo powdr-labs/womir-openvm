@@ -116,8 +116,8 @@ pub struct Rv32LoadStoreReadRecord<F: Field> {
     /// read from mememory for loads
     pub mem_read: Option<RecordId>,
     pub rs1_ptr: F,
-    pub imm: F,
-    pub imm_sign: F,
+    pub imm_hi: F,
+    pub imm_lo: F,
     pub mem_as: F,
     pub mem_ptr_limbs: [u32; 2],
     pub shift_amount: u32,
@@ -384,9 +384,9 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         let rs1_record = wom.read::<RV32_REGISTER_NUM_LIMBS>(b + fp_f);
 
         let rs1_val = compose(rs1_record.1);
-        let imm = c.as_canonical_u32();
-        let imm_sign = g.as_canonical_u32();
-        let imm_extended = imm + imm_sign * 0xff000000;
+        let imm_lo = c.as_canonical_u32();
+        let imm_hi = g.as_canonical_u32();
+        let imm_extended = imm_lo | imm_hi << 16;
 
         let ptr_val = rs1_val.wrapping_add(imm_extended);
         let shift_amount = ptr_val % 4;
@@ -396,7 +396,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
             self.air.pointer_max_bits
         );
 
-        let mem_ptr_limbs = array::from_fn(|i| ((ptr_val >> (i * (RV32_CELL_BITS * 2))) & 0xffff));
+        let mem_ptr_limbs = array::from_fn(|i| (ptr_val >> (i * (RV32_CELL_BITS * 2))) & 0xffff);
 
         let ptr_val = ptr_val - shift_amount;
         let (wom_read, mem_read, read_data) = match local_opcode {
@@ -429,8 +429,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
                 rs1_ptr: b,
                 wom_read,
                 mem_read,
-                imm: c,
-                imm_sign: g,
+                imm_lo: c,
+                imm_hi: g,
                 shift_amount,
                 mem_ptr_limbs,
                 mem_as: e,
