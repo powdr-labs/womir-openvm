@@ -164,6 +164,9 @@ enum Commands {
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
+        /// Files to be read as bytes.
+        #[arg(long)]
+        binary_input_files: Vec<String>,
     },
 }
 
@@ -307,6 +310,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             args,
             metrics,
+            binary_input_files,
             ..
         } => {
             let prove = || -> Result<()> {
@@ -330,6 +334,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for arg in args {
                     let val = arg.parse::<u32>().unwrap();
                     stdin.write(&val);
+                }
+
+                for binary_input_file in &binary_input_files {
+                    stdin.write_bytes(&fs::read(binary_input_file).unwrap());
                 }
 
                 powdr_openvm::prove(&compiled_program, false, false, stdin, None).unwrap();
