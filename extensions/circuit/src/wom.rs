@@ -78,6 +78,12 @@ impl<F: PrimeField32> WomController<F> {
     pub fn clear_unused(&mut self, sorted_used_ranges: impl Iterator<Item = (u32, u32)>) {
         let mut curr_addr = 0;
         for (start, end) in sorted_used_ranges {
+            if start as usize >= self.memory.len() {
+                // the range is beyond the end of allocated memory,
+                // it wasn't written to yet, so we can stop here
+                break;
+            }
+
             self.memory[curr_addr..start as usize].fill(None);
             curr_addr = end as usize;
         }
