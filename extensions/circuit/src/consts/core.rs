@@ -12,35 +12,35 @@ use openvm_stark_backend::{
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
-use openvm_womir_transpiler::RegWriteOpcode;
+use openvm_womir_transpiler::ConstOpcodes;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::adapters::RV32_REGISTER_NUM_LIMBS;
 
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
-pub struct RegWriteCoreCols<T> {
+pub struct ConstsCoreCols<T> {
     pub is_valid: T,
 }
 
 #[derive(Debug, Clone)]
-pub struct RegWriteCoreAir {}
+pub struct ConstsCoreAir {}
 
-impl<F: Field> BaseAir<F> for RegWriteCoreAir {
+impl<F: Field> BaseAir<F> for ConstsCoreAir {
     fn width(&self) -> usize {
-        RegWriteCoreCols::<F>::width()
+        ConstsCoreCols::<F>::width()
     }
 }
 
-impl<F: Field> ColumnsAir<F> for RegWriteCoreAir {
+impl<F: Field> ColumnsAir<F> for ConstsCoreAir {
     fn columns(&self) -> Option<Vec<String>> {
-        RegWriteCoreCols::<F>::struct_reflection()
+        ConstsCoreCols::<F>::struct_reflection()
     }
 }
 
-impl<F: Field> BaseAirWithPublicValues<F> for RegWriteCoreAir {}
+impl<F: Field> BaseAirWithPublicValues<F> for ConstsCoreAir {}
 
-impl<AB, I> VmCoreAir<AB, I> for RegWriteCoreAir
+impl<AB, I> VmCoreAir<AB, I> for ConstsCoreAir
 where
     AB: InteractionBuilder,
     I: VmAdapterInterface<AB::Expr>,
@@ -54,14 +54,14 @@ where
         local_core: &[AB::Var],
         _from_pc: AB::Var,
     ) -> AdapterAirContext<AB::Expr, I> {
-        let core_cols: &RegWriteCoreCols<_> = local_core.borrow();
+        let core_cols: &ConstsCoreCols<_> = local_core.borrow();
 
         // Need at least one constraint otherwise stark-backend complains.
         builder.assert_bool(core_cols.is_valid);
 
         let opcode = VmCoreAir::<AB, I>::expr_to_global_expr(
             self,
-            AB::Expr::from_canonical_usize(RegWriteOpcode::CONST32 as usize),
+            AB::Expr::from_canonical_usize(ConstOpcodes::CONST32 as usize),
         );
 
         AdapterAirContext {
@@ -77,35 +77,35 @@ where
     }
 
     fn start_offset(&self) -> usize {
-        RegWriteOpcode::CLASS_OFFSET
+        ConstOpcodes::CLASS_OFFSET
     }
 }
 
-pub struct RegWriteCoreChipWom {
-    pub air: RegWriteCoreAir,
+pub struct ConstsCoreChipWom {
+    pub air: ConstsCoreAir,
 }
 
-impl RegWriteCoreChipWom {
+impl ConstsCoreChipWom {
     pub fn new() -> Self {
         Self {
-            air: RegWriteCoreAir {},
+            air: ConstsCoreAir {},
         }
     }
 }
 
-impl Default for RegWriteCoreChipWom {
+impl Default for ConstsCoreChipWom {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChip<F, I> for RegWriteCoreChipWom
+impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChip<F, I> for ConstsCoreChipWom
 where
     I::Reads: Into<[[F; RV32_REGISTER_NUM_LIMBS]; 0]>,
     I::Writes: From<[[F; RV32_REGISTER_NUM_LIMBS]; 1]>,
 {
     type Record = ();
-    type Air = RegWriteCoreAir;
+    type Air = ConstsCoreAir;
 
     #[allow(clippy::type_complexity)]
     fn execute_instruction(
@@ -123,7 +123,7 @@ where
     }
 
     fn get_opcode_name(&self, opcode: usize) -> String {
-        format!("REG_WRITE_{}", opcode - RegWriteOpcode::CLASS_OFFSET)
+        format!("CONSTS_{}", opcode - ConstOpcodes::CLASS_OFFSET)
     }
 
     fn generate_trace_row(&self, _row_slice: &mut [F], _record: Self::Record) {}

@@ -149,6 +149,9 @@ enum Commands {
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
+        /// Files to be read as bytes.
+        #[arg(long)]
+        binary_input_files: Vec<String>,
     },
     /// Proves execution of a function from the RISC-V program with the given arguments.
     /// Even though not the main goal of this crate, this is useful for benchmarking against
@@ -161,6 +164,9 @@ enum Commands {
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
+        /// Files to be read as bytes.
+        #[arg(long)]
+        binary_input_files: Vec<String>,
     },
 }
 
@@ -234,6 +240,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             function,
             args,
             metrics,
+            binary_input_files,
             ..
         } => {
             // Load the module
@@ -261,7 +268,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let app_config = AppConfig::new(app_fri_params, vm_config.clone());
 
                 // Commit the exe
-                let app_committed_exe = sdk.commit_app_exe(app_fri_params, exe.clone())?;
+                let app_committed_exe = sdk.commit_app_exe(app_fri_params, exe)?;
 
                 // Generate an AppProvingKey
                 let app_pk = Arc::new(sdk.app_keygen(app_config)?);
@@ -273,14 +280,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     stdin.write(&val);
                 }
 
+                for binary_input_file in &binary_input_files {
+                    stdin.write_bytes(&fs::read(binary_input_file).unwrap());
+                }
+
                 // Generate a proof
                 tracing::info!("Generating app proof...");
                 let start = std::time::Instant::now();
-                let app_proof = sdk.generate_app_proof(
-                    app_pk.clone(),
-                    app_committed_exe.clone(),
-                    stdin.clone(),
-                )?;
+                let app_proof = sdk.generate_app_proof(app_pk, app_committed_exe, stdin)?;
                 tracing::info!("App proof took {:?}", start.elapsed());
 
                 tracing::info!(
@@ -303,6 +310,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             args,
             metrics,
+            binary_input_files,
             ..
         } => {
             let prove = || -> Result<()> {
@@ -326,6 +334,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for arg in args {
                     let val = arg.parse::<u32>().unwrap();
                     stdin.write(&val);
+                }
+
+                for binary_input_file in &binary_input_files {
+                    stdin.write_bytes(&fs::read(binary_input_file).unwrap());
                 }
 
                 powdr_openvm::prove(&compiled_program, false, false, stdin, None).unwrap();
@@ -1068,12 +1080,12 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::allocate_frame_imm::<F>(1, 100), // Allocate entry frame
-            wom::const_field::<F>(10, 28, 0),     // x10 = 28 (return PC)
-            wom::const_field::<F>(11, 0, 0),      // x11 = 0 (saved FP)
+            wom::add_imm::<F>(10, 0, 28_i16.into()), // x10 = 24 (return PC)
+            wom::add_imm::<F>(11, 0, 0_i16.into()), // x11 = 0 (saved FP)
             wom::add_imm::<F>(8, 0, 88_i16.into()), // x8 = 88
             wom::ret::<F>(10, 11),                // Return to PC=x10, FP=x11
             wom::halt(),                          // This should be skipped
-            // PC = 28 (where x10 points)
+            // PC = 24 (where x10 points)
             wom::reveal(8, 0), // wom::reveal x8 (should be 88)
             wom::halt(),
         ];
@@ -1106,7 +1118,7 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::allocate_frame_imm::<F>(1, 100), // Allocate a frame at x1 just so we have some room to work
-            wom::const_field::<F>(12, 32, 0),     // x12 = 32 (target PC)
+            wom::add_imm::<F>(12, 0, 32_i16.into()), // x12 = 32 (target PC)
             wom::allocate_frame_imm::<F>(9, 100), // Allocate new frame of size 100, x9 = new FP
             wom::add_imm::<F>(11, 0, 999_i16.into()), // x11 = 999
             wom::call_indirect::<F>(10, 11, 12, 9), // Call to PC=x12, FP=x9, save PC to x10, FP to x11

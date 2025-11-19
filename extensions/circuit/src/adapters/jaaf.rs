@@ -1,4 +1,5 @@
 use std::{
+    array,
     borrow::Borrow,
     marker::PhantomData,
     sync::{Arc, Mutex},
@@ -20,6 +21,7 @@ use openvm_instructions::{
     LocalOpcode,
     instruction::Instruction,
     program::{DEFAULT_PC_STEP, PC_BITS},
+    riscv::RV32_CELL_BITS,
 };
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
@@ -35,7 +37,9 @@ use crate::{
     FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
 };
 
-use super::RV32_REGISTER_NUM_LIMBS;
+use super::{RV32_REGISTER_NUM_LIMBS, compose as compose_as_u32, decompose};
+
+const RV32_LIMB_MAX: u32 = (1 << RV32_CELL_BITS) - 1;
 
 #[repr(C)]
 #[derive(AlignedBorrow)]
@@ -81,9 +85,9 @@ impl<F: PrimeField32> JaafAdapterChipWom<F> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JaafReadRecord<T> {
     pub rs1: Option<WomRecord<T>>,
-    pub rs1_data: T,       // PC
+    pub rs1_data: [T; RV32_REGISTER_NUM_LIMBS],
     pub rs2: WomRecord<T>, // Always present since FP is always needed
-    pub rs2_data: T,       // FP
+    pub rs2_data: [T; RV32_REGISTER_NUM_LIMBS],
 }
 
 #[repr(C)]
@@ -103,20 +107,16 @@ pub struct JaafAdapterColsWom<T> {
     pub from_frame: FrameState<T>,
 
     pub pc_read_reg: T,
-    // PC stored as a single field element instead of 4 limbs
-    pub pc_read_val: T,
+    pub pc_read_val: [T; RV32_REGISTER_NUM_LIMBS],
     pub pc_save_reg: T,
-    // PC stored as a single field element instead of 4 limbs
-    pub pc_save_val: T,
+    pub pc_save_val: [T; RV32_REGISTER_NUM_LIMBS],
     pub pc_write_mult: T,
     pub pc_imm: T,
 
     pub fp_read_reg: T,
-    // FP stored as a single field element instead of 4 limbs
-    pub fp_read_val: T,
+    pub fp_read_val: [T; RV32_REGISTER_NUM_LIMBS],
     pub fp_save_reg: T,
-    // FP stored as a single field element instead of 4 limbs
-    pub fp_save_val: T,
+    pub fp_save_val: [T; RV32_REGISTER_NUM_LIMBS],
     pub fp_write_mult: T,
 }
 
@@ -160,27 +160,14 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
 
         // read fp
         self.wom_bridge
-            .read(
-                local.fp_read_reg + local.from_frame.fp,
-                [
-                    local.fp_read_val.into(),
-                    AB::Expr::ZERO,
-                    AB::Expr::ZERO,
-                    AB::Expr::ZERO,
-                ],
-            )
+            .read(local.fp_read_reg + local.from_frame.fp, local.fp_read_val)
             .eval(builder, ctx.instruction.is_valid.clone());
 
         // read pc
         self.wom_bridge
             .read(
                 local.pc_read_reg + local.from_frame.fp,
-                [
-                    local.pc_read_val.into(),
-                    AB::Expr::ZERO,
-                    AB::Expr::ZERO,
-                    AB::Expr::ZERO,
-                ],
+                ctx.reads[0].clone(),
             )
             .eval(builder, ctx.instruction.read_pc.clone());
 
@@ -190,12 +177,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
         self.wom_bridge
             .write(
                 local.pc_save_reg + to_fp.clone(),
-                [
-                    local.pc_save_val.into(),
-                    AB::Expr::ZERO,
-                    AB::Expr::ZERO,
-                    AB::Expr::ZERO,
-                ],
+                ctx.writes[0].clone(),
                 local.pc_write_mult,
             )
             .eval(builder, ctx.instruction.save_pc);
@@ -204,19 +186,16 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAirWom {
         self.wom_bridge
             .write(
                 local.fp_save_reg + to_fp.clone(),
-                [
-                    local.fp_save_val.into(),
-                    AB::Expr::ZERO,
-                    AB::Expr::ZERO,
-                    AB::Expr::ZERO,
-                ],
+                ctx.writes[1].clone(),
                 local.fp_write_mult,
             )
             .eval(builder, ctx.instruction.save_fp);
 
         let timestamp_change = AB::Expr::ONE;
 
-        let to_pc = select(ctx.instruction.read_pc, local.pc_read_val, local.pc_imm);
+        let pc_from_reg: AB::Expr = compose(&ctx.reads[0], RV32_REGISTER_NUM_LIMBS);
+
+        let to_pc = select(ctx.instruction.read_pc, pc_from_reg, local.pc_imm);
 
         self.execution_bridge
             .execute_and_increment_or_set_pc::<AB>(
@@ -281,20 +260,17 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
         let (pc_source_record, pc_source_data) = match local_opcode {
             JaafOpcode::RET | JaafOpcode::CALL_INDIRECT => {
                 // Read pc_source (c field) for target PC
-                let pc_source = wom.read_fe(c + fp_f);
+                let pc_source = wom.read::<RV32_REGISTER_NUM_LIMBS>(c + fp_f);
                 (Some(pc_source.0), pc_source.1)
             }
-            _ => (None, F::ZERO),
+            _ => (None, [F::ZERO; RV32_REGISTER_NUM_LIMBS]),
         };
 
         // All opcodes always read fp_source (e field) for target FP
-        let fp_source = wom.read_fe(e + fp_f);
+        let fp_source = wom.read::<RV32_REGISTER_NUM_LIMBS>(e + fp_f);
 
         Ok((
-            [
-                [pc_source_data, F::ZERO, F::ZERO, F::ZERO],
-                [fp_source.1, F::ZERO, F::ZERO, F::ZERO],
-            ],
+            [pc_source_data, fp_source.1],
             JaafReadRecord {
                 rs1: pc_source_record,
                 rs1_data: pc_source_data,
@@ -332,26 +308,36 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
             _ => immediate.as_canonical_u32(),
         };
 
-        let pc_source_val = F::as_canonical_u32(&read_record.rs1_data);
+        let pc_source_data = read_record.rs1_data;
+        let pc_source_val = compose_as_u32(pc_source_data);
 
-        let to_pc = run_jaaf_op(local_opcode, imm, pc_source_val);
+        let (to_pc, rd_data) = run_jalr(local_opcode, from_state.pc, imm, pc_source_val);
 
         // For all JAAF instructions, we also need to handle fp
-        let to_fp = F::as_canonical_u32(&read_record.rs2_data);
+        let fp_source_data = read_record.rs2_data;
+        let to_fp = compose_as_u32(fp_source_data);
+
+        let rd_data = rd_data.map(F::from_canonical_u32);
 
         // Prepare writes based on opcode
-        let (from_pc, from_fp) = match local_opcode {
+        let writes = match local_opcode {
             JAAF | RET => {
                 // No saves, but we still need to provide write data
-                (0, 0)
+                [
+                    [F::ZERO; RV32_REGISTER_NUM_LIMBS],
+                    [F::ZERO; RV32_REGISTER_NUM_LIMBS],
+                ]
             }
             JAAF_SAVE => {
                 // Save fp to rd2
-                (0, from_frame.fp)
+                [
+                    [F::ZERO; RV32_REGISTER_NUM_LIMBS],
+                    decompose::<F>(from_frame.fp),
+                ]
             }
             CALL | CALL_INDIRECT => {
                 // Save pc to rd1 and fp to rd2
-                (from_state.pc, from_frame.fp)
+                [rd_data, decompose::<F>(from_frame.fp)]
             }
         };
 
@@ -364,22 +350,13 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
                 }
                 JaafOpcode::JAAF_SAVE => {
                     // Save fp to rd2 (b field)
-                    let rd2 = wom.write_fe(
-                        b + F::from_canonical_u32(to_fp),
-                        F::from_canonical_u32(from_fp),
-                    );
+                    let rd2 = wom.write(b + F::from_canonical_u32(to_fp), writes[1]);
                     (None, Some(rd2))
                 }
                 JaafOpcode::CALL | JaafOpcode::CALL_INDIRECT => {
                     // Save both pc to rd1 (a field) and fp to rd2 (b field)
-                    let rd1 = wom.write_fe(
-                        a + F::from_canonical_u32(to_fp),
-                        F::from_canonical_u32(from_pc + DEFAULT_PC_STEP),
-                    );
-                    let rd2 = wom.write_fe(
-                        b + F::from_canonical_u32(to_fp),
-                        F::from_canonical_u32(from_fp),
-                    );
+                    let rd1 = wom.write(a + F::from_canonical_u32(to_fp), writes[0]);
+                    let rd2 = wom.write(b + F::from_canonical_u32(to_fp), writes[1]);
                     (Some(rd1), Some(rd2))
                 }
             }
@@ -452,7 +429,12 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JaafAdapterChipWom<F> {
     }
 }
 
-pub(super) fn run_jaaf_op(opcode: JaafOpcode, imm: u32, pc_source: u32) -> u32 {
+pub(super) fn run_jalr(
+    opcode: JaafOpcode,
+    pc: u32,
+    imm: u32,
+    pc_source: u32,
+) -> (u32, [u32; RV32_REGISTER_NUM_LIMBS]) {
     let to_pc = match opcode {
         JAAF | JAAF_SAVE | CALL => {
             // Use immediate for PC
@@ -465,5 +447,8 @@ pub(super) fn run_jaaf_op(opcode: JaafOpcode, imm: u32, pc_source: u32) -> u32 {
         }
     };
     assert!(to_pc < (1 << PC_BITS));
-    to_pc
+    (
+        to_pc,
+        array::from_fn(|i: usize| ((pc + DEFAULT_PC_STEP) >> (RV32_CELL_BITS * i)) & RV32_LIMB_MAX),
+    )
 }

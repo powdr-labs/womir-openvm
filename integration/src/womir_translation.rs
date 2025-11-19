@@ -106,36 +106,34 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         // We assume that the loop above removes a single `nop` introduced by the linker.
         assert_eq!(linked_instructions.len(), start_offset - 1);
 
-        fn decompose(v: u32) -> [u32; 4] {
-            [
-                v & 0xff,
-                (v >> 8) & 0xff,
-                (v >> 16) & 0xff,
-                (v >> 24) & 0xff,
-            ]
-        }
-
         let memory_image = std::mem::take(&mut module.initial_memory)
             .into_iter()
             .flat_map(|(addr, value)| {
                 use womir::loader::MemoryEntry::*;
-                let limbs = match value {
-                    Value(v) => decompose(v),
+                let v = match value {
+                    Value(v) => v,
                     FuncAddr(idx) => {
                         let label = func_idx_to_label(idx);
-                        // PC/FP values are stored as a full F in the least significant limb
-                        [label_map[&label].pc, 0, 0, 0]
+                        label_map[&label].pc
                     }
                     FuncFrameSize(func_idx) => {
                         let label = func_idx_to_label(func_idx);
-                        decompose(label_map[&label].frame_size.unwrap())
+                        label_map[&label].frame_size.unwrap()
                     }
-                    NullFuncType => decompose(NULL_REF[0]),
-                    NullFuncFrameSize => decompose(NULL_REF[1]),
-                    NullFuncAddr => decompose(NULL_REF[2]),
+                    NullFuncType => NULL_REF[0],
+                    NullFuncFrameSize => NULL_REF[1],
+                    NullFuncAddr => NULL_REF[2],
                 };
 
-                limbs.into_iter().enumerate().filter_map(move |(i, byte)| {
+                [
+                    v & 0xff,
+                    (v >> 8) & 0xff,
+                    (v >> 16) & 0xff,
+                    (v >> 24) & 0xff,
+                ]
+                .into_iter()
+                .enumerate()
+                .filter_map(move |(i, byte)| {
                     const ROM_ID: u32 = 2;
                     if byte != 0 {
                         Some(((ROM_ID, addr + i as u32), F::from_canonical_u32(byte)))
@@ -405,9 +403,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         src_ptr: Range<u32>,
         dest_ptr: Range<u32>,
     ) -> Directive<F> {
-        Directive::Instruction(ib::copy_reg(
+        Directive::Instruction(ib::add_imm(
             dest_ptr.start as usize,
             src_ptr.start as usize,
+            AluImm::from(0),
         ))
     }
 
@@ -791,8 +790,7 @@ impl<F: PrimeField32> Directive<F> {
             Directive::ConstFuncAddr { func_idx, reg_dest } => {
                 let label = func_idx_to_label(func_idx);
                 let pc = label_map.get(&label)?.pc;
-                // PC values are stored using a single F
-                Some(ib::const_field(
+                Some(ib::const_32_imm(
                     reg_dest as usize,
                     pc as u16,
                     (pc >> 16) as u16,
@@ -849,32 +847,34 @@ fn translate_most_binary_ops<'a, F: PrimeField32>(
         Op::I64ShrU => Shift64Opcode::SRL.global_opcode(),
 
         // Float instructions
-        Op::F32Eq => todo!(),
-        Op::F32Ne => todo!(),
-        Op::F32Lt => todo!(),
-        Op::F32Gt => todo!(),
-        Op::F32Le => todo!(),
-        Op::F32Ge => todo!(),
-        Op::F64Eq => todo!(),
-        Op::F64Ne => todo!(),
-        Op::F64Lt => todo!(),
-        Op::F64Gt => todo!(),
-        Op::F64Le => todo!(),
-        Op::F64Ge => todo!(),
-        Op::F32Add => todo!(),
-        Op::F32Sub => todo!(),
-        Op::F32Mul => todo!(),
-        Op::F32Div => todo!(),
-        Op::F32Min => todo!(),
-        Op::F32Max => todo!(),
-        Op::F32Copysign => todo!(),
-        Op::F64Add => todo!(),
-        Op::F64Sub => todo!(),
-        Op::F64Mul => todo!(),
-        Op::F64Div => todo!(),
-        Op::F64Min => todo!(),
-        Op::F64Max => todo!(),
-        Op::F64Copysign => todo!(),
+        Op::F32Eq
+        | Op::F32Ne
+        | Op::F32Lt
+        | Op::F32Gt
+        | Op::F32Le
+        | Op::F32Ge
+        | Op::F64Eq
+        | Op::F64Ne
+        | Op::F64Lt
+        | Op::F64Gt
+        | Op::F64Le
+        | Op::F64Ge
+        | Op::F32Add
+        | Op::F32Sub
+        | Op::F32Mul
+        | Op::F32Div
+        | Op::F32Min
+        | Op::F32Max
+        | Op::F32Copysign
+        | Op::F64Add
+        | Op::F64Sub
+        | Op::F64Mul
+        | Op::F64Div
+        | Op::F64Min
+        | Op::F64Max
+        | Op::F64Copysign => {
+            return Some(ib::trap(ERROR_UNIMPLEMENTED_CODE as usize));
+        }
 
         // Not an operation we handle here
         _ => return None,
@@ -1119,7 +1119,11 @@ fn translate_complex_ins_with_const<F: PrimeField32>(
                         .clone()
                         .zip(output.clone())
                         .map(|(src, dest)| {
-                            Directive::Instruction(ib::copy_reg(dest as usize, src as usize))
+                            Directive::Instruction(ib::add_imm(
+                                dest as usize,
+                                src as usize,
+                                AluImm::from(0),
+                            ))
                         })
                         .collect_vec(),
                     // This input is a constant, so we issue const to register instructions
@@ -1225,7 +1229,7 @@ fn translate_complex_ins<F: PrimeField32>(
             let output = output.unwrap().start as usize;
 
             // Just copy the lower limb to the output.
-            Directive::Instruction(ib::copy_reg(output, lower_limb)).into()
+            Directive::Instruction(ib::add_imm(output, lower_limb, AluImm::from(0))).into()
         }
         Op::I32Extend8S | Op::I32Extend16S => {
             let input = inputs[0].start as usize;
@@ -1279,7 +1283,7 @@ fn translate_complex_ins<F: PrimeField32>(
             vec![
                 // Copy the 32 bit values to the high 32 bits of the temporary value.
                 // Leave the low bits undefined.
-                Directive::Instruction(ib::copy_reg(high_shifted + 1, input)),
+                Directive::Instruction(ib::add_imm(high_shifted + 1, input, AluImm::from(0))),
                 // shr will read 64 bits, so we need to zero the other half due to WOM
                 Directive::Instruction(ib::const_32_imm(high_shifted, 0, 0)),
                 // Arithmetic shift right to fill the high bits with the sign bit.
@@ -1293,7 +1297,7 @@ fn translate_complex_ins<F: PrimeField32>(
 
             vec![
                 // Copy the 32 bit value to the low 32 bits of the output.
-                Directive::Instruction(ib::copy_reg(output, input)),
+                Directive::Instruction(ib::add_imm(output, input, AluImm::from(0))),
                 // Zero the high 32 bits.
                 Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)),
             ]
@@ -1824,7 +1828,7 @@ fn translate_complex_ins<F: PrimeField32>(
                 // - write new size to header.
                 Directive::Instruction(ib::storew(new_size, header_addr_reg.start as usize, 0)),
                 // - write old size to output.
-                Directive::Instruction(ib::copy_reg(output, size_reg)),
+                Directive::Instruction(ib::add_imm(output, size_reg, AluImm::from(0))),
                 // - jump to continuation label.
                 Directive::Jump {
                     target: continuation_label.clone(),
@@ -1905,6 +1909,7 @@ fn translate_complex_ins<F: PrimeField32>(
             ]
             .into()
         }
+
         Op::F32Load { .. }
         | Op::F64Load { .. }
         | Op::F32Store { .. }
@@ -1956,7 +1961,11 @@ fn translate_complex_ins<F: PrimeField32>(
                 .clone()
                 .zip(output.unwrap())
                 .map(|(input, output)| {
-                    Directive::Instruction(ib::copy_reg(output as usize, input as usize))
+                    Directive::Instruction(ib::add_imm(
+                        output as usize,
+                        input as usize,
+                        AluImm::from(0),
+                    ))
                 })
                 .collect_vec()
                 .into()
