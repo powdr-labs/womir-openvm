@@ -1068,12 +1068,12 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::allocate_frame_imm::<F>(1, 100), // Allocate entry frame
-            wom::const_field::<F>(10, 28, 0),     // x10 = 28 (return PC)
-            wom::const_field::<F>(11, 0, 0),      // x11 = 0 (saved FP)
+            wom::add_imm::<F>(10, 0, 28_i16.into()), // x10 = 24 (return PC)
+            wom::add_imm::<F>(11, 0, 0_i16.into()), // x11 = 0 (saved FP)
             wom::add_imm::<F>(8, 0, 88_i16.into()), // x8 = 88
             wom::ret::<F>(10, 11),                // Return to PC=x10, FP=x11
             wom::halt(),                          // This should be skipped
-            // PC = 28 (where x10 points)
+            // PC = 24 (where x10 points)
             wom::reveal(8, 0), // wom::reveal x8 (should be 88)
             wom::halt(),
         ];
@@ -1106,7 +1106,7 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::allocate_frame_imm::<F>(1, 100), // Allocate a frame at x1 just so we have some room to work
-            wom::const_field::<F>(12, 32, 0),     // x12 = 32 (target PC)
+            wom::add_imm::<F>(12, 0, 32_i16.into()), // x12 = 32 (target PC)
             wom::allocate_frame_imm::<F>(9, 100), // Allocate new frame of size 100, x9 = new FP
             wom::add_imm::<F>(11, 0, 999_i16.into()), // x11 = 999
             wom::call_indirect::<F>(10, 11, 12, 9), // Call to PC=x12, FP=x9, save PC to x10, FP to x11
