@@ -849,32 +849,34 @@ fn translate_most_binary_ops<'a, F: PrimeField32>(
         Op::I64ShrU => Shift64Opcode::SRL.global_opcode(),
 
         // Float instructions
-        Op::F32Eq => todo!(),
-        Op::F32Ne => todo!(),
-        Op::F32Lt => todo!(),
-        Op::F32Gt => todo!(),
-        Op::F32Le => todo!(),
-        Op::F32Ge => todo!(),
-        Op::F64Eq => todo!(),
-        Op::F64Ne => todo!(),
-        Op::F64Lt => todo!(),
-        Op::F64Gt => todo!(),
-        Op::F64Le => todo!(),
-        Op::F64Ge => todo!(),
-        Op::F32Add => todo!(),
-        Op::F32Sub => todo!(),
-        Op::F32Mul => todo!(),
-        Op::F32Div => todo!(),
-        Op::F32Min => todo!(),
-        Op::F32Max => todo!(),
-        Op::F32Copysign => todo!(),
-        Op::F64Add => todo!(),
-        Op::F64Sub => todo!(),
-        Op::F64Mul => todo!(),
-        Op::F64Div => todo!(),
-        Op::F64Min => todo!(),
-        Op::F64Max => todo!(),
-        Op::F64Copysign => todo!(),
+        Op::F32Eq
+        | Op::F32Ne
+        | Op::F32Lt
+        | Op::F32Gt
+        | Op::F32Le
+        | Op::F32Ge
+        | Op::F64Eq
+        | Op::F64Ne
+        | Op::F64Lt
+        | Op::F64Gt
+        | Op::F64Le
+        | Op::F64Ge
+        | Op::F32Add
+        | Op::F32Sub
+        | Op::F32Mul
+        | Op::F32Div
+        | Op::F32Min
+        | Op::F32Max
+        | Op::F32Copysign
+        | Op::F64Add
+        | Op::F64Sub
+        | Op::F64Mul
+        | Op::F64Div
+        | Op::F64Min
+        | Op::F64Max
+        | Op::F64Copysign => {
+            return Some(ib::trap(ERROR_UNIMPLEMENTED_CODE as usize));
+        }
 
         // Not an operation we handle here
         _ => return None,
@@ -1905,6 +1907,7 @@ fn translate_complex_ins<F: PrimeField32>(
             ]
             .into()
         }
+
         Op::F32Load { .. }
         | Op::F64Load { .. }
         | Op::F32Store { .. }
