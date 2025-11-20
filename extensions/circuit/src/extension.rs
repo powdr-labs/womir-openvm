@@ -21,18 +21,18 @@ use openvm_rv32im_circuit::{
 };
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, CopyIntoFrameOpcode, DivRem64Opcode,
-    DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
-    LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom, RegWriteOpcode,
+    AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
+    DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode,
+    LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom,
     Shift64Opcode, ShiftOpcode,
 };
 
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
+use crate::consts::ConstsCoreChipWom;
 use crate::copy_into_frame::CopyIntoFrameCoreChipWom;
 use crate::loadstore::LoadStoreChip;
-use crate::reg_write::RegWriteCoreChipWom;
 use crate::{adapters::frame_allocator::FrameAllocator, allocate_frame::AllocateFrameCoreChipWom};
 use crate::{adapters::*, wom_traits::*, *};
 
@@ -120,7 +120,7 @@ pub enum WomirIExecutor<F: PrimeField32> {
     Jump(JumpChipWom<F>),
     AllocateFrame(AllocateFrameChipWom<F>),
     CopyIntoFrame(CopyIntoFrameChipWom<F>),
-    RegWrite(RegWriteChipWom<F>),
+    Const32(ConstsChipWom<F>),
     LessThan(LessThanChipWom<F>),
     LessThan64(LessThan64ChipWom<F>),
     HintStore(HintStoreChip<F>),
@@ -293,23 +293,20 @@ impl<F: PrimeField32> VmExtension<F> for WomirI<F> {
             CopyIntoFrameOpcode::iter().map(|x| x.global_opcode()),
         )?;
 
-        let consts_chip = RegWriteChipWom::new(
-            RegWriteAdapterChipWom::new(
+        let consts_chip = ConstsChipWom::new(
+            ConstsAdapterChipWom::new(
                 execution_bus,
                 program_bus,
                 frame_bus,
                 memory_bridge,
                 wom_bridge,
             ),
-            RegWriteCoreChipWom::new(),
+            ConstsCoreChipWom::new(),
             offline_memory.clone(),
             shared_fp.clone(),
             wom_controller.clone(),
         );
-        inventory.add_executor(
-            consts_chip,
-            RegWriteOpcode::iter().map(|x| x.global_opcode()),
-        )?;
+        inventory.add_executor(consts_chip, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 
         let lt_chip = LessThanChipWom::new(
             WomBaseAluAdapterChip::new(

@@ -30,23 +30,12 @@ impl<F: PrimeField32> WomController<F> {
         (WomRecord { pointer, data }, data_array)
     }
 
-    pub fn read_fe(&self, pointer: F) -> (WomRecord<F>, F) {
-        // we still read a full rv32 width
-        let (rec, data) = self.read::<4>(pointer);
-        (rec, data[0])
-    }
-
     pub fn unsafe_read_cell(&self, pointer: F) -> F {
         let ptr_u32 = pointer.as_canonical_u32();
         self.memory
             .get(ptr_u32 as usize)
             .expect("WOM read before write")
             .expect("WOM read before write")
-    }
-
-    pub fn write_fe(&mut self, pointer: F, data: F) -> WomRecord<F> {
-        // we still write a full rv32 width
-        self.write::<4>(pointer, [data, F::ZERO, F::ZERO, F::ZERO])
     }
 
     pub fn write<const N: usize>(&mut self, pointer: F, data: [F; N]) -> WomRecord<F> {
