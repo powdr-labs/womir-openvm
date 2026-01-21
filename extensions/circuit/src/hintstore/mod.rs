@@ -4,12 +4,10 @@ use std::{
 };
 
 use openvm_circuit::{
-    arch::{
-        ExecutionBridge, ExecutionBus, ExecutionError, ExecutionState, InstructionExecutor, Streams,
-    },
+    arch::{ExecutionBridge, ExecutionBus, ExecutionError, ExecutionState, Streams},
     system::{
         memory::{
-            MemoryAddress, MemoryAuxColsFactory, MemoryController, OfflineMemory,
+            MemoryAddress, MemoryAuxColsFactory, MemoryController,
             offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols},
         },
         program::ProgramBus,
@@ -27,13 +25,12 @@ use openvm_instructions::{
     riscv::{RV32_CELL_BITS, RV32_MEMORY_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
 };
 use openvm_stark_backend::{
-    Chip, ChipUsageGetter,
+    ChipUsageGetter,
     config::{StarkGenericConfig, Val},
     interaction::InteractionBuilder,
     p3_air::{Air, AirBuilder, BaseAir},
     p3_field::{Field, FieldAlgebra, PrimeField32},
     p3_matrix::{Matrix, dense::RowMajorMatrix},
-    prover::types::AirProofInput,
     rap::{AnyRap, BaseAirWithPublicValues, ColumnsAir, PartitionedBaseAir},
 };
 use openvm_womir_transpiler::{
@@ -500,17 +497,5 @@ impl<F: PrimeField32> HintStoreChip<F> {
         }
         // padding rows can just be all zeros
         RowMajorMatrix::new(flat_trace, width)
-    }
-}
-
-impl<SC: StarkGenericConfig> Chip<SC> for HintStoreChip<Val<SC>>
-where
-    Val<SC>: PrimeField32,
-{
-    fn air(&self) -> Arc<dyn AnyRap<SC>> {
-        Arc::new(self.air)
-    }
-    fn generate_air_proof_input(self) -> AirProofInput<SC> {
-        AirProofInput::simple_no_pis(self.generate_trace())
     }
 }

@@ -7,17 +7,14 @@
 use std::sync::{Arc, Mutex};
 
 use openvm_circuit::{
-    arch::{
-        AdapterRuntimeContext, ExecutionState, InstructionExecutor as InstructionExecutorTrait,
-        Result as ResultVm, VmAdapterAir, VmAdapterInterface, VmAirWrapper, VmCoreAir, VmCoreChip,
-    },
-    system::memory::{MemoryController, OfflineMemory},
+    arch::{ExecutionState, VmAdapterAir, VmAdapterInterface, VmAirWrapper, VmCoreAir},
+    system::memory::MemoryController,
     utils::next_power_of_two_or_zero,
 };
 use openvm_circuit_primitives::AlignedBorrow;
 use openvm_instructions::instruction::Instruction;
 use openvm_stark_backend::{
-    AirRef, Chip, ChipUsageGetter,
+    AirRef, ChipUsageGetter,
     air_builders::{debug::DebugConstraintBuilder, symbolic::SymbolicRapBuilder},
     config::{StarkGenericConfig, Val},
     interaction::{BusIndex, InteractionBuilder, PermutationCheckBus},
@@ -25,7 +22,6 @@ use openvm_stark_backend::{
     p3_field::{FieldAlgebra, PrimeField32},
     p3_matrix::dense::RowMajorMatrix,
     p3_maybe_rayon::prelude::*,
-    prover::types::AirProofInput,
     rap::{BaseAirWithPublicValues, ColumnsAir, get_air_name},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -371,62 +367,6 @@ where
 
     fn get_opcode_name(&self, opcode: usize) -> String {
         self.core.get_opcode_name(opcode)
-    }
-}
-
-impl<SC, A, C> Chip<SC> for VmChipWrapperWom<Val<SC>, A, C>
-where
-    SC: StarkGenericConfig,
-    Val<SC>: PrimeField32,
-    A: VmAdapterChipWom<Val<SC>> + Send + Sync,
-    C: VmCoreChip<Val<SC>, A::Interface> + Send + Sync,
-    A::Air: Send + Sync + 'static,
-    A::Air: VmAdapterAir<SymbolicRapBuilder<Val<SC>>> + ColumnsAir<Val<SC>>,
-    A::Air: for<'a> VmAdapterAir<DebugConstraintBuilder<'a, SC>>,
-    C::Air: Send + Sync + 'static,
-    C::Air: VmCoreAir<
-            SymbolicRapBuilder<Val<SC>>,
-            <A::Air as VmAdapterAir<SymbolicRapBuilder<Val<SC>>>>::Interface,
-        > + ColumnsAir<Val<SC>>,
-    C::Air: for<'a> VmCoreAir<
-            DebugConstraintBuilder<'a, SC>,
-            <A::Air as VmAdapterAir<DebugConstraintBuilder<'a, SC>>>::Interface,
-        >,
-{
-    fn air(&self) -> AirRef<SC> {
-        let air: VmAirWrapper<A::Air, C::Air> = VmAirWrapper {
-            adapter: self.adapter.air().clone(),
-            core: self.core.air().clone(),
-        };
-        Arc::new(air)
-    }
-
-    fn generate_air_proof_input(self) -> AirProofInput<SC> {
-        let num_records = self.records.len();
-        let height = next_power_of_two_or_zero(num_records);
-        let core_width = self.core.air().width();
-        let adapter_width = self.adapter.air().width();
-        let width = core_width + adapter_width;
-        let mut values = Val::<SC>::zero_vec(height * width);
-
-        let memory = self.offline_memory.lock().unwrap();
-
-        // This zip only goes through records.
-        // The padding rows between records.len()..height are filled with zeros.
-        values
-            .par_chunks_mut(width)
-            .zip(self.records.into_par_iter())
-            .for_each(|(row_slice, record)| {
-                let (adapter_row, core_row) = row_slice.split_at_mut(adapter_width);
-                self.adapter
-                    .generate_trace_row(adapter_row, record.0, record.1, &memory);
-                self.core.generate_trace_row(core_row, record.2);
-            });
-
-        let mut trace = RowMajorMatrix::new(values, width);
-        self.core.finalize(&mut trace, num_records);
-
-        AirProofInput::simple(trace, self.core.generate_public_values())
     }
 }
 

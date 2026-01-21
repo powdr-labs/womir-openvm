@@ -5,8 +5,14 @@ use std::{
 
 use derive_more::derive::From;
 use openvm_circuit::{
-    arch::{SystemPort, VmExtension, VmInventory, VmInventoryBuilder, VmInventoryError},
-    system::phantom::PhantomChip,
+    arch::{
+        AirInventory, AirInventoryError, ExecutorInventory, ExecutorInventoryBuilder,
+        ExecutorInventoryError, PhantomSubExecutor, SystemConfig, VmCircuitExtension,
+        VmExecutionExtension,
+    },
+    system::{
+        memory::online::GuestMemory, phantom::PhantomChip, program::ProgramBus, SystemPort,
+    },
 };
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
 use openvm_circuit_primitives::{
@@ -16,9 +22,10 @@ use openvm_circuit_primitives::{
 use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
 use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_rv32im_circuit::{
-    BaseAluCoreChip, DivRemCoreChip, LoadSignExtendCoreChip, LoadStoreCoreChip,
-    MultiplicationCoreChip, ShiftCoreChip,
+    BaseAluCoreCols, DivRemCoreCols, LoadSignExtendCoreCols, LoadStoreCoreCols,
+    MultiplicationCoreCols, ShiftCoreCols,
 };
+use rand::rngs::StdRng;
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
@@ -638,12 +645,13 @@ mod phantom {
 
     impl<F: Field> PhantomSubExecutor<F> for HintInputSubEx {
         fn phantom_execute(
-            &mut self,
-            _: &MemoryController<F>,
+            &self,
+            _: &GuestMemory,
             streams: &mut Streams<F>,
+            _: &mut StdRng,
             _: PhantomDiscriminant,
-            _: F,
-            _: F,
+            _: u32,
+            _: u32,
             _: u16,
         ) -> eyre::Result<()> {
             let mut hint = match streams.input_stream.pop_front() {
@@ -669,15 +677,16 @@ mod phantom {
 
     impl<F: PrimeField32> PhantomSubExecutor<F> for HintRandomSubEx<F> {
         fn phantom_execute(
-            &mut self,
-            _memory: &MemoryController<F>,
+            &self,
+            _memory: &GuestMemory,
             streams: &mut Streams<F>,
+            _: &mut StdRng,
             _: PhantomDiscriminant,
-            a: F,
-            _: F,
+            a: u32,
+            _: u32,
             _: u16,
         ) -> eyre::Result<()> {
-            let len = unsafe_read_wom_register(&self.wom.lock().unwrap(), a) as usize;
+            let len = unsafe_read_wom_register(&self.wom.lock().unwrap(), F::from_canonical_u32(a)) as usize;
             streams.hint_stream.clear();
             streams.hint_stream.extend(
                 std::iter::repeat_with(|| F::from_canonical_u8(self.rng.r#gen::<u8>()))
@@ -689,20 +698,23 @@ mod phantom {
 
     impl<F: PrimeField32> PhantomSubExecutor<F> for PrintStrSubEx<F> {
         fn phantom_execute(
-            &mut self,
-            memory: &MemoryController<F>,
+            &self,
+            memory: &GuestMemory,
             _: &mut Streams<F>,
+            _: &mut StdRng,
             _: PhantomDiscriminant,
-            a: F,
-            b: F,
+            a: u32,
+            b: u32,
             mem_start_imm: u16,
         ) -> eyre::Result<()> {
             // TODO mem_start_imm may be larger than u16 in some cases.
             let mem_start_imm = mem_start_imm as u32;
             let fp = self.fp.lock().unwrap();
             let fp_f = F::from_canonical_u32(*fp);
-            let rd = unsafe_read_wom_register(&self.wom.lock().unwrap(), a + fp_f);
-            let rs1 = unsafe_read_wom_register(&self.wom.lock().unwrap(), b + fp_f);
+            let a_f = F::from_canonical_u32(a);
+            let b_f = F::from_canonical_u32(b);
+            let rd = unsafe_read_wom_register(&self.wom.lock().unwrap(), a_f + fp_f);
+            let rs1 = unsafe_read_wom_register(&self.wom.lock().unwrap(), b_f + fp_f);
             let bytes = (0..rs1)
                 .map(|i| -> eyre::Result<u8> {
                     let val = memory
@@ -719,16 +731,17 @@ mod phantom {
 
     impl<F: PrimeField32> PhantomSubExecutor<F> for HintLoadByKeySubEx<F> {
         fn phantom_execute(
-            &mut self,
-            memory: &MemoryController<F>,
+            &self,
+            memory: &GuestMemory,
             streams: &mut Streams<F>,
+            _: &mut StdRng,
             _: PhantomDiscriminant,
-            a: F,
-            b: F,
+            a: u32,
+            b: u32,
             _: u16,
         ) -> eyre::Result<()> {
-            let ptr = unsafe_read_wom_register(&self.wom.lock().unwrap(), a);
-            let len = unsafe_read_wom_register(&self.wom.lock().unwrap(), b);
+            let ptr = unsafe_read_wom_register(&self.wom.lock().unwrap(), F::from_canonical_u32(a));
+            let len = unsafe_read_wom_register(&self.wom.lock().unwrap(), F::from_canonical_u32(b));
             let key: Vec<u8> = (0..len)
                 .map(|i| {
                     memory

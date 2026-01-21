@@ -1,7 +1,7 @@
 use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::arch::{
-    AdapterAirContext, AdapterRuntimeContext, Result, VmAdapterInterface, VmCoreAir, VmCoreChip,
+    AdapterAirContext, VmAdapterInterface, VmCoreAir,
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{LocalOpcode, instruction::Instruction};

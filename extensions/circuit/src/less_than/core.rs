@@ -4,8 +4,7 @@ use std::{
 };
 
 use openvm_circuit::arch::{
-    AdapterAirContext, AdapterRuntimeContext, MinimalInstruction, VmAdapterInterface, VmCoreAir,
-    VmCoreChip,
+    AdapterAirContext, MinimalInstruction, VmAdapterInterface, VmCoreAir,
 };
 use openvm_circuit_primitives::{
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
@@ -24,8 +23,6 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
-
-use openvm_circuit::arch::Result as ResultVm;
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
