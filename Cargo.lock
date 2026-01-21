@@ -6045,6 +6045,7 @@ dependencies = [
  "openvm-rv32im-transpiler",
  "openvm-stark-backend",
  "openvm-stark-sdk",
+ "openvm-womir-transpiler",
  "rand 0.8.5",
  "serde",
  "struct-reflection",
