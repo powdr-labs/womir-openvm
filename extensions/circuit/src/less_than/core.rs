@@ -24,6 +24,8 @@ use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
 
+use crate::{VmCoreChipWom, AdapterRuntimeContextWom, ResultVm};
+
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
 pub struct LessThanCoreCols<T, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
@@ -224,7 +226,7 @@ impl<
     const NUM_LIMBS_READ: usize,
     const NUM_LIMBS_WRITE: usize,
     const LIMB_BITS: usize,
-> VmCoreChip<F, I> for LessThanCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
+> VmCoreChipWom<F, I> for LessThanCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 where
     I::Reads: Into<[[F; NUM_LIMBS_READ]; 2]>,
     I::Writes: From<[[F; NUM_LIMBS_WRITE]; 1]>,
@@ -237,8 +239,9 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
+        _from_fp: u32,
         reads: I::Reads,
-    ) -> ResultVm<(AdapterRuntimeContext<F, I>, Self::Record)> {
+    ) -> ResultVm<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
         let Instruction { opcode, .. } = instruction;
         let less_than_opcode = LessThanOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
@@ -299,7 +302,7 @@ where
         let mut writes = [0u32; NUM_LIMBS_WRITE];
         writes[0] = cmp_result as u32;
 
-        let output = AdapterRuntimeContext::without_pc([writes.map(F::from_canonical_u32)]);
+        let output = AdapterRuntimeContextWom::without_pc_fp([writes.map(F::from_canonical_u32)]);
         let record = LessThanCoreRecord {
             opcode: less_than_opcode,
             b: data[0],

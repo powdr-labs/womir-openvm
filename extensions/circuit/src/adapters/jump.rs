@@ -2,11 +2,11 @@ use std::{borrow::Borrow, marker::PhantomData};
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge,
-        ExecutionBus, ExecutionState, Result, VmAdapterAir, VmAdapterInterface,
+        AdapterAirContext, BasicAdapterInterface, ExecutionBridge,
+        ExecutionBus, ExecutionState, VmAdapterAir, VmAdapterInterface,
     },
     system::{
-        memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
+        memory::{MemoryController, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
@@ -190,7 +190,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
-    ) -> Result<(
+    ) -> eyre::Result<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
@@ -232,9 +232,8 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         _from_frame: crate::FrameState<u32>,
-        _output: AdapterRuntimeContext<F, Self::Interface>,
         read_record: &Self::ReadRecord,
-    ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
+    ) -> eyre::Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction {
             opcode,
             a: immediate,
@@ -285,7 +284,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for JumpAdapterChipWom<F> {
         _row_slice: &mut [F],
         _read_record: Self::ReadRecord,
         _write_record: Self::WriteRecord,
-        _memory: &OfflineMemory<F>,
     ) {
     }
 

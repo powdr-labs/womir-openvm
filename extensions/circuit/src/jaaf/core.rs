@@ -14,7 +14,7 @@ use openvm_stark_backend::{
 use openvm_womir_transpiler::JaafOpcode;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::adapters::{JaafInstruction, RV32_REGISTER_NUM_LIMBS};
+use crate::{adapters::{JaafInstruction, RV32_REGISTER_NUM_LIMBS}, VmCoreChipWom, AdapterRuntimeContextWom};
 
 use strum::IntoEnumIterator;
 
@@ -122,7 +122,7 @@ pub struct JaafCoreChipWom {
     pub air: JaafCoreAir,
 }
 
-impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChip<F, I> for JaafCoreChipWom
+impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChipWom<F, I> for JaafCoreChipWom
 where
     I::Reads: Into<[[F; RV32_REGISTER_NUM_LIMBS]; 2]>,
     I::Writes: From<[[F; RV32_REGISTER_NUM_LIMBS]; 2]>,
@@ -135,10 +135,12 @@ where
         &self,
         _instruction: &Instruction<F>,
         _from_pc: u32,
+        _from_fp: u32,
         _reads: I::Reads,
-    ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
-        let output = AdapterRuntimeContext {
+    ) -> eyre::Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
+        let output = AdapterRuntimeContextWom {
             to_pc: None,
+            to_fp: None,
             writes: [
                 [F::ZERO; RV32_REGISTER_NUM_LIMBS],
                 [F::ZERO; RV32_REGISTER_NUM_LIMBS],

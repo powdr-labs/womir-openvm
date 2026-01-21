@@ -2,12 +2,12 @@ use std::{borrow::Borrow, marker::PhantomData};
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterRuntimeContext, BasicAdapterInterface, ExecutionBridge,
-        ExecutionBus, ExecutionState, MinimalInstruction, Result as ResultVm, VmAdapterAir,
+        AdapterAirContext, BasicAdapterInterface, ExecutionBridge,
+        ExecutionBus, ExecutionState, MinimalInstruction, VmAdapterAir,
         VmAdapterInterface,
     },
     system::{
-        memory::{MemoryController, OfflineMemory, offline_checker::MemoryBridge},
+        memory::{MemoryController, offline_checker::MemoryBridge},
         program::ProgramBus,
     },
 };
@@ -31,6 +31,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::{
     FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomBridge, WomController, WomRecord,
+    AdapterRuntimeContextWom, ResultVm,
 };
 
 use super::RV32_CELL_BITS;
@@ -310,7 +311,7 @@ where
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        output: AdapterRuntimeContext<F, Self::Interface>,
+        output: AdapterRuntimeContextWom<F, Self::Interface>,
         _read_record: &Self::ReadRecord,
     ) -> ResultVm<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction { a, d, .. } = instruction;
@@ -339,7 +340,6 @@ where
         _row_slice: &mut [F],
         _read_record: Self::ReadRecord,
         _write_record: Self::WriteRecord,
-        _memory: &OfflineMemory<F>,
     ) {
     }
 

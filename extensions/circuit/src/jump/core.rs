@@ -14,7 +14,7 @@ use openvm_stark_backend::{
 use openvm_womir_transpiler::JumpOpcode;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::adapters::{JumpInstruction, RV32_REGISTER_NUM_LIMBS};
+use crate::{adapters::{JumpInstruction, RV32_REGISTER_NUM_LIMBS}, VmCoreChipWom, AdapterRuntimeContextWom};
 
 use strum::IntoEnumIterator;
 
@@ -107,7 +107,7 @@ pub struct JumpCoreChipWom {
     pub air: JumpCoreAir,
 }
 
-impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChip<F, I> for JumpCoreChipWom
+impl<F: PrimeField32, I: VmAdapterInterface<F>> VmCoreChipWom<F, I> for JumpCoreChipWom
 where
     I::Reads: Into<[[F; RV32_REGISTER_NUM_LIMBS]; 1]>,
     I::Writes: From<[[F; RV32_REGISTER_NUM_LIMBS]; 0]>,
@@ -120,10 +120,12 @@ where
         &self,
         _instruction: &Instruction<F>,
         _from_pc: u32,
+        _from_fp: u32,
         _reads: I::Reads,
-    ) -> Result<(AdapterRuntimeContext<F, I>, Self::Record)> {
-        let output = AdapterRuntimeContext {
+    ) -> eyre::Result<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
+        let output = AdapterRuntimeContextWom {
             to_pc: None,
+            to_fp: None,
             writes: [].into(),
         };
 

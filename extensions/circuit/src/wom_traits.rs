@@ -29,6 +29,8 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use crate::WomController;
 
+pub type ResultVm<T> = eyre::Result<T>;
+
 // ============ Frame Bus System ============
 // These types manage the frame pointer state transitions in the VM
 
@@ -249,7 +251,7 @@ pub trait VmAdapterChipWom<F> {
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        output: AdapterRuntimeContext<F, Self::Interface>,
+        output: AdapterRuntimeContextWom<F, Self::Interface>,
         read_record: &Self::ReadRecord,
     ) -> ResultVm<(ExecutionState<u32>, u32, Self::WriteRecord)>;
 
@@ -262,7 +264,6 @@ pub trait VmAdapterChipWom<F> {
         row_slice: &mut [F],
         read_record: Self::ReadRecord,
         write_record: Self::WriteRecord,
-        memory: &OfflineMemory<F>,
     );
 
     fn air(&self) -> &Self::Air;
@@ -348,9 +349,12 @@ where
         let (reads, read_record) = self
             .adapter
             .preprocess(memory, &mut wom, *fp, instruction)?;
-        let (output, core_record) =
-            self.core
-                .execute_instruction(instruction, from_state.pc, reads)?;
+        let (output, core_record) = self.core.execute_instruction(
+            instruction,
+            from_state.pc,
+            *fp,
+            reads,
+        )?;
         let (to_state, to_fp, write_record) = self.adapter.postprocess(
             memory,
             &mut wom,

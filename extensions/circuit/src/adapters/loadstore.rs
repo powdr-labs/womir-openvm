@@ -3,12 +3,12 @@ use std::{array, borrow::Borrow, marker::PhantomData};
 use LoadStoreOpcode::*;
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterRuntimeContext, ExecutionBridge, ExecutionBus, ExecutionState,
-        Result, VmAdapterAir, VmAdapterInterface,
+        AdapterAirContext, ExecutionBridge, ExecutionBus, ExecutionState,
+        VmAdapterAir, VmAdapterInterface,
     },
     system::{
         memory::{
-            MemoryAddress, MemoryController, OfflineMemory, RecordId,
+            MemoryAddress, MemoryController,
             offline_checker::{
                 MemoryBaseAuxCols, MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols,
             },
@@ -38,7 +38,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use super::{RV32_REGISTER_NUM_LIMBS, compose};
-use crate::{FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomRecord};
+use crate::{FrameBridge, FrameBus, FrameState, VmAdapterChipWom, WomRecord, AdapterRuntimeContextWom};
 use crate::{WomBridge, WomController, adapters::RV32_CELL_BITS};
 
 use openvm_rv32im_circuit::adapters::LoadStoreInstruction;
@@ -359,7 +359,7 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         wom: &mut WomController<F>,
         fp: u32,
         instruction: &Instruction<F>,
-    ) -> Result<(
+    ) -> eyre::Result<(
         <Self::Interface as VmAdapterInterface<F>>::Reads,
         Self::ReadRecord,
     )> {
@@ -445,9 +445,9 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         instruction: &Instruction<F>,
         from_state: ExecutionState<u32>,
         from_frame: FrameState<u32>,
-        output: AdapterRuntimeContext<F, Self::Interface>,
+        output: AdapterRuntimeContextWom<F, Self::Interface>,
         read_record: &Self::ReadRecord,
-    ) -> Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
+    ) -> eyre::Result<(ExecutionState<u32>, u32, Self::WriteRecord)> {
         let Instruction {
             opcode,
             a,
@@ -507,7 +507,6 @@ impl<F: PrimeField32> VmAdapterChipWom<F> for Rv32LoadStoreAdapterChip<F> {
         _row_slice: &mut [F],
         read_record: Self::ReadRecord,
         _write_record: Self::WriteRecord,
-        _memory: &OfflineMemory<F>,
     ) {
         self.range_checker_chip.add_count(
             (read_record.mem_ptr_limbs[0] - read_record.shift_amount) / 4,

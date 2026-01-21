@@ -21,6 +21,8 @@ use serde_big_array::BigArray;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
 
+use crate::{VmCoreChipWom, AdapterRuntimeContextWom, ResultVm};
+
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
 pub struct EqCoreCols<
@@ -200,7 +202,7 @@ impl<
     const NUM_LIMBS_READ: usize,
     const NUM_LIMBS_WRITE: usize,
     const LIMB_BITS: usize,
-> VmCoreChip<F, I> for EqCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
+> VmCoreChipWom<F, I> for EqCoreChip<NUM_LIMBS_READ, NUM_LIMBS_WRITE, LIMB_BITS>
 where
     I::Reads: Into<[[F; NUM_LIMBS_READ]; 2]>,
     I::Writes: From<[[F; NUM_LIMBS_WRITE]; 1]>,
@@ -213,8 +215,9 @@ where
         &self,
         instruction: &Instruction<F>,
         _from_pc: u32,
+        _from_fp: u32,
         reads: I::Reads,
-    ) -> ResultVm<(AdapterRuntimeContext<F, I>, Self::Record)> {
+    ) -> ResultVm<(AdapterRuntimeContextWom<F, I>, Self::Record)> {
         let Instruction { opcode, .. } = instruction;
         let eq_opcode = EqOpcode::from_usize(opcode.local_opcode_idx(self.air.offset));
 
@@ -225,8 +228,9 @@ where
         let mut a: [F; NUM_LIMBS_WRITE] = [F::ZERO; NUM_LIMBS_WRITE];
         a[0] = F::from_bool(cmp_result);
 
-        let output = AdapterRuntimeContext {
+        let output = AdapterRuntimeContextWom {
             to_pc: None,
+            to_fp: None,
             writes: [a].into(),
         };
 
