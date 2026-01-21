@@ -25,11 +25,24 @@ use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
 use womir::loader::flattening::WriteOnceAsm;
 use womir::loader::{FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics};
 
-use openvm_circuit::arch::{InitFileGenerator, SystemConfig, VmChipComplex, VmConfig};
 use openvm_circuit::circuit_derive::{Chip, ChipUsageGetter};
-use openvm_circuit_derive::AnyEnum;
+use openvm_circuit::{
+    arch::{
+        AirInventory, AirInventoryError, ChipInventory, ChipInventoryError, ExecutionBridge,
+        ExecutorInventoryBuilder, ExecutorInventoryError, InitFileGenerator, MatrixRecordArena,
+        RowMajorMatrixArena, SystemConfig, VmBuilder, VmChipComplex, VmCircuitExtension,
+        VmExecutionExtension, VmProverExtension,
+    },
+    system::{
+        SystemChipInventory, SystemCpuBuilder, SystemExecutor, SystemPort,
+        memory::SharedMemoryHelper,
+    },
+};
+use openvm_circuit_derive::{AnyEnum, Executor, MeteredExecutor, PreflightExecutor, VmConfig};
 use openvm_sdk::Sdk;
-use openvm_sdk::config::{AppConfig, DEFAULT_APP_LOG_BLOWUP, SdkVmConfig, SdkVmConfigExecutor};
+use openvm_sdk::config::{
+    AppConfig, DEFAULT_APP_LOG_BLOWUP, SdkVmConfig, SdkVmConfigExecutor, TranspilerConfig,
+};
 use openvm_stark_sdk::config::FriParameters;
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
@@ -38,7 +51,12 @@ type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use crate::builtin_functions::BuiltinFunction;
 use crate::womir_translation::{Directive, LinkedProgram, OpenVMSettings};
-//
+
+use openvm_stark_sdk::p3_baby_bear::BabyBear;
+use openvm_transpiler::transpiler::Transpiler;
+
+use womir_circuit::WomirConfig;
+
 // #[derive(Serialize, Deserialize, Clone)]
 // pub struct SpecializedConfig {
 //     pub sdk_config: SdkVmConfig,
@@ -202,29 +220,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let wasm_bytes = std::fs::read(program_path).expect("Failed to read WASM file");
             let (module, functions) = load_wasm(&wasm_bytes);
 
-            // Create VM configuration
-            let vm_config = SdkVmConfig::builder()
-                .system(Default::default())
-                .io(Default::default())
-                .build();
-            // let vm_config = SpecializedConfig::new(vm_config);
-            //
-            // // Create and execute program
-            // let mut linked_program = LinkedProgram::new(module, functions);
-            //
-            // let mut stdin = StdIn::default();
-            // for arg in args {
-            //     let val = arg.parse::<u32>().unwrap();
-            //     stdin.write(&val);
-            // }
-            //
-            // for binary_input_file in &binary_input_files {
-            //     stdin.write_bytes(&fs::read(binary_input_file).unwrap());
-            // }
-            //
-            // let output = linked_program.execute(vm_config, &function, stdin)?;
-            //
-            // println!("output: {output:?}");
+            // Create and execute program
+            let mut linked_program = LinkedProgram::new(module, functions);
+
+            let mut stdin = StdIn::default();
+            for arg in args {
+                let val = arg.parse::<u32>().unwrap();
+                stdin.write(&val);
+            }
+
+            for binary_input_file in &binary_input_files {
+                stdin.write_bytes(&fs::read(binary_input_file).unwrap());
+            }
+
+            let output = linked_program.execute(WomirConfig::default(), &function, stdin)?;
+
+            println!("output: {output:?}");
         }
         Commands::Prove {
             function,

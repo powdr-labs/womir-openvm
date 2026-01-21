@@ -14,7 +14,7 @@ dependencies = [
  "core_extensions",
  "crossbeam-channel",
  "generational-arena",
- "libloading",
+ "libloading 0.7.4",
  "lock_api",
  "parking_lot",
  "paste",
@@ -514,6 +514,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36eaf5d7b090263e8150820482d5d93cd964a81e4019913c972f4edcc6edb740"
+dependencies = [
+ "bincode_derive",
+ "serde",
+ "unty",
+]
+
+[[package]]
+name = "bincode_derive"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf95709a440f45e986983918d0e8a1f30a9b1df04918fc828670606804ac3c09"
+dependencies = [
+ "virtue",
+]
+
+[[package]]
 name = "bitcode"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -692,6 +712,12 @@ name = "bytes"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b35204fbdc0b3f4446b89fc1ac2cf84a8a68971995d0bf2e925ec7cd960f9cb3"
+
+[[package]]
+name = "bytesize"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bd91ee7b2422bcb158d90ef4d14f75ef67f340943fc4149891dcce8f8b972a3"
 
 [[package]]
 name = "camino"
@@ -1021,6 +1047,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67773048316103656a637612c4a62477603b777d91d9c62ff2290f9cde178fdb"
+dependencies = [
+ "ctor-proc-macro",
+ "dtor",
+]
+
+[[package]]
+name = "ctor-proc-macro"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2931af7e13dc045d8e9d26afccc6fa115d64e115c9c84b1166288b46f6782c2"
+
+[[package]]
 name = "darling"
 version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1247,6 +1289,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
+name = "dtor"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "404d02eeb088a82cfd873006cb713fe411306c7d182c344905e101fb1167d301"
+dependencies = [
+ "dtor-proc-macro",
+]
+
+[[package]]
+name = "dtor-proc-macro"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f678cf4a922c215c63e0de95eb1ff08a958a81d47e485cf9da1e27bf6305cfa5"
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1375,7 +1432,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2029,7 +2086,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2146,6 +2203,16 @@ checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
 dependencies = [
  "cfg-if",
  "winapi",
+]
+
+[[package]]
+name = "libloading"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
+dependencies = [
+ "cfg-if",
+ "windows-link",
 ]
 
 [[package]]
@@ -2319,7 +2386,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2614,13 +2681,18 @@ dependencies = [
  "getset",
  "itertools 0.14.0",
  "libc",
+ "libloading 0.8.9",
  "memmap2",
  "metrics",
  "openvm-circuit-derive",
  "openvm-circuit-primitives",
  "openvm-circuit-primitives-derive",
+ "openvm-cuda-backend",
+ "openvm-cuda-builder",
+ "openvm-cuda-common",
  "openvm-instructions",
  "openvm-poseidon2-air",
+ "openvm-rv32im-transpiler",
  "openvm-stark-backend",
  "openvm-stark-sdk",
  "p3-baby-bear 0.1.0 (git+https://github.com/Plonky3/Plonky3.git?rev=539bbc84085efb609f4f62cb03cf49588388abdb)",
@@ -2631,6 +2703,7 @@ dependencies = [
  "serde-big-array",
  "static_assertions",
  "struct-reflection",
+ "tempfile",
  "thiserror",
  "tracing",
 ]
@@ -2656,7 +2729,9 @@ dependencies = [
  "num-bigint 0.4.6",
  "num-traits",
  "openvm-circuit-primitives-derive",
+ "openvm-cuda-backend",
  "openvm-cuda-builder",
+ "openvm-cuda-common",
  "openvm-stark-backend",
  "rand 0.8.5",
  "struct-reflection",
@@ -2689,12 +2764,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "openvm-cuda-backend"
+version = "1.2.2"
+source = "git+https://github.com/powdr-labs/stark-backend.git?rev=v1.2.2-powdr#c5e930ebe878735811dd8d1437559171030808e5"
+dependencies = [
+ "bincode 2.0.1",
+ "bincode_derive",
+ "derivative",
+ "derive-new 0.7.0",
+ "itertools 0.14.0",
+ "lazy_static",
+ "metrics",
+ "openvm-cuda-builder",
+ "openvm-cuda-common",
+ "openvm-stark-backend",
+ "openvm-stark-sdk",
+ "p3-baby-bear 0.1.0 (git+https://github.com/Plonky3/Plonky3.git?rev=539bbc84085efb609f4f62cb03cf49588388abdb)",
+ "p3-commit",
+ "p3-dft 0.1.0 (git+https://github.com/Plonky3/Plonky3.git?rev=539bbc84085efb609f4f62cb03cf49588388abdb)",
+ "p3-field 0.1.0 (git+https://github.com/Plonky3/Plonky3.git?rev=539bbc84085efb609f4f62cb03cf49588388abdb)",
+ "p3-fri",
+ "p3-matrix 0.1.0 (git+https://github.com/Plonky3/Plonky3.git?rev=539bbc84085efb609f4f62cb03cf49588388abdb)",
+ "p3-merkle-tree",
+ "p3-symmetric 0.1.0 (git+https://github.com/Plonky3/Plonky3.git?rev=539bbc84085efb609f4f62cb03cf49588388abdb)",
+ "p3-util 0.1.0 (git+https://github.com/Plonky3/Plonky3.git?rev=539bbc84085efb609f4f62cb03cf49588388abdb)",
+ "rustc-hash 2.1.1",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "openvm-cuda-builder"
 version = "1.2.2"
 source = "git+https://github.com/powdr-labs/stark-backend.git?rev=v1.2.2-powdr#c5e930ebe878735811dd8d1437559171030808e5"
 dependencies = [
  "cc",
  "glob",
+]
+
+[[package]]
+name = "openvm-cuda-common"
+version = "1.2.2"
+source = "git+https://github.com/powdr-labs/stark-backend.git?rev=v1.2.2-powdr#c5e930ebe878735811dd8d1437559171030808e5"
+dependencies = [
+ "bytesize",
+ "ctor",
+ "lazy_static",
+ "metrics",
+ "openvm-cuda-builder",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -4702,7 +4823,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5040,7 +5161,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89cc442a507abb490f3c2f5e2a0be2626b1d9d9ea2137fb240c6ddf5a8377e24"
 dependencies = [
- "bincode",
+ "bincode 1.3.3",
  "ethereum-types",
  "getset",
  "halo2-base",
@@ -5192,7 +5313,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5582,6 +5703,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "unty"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
+
+[[package]]
 name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5598,6 +5725,12 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "virtue"
+version = "0.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "051eb1abcf10076295e815102942cc58f9d5e3b4560e46e53c21e8ff6f3af7b1"
 
 [[package]]
 name = "wasi"
@@ -5712,7 +5845,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5892,11 +6025,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "womir-circuit"
+version = "0.0.1"
+dependencies = [
+ "cfg-if",
+ "derive-new 0.6.0",
+ "derive_more 1.0.0",
+ "eyre",
+ "num-bigint 0.4.6",
+ "num-integer",
+ "openvm-circuit",
+ "openvm-circuit-derive",
+ "openvm-circuit-primitives",
+ "openvm-circuit-primitives-derive",
+ "openvm-cuda-backend",
+ "openvm-cuda-builder",
+ "openvm-cuda-common",
+ "openvm-instructions",
+ "openvm-rv32im-transpiler",
+ "openvm-stark-backend",
+ "openvm-stark-sdk",
+ "rand 0.8.5",
+ "serde",
+ "struct-reflection",
+ "strum 0.26.3",
+ "test-case",
+]
+
+[[package]]
 name = "womir-openvm-integration"
 version = "0.0.1"
 dependencies = [
  "arrayvec",
  "clap",
+ "derive-new 0.6.0",
  "derive_more 1.0.0",
  "eyre",
  "itertools 0.14.0",
@@ -5913,6 +6075,7 @@ dependencies = [
  "openvm-sdk",
  "openvm-stark-backend",
  "openvm-stark-sdk",
+ "openvm-transpiler",
  "openvm-womir-circuit",
  "openvm-womir-transpiler",
  "powdr-autoprecompiles",
@@ -5925,6 +6088,7 @@ dependencies = [
  "tracing-subscriber",
  "wasmparser",
  "womir",
+ "womir-circuit",
 ]
 
 [[package]]

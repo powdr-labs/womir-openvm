@@ -1,14 +1,15 @@
 use std::{collections::HashMap, ops::Range, vec};
 
 use crate::{
+    WomirConfig,
     const_collapse::can_turn_to_lt,
     instruction_builder::{self as ib, AluImm},
 };
 use arrayvec::ArrayVec;
 use itertools::Itertools;
 use openvm_circuit::{
-    arch::{ExecutionError, Streams, VmConfig, VmExecutor},
-    // system::memory::tree::public_values::extract_public_values,
+    arch::{ExecutionError, Streams, VmExecutor},
+    system::memory::{merkle::public_values::extract_public_values, online::LinearMemory},
 };
 use openvm_instructions::{
     exe::{SparseMemoryImage, VmExe},
@@ -171,31 +172,43 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
             .with_init_memory(self.memory_image.clone())
     }
 
-    // pub fn execute(
-    //     &mut self,
-    //     vm_config: impl VmConfig<F>,
-    //     entry_point: &str,
-    //     inputs: impl Into<Streams<F>>,
-    // ) -> Result<Vec<F>, ExecutionError> {
-    //     let exe = self.program_with_entry_point(entry_point);
-    //
-    //     let vm = VmExecutor::new(vm_config);
-    //     let final_memory = vm.execute(exe, inputs)?.unwrap();
-    //     let public_values = extract_public_values(
-    //         &vm.config.system().memory_config.memory_dimensions(),
-    //         vm.config.system().num_public_values,
-    //         &final_memory,
-    //     );
-    //
-    //     // TODO: extract_public_values() already converts the final_memory to a MemoryImage<F>,
-    //     // and this is a kinda expensive redundant work. Find a way to do it only once.
-    //     self.memory_image = final_memory
-    //         .items()
-    //         .filter_map(|(addr, v)| (!v.is_zero()).then_some((addr, v)))
-    //         .collect();
-    //
-    //     Ok(public_values)
-    // }
+    pub fn execute(
+        &mut self,
+        vm_config: WomirConfig,
+        entry_point: &str,
+        inputs: impl Into<Streams<F>>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        let exe = self.program_with_entry_point(entry_point);
+
+        let vm = VmExecutor::new(vm_config.clone()).unwrap();
+        let instance = vm.instance(&exe).unwrap();
+        let final_state = instance.execute(inputs, None)?;
+        let public_values = extract_public_values(
+            vm_config.system.num_public_values,
+            &final_state.memory.memory,
+        );
+
+        // TODO the block below may not work after the refactor.
+        // TODO: extract_public_values() already converts the final_memory to a MemoryImage<F>,
+        // and this is a kinda expensive redundant work. Find a way to do it only once.
+        self.memory_image = final_state
+            .memory
+            .memory
+            .get_memory()
+            .iter()
+            .enumerate()
+            .flat_map(|(addr_space, linear_mem)| {
+                linear_mem
+                    .as_slice()
+                    .iter()
+                    .enumerate()
+                    .map(move |(addr, v)| (addr_space as u32, addr as u32, *v))
+            })
+            .filter_map(|(addr_space, addr, v)| (v != 0).then_some(((addr_space, addr), v)))
+            .collect();
+
+        Ok(public_values)
+    }
 }
 
 fn create_startup_code<F>(ctx: &Module, entry_point: &LabelValue) -> Vec<Instruction<F>>
