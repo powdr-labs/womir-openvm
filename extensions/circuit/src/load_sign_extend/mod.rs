@@ -6,5 +6,5 @@ use openvm_rv32im_circuit::LoadSignExtendCoreCols;
 pub type LoadSignExtendChip<F> = VmChipWrapperWom<
     F,
     Rv32LoadStoreAdapterChip<F>,
-    LoadSignExtendCoreCols<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+    LoadSignExtendCoreCols<F, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;

@@ -9,21 +9,18 @@ use openvm_circuit::{
         ExecutorInventoryBuilder, ExecutorInventoryError, PhantomSubExecutor, VmCircuitExtension,
         VmExecutionExtension, AirInventory, AirInventoryError,
     },
-    system::memory::online::GuestMemory,
+    system::{memory::online::GuestMemory, phantom::PhantomChip},
 };
-use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
+use openvm_circuit_derive::AnyEnum;
 use openvm_circuit_primitives::{
-    bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
-    range_tuple::{RangeTupleCheckerBus, SharedRangeTupleCheckerChip},
+    bitwise_op_lookup::SharedBitwiseOperationLookupChip,
+    range_tuple::SharedRangeTupleCheckerChip,
 };
 use openvm_circuit_primitives_derive::{Chip, ChipUsageGetter};
-use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
-use openvm_rv32im_circuit::{
-    BaseAluCoreCols, DivRemCoreCols, LoadSignExtendCoreCols, LoadStoreCoreCols,
-    MultiplicationCoreCols, ShiftCoreCols,
-};
+use openvm_instructions::PhantomDiscriminant;
+use openvm_rv32im_circuit::*;
 use rand::rngs::StdRng;
-use openvm_stark_backend::{p3_field::PrimeField32, config::StarkGenericConfig};
+use openvm_stark_backend::{p3_field::PrimeField32, config::{StarkGenericConfig, Val}};
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
     DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode,
@@ -196,9 +193,9 @@ impl<F: PrimeField32> VmExecutionExtension<F> for WomirI<F> {
     }
 }
 
-impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for WomirI<SC::Val>
+impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for WomirI<Val<SC>>
 where
-    SC::Val: PrimeField32,
+    Val<SC>: PrimeField32,
 {
     fn extend_circuit(&self, _inventory: &mut AirInventory<SC>) -> Result<(), AirInventoryError> {
         // TODO: Implement AIR registration

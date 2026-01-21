@@ -8,7 +8,7 @@ use openvm_circuit::{
     },
     system::{
         memory::{
-            MemoryAddress, MemoryController, RecordId,
+            MemoryAddress, MemoryController,
             offline_checker::{
                 MemoryBaseAuxCols, MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols,
             },
@@ -114,7 +114,7 @@ pub struct Rv32LoadStoreReadRecord<F: Field> {
     /// read from register for stores
     pub wom_read: Option<WomRecord<F>>,
     /// read from mememory for loads
-    pub mem_read: Option<RecordId>,
+    pub mem_read: Option<usize>,
     pub rs1_ptr: F,
     pub imm_hi: F,
     pub imm_lo: F,
@@ -128,10 +128,10 @@ pub struct Rv32LoadStoreReadRecord<F: Field> {
 #[serde(bound = "F: Field")]
 pub struct Rv32LoadStoreWriteRecord<F: Field> {
     /// This will be a write to a register in case of Load and a write to RISC-V memory in case of
-    /// Stores. For better struct packing, `RecordId(usize::MAX)` is used to indicate that
+    /// Stores. For better struct packing, `usize::MAX` is used to indicate that
     /// there is no write.
     pub wom_write: Option<WomRecord<F>>,
-    pub mem_write: Option<RecordId>,
+    pub mem_write: Option<usize>,
     pub from_state: ExecutionState<u32>,
     pub from_frame: FrameState<u32>,
     pub rd_rs2_ptr: F,

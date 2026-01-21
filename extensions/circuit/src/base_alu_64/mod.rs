@@ -6,5 +6,5 @@ use openvm_rv32im_circuit::BaseAluCoreCols;
 pub type WomBaseAlu64Chip<F> = VmChipWrapperWom<
     F,
     WomBaseAluAdapterChip<F, { RV32_REGISTER_NUM_LIMBS * 2 }, { RV32_REGISTER_NUM_LIMBS * 2 }, 2>,
-    BaseAluCoreCols<{ RV32_REGISTER_NUM_LIMBS * 2 }, RV32_CELL_BITS>,
+    BaseAluCoreCols<F, { RV32_REGISTER_NUM_LIMBS * 2 }, RV32_CELL_BITS>,
 >;

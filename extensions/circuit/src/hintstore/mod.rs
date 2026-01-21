@@ -284,7 +284,7 @@ pub struct HintStoreChip<F: Field> {
     air: HintStoreAir,
     pub records: Vec<HintStoreRecord<F>>,
     pub height: usize,
-    offline_memory: Arc<Mutex<OfflineMemory<F>>>,
+    offline_memory: Arc<Mutex<WomController<F>>>,
     pub streams: OnceLock<Arc<Mutex<Streams<F>>>>,
     pub shared_fp: Arc<Mutex<u32>>,
     wom: Arc<Mutex<WomController<F>>>,
@@ -299,7 +299,7 @@ impl<F: PrimeField32> HintStoreChip<F> {
         program_bus: ProgramBus,
         bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
         memory_bridge: MemoryBridge,
-        offline_memory: Arc<Mutex<OfflineMemory<F>>>,
+        offline_memory: Arc<Mutex<WomController<F>>>,
         shared_fp: Arc<Mutex<u32>>,
         wom: Arc<Mutex<WomController<F>>>,
         pointer_max_bits: usize,
@@ -332,8 +332,8 @@ impl<F: PrimeField32> HintStoreChip<F> {
     }
 }
 
-impl<F: PrimeField32> InstructionExecutor<F> for HintStoreChip<F> {
-    fn execute(
+impl<F: PrimeField32> HintStoreChip<F> {
+    pub fn execute(
         &mut self,
         memory: &mut MemoryController<F>,
         instruction: &Instruction<F>,
@@ -468,7 +468,6 @@ impl<F: PrimeField32> HintStoreChip<F> {
         _record: HintStoreRecord<F>,
         _aux_cols_factory: &MemoryAuxColsFactory<F>,
         _slice: &mut [F],
-        _memory: &OfflineMemory<F>,
         _bitwise_lookup_chip: &SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
         _pointer_max_bits: usize,
     ) -> usize {

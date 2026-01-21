@@ -7,5 +7,5 @@ use openvm_rv32im_circuit::DivRemCoreCols;
 pub type WomDivRemChip<F> = VmChipWrapperWom<
     F,
     WomBaseAluAdapterChip<F, RV32_REGISTER_NUM_LIMBS, RV32_REGISTER_NUM_LIMBS, 1>,
-    DivRemCoreCols<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+    DivRemCoreCols<F, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;

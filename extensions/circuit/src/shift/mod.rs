@@ -7,5 +7,5 @@ use openvm_rv32im_circuit::ShiftCoreCols;
 pub type WomShiftChip<F> = VmChipWrapperWom<
     F,
     WomBaseAluAdapterChip<F, RV32_REGISTER_NUM_LIMBS, RV32_REGISTER_NUM_LIMBS, 1>,
-    ShiftCoreCols<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+    ShiftCoreCols<F, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;

@@ -175,11 +175,11 @@ impl<AB: InteractionBuilder> FrameBridgeInteractor<AB> {
 // ============ Wom VM Chip Wrapper ============
 // Main wrapper that manages frame pointer state across instruction execution
 
-pub struct VmChipWrapperWom<F, A: VmAdapterChipWom<F>, C: VmCoreChip<F, A::Interface>> {
+pub struct VmChipWrapperWom<F, A: VmAdapterChipWom<F>, C: VmCoreChipWom<F, A::Interface>> {
     adapter: A,
     core: C,
     records: Vec<(A::ReadRecord, A::WriteRecord, C::Record)>,
-    offline_memory: Arc<Mutex<OfflineMemory<F>>>,
+    offline_memory: Arc<Mutex<WomController<F>>>,
     fp: Arc<Mutex<u32>>,
     wom: Arc<Mutex<WomController<F>>>,
 }
@@ -189,12 +189,12 @@ const DEFAULT_RECORDS_CAPACITY: usize = 1 << 5;
 impl<F, A, C> VmChipWrapperWom<F, A, C>
 where
     A: VmAdapterChipWom<F>,
-    C: VmCoreChip<F, A::Interface>,
+    C: VmCoreChipWom<F, A::Interface>,
 {
     pub fn new(
         adapter: A,
         core: C,
-        offline_memory: Arc<Mutex<OfflineMemory<F>>>,
+        offline_memory: Arc<Mutex<WomController<F>>>,
         fp: Arc<Mutex<u32>>,
         wom: Arc<Mutex<WomController<F>>>,
     ) -> Self {
@@ -332,13 +332,13 @@ pub trait VmCoreChipWom<F, I: VmAdapterInterface<F>> {
 
 // ============ Trait Implementations ============
 
-impl<F, A, M> InstructionExecutorTrait<F> for VmChipWrapperWom<F, A, M>
+impl<F, A, M> VmChipWrapperWom<F, A, M>
 where
     F: PrimeField32,
     A: VmAdapterChipWom<F> + Send + Sync,
-    M: VmCoreChip<F, A::Interface> + Send + Sync,
+    M: VmCoreChipWom<F, A::Interface> + Send + Sync,
 {
-    fn execute(
+    pub fn execute(
         &mut self,
         memory: &mut MemoryController<F>,
         instruction: &Instruction<F>,
@@ -369,7 +369,7 @@ where
         Ok(to_state)
     }
 
-    fn get_opcode_name(&self, opcode: usize) -> String {
+    pub fn get_opcode_name(&self, opcode: usize) -> String {
         self.core.get_opcode_name(opcode)
     }
 }
@@ -377,7 +377,7 @@ where
 impl<F, A, M> ChipUsageGetter for VmChipWrapperWom<F, A, M>
 where
     A: VmAdapterChipWom<F> + Sync,
-    M: VmCoreChip<F, A::Interface> + Sync,
+    M: VmCoreChipWom<F, A::Interface> + Sync,
 {
     fn air_name(&self) -> String {
         format!(
