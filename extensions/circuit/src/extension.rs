@@ -6,13 +6,10 @@ use std::{
 use derive_more::derive::From;
 use openvm_circuit::{
     arch::{
-        AirInventory, AirInventoryError, ExecutorInventory, ExecutorInventoryBuilder,
-        ExecutorInventoryError, PhantomSubExecutor, SystemConfig, VmCircuitExtension,
-        VmExecutionExtension,
+        ExecutorInventoryBuilder, ExecutorInventoryError, PhantomSubExecutor, VmCircuitExtension,
+        VmExecutionExtension, AirInventory, AirInventoryError,
     },
-    system::{
-        memory::online::GuestMemory, phantom::PhantomChip, program::ProgramBus, SystemPort,
-    },
+    system::memory::online::GuestMemory,
 };
 use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
 use openvm_circuit_primitives::{
@@ -26,7 +23,7 @@ use openvm_rv32im_circuit::{
     MultiplicationCoreCols, ShiftCoreCols,
 };
 use rand::rngs::StdRng;
-use openvm_stark_backend::p3_field::PrimeField32;
+use openvm_stark_backend::{p3_field::PrimeField32, config::StarkGenericConfig};
 use openvm_womir_transpiler::{
     AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
     DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode,
@@ -154,6 +151,65 @@ pub enum WomirIPeriphery<F: PrimeField32> {
 
 // ============ VmExtension Implementations ============
 
+impl<F: PrimeField32> VmExecutionExtension<F> for WomirI<F> {
+    type Executor = WomirIExecutor<F>;
+
+    fn extend_execution(
+        &self,
+        builder: &mut ExecutorInventoryBuilder<F, Self::Executor>,
+    ) -> Result<(), ExecutorInventoryError> {
+        // TODO: Implement executor registration
+        // This needs to be rewritten to use the new Executor pattern
+        // For now, we'll register phantom sub-executors which are still supported
+        
+        self.prepare_new_segment();
+        
+        // Register phantom sub-executors
+        builder.add_phantom_sub_executor(
+            phantom::HintInputSubEx,
+            PhantomDiscriminant(Phantom::HintInput as u16),
+        )?;
+        builder.add_phantom_sub_executor(
+            phantom::HintRandomSubEx::new(self.wom_controller.clone()),
+            PhantomDiscriminant(Phantom::HintRandom as u16),
+        )?;
+        builder.add_phantom_sub_executor(
+            phantom::PrintStrSubEx {
+                wom: self.wom_controller.clone(),
+                fp: self.fp.clone(),
+            },
+            PhantomDiscriminant(Phantom::PrintStr as u16),
+        )?;
+        builder.add_phantom_sub_executor(
+            phantom::HintLoadByKeySubEx {
+                wom: self.wom_controller.clone(),
+            },
+            PhantomDiscriminant(Phantom::HintLoadByKey as u16),
+        )?;
+        
+        // TODO: Register all the WOM executors here following the pattern from rv32im
+        // For example:
+        // let base_alu = WomBaseAluExecutor::new(...);
+        // builder.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
+        
+        Ok(())
+    }
+}
+
+impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for WomirI<SC::Val>
+where
+    SC::Val: PrimeField32,
+{
+    fn extend_circuit(&self, _inventory: &mut AirInventory<SC>) -> Result<(), AirInventoryError> {
+        // TODO: Implement AIR registration
+        // This needs to register all the AIRs for the WOM extension
+        // For now, return Ok to allow compilation
+        Ok(())
+    }
+}
+
+// The old build method is commented out for reference
+/*
 impl<F: PrimeField32> VmExtension<F> for WomirI<F> {
     type Executor = WomirIExecutor<F>;
     type Periphery = WomirIPeriphery<F>;
@@ -606,6 +662,7 @@ impl<F: PrimeField32> VmExtension<F> for WomirI<F> {
         Ok(inventory)
     }
 }
+*/
 
 /// Phantom sub-executors
 mod phantom {
