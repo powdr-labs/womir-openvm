@@ -587,7 +587,7 @@ mod tests {
             wom::add_imm::<F>(9, 0, 1_i16.into()),
             wom::add::<F>(10, 8, 9),
             // wom::reveal(10, 0),
-            // wom::halt(),
+            wom::halt(),
         ];
 
         run_vm_test("Basic WOM operations", instructions, 667, None)
