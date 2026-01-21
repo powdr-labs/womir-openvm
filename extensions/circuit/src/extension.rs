@@ -60,48 +60,48 @@ impl<F: PrimeField32> Default for WomirI<F> {
             range_tuple_checker_sizes: default_range_tuple_checker_sizes(),
             // The entry frame starts at fp=0:
             fp: Arc::new(Mutex::new(DEFAULT_INIT_FP)),
-            frame_stack: Arc::new(Mutex::new(vec![0])),
-            frame_allocator: Arc::new(Mutex::new(Self::new_frame_allocator(
-                // Reserve range 0..8 that is used by the startup code.
-                [(0, 8)].into(),
-            ))),
-            wom_controller: Arc::new(Mutex::new(WomController::new())),
+            // frame_stack: Arc::new(Mutex::new(vec![0])),
+            // frame_allocator: Arc::new(Mutex::new(Self::new_frame_allocator(
+            //     // Reserve range 0..8 that is used by the startup code.
+            //     [(0, 8)].into(),
+            // ))),
+            // wom_controller: Arc::new(Mutex::new(WomController::new())),
         }
     }
 }
 
 impl<F: PrimeField32> WomirI<F> {
-    fn new_frame_allocator(existing_allocations: BTreeMap<u32, u32>) -> FrameAllocator {
-        FrameAllocator::new(
-            // The frame pointer is a field element, so the field limits its size.
-            F::ORDER_U32 - 1,
-            existing_allocations,
-        )
-    }
+    // fn new_frame_allocator(existing_allocations: BTreeMap<u32, u32>) -> FrameAllocator {
+    //     FrameAllocator::new(
+    //         // The frame pointer is a field element, so the field limits its size.
+    //         F::ORDER_U32 - 1,
+    //         existing_allocations,
+    //     )
+    // }
 
     /// Carry over the state that persists across segments.
     fn prepare_new_segment(&self) {
-        // Reset the frame allocator.
-        let mut frame_allocator = self.frame_allocator.lock().unwrap();
-        let old_ranges = frame_allocator.get_allocated_ranges();
-
-        // Keep all ranges that are in the frame stack.
-        let remaining_ranges: BTreeMap<u32, u32> = self
-            .frame_stack
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|fp| (*fp, *old_ranges.get(fp).unwrap()))
-            .collect();
-
-        // Clear all the memory ranges outside of the remaining frames.
-        self.wom_controller
-            .lock()
-            .unwrap()
-            .clear_unused(remaining_ranges.iter().map(|(s, sz)| (*s, *sz)));
-
-        // Create the new frame allocator.
-        *frame_allocator = Self::new_frame_allocator(remaining_ranges);
+        // // Reset the frame allocator.
+        // let mut frame_allocator = self.frame_allocator.lock().unwrap();
+        // let old_ranges = frame_allocator.get_allocated_ranges();
+        //
+        // // Keep all ranges that are in the frame stack.
+        // let remaining_ranges: BTreeMap<u32, u32> = self
+        //     .frame_stack
+        //     .lock()
+        //     .unwrap()
+        //     .iter()
+        //     .map(|fp| (*fp, *old_ranges.get(fp).unwrap()))
+        //     .collect();
+        //
+        // // Clear all the memory ranges outside of the remaining frames.
+        // self.wom_controller
+        //     .lock()
+        //     .unwrap()
+        //     .clear_unused(remaining_ranges.iter().map(|(s, sz)| (*s, *sz)));
+        //
+        // // Create the new frame allocator.
+        // *frame_allocator = Self::new_frame_allocator(remaining_ranges);
     }
 }
 

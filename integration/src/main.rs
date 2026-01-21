@@ -25,92 +25,88 @@ use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
 use womir::loader::flattening::WriteOnceAsm;
 use womir::loader::{FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics};
 
-use openvm_circuit::arch::{
-    InitFileGenerator, SystemConfig, VmChipComplex, VmConfig, VmInventoryError,
-};
+use openvm_circuit::arch::{InitFileGenerator, SystemConfig, VmChipComplex, VmConfig};
 use openvm_circuit::circuit_derive::{Chip, ChipUsageGetter};
-use openvm_circuit_derive::{AnyEnum, InstructionExecutor};
+use openvm_circuit_derive::AnyEnum;
 use openvm_sdk::Sdk;
-use openvm_sdk::config::{
-    AppConfig, DEFAULT_APP_LOG_BLOWUP, SdkVmConfig, SdkVmConfigExecutor, SdkVmConfigPeriphery,
-};
+use openvm_sdk::config::{AppConfig, DEFAULT_APP_LOG_BLOWUP, SdkVmConfig, SdkVmConfigExecutor};
 use openvm_stark_sdk::config::FriParameters;
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
-use openvm_womir_circuit::{self, WomirI, WomirIExecutor, WomirIPeriphery};
+// use openvm_womir_circuit::{self, WomirI, WomirIExecutor, WomirIPeriphery};
 
 use crate::builtin_functions::BuiltinFunction;
 use crate::womir_translation::{Directive, LinkedProgram, OpenVMSettings};
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct SpecializedConfig {
-    pub sdk_config: SdkVmConfig,
-    wom: WomirI<F>,
-}
-
-impl SpecializedConfig {
-    fn new(sdk_config: SdkVmConfig) -> Self {
-        Self {
-            sdk_config,
-            wom: WomirI::default(),
-        }
-    }
-}
-
-impl InitFileGenerator for SpecializedConfig {
-    fn generate_init_file_contents(&self) -> Option<String> {
-        self.sdk_config.generate_init_file_contents()
-    }
-
-    fn write_to_init_file(
-        &self,
-        manifest_dir: &Path,
-        init_file_name: Option<&str>,
-    ) -> eyre::Result<()> {
-        self.sdk_config
-            .write_to_init_file(manifest_dir, init_file_name)
-    }
-}
-
-#[allow(clippy::large_enum_variant)]
-#[derive(ChipUsageGetter, InstructionExecutor, Chip, From, AnyEnum)]
-pub enum SpecializedExecutor<F: PrimeField32> {
-    #[any_enum]
-    SdkExecutor(SdkVmConfigExecutor<F>),
-    #[any_enum]
-    WomExecutor(WomirIExecutor<F>),
-}
-
-#[derive(From, ChipUsageGetter, Chip, AnyEnum)]
-pub enum SpecializedPeriphery<F: PrimeField32> {
-    #[any_enum]
-    SdkPeriphery(SdkVmConfigPeriphery<F>),
-    #[any_enum]
-    WomPeriphery(WomirIPeriphery<F>),
-}
-
-impl VmConfig<F> for SpecializedConfig {
-    type Executor = SpecializedExecutor<F>;
-    type Periphery = SpecializedPeriphery<F>;
-
-    fn system(&self) -> &SystemConfig {
-        VmConfig::<F>::system(&self.sdk_config)
-    }
-
-    fn system_mut(&mut self) -> &mut SystemConfig {
-        VmConfig::<F>::system_mut(&mut self.sdk_config)
-    }
-
-    fn create_chip_complex(
-        &self,
-    ) -> Result<VmChipComplex<F, Self::Executor, Self::Periphery>, VmInventoryError> {
-        let chip = self.sdk_config.create_chip_complex()?;
-        let chip = chip.extend(&self.wom)?;
-
-        Ok(chip)
-    }
-}
+//
+// #[derive(Serialize, Deserialize, Clone)]
+// pub struct SpecializedConfig {
+//     pub sdk_config: SdkVmConfig,
+//     wom: WomirI<F>,
+// }
+//
+// impl SpecializedConfig {
+//     fn new(sdk_config: SdkVmConfig) -> Self {
+//         Self {
+//             sdk_config,
+//             wom: WomirI::default(),
+//         }
+//     }
+// }
+//
+// impl InitFileGenerator for SpecializedConfig {
+//     fn generate_init_file_contents(&self) -> Option<String> {
+//         self.sdk_config.generate_init_file_contents()
+//     }
+//
+//     fn write_to_init_file(
+//         &self,
+//         manifest_dir: &Path,
+//         init_file_name: Option<&str>,
+//     ) -> eyre::Result<()> {
+//         self.sdk_config
+//             .write_to_init_file(manifest_dir, init_file_name)
+//     }
+// }
+//
+// #[allow(clippy::large_enum_variant)]
+// #[derive(ChipUsageGetter, InstructionExecutor, Chip, From, AnyEnum)]
+// pub enum SpecializedExecutor<F: PrimeField32> {
+//     #[any_enum]
+//     SdkExecutor(SdkVmConfigExecutor<F>),
+//     #[any_enum]
+//     WomExecutor(WomirIExecutor<F>),
+// }
+//
+// #[derive(From, ChipUsageGetter, Chip, AnyEnum)]
+// pub enum SpecializedPeriphery<F: PrimeField32> {
+//     #[any_enum]
+//     SdkPeriphery(SdkVmConfigPeriphery<F>),
+//     #[any_enum]
+//     WomPeriphery(WomirIPeriphery<F>),
+// }
+//
+// impl VmConfig<F> for SpecializedConfig {
+//     type Executor = SpecializedExecutor<F>;
+//     type Periphery = SpecializedPeriphery<F>;
+//
+//     fn system(&self) -> &SystemConfig {
+//         VmConfig::<F>::system(&self.sdk_config)
+//     }
+//
+//     fn system_mut(&mut self) -> &mut SystemConfig {
+//         VmConfig::<F>::system_mut(&mut self.sdk_config)
+//     }
+//
+//     fn create_chip_complex(
+//         &self,
+//     ) -> Result<VmChipComplex<F, Self::Executor, Self::Periphery>, VmInventoryError> {
+//         let chip = self.sdk_config.create_chip_complex()?;
+//         let chip = chip.extend(&self.wom)?;
+//
+//         Ok(chip)
+//     }
+// }
 
 #[derive(Parser)]
 struct CliArgs {
@@ -211,24 +207,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .system(Default::default())
                 .io(Default::default())
                 .build();
-            let vm_config = SpecializedConfig::new(vm_config);
-
-            // Create and execute program
-            let mut linked_program = LinkedProgram::new(module, functions);
-
-            let mut stdin = StdIn::default();
-            for arg in args {
-                let val = arg.parse::<u32>().unwrap();
-                stdin.write(&val);
-            }
-
-            for binary_input_file in &binary_input_files {
-                stdin.write_bytes(&fs::read(binary_input_file).unwrap());
-            }
-
-            let output = linked_program.execute(vm_config, &function, stdin)?;
-
-            println!("output: {output:?}");
+            // let vm_config = SpecializedConfig::new(vm_config);
+            //
+            // // Create and execute program
+            // let mut linked_program = LinkedProgram::new(module, functions);
+            //
+            // let mut stdin = StdIn::default();
+            // for arg in args {
+            //     let val = arg.parse::<u32>().unwrap();
+            //     stdin.write(&val);
+            // }
+            //
+            // for binary_input_file in &binary_input_files {
+            //     stdin.write_bytes(&fs::read(binary_input_file).unwrap());
+            // }
+            //
+            // let output = linked_program.execute(vm_config, &function, stdin)?;
+            //
+            // println!("output: {output:?}");
         }
         Commands::Prove {
             function,
@@ -244,60 +240,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let linked_program = LinkedProgram::new(module, functions);
             let exe = linked_program.program_with_entry_point(&function);
 
-            let prove = || -> Result<()> {
-                // Create VM configuration
-                let vm_config = SdkVmConfig::builder()
-                    .system(Default::default())
-                    .io(Default::default())
-                    .build();
-                let vm_config = SpecializedConfig::new(vm_config);
+            // let prove = || -> Result<()> {
+            //     // Create VM configuration
+            //     let vm_config = SdkVmConfig::builder()
+            //         .system(Default::default())
+            //         .io(Default::default())
+            //         .build();
+            //     let vm_config = SpecializedConfig::new(vm_config);
 
-                let sdk = Sdk::new();
+            // let sdk = Sdk::new();
+            //
+            // // Set app configuration
+            // let app_fri_params = FriParameters::standard_with_100_bits_conjectured_security(
+            //     DEFAULT_APP_LOG_BLOWUP,
+            // );
+            // let app_config = AppConfig::new(app_fri_params, vm_config.clone());
+            //
+            // // Commit the exe
+            // let app_committed_exe = sdk.commit_app_exe(app_fri_params, exe.clone())?;
+            //
+            // // Generate an AppProvingKey
+            // let app_pk = Arc::new(sdk.app_keygen(app_config)?);
+            //
+            // // Setup input
+            // let mut stdin = StdIn::default();
+            // for arg in args {
+            //     let val = arg.parse::<u32>().unwrap();
+            //     stdin.write(&val);
+            // }
+            //
+            // // Generate a proof
+            // tracing::info!("Generating app proof...");
+            // let start = std::time::Instant::now();
+            // let app_proof = sdk.generate_app_proof(
+            //     app_pk.clone(),
+            //     app_committed_exe.clone(),
+            //     stdin.clone(),
+            // )?;
+            // tracing::info!("App proof took {:?}", start.elapsed());
+            //
+            // tracing::info!(
+            //     "Public values: {:?}",
+            //     app_proof.user_public_values.public_values
+            // );
 
-                // Set app configuration
-                let app_fri_params = FriParameters::standard_with_100_bits_conjectured_security(
-                    DEFAULT_APP_LOG_BLOWUP,
-                );
-                let app_config = AppConfig::new(app_fri_params, vm_config.clone());
-
-                // Commit the exe
-                let app_committed_exe = sdk.commit_app_exe(app_fri_params, exe.clone())?;
-
-                // Generate an AppProvingKey
-                let app_pk = Arc::new(sdk.app_keygen(app_config)?);
-
-                // Setup input
-                let mut stdin = StdIn::default();
-                for arg in args {
-                    let val = arg.parse::<u32>().unwrap();
-                    stdin.write(&val);
-                }
-
-                // Generate a proof
-                tracing::info!("Generating app proof...");
-                let start = std::time::Instant::now();
-                let app_proof = sdk.generate_app_proof(
-                    app_pk.clone(),
-                    app_committed_exe.clone(),
-                    stdin.clone(),
-                )?;
-                tracing::info!("App proof took {:?}", start.elapsed());
-
-                tracing::info!(
-                    "Public values: {:?}",
-                    app_proof.user_public_values.public_values
-                );
-
-                Ok(())
-            };
-            if let Some(metrics_path) = metrics {
-                run_with_metric_collection_to_file(
-                    std::fs::File::create(metrics_path).expect("Failed to create metrics file"),
-                    prove,
-                )?;
-            } else {
-                prove()?
-            }
+            //     Ok(())
+            // };
+            // if let Some(metrics_path) = metrics {
+            //     run_with_metric_collection_to_file(
+            //         std::fs::File::create(metrics_path).expect("Failed to create metrics file"),
+            //         prove,
+            //     )?;
+            // } else {
+            //     prove()?
+            // }
         }
         Commands::ProveRiscv {
             program,
@@ -306,29 +302,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..
         } => {
             let prove = || -> Result<()> {
-                let compiled_program = powdr_openvm::compile_guest(
-                    &program,
-                    Default::default(),
-                    powdr_autoprecompiles::PowdrConfig::new(
-                        0,
-                        0,
-                        powdr_openvm::DegreeBound {
-                            identities: 3,
-                            bus_interactions: 2,
-                        },
-                    ),
-                    Default::default(),
-                    Default::default(),
-                )
-                .unwrap();
+                // let compiled_program = powdr_openvm::compile_guest(
+                //     &program,
+                //     Default::default(),
+                //     powdr_autoprecompiles::PowdrConfig::new(
+                //         0,
+                //         0,
+                //         powdr_openvm::DegreeBound {
+                //             identities: 3,
+                //             bus_interactions: 2,
+                //         },
+                //     ),
+                //     Default::default(),
+                //     Default::default(),
+                // )
+                // .unwrap();
 
-                let mut stdin = StdIn::default();
-                for arg in args {
-                    let val = arg.parse::<u32>().unwrap();
-                    stdin.write(&val);
-                }
+                // let mut stdin = StdIn::default();
+                // for arg in args {
+                //     let val = arg.parse::<u32>().unwrap();
+                //     stdin.write(&val);
+                // }
 
-                powdr_openvm::prove(&compiled_program, false, false, stdin, None).unwrap();
+                // powdr_openvm::prove(&compiled_program, false, false, stdin, None).unwrap();
 
                 Ok(())
             };

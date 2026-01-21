@@ -8,10 +8,10 @@ use arrayvec::ArrayVec;
 use itertools::Itertools;
 use openvm_circuit::{
     arch::{ExecutionError, Streams, VmConfig, VmExecutor},
-    system::memory::tree::public_values::extract_public_values,
+    // system::memory::tree::public_values::extract_public_values,
 };
 use openvm_instructions::{
-    exe::{MemoryImage, VmExe},
+    exe::{SparseMemoryImage, VmExe},
     instruction::Instruction,
     program::{DEFAULT_PC_STEP, Program},
     riscv,
@@ -64,7 +64,7 @@ pub struct LinkedProgram<'a, F: PrimeField32> {
     label_map: HashMap<String, LabelValue>,
     /// Linked instructions without the startup code:
     linked_instructions: Vec<Instruction<F>>,
-    memory_image: MemoryImage<F>,
+    memory_image: SparseMemoryImage,
 }
 
 impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
@@ -106,43 +106,44 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         // We assume that the loop above removes a single `nop` introduced by the linker.
         assert_eq!(linked_instructions.len(), start_offset - 1);
 
-        let memory_image = std::mem::take(&mut module.initial_memory)
-            .into_iter()
-            .flat_map(|(addr, value)| {
-                use womir::loader::MemoryEntry::*;
-                let v = match value {
-                    Value(v) => v,
-                    FuncAddr(idx) => {
-                        let label = func_idx_to_label(idx);
-                        label_map[&label].pc
-                    }
-                    FuncFrameSize(func_idx) => {
-                        let label = func_idx_to_label(func_idx);
-                        label_map[&label].frame_size.unwrap()
-                    }
-                    NullFuncType => NULL_REF[0],
-                    NullFuncFrameSize => NULL_REF[1],
-                    NullFuncAddr => NULL_REF[2],
-                };
-
-                [
-                    v & 0xff,
-                    (v >> 8) & 0xff,
-                    (v >> 16) & 0xff,
-                    (v >> 24) & 0xff,
-                ]
-                .into_iter()
-                .enumerate()
-                .filter_map(move |(i, byte)| {
-                    const ROM_ID: u32 = 2;
-                    if byte != 0 {
-                        Some(((ROM_ID, addr + i as u32), F::from_canonical_u32(byte)))
-                    } else {
-                        None
-                    }
-                })
-            })
-            .collect();
+        let memory_image = Default::default();
+        // let memory_image = std::mem::take(&mut module.initial_memory)
+        //     .into_iter()
+        //     .flat_map(|(addr, value)| {
+        //         use womir::loader::MemoryEntry::*;
+        //         let v = match value {
+        //             Value(v) => v,
+        //             FuncAddr(idx) => {
+        //                 let label = func_idx_to_label(idx);
+        //                 label_map[&label].pc
+        //             }
+        //             FuncFrameSize(func_idx) => {
+        //                 let label = func_idx_to_label(func_idx);
+        //                 label_map[&label].frame_size.unwrap()
+        //             }
+        //             NullFuncType => NULL_REF[0],
+        //             NullFuncFrameSize => NULL_REF[1],
+        //             NullFuncAddr => NULL_REF[2],
+        //         };
+        //
+        //         [
+        //             v & 0xff,
+        //             (v >> 8) & 0xff,
+        //             (v >> 16) & 0xff,
+        //             (v >> 24) & 0xff,
+        //         ]
+        //         .into_iter()
+        //         .enumerate()
+        //         .filter_map(move |(i, byte)| {
+        //             const ROM_ID: u32 = 2;
+        //             if byte != 0 {
+        //                 Some(((ROM_ID, addr + i as u32), F::from_canonical_u32(byte)))
+        //             } else {
+        //                 None
+        //             }
+        //         })
+        //     })
+        //     .collect();
 
         Self {
             module,
@@ -162,11 +163,7 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         // TODO: make womir read and carry debug info
         // The first instruction was removed, which was a nop inserted by the linker,
         // so we need to set PC base to DEFAULT_PC_STEP, skipping position 0.
-        let program = Program::new_without_debug_infos(
-            &linked_instructions,
-            DEFAULT_PC_STEP,
-            DEFAULT_PC_STEP,
-        );
+        let program = Program::new_without_debug_infos(&linked_instructions, DEFAULT_PC_STEP);
 
         // Create the executor using the current memory image.
         VmExe::new(program)
@@ -174,31 +171,31 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
             .with_init_memory(self.memory_image.clone())
     }
 
-    pub fn execute(
-        &mut self,
-        vm_config: impl VmConfig<F>,
-        entry_point: &str,
-        inputs: impl Into<Streams<F>>,
-    ) -> Result<Vec<F>, ExecutionError> {
-        let exe = self.program_with_entry_point(entry_point);
-
-        let vm = VmExecutor::new(vm_config);
-        let final_memory = vm.execute(exe, inputs)?.unwrap();
-        let public_values = extract_public_values(
-            &vm.config.system().memory_config.memory_dimensions(),
-            vm.config.system().num_public_values,
-            &final_memory,
-        );
-
-        // TODO: extract_public_values() already converts the final_memory to a MemoryImage<F>,
-        // and this is a kinda expensive redundant work. Find a way to do it only once.
-        self.memory_image = final_memory
-            .items()
-            .filter_map(|(addr, v)| (!v.is_zero()).then_some((addr, v)))
-            .collect();
-
-        Ok(public_values)
-    }
+    // pub fn execute(
+    //     &mut self,
+    //     vm_config: impl VmConfig<F>,
+    //     entry_point: &str,
+    //     inputs: impl Into<Streams<F>>,
+    // ) -> Result<Vec<F>, ExecutionError> {
+    //     let exe = self.program_with_entry_point(entry_point);
+    //
+    //     let vm = VmExecutor::new(vm_config);
+    //     let final_memory = vm.execute(exe, inputs)?.unwrap();
+    //     let public_values = extract_public_values(
+    //         &vm.config.system().memory_config.memory_dimensions(),
+    //         vm.config.system().num_public_values,
+    //         &final_memory,
+    //     );
+    //
+    //     // TODO: extract_public_values() already converts the final_memory to a MemoryImage<F>,
+    //     // and this is a kinda expensive redundant work. Find a way to do it only once.
+    //     self.memory_image = final_memory
+    //         .items()
+    //         .filter_map(|(addr, v)| (!v.is_zero()).then_some((addr, v)))
+    //         .collect();
+    //
+    //     Ok(public_values)
+    // }
 }
 
 fn create_startup_code<F>(ctx: &Module, entry_point: &LabelValue) -> Vec<Instruction<F>>
