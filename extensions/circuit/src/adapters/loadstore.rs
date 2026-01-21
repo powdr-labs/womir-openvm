@@ -8,7 +8,7 @@ use openvm_circuit::{
     },
     system::{
         memory::{
-            MemoryAddress, MemoryController,
+            MemoryAddress, MemoryController, RecordId,
             offline_checker::{
                 MemoryBaseAuxCols, MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols,
             },
