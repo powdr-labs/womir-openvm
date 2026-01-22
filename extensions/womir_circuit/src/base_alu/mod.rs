@@ -6,7 +6,6 @@ use super::adapters::{
 };
 
 mod core;
-mod execution;
 pub use core::*;
 
 #[cfg(feature = "cuda")]

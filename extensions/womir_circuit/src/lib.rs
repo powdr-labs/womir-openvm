@@ -135,7 +135,7 @@ where
     }
 }
 
-// Implement InterpreterExecutor for the wrapper - generic over any Inner executor
+// InterpreterExecutor - delegates to inner (required by OpenVM framework, but unused in FP-only system)
 impl<F, Inner, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F>
     for PreflightExecutorWrapperFp<Inner, NUM_LIMBS, LIMB_BITS>
 where
