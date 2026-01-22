@@ -20,17 +20,17 @@ use crate::{
 };
 
 #[derive(new)]
-pub struct BaseAluChipGpu {
+pub struct BaseAluChipGpu<const NUM_LIMBS: usize> {
     pub range_checker: Arc<VariableRangeCheckerChipGPU>,
     pub bitwise_lookup: Arc<BitwiseOperationLookupChipGPU<RV32_CELL_BITS>>,
     pub timestamp_max_bits: usize,
 }
 
-impl Chip<DenseRecordArena, GpuBackend> for BaseAluChipGpu {
+impl<const NUM_LIMBS: usize> Chip<DenseRecordArena, GpuBackend> for BaseAluChipGpu<NUM_LIMBS> {
     fn generate_proving_ctx(&self, arena: DenseRecordArena) -> AirProvingContext<GpuBackend> {
         const RECORD_SIZE: usize = size_of::<(
-            BaseAluAdapterRecord,
-            BaseAluCoreRecord<RV32_REGISTER_NUM_LIMBS>,
+            BaseAluAdapterRecord<NUM_LIMBS>,
+            BaseAluCoreRecord<NUM_LIMBS>,
         )>();
         let records = arena.allocated();
         if records.is_empty() {
@@ -38,8 +38,8 @@ impl Chip<DenseRecordArena, GpuBackend> for BaseAluChipGpu {
         }
         debug_assert_eq!(records.len() % RECORD_SIZE, 0);
 
-        let trace_width = BaseAluCoreCols::<F, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>::width()
-            + BaseAluAdapterCols::<F>::width();
+        let trace_width = BaseAluCoreCols::<F, NUM_LIMBS, RV32_CELL_BITS>::width()
+            + BaseAluAdapterCols::<F, NUM_LIMBS>::width();
         let trace_height = next_power_of_two_or_zero(records.len() / RECORD_SIZE);
 
         let d_records = records.to_device().unwrap();

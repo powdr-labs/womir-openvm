@@ -32,11 +32,11 @@ use openvm_stark_backend::{
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
-use openvm_womir_transpiler::{BaseAluOpcode, LoadStoreOpcode};
+use openvm_womir_transpiler::{BaseAlu64Opcode, BaseAluOpcode, LoadStoreOpcode};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
-use crate::{adapters::*, *};
+use crate::{adapters::*, base_alu::REGISTER_NUM_LIMBS_64, *};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "cuda")] {
@@ -85,8 +85,10 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
     )
 )]
 pub enum WomirExecutor {
-    // Rv32 (for standard 32-bit integers):
+    // 32-bit operations:
     BaseAlu(BaseAluExecutor),
+    // 64-bit operations:
+    BaseAlu64(BaseAlu64Executor),
     // LessThan(Rv32LessThanExecutor),
     // Shift(Rv32ShiftExecutor),
     LoadStore(Rv32LoadStoreExecutor),
@@ -110,14 +112,24 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         let pointer_max_bits = inventory.pointer_max_bits();
 
         let fp = std::sync::Arc::new(std::sync::Mutex::new(0));
-        let base_alu = crate::PreflightExecutorWrapperFp::new(
+        let base_alu: BaseAluExecutor = crate::PreflightExecutorWrapperFp::new(
             BaseAluCoreExecutor::new(
-                BaseAluAdapterExecutor::new(),
+                BaseAluAdapterExecutor::<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>::new(),
                 BaseAluOpcode::CLASS_OFFSET
             ),
-            fp
+            fp.clone(),
         );
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
+
+        // 64-bit ALU operations
+        let base_alu_64: BaseAlu64Executor = crate::PreflightExecutorWrapperFp::new(
+            BaseAluCoreExecutor::new(
+                BaseAluAdapterExecutor::<REGISTER_NUM_LIMBS_64, RV32_CELL_BITS>::new(),
+                BaseAlu64Opcode::CLASS_OFFSET
+            ),
+            fp,
+        );
+        inventory.add_executor(base_alu_64, BaseAlu64Opcode::iter().map(|x| x.global_opcode()))?;
         //
         // let lt = LessThanExecutor::new(BaseAluAdapterExecutor, LessThanOpcode::CLASS_OFFSET);
         // inventory.add_executor(lt, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
@@ -219,6 +231,13 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             BaseAluCoreAir::new(bitwise_lu, BaseAluOpcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu);
+
+        // 64-bit ALU AIR
+        let base_alu_64 = BaseAlu64Air::new(
+            BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(base_alu_64);
         //
         // let lt = Rv32LessThanAir::new(
         //     BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
@@ -334,6 +353,18 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(base_alu);
+
+        // 64-bit ALU chip
+        inventory.next_air::<BaseAlu64Air>()?;
+        let base_alu_64 = BaseAlu64Chip::new(
+            BaseAluFiller::new(
+                BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                BaseAlu64Opcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(base_alu_64);
         //
         // inventory.next_air::<Rv32LessThanAir>()?;
         // let lt = Rv32LessThanChip::new(

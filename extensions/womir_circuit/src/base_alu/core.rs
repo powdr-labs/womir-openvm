@@ -1,8 +1,11 @@
+use std::borrow::Borrow;
 use openvm_circuit::arch::*;
-use openvm_circuit::system::memory::online::TracingMemory;
+use openvm_circuit::system::memory::online::{GuestMemory, TracingMemory};
 use openvm_instructions::{instruction::Instruction, LocalOpcode};
 use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
+
+use crate::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 
 // Re-export upstream types that we don't modify
 pub use openvm_rv32im_circuit::{
@@ -50,42 +53,137 @@ pub fn run_alu<const NUM_LIMBS: usize, const LIMB_BITS: usize>(
     }
 }
 
-// InterpreterExecutor - delegates to upstream (required by OpenVM framework, but unused in FP-only system)
+use openvm_circuit_primitives::AlignedBytesBorrow;
+
+// PreCompute struct for InterpreterExecutor
+// This stores instruction parameters in a compact byte representation for zero-copy execution
+#[derive(AlignedBytesBorrow, Clone)]
+#[repr(C)]
+struct BaseAluPreCompute {
+    local_opcode: u8,
+    a: u8,
+    b: u8,
+    c: u32,
+    e: u8,
+}
+
+// Execute function for InterpreterExecutor
+// The unsafe code is required by OpenVM's InterpreterExecutor design - it uses raw pointers
+// for zero-copy performance. This function is called via function pointer after pre_compute
+// stores the instruction data as bytes.
+unsafe fn execute_base_alu<
+    F: PrimeField32,
+    Ctx: ExecutionCtxTrait,
+    const NUM_LIMBS: usize,
+    const LIMB_BITS: usize,
+>(
+    pre_compute: *const u8,
+    exec_state: &mut VmExecState<F, GuestMemory, Ctx>,
+) {
+    use openvm_instructions::{riscv::RV32_REGISTER_AS, program::DEFAULT_PC_STEP};
+    use crate::adapters::{memory_read, memory_write};
+
+    // Convert raw bytes back to BaseAluPreCompute struct (unsafe because raw pointer dereference)
+    let pre_compute: &BaseAluPreCompute = unsafe {
+        std::slice::from_raw_parts(pre_compute, std::mem::size_of::<BaseAluPreCompute>()).borrow()
+    };
+
+    let local_opcode = BaseAluOpcode::from_usize(pre_compute.local_opcode as usize);
+
+    // Read operands
+    let rs1_data: [u8; NUM_LIMBS] = memory_read(&exec_state.memory, RV32_REGISTER_AS, pre_compute.b as u32);
+    let rs2_data: [u8; NUM_LIMBS] = if pre_compute.e as u32 == RV32_REGISTER_AS {
+        memory_read(&exec_state.memory, RV32_REGISTER_AS, pre_compute.c)
+    } else {
+        // Immediate value - sign extend to NUM_LIMBS bytes
+        let imm_4bytes = pre_compute.c.to_le_bytes();
+        let sign_byte = imm_4bytes[3];
+        let mut result = [sign_byte; NUM_LIMBS];
+        result[..4].copy_from_slice(&imm_4bytes);
+        result
+    };
+
+    // Perform ALU operation
+    let rd_data = run_alu::<NUM_LIMBS, LIMB_BITS>(local_opcode, &rs1_data, &rs2_data);
+
+    // Write result
+    memory_write(&mut exec_state.memory, RV32_REGISTER_AS, pre_compute.a as u32, rd_data);
+
+    // Increment PC
+    let next_pc = exec_state.pc().wrapping_add(DEFAULT_PC_STEP);
+    exec_state.set_pc(next_pc);
+}
+
+// InterpreterExecutor implementation - required by OpenVM trait bounds but unused in FP-only system
 impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F>
     for BaseAluCoreExecutor<A, NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
-    A: Clone,
-    openvm_rv32im_circuit::BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>: InterpreterExecutor<F>,
 {
     fn pre_compute_size(&self) -> usize {
-        openvm_rv32im_circuit::BaseAluExecutor::new(self.adapter.clone(), self.offset).pre_compute_size()
+        std::mem::size_of::<BaseAluPreCompute>()
     }
 
     #[cfg(not(feature = "tco"))]
     fn pre_compute<Ctx>(
         &self,
-        pc: u32,
+        _pc: u32,
         inst: &Instruction<F>,
         data: &mut [u8],
     ) -> Result<ExecuteFunc<F, Ctx>, StaticProgramError>
     where
         Ctx: ExecutionCtxTrait,
     {
-        openvm_rv32im_circuit::BaseAluExecutor::new(self.adapter.clone(), self.offset).pre_compute(pc, inst, data)
+        use openvm_instructions::riscv::RV32_REGISTER_AS;
+
+        let Instruction { a, b, c, d, e, .. } = *inst;
+        let local_opcode = BaseAluOpcode::from_usize(inst.opcode.local_opcode_idx(self.offset));
+
+        debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+
+        let pre_compute = BaseAluPreCompute {
+            local_opcode: local_opcode as u8,
+            a: a.as_canonical_u32() as u8,
+            b: b.as_canonical_u32() as u8,
+            c: c.as_canonical_u32(),
+            e: e.as_canonical_u32() as u8,
+        };
+
+        data[..std::mem::size_of::<BaseAluPreCompute>()].copy_from_slice(unsafe {
+            std::slice::from_raw_parts(&pre_compute as *const _ as *const u8, std::mem::size_of::<BaseAluPreCompute>())
+        });
+
+        Ok(execute_base_alu::<F, Ctx, NUM_LIMBS, LIMB_BITS>)
     }
 
     #[cfg(feature = "tco")]
     fn handler<Ctx>(
         &self,
-        pc: u32,
+        _pc: u32,
         inst: &Instruction<F>,
         data: &mut [u8],
     ) -> Result<Handler<F, Ctx>, StaticProgramError>
     where
         Ctx: ExecutionCtxTrait,
     {
-        openvm_rv32im_circuit::BaseAluExecutor::new(self.adapter.clone(), self.offset).handler(pc, inst, data)
+        use openvm_instructions::riscv::RV32_REGISTER_AS;
+
+        let Instruction { a, b, c, d, e, .. } = *inst;
+        let local_opcode = BaseAluOpcode::from_usize(inst.opcode.local_opcode_idx(self.offset));
+
+        debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+
+        let pre_compute = BaseAluPreCompute {
+            local_opcode: local_opcode as u8,
+            a: a.as_canonical_u32() as u8,
+            b: b.as_canonical_u32() as u8,
+            c: c.as_canonical_u32(),
+            e: e.as_canonical_u32() as u8,
+        };
+
+        data[..std::mem::size_of::<BaseAluPreCompute>()].copy_from_slice(pre_compute.as_bytes());
+
+        Ok(Box::new(execute_base_alu::<F, Ctx, NUM_LIMBS, LIMB_BITS>))
     }
 }
 
