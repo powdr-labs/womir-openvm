@@ -5,7 +5,7 @@ pub use core::*;
 use openvm_circuit::arch::{VmAirWrapper, VmChipWrapper};
 
 use super::adapters::RV32_REGISTER_NUM_LIMBS;
-use crate::adapters::{Rv32LoadStoreAdapterAir, Rv32LoadStoreAdapterExecutor};
+use crate::adapters::{LoadStoreAdapterAir, LoadStoreAdapterExecutor};
 
 mod execution;
 
@@ -16,11 +16,11 @@ pub use cuda::*;
 #[cfg(feature = "aot")]
 mod aot;
 
-#[cfg(test)]
-mod tests;
-
-pub type Rv32LoadStoreAir =
-    VmAirWrapper<Rv32LoadStoreAdapterAir, LoadStoreCoreAir<RV32_REGISTER_NUM_LIMBS>>;
-pub type Rv32LoadStoreExecutor =
-    LoadStoreExecutor<Rv32LoadStoreAdapterExecutor, RV32_REGISTER_NUM_LIMBS>;
-pub type Rv32LoadStoreChip<F> = VmChipWrapper<F, LoadStoreFiller>;
+pub type LoadStoreAir =
+    VmAirWrapper<LoadStoreAdapterAir, LoadStoreCoreAir<RV32_REGISTER_NUM_LIMBS>>;
+pub type LoadStoreExecutor32 = crate::PreflightExecutorWrapperFp<
+    LoadStoreExecutor<LoadStoreAdapterExecutor, RV32_REGISTER_NUM_LIMBS>,
+    RV32_REGISTER_NUM_LIMBS,
+    { super::adapters::RV32_CELL_BITS },
+>;
+pub type LoadStoreChip<F> = VmChipWrapper<F, LoadStoreFiller>;

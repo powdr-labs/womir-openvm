@@ -80,7 +80,7 @@ pub enum WomirExecutor {
     BaseAlu64(BaseAlu64Executor),
     // LessThan(Rv32LessThanExecutor),
     // Shift(Rv32ShiftExecutor),
-    LoadStore(Rv32LoadStoreExecutor),
+    LoadStore(LoadStoreExecutor32),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     // BranchEqual(Rv32BranchEqualExecutor),
     // BranchLessThan(Rv32BranchLessThanExecutor),
@@ -116,7 +116,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
                 BaseAluAdapterExecutor::<REGISTER_NUM_LIMBS_64, RV32_CELL_BITS>::new(),
                 BaseAlu64Opcode::CLASS_OFFSET,
             ),
-            fp,
+            fp.clone(),
         );
         inventory.add_executor(
             base_alu_64,
@@ -129,9 +129,12 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         // let shift = ShiftExecutor::new(BaseAluAdapterExecutor, ShiftOpcode::CLASS_OFFSET);
         // inventory.add_executor(shift, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
         //
-        let load_store = LoadStoreExecutor::new(
-            Rv32LoadStoreAdapterExecutor::new(pointer_max_bits),
-            LoadStoreOpcode::CLASS_OFFSET,
+        let load_store: LoadStoreExecutor32 = crate::PreflightExecutorWrapperFp::new(
+            LoadStoreExecutor::new(
+                LoadStoreAdapterExecutor::new(pointer_max_bits),
+                LoadStoreOpcode::CLASS_OFFSET,
+            ),
+            fp.clone(),
         );
         inventory.add_executor(
             load_store,
@@ -141,7 +144,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         )?;
 
         let load_sign_extend =
-            LoadSignExtendExecutor::new(Rv32LoadStoreAdapterExecutor::new(pointer_max_bits));
+            LoadSignExtendExecutor::new(LoadStoreAdapterExecutor::new(pointer_max_bits));
         inventory.add_executor(
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
