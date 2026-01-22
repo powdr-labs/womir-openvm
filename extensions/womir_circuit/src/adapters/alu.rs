@@ -39,7 +39,7 @@ use super::{
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct Rv32BaseAluAdapterCols<T> {
+pub struct BaseAluAdapterCols<T> {
     pub from_state: ExecutionState<T>,
     pub rd_ptr: T,
     pub rs1_ptr: T,
@@ -55,25 +55,25 @@ pub struct Rv32BaseAluAdapterCols<T> {
 /// Operand d can only be 1, and e can be either 1 (for register reads) or 0 (when c
 /// is an immediate).
 #[derive(Clone, Copy, Debug, derive_new::new)]
-pub struct Rv32BaseAluAdapterAir {
+pub struct BaseAluAdapterAir {
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) memory_bridge: MemoryBridge,
     bitwise_lookup_bus: BitwiseOperationLookupBus,
 }
 
-impl<F: Field> BaseAir<F> for Rv32BaseAluAdapterAir {
+impl<F: Field> BaseAir<F> for BaseAluAdapterAir {
     fn width(&self) -> usize {
-        Rv32BaseAluAdapterCols::<F>::width()
+        BaseAluAdapterCols::<F>::width()
     }
 }
 
-impl<F: Field> ColumnsAir<F> for Rv32BaseAluAdapterAir {
+impl<F: Field> ColumnsAir<F> for BaseAluAdapterAir {
     fn columns(&self) -> Option<Vec<String>> {
-        Rv32BaseAluAdapterCols::<F>::struct_reflection()
+        BaseAluAdapterCols::<F>::struct_reflection()
     }
 }
 
-impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
+impl<AB: InteractionBuilder> VmAdapterAir<AB> for BaseAluAdapterAir {
     type Interface = BasicAdapterInterface<
         AB::Expr,
         MinimalInstruction<AB::Expr>,
@@ -89,7 +89,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
         local: &[AB::Var],
         ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local: &Rv32BaseAluAdapterCols<_> = local.borrow();
+        let local: &BaseAluAdapterCols<_> = local.borrow();
         let timestamp = local.from_state.timestamp;
         let mut timestamp_delta: usize = 0;
         let mut timestamp_pp = || {
@@ -166,23 +166,23 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &Rv32BaseAluAdapterCols<_> = local.borrow();
+        let cols: &BaseAluAdapterCols<_> = local.borrow();
         cols.from_state.pc
     }
 }
 
 #[derive(Clone, derive_new::new)]
-pub struct Rv32BaseAluAdapterExecutor<const LIMB_BITS: usize>;
+pub struct BaseAluAdapterExecutor<const LIMB_BITS: usize>;
 
 #[derive(derive_new::new)]
-pub struct Rv32BaseAluAdapterFiller<const LIMB_BITS: usize> {
+pub struct BaseAluAdapterFiller<const LIMB_BITS: usize> {
     bitwise_lookup_chip: SharedBitwiseOperationLookupChip<LIMB_BITS>,
 }
 
 // Intermediate type that should not be copied or cloned and should be directly written to
 #[repr(C)]
 #[derive(AlignedBytesBorrow, Debug)]
-pub struct Rv32BaseAluAdapterRecord {
+pub struct BaseAluAdapterRecord {
     pub from_pc: u32,
     pub from_timestamp: u32,
     /// Frame pointer for register access
@@ -201,14 +201,14 @@ pub struct Rv32BaseAluAdapterRecord {
 
 // FP-aware implementation - uses fp + register_address for all register accesses
 impl<F: PrimeField32, const LIMB_BITS: usize> crate::FpAdapterTraceExecutor<F>
-    for Rv32BaseAluAdapterExecutor<LIMB_BITS>
+    for BaseAluAdapterExecutor<LIMB_BITS>
 {
     type ReadData = [[u8; RV32_REGISTER_NUM_LIMBS]; 2];
     type WriteData = [[u8; RV32_REGISTER_NUM_LIMBS]; 1];
-    type RecordMut<'a> = &'a mut Rv32BaseAluAdapterRecord;
+    type RecordMut<'a> = &'a mut BaseAluAdapterRecord;
 
     #[inline(always)]
-    fn start_with_fp(pc: u32, fp: u32, memory: &TracingMemory, record: &mut &mut Rv32BaseAluAdapterRecord) {
+    fn start_with_fp(pc: u32, fp: u32, memory: &TracingMemory, record: &mut &mut BaseAluAdapterRecord) {
         record.from_pc = pc;
         record.from_timestamp = memory.timestamp;
         // Store fp in the record for use in read/write
@@ -220,7 +220,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> crate::FpAdapterTraceExecutor<F>
         &self,
         memory: &mut TracingMemory,
         instruction: &Instruction<F>,
-        record: &mut &mut Rv32BaseAluAdapterRecord,
+        record: &mut &mut BaseAluAdapterRecord,
     ) -> Self::ReadData {
         let &Instruction { b, c, d, e, .. } = instruction;
 
@@ -263,7 +263,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> crate::FpAdapterTraceExecutor<F>
         memory: &mut TracingMemory,
         instruction: &Instruction<F>,
         data: Self::WriteData,
-        record: &mut &mut Rv32BaseAluAdapterRecord,
+        record: &mut &mut BaseAluAdapterRecord,
     ) {
         let &Instruction { a, d, .. } = instruction;
 
@@ -283,9 +283,9 @@ impl<F: PrimeField32, const LIMB_BITS: usize> crate::FpAdapterTraceExecutor<F>
 }
 
 impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceFiller<F>
-    for Rv32BaseAluAdapterFiller<LIMB_BITS>
+    for BaseAluAdapterFiller<LIMB_BITS>
 {
-    const WIDTH: usize = size_of::<Rv32BaseAluAdapterCols<u8>>();
+    const WIDTH: usize = size_of::<BaseAluAdapterCols<u8>>();
 
     fn fill_trace_row(&self, mem_helper: &MemoryAuxColsFactory<F>, mut adapter_row: &mut [F]) {
         // SAFETY: the following is highly unsafe. We are going to cast `adapter_row` to a record
@@ -295,11 +295,11 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceFiller<F>
         // - Do not overwrite any reference in `record` before it has already been used or moved
         // - alignment of `F` must be >= alignment of Record (AlignedBytesBorrow will panic
         //   otherwise)
-        // - adapter_row contains a valid Rv32BaseAluAdapterRecord representation
-        // - get_record_from_slice correctly interprets the bytes as Rv32BaseAluAdapterRecord
-        let record: &Rv32BaseAluAdapterRecord =
+        // - adapter_row contains a valid BaseAluAdapterRecord representation
+        // - get_record_from_slice correctly interprets the bytes as BaseAluAdapterRecord
+        let record: &BaseAluAdapterRecord =
             unsafe { get_record_from_slice(&mut adapter_row, ()) };
-        let adapter_row: &mut Rv32BaseAluAdapterCols<F> = adapter_row.borrow_mut();
+        let adapter_row: &mut BaseAluAdapterCols<F> = adapter_row.borrow_mut();
 
         // We must assign in reverse
         const TIMESTAMP_DELTA: u32 = 2;

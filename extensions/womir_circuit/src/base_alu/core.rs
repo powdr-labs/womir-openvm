@@ -9,9 +9,9 @@ pub use openvm_rv32im_circuit::{
     BaseAluCoreAir, BaseAluCoreCols, BaseAluCoreRecord, BaseAluFiller,
 };
 
-// Our own BaseAluExecutor that uses FP-aware adapters
+// Our own BaseAluCoreExecutor that uses FP-aware adapters
 #[derive(Clone, Copy, derive_new::new)]
-pub struct BaseAluExecutor<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
+pub struct BaseAluCoreExecutor<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
     pub adapter: A,
     pub offset: usize,
 }
@@ -52,7 +52,7 @@ pub fn run_alu<const NUM_LIMBS: usize, const LIMB_BITS: usize>(
 
 // InterpreterExecutor - delegates to upstream (required by OpenVM framework, but unused in FP-only system)
 impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F>
-    for BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>
+    for BaseAluCoreExecutor<A, NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
     A: Clone,
@@ -91,7 +91,7 @@ where
 
 // FpPreflightExecutor implementation when adapter is FP-aware
 impl<F, A, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> crate::FpPreflightExecutor<F, RA>
-    for BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>
+    for BaseAluCoreExecutor<A, NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
     A: 'static

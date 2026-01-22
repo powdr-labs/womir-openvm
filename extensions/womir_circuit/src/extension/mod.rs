@@ -86,7 +86,7 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 )]
 pub enum WomirExecutor {
     // Rv32 (for standard 32-bit integers):
-    BaseAlu(Rv32BaseAluExecutor),
+    BaseAlu(BaseAluExecutor),
     // LessThan(Rv32LessThanExecutor),
     // Shift(Rv32ShiftExecutor),
     LoadStore(Rv32LoadStoreExecutor),
@@ -110,19 +110,19 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         let pointer_max_bits = inventory.pointer_max_bits();
 
         let fp = std::sync::Arc::new(std::sync::Mutex::new(0));
-        let base_alu = Rv32BaseAluExecutor::new(
-            BaseAluExecutor::new(
-                Rv32BaseAluAdapterExecutor::new(),
+        let base_alu = crate::PreflightExecutorWrapperFp::new(
+            BaseAluCoreExecutor::new(
+                BaseAluAdapterExecutor::new(),
                 BaseAluOpcode::CLASS_OFFSET
             ),
             fp
         );
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
         //
-        // let lt = LessThanExecutor::new(Rv32BaseAluAdapterExecutor, LessThanOpcode::CLASS_OFFSET);
+        // let lt = LessThanExecutor::new(BaseAluAdapterExecutor, LessThanOpcode::CLASS_OFFSET);
         // inventory.add_executor(lt, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
         //
-        // let shift = ShiftExecutor::new(Rv32BaseAluAdapterExecutor, ShiftOpcode::CLASS_OFFSET);
+        // let shift = ShiftExecutor::new(BaseAluAdapterExecutor, ShiftOpcode::CLASS_OFFSET);
         // inventory.add_executor(shift, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
         //
         let load_store = LoadStoreExecutor::new(
@@ -214,20 +214,20 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             }
         };
 
-        let base_alu = Rv32BaseAluAir::new(
-            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+        let base_alu = BaseAluAir::new(
+            BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
             BaseAluCoreAir::new(bitwise_lu, BaseAluOpcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu);
         //
         // let lt = Rv32LessThanAir::new(
-        //     Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+        //     BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
         //     LessThanCoreAir::new(bitwise_lu, LessThanOpcode::CLASS_OFFSET),
         // );
         // inventory.add_air(lt);
         //
         // let shift = Rv32ShiftAir::new(
-        //     Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+        //     BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
         //     ShiftCoreAir::new(bitwise_lu, range_checker, ShiftOpcode::CLASS_OFFSET),
         // );
         // inventory.add_air(shift);
@@ -324,10 +324,10 @@ where
 
         // These calls to next_air are not strictly necessary to construct the chips, but provide a
         // safeguard to ensure that chip construction matches the circuit definition
-        inventory.next_air::<Rv32BaseAluAir>()?;
-        let base_alu = Rv32BaseAluChip::new(
+        inventory.next_air::<BaseAluAir>()?;
+        let base_alu = BaseAluChip::new(
             BaseAluFiller::new(
-                Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
                 BaseAluOpcode::CLASS_OFFSET,
             ),
@@ -338,7 +338,7 @@ where
         // inventory.next_air::<Rv32LessThanAir>()?;
         // let lt = Rv32LessThanChip::new(
         //     LessThanFiller::new(
-        //         Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+        //         BaseAluAdapterFiller::new(bitwise_lu.clone()),
         //         bitwise_lu.clone(),
         //         LessThanOpcode::CLASS_OFFSET,
         //     ),
@@ -349,7 +349,7 @@ where
         // inventory.next_air::<Rv32ShiftAir>()?;
         // let shift = Rv32ShiftChip::new(
         //     ShiftFiller::new(
-        //         Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+        //         BaseAluAdapterFiller::new(bitwise_lu.clone()),
         //         bitwise_lu.clone(),
         //         range_checker.clone(),
         //         ShiftOpcode::CLASS_OFFSET,

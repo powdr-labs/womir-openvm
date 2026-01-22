@@ -9,7 +9,7 @@ use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::Gp
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 
 use crate::{
-    Rv32AuipcAir, Rv32AuipcChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32BranchEqualAir,
+    Rv32AuipcAir, Rv32AuipcChipGpu, BaseAluAir, BaseAluChipGpu, Rv32BranchEqualAir,
     Rv32BranchEqualChipGpu, Rv32BranchLessThanAir, Rv32BranchLessThanChipGpu, Rv32DivRemAir,
     Rv32DivRemChipGpu, Rv32HintStoreAir, Rv32HintStoreChipGpu, Rv32Io, Rv32JalLuiAir,
     Rv32JalLuiChipGpu, Rv32JalrAir, Rv32JalrChipGpu, Rv32LessThanAir, Rv32LessThanChipGpu,
@@ -36,8 +36,8 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
 
         // These calls to next_air are not strictly necessary to construct the chips, but provide a
         // safeguard to ensure that chip construction matches the circuit definition
-        inventory.next_air::<Rv32BaseAluAir>()?;
-        let base_alu = Rv32BaseAluChipGpu::new(
+        inventory.next_air::<BaseAluAir>()?;
+        let base_alu = BaseAluChipGpu::new(
             range_checker.clone(),
             bitwise_lu.clone(),
             timestamp_max_bits,
