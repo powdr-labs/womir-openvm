@@ -46,9 +46,7 @@ pub(super) fn run_write_data<const NUM_CELLS: usize>(
                 prev_data[i]
             }
         }),
-        _ => unreachable!(
-            "unaligned memory access not supported: {opcode:?}, shift: {shift}"
-        ),
+        _ => unreachable!("unaligned memory access not supported: {opcode:?}, shift: {shift}"),
     }
 }
 
@@ -60,7 +58,8 @@ pub struct LoadStoreExecutor<A, const NUM_CELLS: usize> {
 }
 
 // FpPreflightExecutor implementation when adapter is FP-aware
-impl<F, A, RA, const NUM_CELLS: usize> crate::FpPreflightExecutor<F, RA> for LoadStoreExecutor<A, NUM_CELLS>
+impl<F, A, RA, const NUM_CELLS: usize> crate::FpPreflightExecutor<F, RA>
+    for LoadStoreExecutor<A, NUM_CELLS>
 where
     F: PrimeField32,
     A: 'static

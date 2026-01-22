@@ -5,8 +5,8 @@ use std::{
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterTraceFiller, ExecutionBridge,
-        ExecutionState, VmAdapterAir, VmAdapterInterface, get_record_from_slice,
+        AdapterAirContext, AdapterTraceFiller, ExecutionBridge, ExecutionState, VmAdapterAir,
+        VmAdapterInterface, get_record_from_slice,
     },
     system::{
         memory::{
@@ -388,7 +388,7 @@ where
         record.rs1_val = u32::from_le_bytes(tracing_read(
             memory,
             RV32_REGISTER_AS,
-            record.fp + record.rs1_ptr,  // FP-relative address
+            record.fp + record.rs1_ptr, // FP-relative address
             &mut record.rs1_aux_record.prev_timestamp,
         ));
 
@@ -419,8 +419,12 @@ where
                     ptr_val,
                     &mut record.read_data_aux.prev_timestamp,
                 );
-                let prev_data = memory_read(memory.data(), RV32_REGISTER_AS, record.fp + a.as_canonical_u32())  // FP-relative address
-                    .map(u32::from);
+                let prev_data = memory_read(
+                    memory.data(),
+                    RV32_REGISTER_AS,
+                    record.fp + a.as_canonical_u32(),
+                ) // FP-relative address
+                .map(u32::from);
                 (read_data, prev_data)
             }
             STOREW | STOREH | STOREB => {
@@ -431,7 +435,7 @@ where
                 let read_data = tracing_read(
                     memory,
                     RV32_REGISTER_AS,
-                    record.fp + a.as_canonical_u32(),  // FP-relative address
+                    record.fp + a.as_canonical_u32(), // FP-relative address
                     &mut record.read_data_aux.prev_timestamp,
                 );
                 let prev_data = if e == NATIVE_AS {
@@ -489,7 +493,7 @@ where
                     timed_write(
                         memory,
                         RV32_REGISTER_AS,
-                        record.fp + record.rd_rs2_ptr,  // FP-relative address
+                        record.fp + record.rd_rs2_ptr, // FP-relative address
                         data.map(|x| x as u8),
                     )
                     .0

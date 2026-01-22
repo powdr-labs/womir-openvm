@@ -6,8 +6,7 @@ use openvm_stark_backend::p3_field::PrimeField32;
 
 // Re-export upstream types that we don't modify
 pub use openvm_rv32im_circuit::{
-    LoadSignExtendCoreAir, LoadSignExtendCoreCols, LoadSignExtendCoreRecord,
-    LoadSignExtendFiller,
+    LoadSignExtendCoreAir, LoadSignExtendCoreCols, LoadSignExtendCoreRecord, LoadSignExtendFiller,
 };
 
 // Helper function for sign-extended write data (pure logic, no FP dependency)
@@ -30,7 +29,11 @@ pub(super) fn run_write_data_sign_extend<const NUM_CELLS: usize>(
         // Load halfword with sign extension (shift must be 0 or 2)
         write_data[0] = read_data[shift];
         write_data[1] = read_data[shift + 1];
-        let sign_extend = if read_data[shift + 1] & 0x80 != 0 { 0xFF } else { 0x00 };
+        let sign_extend = if read_data[shift + 1] & 0x80 != 0 {
+            0xFF
+        } else {
+            0x00
+        };
         for cell in write_data.iter_mut().skip(2) {
             *cell = sign_extend;
         }
