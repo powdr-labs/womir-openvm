@@ -6,11 +6,11 @@ use std::{
 
 use openvm_circuit::{
     arch::*,
-    system::memory::{online::TracingMemory, MemoryAuxColsFactory},
+    system::memory::{MemoryAuxColsFactory, online::TracingMemory},
 };
 use openvm_circuit_primitives::{AlignedBorrow, AlignedBytesBorrow};
 use openvm_instructions::{
-    instruction::Instruction, program::DEFAULT_PC_STEP, riscv::RV32_REGISTER_NUM_LIMBS, LocalOpcode,
+    LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP, riscv::RV32_REGISTER_NUM_LIMBS,
 };
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::{
@@ -279,10 +279,10 @@ where
             WriteData = [u32; NUM_CELLS],
         >,
     for<'buf> RA: RecordArena<
-        'buf,
-        EmptyAdapterCoreLayout<F, A>,
-        (A::RecordMut<'buf>, &'buf mut LoadStoreCoreRecord<NUM_CELLS>),
-    >,
+            'buf,
+            EmptyAdapterCoreLayout<F, A>,
+            (A::RecordMut<'buf>, &'buf mut LoadStoreCoreRecord<NUM_CELLS>),
+        >,
 {
     fn get_opcode_name(&self, opcode: usize) -> String {
         format!(
@@ -386,13 +386,11 @@ pub(super) fn run_write_data<const NUM_CELLS: usize>(
     shift: usize,
 ) -> [u32; NUM_CELLS] {
     match (opcode, shift) {
-        (LOADW, 0) => {
-            read_data.map(|x| x as u32)
-        },
+        (LOADW, 0) => read_data.map(|x| x as u32),
         (LOADBU, 0) | (LOADBU, 1) | (LOADBU, 2) | (LOADBU, 3) => {
-           let mut wrie_data = [0; NUM_CELLS];
-           wrie_data[0] = read_data[shift] as u32;
-           wrie_data
+            let mut wrie_data = [0; NUM_CELLS];
+            wrie_data[0] = read_data[shift] as u32;
+            wrie_data
         }
         (LOADHU, 0) | (LOADHU, 2) => {
             let mut write_data = [0; NUM_CELLS];
@@ -401,23 +399,19 @@ pub(super) fn run_write_data<const NUM_CELLS: usize>(
             }
             write_data
         }
-        (STOREW, 0) => {
-            read_data.map(|x| x as u32)
-        },
+        (STOREW, 0) => read_data.map(|x| x as u32),
         (STOREB, 0) | (STOREB, 1) | (STOREB, 2) | (STOREB, 3) => {
             let mut write_data = prev_data;
             write_data[shift] = read_data[0] as u32;
             write_data
         }
-        (STOREH, 0) | (STOREH, 2) => {
-            array::from_fn(|i| {
-                if i >= shift && i < (NUM_CELLS / 2 + shift){
-                    read_data[i - shift] as u32
-                } else {
-                    prev_data[i]
-                }
-            })
-        }
+        (STOREH, 0) | (STOREH, 2) => array::from_fn(|i| {
+            if i >= shift && i < (NUM_CELLS / 2 + shift) {
+                read_data[i - shift] as u32
+            } else {
+                prev_data[i]
+            }
+        }),
         // Currently the adapter AIR requires `ptr_val` to be aligned to the data size in bytes.
         // The circuit requires that `shift = ptr_val % 4` so that `ptr_val - shift` is a multiple of 4.
         // This requirement is non-trivial to remove, because we use it to ensure that `ptr_val - shift + 4 <= 2^pointer_max_bits`.

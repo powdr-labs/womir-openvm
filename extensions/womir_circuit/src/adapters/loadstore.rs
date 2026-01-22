@@ -5,32 +5,32 @@ use std::{
 
 use openvm_circuit::{
     arch::{
-        get_record_from_slice, AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller,
-        ExecutionBridge, ExecutionState, VmAdapterAir, VmAdapterInterface,
+        AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller, ExecutionBridge,
+        ExecutionState, VmAdapterAir, VmAdapterInterface, get_record_from_slice,
     },
     system::{
         memory::{
+            MemoryAddress, MemoryAuxColsFactory,
             offline_checker::{
                 MemoryBaseAuxCols, MemoryBridge, MemoryReadAuxCols, MemoryReadAuxRecord,
                 MemoryWriteAuxCols,
             },
             online::TracingMemory,
-            MemoryAddress, MemoryAuxColsFactory,
         },
         native_adapter::util::{memory_read_native, timed_write_native},
     },
 };
 use openvm_circuit_primitives::{
+    AlignedBytesBorrow,
     utils::{not, select},
     var_range::{SharedVariableRangeCheckerChip, VariableRangeCheckerBus},
-    AlignedBytesBorrow,
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
+    LocalOpcode, NATIVE_AS,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_IMM_AS, RV32_MEMORY_AS, RV32_REGISTER_AS},
-    LocalOpcode, NATIVE_AS,
 };
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::{
@@ -42,7 +42,7 @@ use openvm_stark_backend::{
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use super::RV32_REGISTER_NUM_LIMBS;
-use crate::adapters::{memory_read, timed_write, tracing_read, RV32_CELL_BITS};
+use crate::adapters::{RV32_CELL_BITS, memory_read, timed_write, tracing_read};
 
 /// LoadStore Adapter handles all memory and register operations, so it must be aware
 /// of the instruction type, specifically whether it is a load or store

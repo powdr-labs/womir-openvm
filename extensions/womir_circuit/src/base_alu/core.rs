@@ -1,11 +1,9 @@
-use std::borrow::Borrow;
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::online::{GuestMemory, TracingMemory};
-use openvm_instructions::{instruction::Instruction, LocalOpcode};
+use openvm_instructions::{LocalOpcode, instruction::Instruction};
 use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
-
-use crate::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+use std::borrow::Borrow;
 
 // Re-export upstream types that we don't modify
 pub use openvm_rv32im_circuit::{
@@ -80,8 +78,8 @@ unsafe fn execute_base_alu<
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, Ctx>,
 ) {
-    use openvm_instructions::{riscv::RV32_REGISTER_AS, program::DEFAULT_PC_STEP};
     use crate::adapters::{memory_read, memory_write};
+    use openvm_instructions::{program::DEFAULT_PC_STEP, riscv::RV32_REGISTER_AS};
 
     // Convert raw bytes back to BaseAluPreCompute struct (unsafe because raw pointer dereference)
     let pre_compute: &BaseAluPreCompute = unsafe {
@@ -91,7 +89,8 @@ unsafe fn execute_base_alu<
     let local_opcode = BaseAluOpcode::from_usize(pre_compute.local_opcode as usize);
 
     // Read operands
-    let rs1_data: [u8; NUM_LIMBS] = memory_read(&exec_state.memory, RV32_REGISTER_AS, pre_compute.b as u32);
+    let rs1_data: [u8; NUM_LIMBS] =
+        memory_read(&exec_state.memory, RV32_REGISTER_AS, pre_compute.b as u32);
     let rs2_data: [u8; NUM_LIMBS] = if pre_compute.e as u32 == RV32_REGISTER_AS {
         memory_read(&exec_state.memory, RV32_REGISTER_AS, pre_compute.c)
     } else {
@@ -107,7 +106,12 @@ unsafe fn execute_base_alu<
     let rd_data = run_alu::<NUM_LIMBS, LIMB_BITS>(local_opcode, &rs1_data, &rs2_data);
 
     // Write result
-    memory_write(&mut exec_state.memory, RV32_REGISTER_AS, pre_compute.a as u32, rd_data);
+    memory_write(
+        &mut exec_state.memory,
+        RV32_REGISTER_AS,
+        pre_compute.a as u32,
+        rd_data,
+    );
 
     // Increment PC
     let next_pc = exec_state.pc().wrapping_add(DEFAULT_PC_STEP);
@@ -150,7 +154,10 @@ where
         };
 
         data[..std::mem::size_of::<BaseAluPreCompute>()].copy_from_slice(unsafe {
-            std::slice::from_raw_parts(&pre_compute as *const _ as *const u8, std::mem::size_of::<BaseAluPreCompute>())
+            std::slice::from_raw_parts(
+                &pre_compute as *const _ as *const u8,
+                std::mem::size_of::<BaseAluPreCompute>(),
+            )
         });
 
         Ok(execute_base_alu::<F, Ctx, NUM_LIMBS, LIMB_BITS>)
@@ -199,10 +206,10 @@ where
             WriteData: From<[[u8; NUM_LIMBS]; 1]>,
         >,
     for<'buf> RA: RecordArena<
-        'buf,
-        EmptyAdapterCoreLayout<F, A>,
-        (A::RecordMut<'buf>, &'buf mut BaseAluCoreRecord<NUM_LIMBS>),
-    >,
+            'buf,
+            EmptyAdapterCoreLayout<F, A>,
+            (A::RecordMut<'buf>, &'buf mut BaseAluCoreRecord<NUM_LIMBS>),
+        >,
 {
     fn get_opcode_name(&self, opcode: usize) -> String {
         format!("{:?}", BaseAluOpcode::from_usize(opcode - self.offset))

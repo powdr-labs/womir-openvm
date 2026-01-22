@@ -2,22 +2,22 @@ use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::{
     arch::{
-        get_record_from_slice, AdapterAirContext, AdapterTraceFiller,
-        BasicAdapterInterface, ExecutionBridge, ExecutionState, MinimalInstruction, VmAdapterAir,
+        AdapterAirContext, AdapterTraceFiller, BasicAdapterInterface, ExecutionBridge,
+        ExecutionState, MinimalInstruction, VmAdapterAir, get_record_from_slice,
     },
     system::memory::{
+        MemoryAddress, MemoryAuxColsFactory,
         offline_checker::{
             MemoryBridge, MemoryReadAuxCols, MemoryReadAuxRecord, MemoryWriteAuxCols,
             MemoryWriteBytesAuxRecord,
         },
         online::TracingMemory,
-        MemoryAddress, MemoryAuxColsFactory,
     },
 };
 use openvm_circuit_primitives::{
+    AlignedBytesBorrow,
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
     utils::not,
-    AlignedBytesBorrow,
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
@@ -33,9 +33,7 @@ use openvm_stark_backend::{
 };
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use super::{
-    tracing_read, tracing_read_imm, tracing_write, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS,
-};
+use super::{RV32_CELL_BITS, tracing_read, tracing_read_imm, tracing_write};
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
@@ -73,15 +71,11 @@ impl<F: Field, const NUM_LIMBS: usize> ColumnsAir<F> for BaseAluAdapterAir<NUM_L
     }
 }
 
-impl<AB: InteractionBuilder, const NUM_LIMBS: usize> VmAdapterAir<AB> for BaseAluAdapterAir<NUM_LIMBS> {
-    type Interface = BasicAdapterInterface<
-        AB::Expr,
-        MinimalInstruction<AB::Expr>,
-        2,
-        1,
-        NUM_LIMBS,
-        NUM_LIMBS,
-    >;
+impl<AB: InteractionBuilder, const NUM_LIMBS: usize> VmAdapterAir<AB>
+    for BaseAluAdapterAir<NUM_LIMBS>
+{
+    type Interface =
+        BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 2, 1, NUM_LIMBS, NUM_LIMBS>;
 
     fn eval(
         &self,
@@ -200,15 +194,20 @@ pub struct BaseAluAdapterRecord<const NUM_LIMBS: usize> {
 }
 
 // FP-aware implementation - uses fp + register_address for all register accesses
-impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> crate::FpAdapterTraceExecutor<F>
-    for BaseAluAdapterExecutor<NUM_LIMBS, LIMB_BITS>
+impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize>
+    crate::FpAdapterTraceExecutor<F> for BaseAluAdapterExecutor<NUM_LIMBS, LIMB_BITS>
 {
     type ReadData = [[u8; NUM_LIMBS]; 2];
     type WriteData = [[u8; NUM_LIMBS]; 1];
     type RecordMut<'a> = &'a mut BaseAluAdapterRecord<NUM_LIMBS>;
 
     #[inline(always)]
-    fn start_with_fp(pc: u32, fp: u32, memory: &TracingMemory, record: &mut &mut BaseAluAdapterRecord<NUM_LIMBS>) {
+    fn start_with_fp(
+        pc: u32,
+        fp: u32,
+        memory: &TracingMemory,
+        record: &mut &mut BaseAluAdapterRecord<NUM_LIMBS>,
+    ) {
         record.from_pc = pc;
         record.from_timestamp = memory.timestamp;
         // Store fp in the record for use in read/write
@@ -234,7 +233,7 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> crate::FpA
         let rs1 = tracing_read(
             memory,
             RV32_REGISTER_AS,
-            record.fp + record.rs1_ptr,  // FP-relative address
+            record.fp + record.rs1_ptr, // FP-relative address
             &mut record.reads_aux[0].prev_timestamp,
         );
 
@@ -245,7 +244,7 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> crate::FpA
             tracing_read(
                 memory,
                 RV32_REGISTER_AS,
-                record.fp + record.rs2,  // FP-relative address
+                record.fp + record.rs2, // FP-relative address
                 &mut record.reads_aux[1].prev_timestamp,
             )
         } else {
@@ -279,7 +278,7 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> crate::FpA
         tracing_write(
             memory,
             RV32_REGISTER_AS,
-            record.fp + record.rd_ptr,  // FP-relative address
+            record.fp + record.rd_ptr, // FP-relative address
             data[0],
             &mut record.writes_aux.prev_timestamp,
             &mut record.writes_aux.prev_data,

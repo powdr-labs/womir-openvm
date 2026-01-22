@@ -1,10 +1,10 @@
-use openvm_circuit::arch::testing::{memory::gen_pointer, TestBuilder};
-use openvm_instructions::{instruction::Instruction, VmOpcode};
+use openvm_circuit::arch::testing::{TestBuilder, memory::gen_pointer};
+use openvm_instructions::{VmOpcode, instruction::Instruction};
 use openvm_stark_backend::{p3_field::FieldAlgebra, verifier::VerificationError};
 use openvm_stark_sdk::p3_baby_bear::BabyBear;
-use rand::{rngs::StdRng, Rng};
+use rand::{Rng, rngs::StdRng};
 
-use super::adapters::{RV32_REGISTER_NUM_LIMBS, RV_IS_TYPE_IMM_BITS};
+use super::adapters::{RV_IS_TYPE_IMM_BITS, RV32_REGISTER_NUM_LIMBS};
 
 // Returns (instruction, rd)
 #[cfg_attr(all(feature = "test-utils", not(test)), allow(dead_code))]

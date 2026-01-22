@@ -10,22 +10,11 @@ use openvm_circuit::{
     system::{SystemPort, memory::SharedMemoryHelper},
 };
 use openvm_circuit_derive::{AnyEnum, PreflightExecutor};
-use openvm_circuit_primitives::{
-    bitwise_op_lookup::{
-        BitwiseOperationLookupAir, BitwiseOperationLookupBus, BitwiseOperationLookupChip,
-        SharedBitwiseOperationLookupChip,
-    },
-    range_tuple::{
-        RangeTupleCheckerAir, RangeTupleCheckerBus, RangeTupleCheckerChip,
-        SharedRangeTupleCheckerChip,
-    },
+use openvm_circuit_primitives::bitwise_op_lookup::{
+    BitwiseOperationLookupAir, BitwiseOperationLookupBus, BitwiseOperationLookupChip,
+    SharedBitwiseOperationLookupChip,
 };
-use openvm_instructions::{LocalOpcode, PhantomDiscriminant, program::DEFAULT_PC_STEP};
-use openvm_rv32im_transpiler::{
-    BranchEqualOpcode, BranchLessThanOpcode, DivRemOpcode, LessThanOpcode, MulHOpcode, MulOpcode,
-    Rv32AuipcOpcode, Rv32HintStoreOpcode, Rv32JalLuiOpcode, Rv32JalrOpcode, Rv32Phantom,
-    ShiftOpcode,
-};
+use openvm_instructions::LocalOpcode;
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     engine::StarkEngine,
@@ -115,7 +104,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         let base_alu: BaseAluExecutor = crate::PreflightExecutorWrapperFp::new(
             BaseAluCoreExecutor::new(
                 BaseAluAdapterExecutor::<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>::new(),
-                BaseAluOpcode::CLASS_OFFSET
+                BaseAluOpcode::CLASS_OFFSET,
             ),
             fp.clone(),
         );
@@ -125,11 +114,14 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         let base_alu_64: BaseAlu64Executor = crate::PreflightExecutorWrapperFp::new(
             BaseAluCoreExecutor::new(
                 BaseAluAdapterExecutor::<REGISTER_NUM_LIMBS_64, RV32_CELL_BITS>::new(),
-                BaseAlu64Opcode::CLASS_OFFSET
+                BaseAlu64Opcode::CLASS_OFFSET,
             ),
             fp,
         );
-        inventory.add_executor(base_alu_64, BaseAlu64Opcode::iter().map(|x| x.global_opcode()))?;
+        inventory.add_executor(
+            base_alu_64,
+            BaseAlu64Opcode::iter().map(|x| x.global_opcode()),
+        )?;
         //
         // let lt = LessThanExecutor::new(BaseAluAdapterExecutor, LessThanOpcode::CLASS_OFFSET);
         // inventory.add_executor(lt, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
@@ -210,7 +202,7 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         } = inventory.system().port();
 
         let exec_bridge = ExecutionBridge::new(execution_bus, program_bus);
-        let range_checker = inventory.range_checker().bus;
+        let _range_checker = inventory.range_checker().bus;
         let _pointer_max_bits = inventory.pointer_max_bits();
 
         let bitwise_lu = {

@@ -69,7 +69,7 @@ pub struct LinkedProgram<'a, F: PrimeField32> {
 }
 
 impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
-    pub fn new(mut module: Module<'a>, functions: Vec<WriteOnceAsm<Directive<F>>>) -> Self {
+    pub fn new(module: Module<'a>, functions: Vec<WriteOnceAsm<Directive<F>>>) -> Self {
         let functions = functions
             .into_iter()
             .map(|f| {

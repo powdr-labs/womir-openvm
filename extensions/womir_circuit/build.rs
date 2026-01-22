@@ -1,5 +1,5 @@
 #[cfg(feature = "cuda")]
-use openvm_cuda_builder::{cuda_available, CudaBuilder};
+use openvm_cuda_builder::{CudaBuilder, cuda_available};
 
 fn main() {
     #[cfg(feature = "cuda")]

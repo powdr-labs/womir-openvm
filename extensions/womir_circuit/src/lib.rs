@@ -4,14 +4,12 @@
 #![cfg_attr(feature = "tco", feature(core_intrinsics))]
 use openvm_circuit::{
     arch::{
-        AirInventory, ChipInventoryError, ExecutionError,
-        InitFileGenerator, InterpreterExecutor, MatrixRecordArena,
-        PreflightExecutor, SystemConfig, VmBuilder, VmChipComplex,
+        AirInventory, ChipInventoryError, ExecutionError, InitFileGenerator, InterpreterExecutor,
+        MatrixRecordArena, PreflightExecutor, SystemConfig, VmBuilder, VmChipComplex,
         VmProverExtension, VmStateMut,
     },
     system::{
-        SystemChipInventory, SystemCpuBuilder, SystemExecutor,
-        memory::online::TracingMemory,
+        SystemChipInventory, SystemCpuBuilder, SystemExecutor, memory::online::TracingMemory,
     },
 };
 use openvm_circuit_derive::{Executor, MeteredExecutor, VmConfig};

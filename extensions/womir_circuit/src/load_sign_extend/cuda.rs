@@ -8,12 +8,12 @@ use openvm_cuda_backend::{
 };
 use openvm_cuda_common::copy::MemCopyH2D;
 use openvm_instructions::riscv::RV32_REGISTER_NUM_LIMBS;
-use openvm_stark_backend::{prover::types::AirProvingContext, Chip};
+use openvm_stark_backend::{Chip, prover::types::AirProvingContext};
 
 use crate::{
+    LoadSignExtendCoreCols, LoadSignExtendCoreRecord,
     adapters::{Rv32LoadStoreAdapterCols, Rv32LoadStoreAdapterRecord},
     cuda_abi::load_sign_extend_cuda::tracegen,
-    LoadSignExtendCoreCols, LoadSignExtendCoreRecord,
 };
 
 #[derive(new)]

@@ -12,38 +12,17 @@ use itertools::Itertools;
 use metrics_tracing_context::{MetricsLayer, TracingContextLayer};
 use metrics_util::{debugging::DebuggingRecorder, layers::Layer};
 use openvm_sdk::StdIn;
-use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
-use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
 use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Mutex, RwLock};
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
 use womir::loader::flattening::WriteOnceAsm;
 use womir::loader::{FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics};
 
-use openvm_circuit::circuit_derive::{Chip, ChipUsageGetter};
-use openvm_circuit::{
-    arch::{
-        AirInventory, AirInventoryError, ChipInventory, ChipInventoryError, ExecutionBridge,
-        ExecutorInventoryBuilder, ExecutorInventoryError, InitFileGenerator, MatrixRecordArena,
-        RowMajorMatrixArena, SystemConfig, VmBuilder, VmChipComplex, VmCircuitExtension,
-        VmExecutionExtension, VmProverExtension,
-    },
-    system::{
-        SystemChipInventory, SystemCpuBuilder, SystemExecutor, SystemPort,
-        memory::SharedMemoryHelper,
-    },
-};
-use openvm_circuit_derive::{AnyEnum, Executor, MeteredExecutor, PreflightExecutor, VmConfig};
-use openvm_sdk::Sdk;
-use openvm_sdk::config::{
-    AppConfig, DEFAULT_APP_LOG_BLOWUP, SdkVmConfig, SdkVmConfigExecutor, TranspilerConfig,
-};
-use openvm_stark_sdk::config::FriParameters;
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -51,9 +30,6 @@ type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use crate::builtin_functions::BuiltinFunction;
 use crate::womir_translation::{Directive, LinkedProgram, OpenVMSettings};
-
-use openvm_stark_sdk::p3_baby_bear::BabyBear;
-use openvm_transpiler::transpiler::Transpiler;
 
 use womir_circuit::WomirConfig;
 
@@ -237,19 +213,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("output: {output:?}");
         }
-        Commands::Prove {
-            function,
-            args,
-            metrics,
-            ..
-        } => {
+        Commands::Prove { function, .. } => {
             // Load the module
             let wasm_bytes = std::fs::read(program_path).expect("Failed to read WASM file");
             let (module, functions) = load_wasm(&wasm_bytes);
 
             // Create program
             let linked_program = LinkedProgram::new(module, functions);
-            let exe = linked_program.program_with_entry_point(&function);
+            let _exe = linked_program.program_with_entry_point(&function);
 
             // let prove = || -> Result<()> {
             //     // Create VM configuration
@@ -306,12 +277,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             //     prove()?
             // }
         }
-        Commands::ProveRiscv {
-            program,
-            args,
-            metrics,
-            ..
-        } => {
+        Commands::ProveRiscv { metrics, .. } => {
             let prove = || -> Result<()> {
                 // let compiled_program = powdr_openvm::compile_guest(
                 //     &program,

@@ -8,10 +8,10 @@ mod aot {
     pub(crate) use openvm_circuit::arch::aot::common::*;
     use openvm_circuit::{
         arch::{
-            execution_mode::{metered::memory_ctx::MemoryCtx, MeteredCtx},
-            AotError, SystemConfig, VmExecState, ADDR_SPACE_OFFSET,
+            ADDR_SPACE_OFFSET, AotError, SystemConfig, VmExecState,
+            execution_mode::{MeteredCtx, metered::memory_ctx::MemoryCtx},
         },
-        system::memory::{merkle::public_values::PUBLIC_VALUES_AS, online::GuestMemory, CHUNK},
+        system::memory::{CHUNK, merkle::public_values::PUBLIC_VALUES_AS, online::GuestMemory},
     };
     use openvm_instructions::riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS};
 
@@ -148,7 +148,7 @@ mod aot {
         //     }
         // }
         // ```
-        // 
+        //
         // For a specific RV32 instruction, the variables can be treated as constants at AOT
         // compilation time:
         // - `address_space`: always a constant because it is derived from an Instruction
@@ -225,7 +225,7 @@ mod aot {
         //     }
         // }
         // ```
-        // 
+        //
         // For a specific RV32 instruction, the variables can be treated as constants at AOT compilation time:
         // Inputs:
         // - `chunk`: always 8(CHUNK) because we only support when continuation is enabled.
