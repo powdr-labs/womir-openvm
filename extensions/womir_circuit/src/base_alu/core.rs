@@ -197,12 +197,13 @@ pub struct BaseAluFiller<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
     pub offset: usize,
 }
 
-impl<F, A, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> PreflightExecutor<F, RA>
+// FpPreflightExecutor implementation when adapter is FP-aware
+impl<F, A, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> crate::FpPreflightExecutor<F, RA>
     for BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
     A: 'static
-        + AdapterTraceExecutor<
+        + crate::FpAdapterTraceExecutor<
             F,
             ReadData: Into<[[u8; NUM_LIMBS]; 2]>,
             WriteData: From<[[u8; NUM_LIMBS]; 1]>,
@@ -217,17 +218,19 @@ where
         format!("{:?}", BaseAluOpcode::from_usize(opcode - self.offset))
     }
 
-    fn execute(
+    fn execute_with_fp(
         &self,
         state: VmStateMut<F, TracingMemory, RA>,
         instruction: &Instruction<F>,
-    ) -> Result<(), ExecutionError> {
+        fp: u32,
+    ) -> Result<Option<u32>, ExecutionError> {
         let Instruction { opcode, .. } = instruction;
 
         let local_opcode = BaseAluOpcode::from_usize(opcode.local_opcode_idx(self.offset));
         let (mut adapter_record, core_record) = state.ctx.alloc(EmptyAdapterCoreLayout::new());
 
-        A::start(*state.pc, state.memory, &mut adapter_record);
+        // Call FP-aware start
+        A::start_with_fp(*state.pc, fp, state.memory, &mut adapter_record);
 
         [core_record.b, core_record.c] = self
             .adapter
@@ -243,7 +246,8 @@ where
 
         *state.pc = state.pc.wrapping_add(DEFAULT_PC_STEP);
 
-        Ok(())
+        // FP doesn't change for basic ALU operations
+        Ok(None)
     }
 }
 

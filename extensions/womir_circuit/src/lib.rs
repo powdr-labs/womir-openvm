@@ -4,9 +4,9 @@
 #![cfg_attr(feature = "tco", feature(core_intrinsics))]
 use openvm_circuit::{
     arch::{
-        AirInventory, ChipInventoryError, EmptyAdapterCoreLayout, ExecutionError,
+        AirInventory, ChipInventoryError, ExecutionError,
         InitFileGenerator, InterpreterExecutor, MatrixRecordArena,
-        PreflightExecutor, RecordArena, SystemConfig, VmBuilder, VmChipComplex,
+        PreflightExecutor, SystemConfig, VmBuilder, VmChipComplex,
         VmProverExtension, VmStateMut,
     },
     system::{
@@ -15,7 +15,7 @@ use openvm_circuit::{
     },
 };
 use openvm_circuit_derive::{Executor, MeteredExecutor, VmConfig};
-use openvm_instructions::{instruction::Instruction, LocalOpcode};
+use openvm_instructions::instruction::Instruction;
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     engine::StarkEngine,
@@ -25,8 +25,8 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-// ============ FP Adapter Traits ============
-// Traits for adapters that support frame pointer (fp) tracking
+// ============ FP Executor Traits ============
+// Traits for executors that support frame pointer (fp) tracking
 
 /// Adapter executor trait that supports frame pointer operations.
 /// Similar to AdapterTraceExecutor but includes fp parameter.
@@ -56,70 +56,63 @@ pub trait FpAdapterTraceExecutor<F> {
     );
 }
 
-/// Core executor trait that can execute ALU operations
-pub trait FpCoreExecutor<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
-    /// Execute the core ALU operation and return result
-    fn execute_core(
-        opcode: usize,
-        offset: usize,
-        input_b: &[u8; NUM_LIMBS],
-        input_c: &[u8; NUM_LIMBS],
-    ) -> [u8; NUM_LIMBS];
+/// Executor trait similar to PreflightExecutor but with frame pointer support.
+/// Executors that need FP should implement this trait instead of PreflightExecutor directly.
+pub trait FpPreflightExecutor<F, RA> {
+    /// Get a human-readable name for the opcode
+    fn get_opcode_name(&self, opcode: usize) -> String;
 
-    /// Get the opcode name for debugging
-    fn get_opcode_name(opcode: usize, offset: usize) -> String;
+    /// Execute instruction with frame pointer
+    /// Returns the updated frame pointer (or None if unchanged)
+    fn execute_with_fp(
+        &self,
+        state: VmStateMut<F, TracingMemory, RA>,
+        instruction: &Instruction<F>,
+        fp: u32,
+    ) -> Result<Option<u32>, ExecutionError>;
 }
 
-/// Wrapper around BaseAluExecutor that adds frame pointer tracking
+/// Wrapper around any FP-aware executor that implements PreflightExecutor
+/// by managing FP state and delegating to the inner FpPreflightExecutor
 #[derive(Clone)]
 pub struct PreflightExecutorWrapperFp<Inner, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
     pub inner: Inner,
     /// Frame pointer - tracks the current frame offset for register access
     /// This is separate from PC and persists across instructions
-    pub fp: std::cell::Cell<u32>,
+    /// Uses Arc<Mutex> for shared, synchronized access
+    pub fp: std::sync::Arc<std::sync::Mutex<u32>>,
     _phantom: PhantomData<([u8; NUM_LIMBS], [u8; LIMB_BITS])>,
 }
 
 impl<Inner, const NUM_LIMBS: usize, const LIMB_BITS: usize>
     PreflightExecutorWrapperFp<Inner, NUM_LIMBS, LIMB_BITS>
 {
-    pub fn new(inner: Inner) -> Self {
+    pub fn new(inner: Inner, fp: std::sync::Arc<std::sync::Mutex<u32>>) -> Self {
         Self {
             inner,
-            fp: std::cell::Cell::new(0), // Initialize fp to 0
+            fp,
             _phantom: PhantomData,
         }
     }
 
     pub fn get_fp(&self) -> u32 {
-        self.fp.get()
+        *self.fp.lock().unwrap()
     }
 
     pub fn set_fp(&self, new_fp: u32) {
-        self.fp.set(new_fp);
+        *self.fp.lock().unwrap() = new_fp;
     }
 }
 
-// Implement PreflightExecutor for the wrapper
-impl<F, A, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> PreflightExecutor<F, RA>
-    for PreflightExecutorWrapperFp<base_alu::BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>, NUM_LIMBS, LIMB_BITS>
+// Implement PreflightExecutor for the wrapper by delegating to inner FpPreflightExecutor
+impl<F, Inner, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> PreflightExecutor<F, RA>
+    for PreflightExecutorWrapperFp<Inner, NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
-    A: 'static
-        + FpAdapterTraceExecutor<
-            F,
-            ReadData: Into<[[u8; NUM_LIMBS]; 2]>,
-            WriteData: From<[[u8; NUM_LIMBS]; 1]>
-        >,
-    for<'buf> RA: RecordArena<
-        'buf,
-        EmptyAdapterCoreLayout<F, A>,
-        (A::RecordMut<'buf>, &'buf mut base_alu::BaseAluCoreRecord<NUM_LIMBS>),
-    >,
+    Inner: FpPreflightExecutor<F, RA>,
 {
     fn get_opcode_name(&self, opcode: usize) -> String {
-        use openvm_rv32im_transpiler::BaseAluOpcode;
-        format!("{:?}", BaseAluOpcode::from_usize(opcode - self.inner.offset))
+        self.inner.get_opcode_name(opcode)
     }
 
     fn execute(
@@ -127,48 +120,27 @@ where
         state: VmStateMut<F, TracingMemory, RA>,
         instruction: &Instruction<F>,
     ) -> Result<(), ExecutionError> {
-        use openvm_instructions::program::DEFAULT_PC_STEP;
-        use openvm_rv32im_transpiler::BaseAluOpcode;
+        // Get current FP
+        let fp = *self.fp.lock().unwrap();
 
-        let Instruction { opcode, .. } = instruction;
+        // Call inner executor with FP
+        let new_fp = self.inner.execute_with_fp(state, instruction, fp)?;
 
-        let local_opcode = BaseAluOpcode::from_usize(opcode.local_opcode_idx(self.inner.offset));
-        let (mut adapter_record, core_record) = state.ctx.alloc(EmptyAdapterCoreLayout::new());
-
-        // Get current fp from the wrapper's state
-        let fp = self.get_fp();
-
-        // Call FP-aware start
-        A::start_with_fp(*state.pc, fp, state.memory, &mut adapter_record);
-
-        // Adapter read/write will use fp internally
-        [core_record.b, core_record.c] = self
-            .inner.adapter
-            .read(state.memory, instruction, &mut adapter_record)
-            .into();
-
-        let rd = base_alu::run_alu::<NUM_LIMBS, LIMB_BITS>(local_opcode, &core_record.b, &core_record.c);
-
-        core_record.local_opcode = local_opcode as u8;
-
-        self.inner.adapter
-            .write(state.memory, instruction, [rd].into(), &mut adapter_record);
-
-        *state.pc = state.pc.wrapping_add(DEFAULT_PC_STEP);
-
-        // FP may be updated by some instructions (e.g., frame allocation)
-        // For basic ALU, fp stays the same
+        // Update FP if changed
+        if let Some(updated_fp) = new_fp {
+            *self.fp.lock().unwrap() = updated_fp;
+        }
 
         Ok(())
     }
 }
 
-// Implement InterpreterExecutor for the wrapper by delegating to inner
-impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F>
-    for PreflightExecutorWrapperFp<base_alu::BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>, NUM_LIMBS, LIMB_BITS>
+// Implement InterpreterExecutor for the wrapper - generic over any Inner executor
+impl<F, Inner, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F>
+    for PreflightExecutorWrapperFp<Inner, NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
-    base_alu::BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>: InterpreterExecutor<F>,
+    Inner: InterpreterExecutor<F>,
 {
     fn pre_compute_size(&self) -> usize {
         self.inner.pre_compute_size()

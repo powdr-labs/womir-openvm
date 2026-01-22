@@ -109,11 +109,13 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
     ) -> Result<(), ExecutorInventoryError> {
         let pointer_max_bits = inventory.pointer_max_bits();
 
+        let fp = std::sync::Arc::new(std::sync::Mutex::new(0));
         let base_alu = Rv32BaseAluExecutor::new(
             BaseAluExecutor::new(
                 Rv32BaseAluAdapterExecutor::new(),
                 BaseAluOpcode::CLASS_OFFSET
-            )
+            ),
+            fp
         );
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
         //

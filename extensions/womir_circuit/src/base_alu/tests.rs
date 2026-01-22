@@ -61,11 +61,13 @@ fn create_harness_fields(
         Rv32BaseAluAdapterAir::new(execution_bridge, memory_bridge, bitwise_chip.bus()),
         BaseAluCoreAir::new(bitwise_chip.bus(), BaseAluOpcode::CLASS_OFFSET),
     );
+    let fp = std::sync::Arc::new(std::sync::Mutex::new(0));
     let executor = Rv32BaseAluExecutor::new(
         BaseAluExecutor::new(
             Rv32BaseAluAdapterExecutor::new(),
-            BaseAluOpcode::CLASS_OFFSET,
-        )
+            BaseAluOpcode::CLASS_OFFSET
+        ),
+        fp
     );
     let chip = Rv32BaseAluChip::new(
         BaseAluFiller::new(
