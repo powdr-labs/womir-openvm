@@ -2,7 +2,7 @@ use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::{
     arch::{
-        get_record_from_slice, AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller,
+        get_record_from_slice, AdapterAirContext, AdapterTraceFiller,
         BasicAdapterInterface, ExecutionBridge, ExecutionState, MinimalInstruction, VmAdapterAir,
     },
     system::memory::{
@@ -197,86 +197,6 @@ pub struct Rv32BaseAluAdapterRecord {
 
     pub reads_aux: [MemoryReadAuxRecord; 2],
     pub writes_aux: MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>,
-}
-
-impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
-    for Rv32BaseAluAdapterExecutor<LIMB_BITS>
-{
-    const WIDTH: usize = size_of::<Rv32BaseAluAdapterCols<u8>>();
-    type ReadData = [[u8; RV32_REGISTER_NUM_LIMBS]; 2];
-    type WriteData = [[u8; RV32_REGISTER_NUM_LIMBS]; 1];
-    type RecordMut<'a> = &'a mut Rv32BaseAluAdapterRecord;
-
-    #[inline(always)]
-    fn start(pc: u32, memory: &TracingMemory, record: &mut &mut Rv32BaseAluAdapterRecord) {
-        record.from_pc = pc;
-        record.from_timestamp = memory.timestamp;
-    }
-
-    // @dev cannot get rid of double &mut due to trait
-    #[inline(always)]
-    fn read(
-        &self,
-        memory: &mut TracingMemory,
-        instruction: &Instruction<F>,
-        record: &mut &mut Rv32BaseAluAdapterRecord,
-    ) -> Self::ReadData {
-        let &Instruction { b, c, d, e, .. } = instruction;
-
-        debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
-        debug_assert!(
-            e.as_canonical_u32() == RV32_REGISTER_AS || e.as_canonical_u32() == RV32_IMM_AS
-        );
-
-        record.rs1_ptr = b.as_canonical_u32();
-        let rs1 = tracing_read(
-            memory,
-            RV32_REGISTER_AS,
-            record.rs1_ptr,
-            &mut record.reads_aux[0].prev_timestamp,
-        );
-
-        let rs2 = if e.as_canonical_u32() == RV32_REGISTER_AS {
-            record.rs2_as = RV32_REGISTER_AS as u8;
-            record.rs2 = c.as_canonical_u32();
-
-            tracing_read(
-                memory,
-                RV32_REGISTER_AS,
-                record.rs2,
-                &mut record.reads_aux[1].prev_timestamp,
-            )
-        } else {
-            record.rs2_as = RV32_IMM_AS as u8;
-
-            tracing_read_imm(memory, c.as_canonical_u32(), &mut record.rs2)
-        };
-
-        [rs1, rs2]
-    }
-
-    #[inline(always)]
-    fn write(
-        &self,
-        memory: &mut TracingMemory,
-        instruction: &Instruction<F>,
-        data: Self::WriteData,
-        record: &mut &mut Rv32BaseAluAdapterRecord,
-    ) {
-        let &Instruction { a, d, .. } = instruction;
-
-        debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
-
-        record.rd_ptr = a.as_canonical_u32();
-        tracing_write(
-            memory,
-            RV32_REGISTER_AS,
-            record.rd_ptr,
-            data[0],
-            &mut record.writes_aux.prev_timestamp,
-            &mut record.writes_aux.prev_data,
-        );
-    }
 }
 
 // FP-aware implementation - uses fp + register_address for all register accesses
