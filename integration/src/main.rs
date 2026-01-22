@@ -2186,9 +2186,9 @@ mod wast_tests {
     // We use powdr-openvm to run OpenVM RISC-V so we don't have to deal with
     // SdkConfig stuff and have access to autoprecompiles.
     fn run_openvm_guest(
-        guest: &str,
-        args: &[u32],
-        expected: &[u32],
+        _guest: &str,
+        _args: &[u32],
+        _expected: &[u32],
     ) -> Result<(), Box<dyn std::error::Error>> {
         // setup_tracing_with_log_level(Level::WARN);
         // println!("Running OpenVM test {guest} with ({args:?}): expected {expected:?}");

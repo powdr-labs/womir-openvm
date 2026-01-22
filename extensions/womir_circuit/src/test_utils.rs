@@ -7,7 +7,7 @@ use rand::{Rng, rngs::StdRng};
 use super::adapters::{RV_IS_TYPE_IMM_BITS, RV32_REGISTER_NUM_LIMBS};
 
 // Returns (instruction, rd)
-#[cfg_attr(all(feature = "test-utils", not(test)), allow(dead_code))]
+#[allow(dead_code)]
 pub fn rv32_rand_write_register_or_imm<const NUM_LIMBS: usize>(
     tester: &mut impl TestBuilder<BabyBear>,
     rs1_writes: [u8; NUM_LIMBS],
@@ -36,7 +36,7 @@ pub fn rv32_rand_write_register_or_imm<const NUM_LIMBS: usize>(
     )
 }
 
-#[cfg_attr(all(feature = "test-utils", not(test)), allow(dead_code))]
+#[allow(dead_code)]
 pub fn generate_rv32_is_type_immediate(rng: &mut StdRng) -> (usize, [u8; RV32_REGISTER_NUM_LIMBS]) {
     let mut imm: u32 = rng.gen_range(0..(1 << RV_IS_TYPE_IMM_BITS));
     if (imm & 0x800) != 0 {
