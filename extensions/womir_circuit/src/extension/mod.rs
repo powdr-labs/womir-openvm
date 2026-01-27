@@ -152,7 +152,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         )?;
 
         let multiplication: MultiplicationExecutor32 = crate::PreflightExecutorWrapperFp::new(
-            MultiplicationExecutor::new(MultAdapterExecutor::new(), MulOpcode::CLASS_OFFSET),
+            MultiplicationExecutor::new(BaseAluAdapterExecutor::new(), MulOpcode::CLASS_OFFSET),
             fp.clone(),
         );
         inventory.add_executor(multiplication, MulOpcode::iter().map(|x| x.global_opcode()))?;
@@ -240,6 +240,17 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu_64);
+
+        // Multiplication AIR - re-uses BaseAluAdapter since it has the same I/O pattern
+        let range_tuple_bus = openvm_circuit_primitives::range_tuple::RangeTupleCheckerBus::new(
+            inventory.new_bus_idx(),
+            self.range_tuple_checker_sizes,
+        );
+        let multiplication = MultiplicationAir::new(
+            BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            MultiplicationCoreAir::new(range_tuple_bus, MulOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(multiplication);
         //
         // let lt = Rv32LessThanAir::new(
         //     BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
@@ -367,6 +378,24 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(base_alu_64);
+
+        // Multiplication chip - re-uses BaseAluAdapterFiller since it has the same I/O pattern
+        let multiplication_air: &MultiplicationAir = inventory.next_air()?;
+        let range_tuple_chip = Arc::new(
+            openvm_circuit_primitives::range_tuple::RangeTupleCheckerChip::new(
+                multiplication_air.core.bus,
+            ),
+        );
+        inventory.add_periphery_chip(range_tuple_chip.clone());
+        let multiplication = MultiplicationChip::new(
+            MultiplicationFiller::new(
+                BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                range_tuple_chip,
+                MulOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(multiplication);
         //
         // inventory.next_air::<Rv32LessThanAir>()?;
         // let lt = Rv32LessThanChip::new(

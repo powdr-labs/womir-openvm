@@ -14,14 +14,14 @@ mod alu;
 // mod branch;
 // mod jalr;
 mod loadstore;
-mod mul;
+// mod mul;  // Not needed - multiplication re-uses BaseAluAdapter
 // mod rdwrite;
 
 pub use alu::*;
 // pub use branch::*;
 // pub use jalr::*;
 pub use loadstore::*;
-pub use mul::*;
+// pub use mul::*;  // Not needed - multiplication re-uses BaseAluAdapter
 pub use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 // pub use rdwrite::*;
 
