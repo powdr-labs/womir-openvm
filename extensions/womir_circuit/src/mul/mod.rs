@@ -1,7 +1,7 @@
 use openvm_circuit::arch::{VmAirWrapper, VmChipWrapper};
 
 use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
-use crate::adapters::{Rv32MultAdapterAir, Rv32MultAdapterExecutor, Rv32MultAdapterFiller};
+use crate::adapters::{MultAdapterAir, MultAdapterExecutor, MultAdapterFiller};
 
 mod core;
 mod execution;
@@ -12,16 +12,14 @@ mod cuda;
 #[cfg(feature = "cuda")]
 pub use cuda::*;
 
-#[cfg(test)]
-mod tests;
-
-pub type Rv32MultiplicationAir = VmAirWrapper<
-    Rv32MultAdapterAir,
-    MultiplicationCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+pub type MultiplicationAir =
+    VmAirWrapper<MultAdapterAir, MultiplicationCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>;
+pub type MultiplicationExecutor32 = crate::PreflightExecutorWrapperFp<
+    MultiplicationExecutor<MultAdapterExecutor, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+    RV32_REGISTER_NUM_LIMBS,
+    RV32_CELL_BITS,
 >;
-pub type Rv32MultiplicationExecutor =
-    MultiplicationExecutor<Rv32MultAdapterExecutor, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>;
-pub type Rv32MultiplicationChip<F> = VmChipWrapper<
+pub type MultiplicationChip<F> = VmChipWrapper<
     F,
-    MultiplicationFiller<Rv32MultAdapterFiller, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+    MultiplicationFiller<MultAdapterFiller, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;

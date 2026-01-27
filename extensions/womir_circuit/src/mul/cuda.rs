@@ -7,19 +7,19 @@ use openvm_circuit_primitives::{
 };
 use openvm_cuda_backend::{
     base::DeviceMatrix,
-    chip::{get_empty_air_proving_ctx, UInt2},
+    chip::{UInt2, get_empty_air_proving_ctx},
     prover_backend::GpuBackend,
     types::F,
 };
 use openvm_cuda_common::copy::MemCopyH2D;
-use openvm_stark_backend::{prover::types::AirProvingContext, Chip};
+use openvm_stark_backend::{Chip, prover::types::AirProvingContext};
 
 use crate::{
+    MultiplicationCoreCols, MultiplicationCoreRecord,
     adapters::{
-        Rv32MultAdapterCols, Rv32MultAdapterRecord, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS,
+        RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, Rv32MultAdapterCols, Rv32MultAdapterRecord,
     },
     cuda_abi::mul_cuda::tracegen,
-    MultiplicationCoreCols, MultiplicationCoreRecord,
 };
 
 #[derive(new)]

@@ -589,7 +589,7 @@ mod tests {
     #[test]
     fn test_basic_mul() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 666_i16.into()),
             wom::add_imm::<F>(9, 0, 1_i16.into()),
             wom::mul::<F>(10, 8, 9),
@@ -603,7 +603,7 @@ mod tests {
     #[test]
     fn test_mul_zero() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 12345_i16.into()),
             wom::add_imm::<F>(9, 0, 0_i16.into()),
             wom::mul::<F>(10, 8, 9), // 12345 * 0 = 0
@@ -616,7 +616,7 @@ mod tests {
     #[test]
     fn test_mul_one() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 999_i16.into()),
             wom::add_imm::<F>(9, 0, 1_i16.into()),
             wom::mul::<F>(10, 8, 9), // 999 * 1 = 999
@@ -650,7 +650,7 @@ mod tests {
     #[test]
     fn test_mul_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 7_i16.into()),
             wom::add_imm::<F>(9, 0, 8_i16.into()), // 2^3
             wom::mul::<F>(10, 8, 9),               // 7 * 8 = 56

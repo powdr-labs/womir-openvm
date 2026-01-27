@@ -2,16 +2,16 @@ use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::{
     arch::{
-        get_record_from_slice, AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller,
-        BasicAdapterInterface, ExecutionBridge, ExecutionState, MinimalInstruction, VmAdapterAir,
+        AdapterAirContext, AdapterTraceFiller, BasicAdapterInterface, ExecutionBridge,
+        ExecutionState, MinimalInstruction, VmAdapterAir, get_record_from_slice,
     },
     system::memory::{
+        MemoryAddress, MemoryAuxColsFactory,
         offline_checker::{
             MemoryBridge, MemoryReadAuxCols, MemoryReadAuxRecord, MemoryWriteAuxCols,
             MemoryWriteBytesAuxRecord,
         },
         online::TracingMemory,
-        MemoryAddress, MemoryAuxColsFactory,
     },
 };
 use openvm_circuit_primitives::AlignedBytesBorrow;
@@ -26,13 +26,13 @@ use openvm_stark_backend::{
     rap::ColumnsAir,
 };
 
-use super::{tracing_write, RV32_REGISTER_NUM_LIMBS};
+use super::{RV32_REGISTER_NUM_LIMBS, tracing_write};
 use crate::adapters::tracing_read;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct Rv32MultAdapterCols<T> {
+pub struct MultAdapterCols<T> {
     pub from_state: ExecutionState<T>,
     pub rd_ptr: T,
     pub rs1_ptr: T,
@@ -44,24 +44,24 @@ pub struct Rv32MultAdapterCols<T> {
 /// Reads instructions of the form OP a, b, c, d where \[a:4\]_d = \[b:4\]_d op \[c:4\]_d.
 /// Operand d can only be 1, and there is no immediate support.
 #[derive(Clone, Copy, Debug, derive_new::new)]
-pub struct Rv32MultAdapterAir {
+pub struct MultAdapterAir {
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) memory_bridge: MemoryBridge,
 }
 
-impl<F: Field> BaseAir<F> for Rv32MultAdapterAir {
+impl<F: Field> BaseAir<F> for MultAdapterAir {
     fn width(&self) -> usize {
-        Rv32MultAdapterCols::<F>::width()
+        MultAdapterCols::<F>::width()
     }
 }
 
-impl<F: Field> ColumnsAir<F> for Rv32MultAdapterAir {
+impl<F: Field> ColumnsAir<F> for MultAdapterAir {
     fn columns(&self) -> Option<Vec<String>> {
-        Rv32MultAdapterCols::<F>::struct_reflection()
+        MultAdapterCols::<F>::struct_reflection()
     }
 }
 
-impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32MultAdapterAir {
+impl<AB: InteractionBuilder> VmAdapterAir<AB> for MultAdapterAir {
     type Interface = BasicAdapterInterface<
         AB::Expr,
         MinimalInstruction<AB::Expr>,
@@ -77,7 +77,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32MultAdapterAir {
         local: &[AB::Var],
         ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local: &Rv32MultAdapterCols<_> = local.borrow();
+        let local: &MultAdapterCols<_> = local.borrow();
         let timestamp = local.from_state.timestamp;
         let mut timestamp_delta: usize = 0;
         let mut timestamp_pp = || {
@@ -130,16 +130,18 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32MultAdapterAir {
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &Rv32MultAdapterCols<_> = local.borrow();
+        let cols: &MultAdapterCols<_> = local.borrow();
         cols.from_state.pc
     }
 }
 
 #[repr(C)]
 #[derive(AlignedBytesBorrow, Debug)]
-pub struct Rv32MultAdapterRecord {
+pub struct MultAdapterRecord {
     pub from_pc: u32,
     pub from_timestamp: u32,
+    /// Frame pointer for register access
+    pub fp: u32,
 
     pub rd_ptr: u32,
     pub rs1_ptr: u32,
@@ -150,24 +152,26 @@ pub struct Rv32MultAdapterRecord {
 }
 
 #[derive(Clone, Copy, derive_new::new)]
-pub struct Rv32MultAdapterExecutor;
+pub struct MultAdapterExecutor;
 
 #[derive(Clone, Copy, derive_new::new)]
-pub struct Rv32MultAdapterFiller;
+pub struct MultAdapterFiller;
 
-impl<F> AdapterTraceExecutor<F> for Rv32MultAdapterExecutor
+// FP-aware implementation - uses fp + register_address for all register accesses
+impl<F> crate::FpAdapterTraceExecutor<F> for MultAdapterExecutor
 where
     F: PrimeField32,
 {
-    const WIDTH: usize = size_of::<Rv32MultAdapterCols<u8>>();
     type ReadData = [[u8; RV32_REGISTER_NUM_LIMBS]; 2];
     type WriteData = [[u8; RV32_REGISTER_NUM_LIMBS]; 1];
-    type RecordMut<'a> = &'a mut Rv32MultAdapterRecord;
+    type RecordMut<'a> = &'a mut MultAdapterRecord;
 
     #[inline(always)]
-    fn start(pc: u32, memory: &TracingMemory, record: &mut Self::RecordMut<'_>) {
+    fn start_with_fp(pc: u32, fp: u32, memory: &TracingMemory, record: &mut Self::RecordMut<'_>) {
         record.from_pc = pc;
         record.from_timestamp = memory.timestamp;
+        // Store fp in the record for use in read/write
+        record.fp = fp;
     }
 
     #[inline(always)]
@@ -181,18 +185,19 @@ where
 
         debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
 
+        // Use fp + register address for frame-local access
         record.rs1_ptr = b.as_canonical_u32();
         let rs1 = tracing_read(
             memory,
             RV32_REGISTER_AS,
-            b.as_canonical_u32(),
+            record.fp + record.rs1_ptr, // FP-relative address
             &mut record.reads_aux[0].prev_timestamp,
         );
         record.rs2_ptr = c.as_canonical_u32();
         let rs2 = tracing_read(
             memory,
             RV32_REGISTER_AS,
-            c.as_canonical_u32(),
+            record.fp + record.rs2_ptr, // FP-relative address
             &mut record.reads_aux[1].prev_timestamp,
         );
 
@@ -215,7 +220,7 @@ where
         tracing_write(
             memory,
             RV32_REGISTER_AS,
-            a.as_canonical_u32(),
+            record.fp + record.rd_ptr, // FP-relative address
             data[0],
             &mut record.writes_aux.prev_timestamp,
             &mut record.writes_aux.prev_data,
@@ -223,17 +228,17 @@ where
     }
 }
 
-impl<F: PrimeField32> AdapterTraceFiller<F> for Rv32MultAdapterFiller {
-    const WIDTH: usize = size_of::<Rv32MultAdapterCols<u8>>();
+impl<F: PrimeField32> AdapterTraceFiller<F> for MultAdapterFiller {
+    const WIDTH: usize = size_of::<MultAdapterCols<u8>>();
 
     #[inline(always)]
     fn fill_trace_row(&self, mem_helper: &MemoryAuxColsFactory<F>, mut adapter_row: &mut [F]) {
         // SAFETY:
         // - caller ensures `adapter_row` contains a valid record representation that was previously
         //   written by the executor
-        // - get_record_from_slice correctly interprets the bytes as Rv32MultAdapterRecord
-        let record: &Rv32MultAdapterRecord = unsafe { get_record_from_slice(&mut adapter_row, ()) };
-        let adapter_row: &mut Rv32MultAdapterCols<F> = adapter_row.borrow_mut();
+        // - get_record_from_slice correctly interprets the bytes as MultAdapterRecord
+        let record: &MultAdapterRecord = unsafe { get_record_from_slice(&mut adapter_row, ()) };
+        let adapter_row: &mut MultAdapterCols<F> = adapter_row.borrow_mut();
 
         let timestamp = record.from_timestamp;
 

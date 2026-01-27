@@ -21,7 +21,7 @@ use openvm_stark_backend::{
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
-use openvm_womir_transpiler::{BaseAlu64Opcode, BaseAluOpcode, LoadStoreOpcode};
+use openvm_womir_transpiler::{BaseAlu64Opcode, BaseAluOpcode, LoadStoreOpcode, MulOpcode};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
@@ -82,6 +82,7 @@ pub enum WomirExecutor {
     // Shift(Rv32ShiftExecutor),
     LoadStore(LoadStoreExecutor32),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
+    Multiplication(MultiplicationExecutor32),
     // BranchEqual(Rv32BranchEqualExecutor),
     // BranchLessThan(Rv32BranchLessThanExecutor),
     // JalLui(Rv32JalLuiExecutor),
@@ -149,6 +150,12 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
         )?;
+
+        let multiplication: MultiplicationExecutor32 = crate::PreflightExecutorWrapperFp::new(
+            MultiplicationExecutor::new(MultAdapterExecutor::new(), MulOpcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(multiplication, MulOpcode::iter().map(|x| x.global_opcode()))?;
 
         // let beq = BranchEqualExecutor::new(
         //     Rv32BranchAdapterExecutor,

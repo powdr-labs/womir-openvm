@@ -184,7 +184,7 @@ pub mod common;
 // mod less_than;
 mod load_sign_extend;
 mod loadstore;
-// mod mul;
+mod mul;
 // mod mulh;
 // mod shift;
 
@@ -199,7 +199,7 @@ pub use base_alu::*;
 // pub use less_than::*;
 pub use load_sign_extend::*;
 pub use loadstore::*;
-// pub use mul::*;
+pub use mul::*;
 // pub use mulh::*;
 // pub use shift::*;
 
