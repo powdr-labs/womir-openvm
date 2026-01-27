@@ -320,8 +320,10 @@ unsafe fn execute_e1_impl<F: PrimeField32, CTX: ExecutionCtxTrait, OP: DivRemOp>
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     let pre_compute: &DivRemPreCompute =
-        std::slice::from_raw_parts(pre_compute, size_of::<DivRemPreCompute>()).borrow();
-    execute_e12_impl::<F, CTX, OP>(pre_compute, exec_state);
+        unsafe { std::slice::from_raw_parts(pre_compute, size_of::<DivRemPreCompute>()).borrow() };
+    unsafe {
+        execute_e12_impl::<F, CTX, OP>(pre_compute, exec_state);
+    }
 }
 
 #[create_handler]
@@ -330,13 +332,16 @@ unsafe fn execute_e2_impl<F: PrimeField32, CTX: MeteredExecutionCtxTrait, OP: Di
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
-    let pre_compute: &E2PreCompute<DivRemPreCompute> =
+    let pre_compute: &E2PreCompute<DivRemPreCompute> = unsafe {
         std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<DivRemPreCompute>>())
-            .borrow();
+            .borrow()
+    };
     exec_state
         .ctx
         .on_height_change(pre_compute.chip_idx as usize, 1);
-    execute_e12_impl::<F, CTX, OP>(&pre_compute.data, exec_state);
+    unsafe {
+        execute_e12_impl::<F, CTX, OP>(&pre_compute.data, exec_state);
+    }
 }
 
 trait DivRemOp {

@@ -113,8 +113,8 @@ fn biguint_to_limbs<const NUM_LIMBS: usize, const LIMB_BITS: usize>(
 ) -> [u32; NUM_LIMBS] {
     let limb_mask = (1 << LIMB_BITS) - 1;
     let mut res = [0u32; NUM_LIMBS];
-    for i in 0..NUM_LIMBS {
-        res[i] = ((x >> (i * LIMB_BITS))
+    for (i, limb) in res.iter_mut().enumerate() {
+        *limb = ((x >> (i * LIMB_BITS))
             .to_u32_digits()
             .first()
             .copied()
