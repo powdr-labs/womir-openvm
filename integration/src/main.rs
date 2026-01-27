@@ -840,7 +840,7 @@ mod tests {
     #[test]
     fn test_basic_div() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 100_i16.into()),
             wom::add_imm::<F>(9, 0, 10_i16.into()),
             wom::div::<F>(10, 8, 9), // 100 / 10 = 10
@@ -853,7 +853,7 @@ mod tests {
     #[test]
     fn test_div_by_one() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 999_i16.into()),
             wom::add_imm::<F>(9, 0, 1_i16.into()),
             wom::div::<F>(10, 8, 9), // 999 / 1 = 999
@@ -866,7 +866,7 @@ mod tests {
     #[test]
     fn test_div_equal_numbers() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 42_i16.into()),
             wom::add_imm::<F>(9, 0, 42_i16.into()),
             wom::div::<F>(10, 8, 9), // 42 / 42 = 1
@@ -879,7 +879,7 @@ mod tests {
     #[test]
     fn test_div_with_remainder() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 17_i16.into()),
             wom::add_imm::<F>(9, 0, 5_i16.into()),
             wom::div::<F>(10, 8, 9), // 17 / 5 = 3 (integer division)
@@ -892,7 +892,7 @@ mod tests {
     #[test]
     fn test_div_zero_dividend() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 0_i16.into()),
             wom::add_imm::<F>(9, 0, 100_i16.into()),
             wom::div::<F>(10, 8, 9), // 0 / 100 = 0
@@ -918,7 +918,7 @@ mod tests {
     #[test]
     fn test_div_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 128_i16.into()),
             wom::add_imm::<F>(9, 0, 8_i16.into()), // 2^3
             wom::div::<F>(10, 8, 9),               // 128 / 8 = 16
@@ -931,7 +931,7 @@ mod tests {
     #[test]
     fn test_div_chain() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 120_i16.into()),
             wom::add_imm::<F>(9, 0, 2_i16.into()),
             wom::add_imm::<F>(10, 0, 3_i16.into()),
@@ -981,7 +981,7 @@ mod tests {
     fn test_div_and_mul_inverse() -> Result<(), Box<dyn std::error::Error>> {
         // Test that (a / b) * b ≈ a (with integer truncation)
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 100_i16.into()),
             wom::add_imm::<F>(9, 0, 7_i16.into()),
             wom::div::<F>(10, 8, 9),  // 100 / 7 = 14

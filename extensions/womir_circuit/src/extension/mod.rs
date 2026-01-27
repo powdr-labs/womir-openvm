@@ -21,7 +21,9 @@ use openvm_stark_backend::{
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
-use openvm_womir_transpiler::{BaseAlu64Opcode, BaseAluOpcode, LoadStoreOpcode, MulOpcode};
+use openvm_womir_transpiler::{
+    BaseAlu64Opcode, BaseAluOpcode, DivRemOpcode, LoadStoreOpcode, MulOpcode,
+};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
@@ -83,6 +85,7 @@ pub enum WomirExecutor {
     LoadStore(LoadStoreExecutor32),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     Multiplication(MultiplicationExecutor32),
+    DivRem(DivRemExecutor32),
     // BranchEqual(Rv32BranchEqualExecutor),
     // BranchLessThan(Rv32BranchLessThanExecutor),
     // JalLui(Rv32JalLuiExecutor),
@@ -156,6 +159,12 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             fp.clone(),
         );
         inventory.add_executor(multiplication, MulOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let divrem: DivRemExecutor32 = crate::PreflightExecutorWrapperFp::new(
+            DivRemExecutor::new(BaseAluAdapterExecutor::new(), DivRemOpcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(divrem, DivRemOpcode::iter().map(|x| x.global_opcode()))?;
 
         // let beq = BranchEqualExecutor::new(
         //     Rv32BranchAdapterExecutor,
@@ -251,6 +260,22 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             MultiplicationCoreAir::new(range_tuple_bus, MulOpcode::CLASS_OFFSET),
         );
         inventory.add_air(multiplication);
+
+        // DivRem AIR - re-uses BaseAluAdapter since it has the same I/O pattern
+        let divrem_range_tuple_bus =
+            openvm_circuit_primitives::range_tuple::RangeTupleCheckerBus::new(
+                inventory.new_bus_idx(),
+                self.range_tuple_checker_sizes,
+            );
+        let divrem = DivRemAir::new(
+            BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            DivRemCoreAir::new(
+                bitwise_lu,
+                divrem_range_tuple_bus,
+                DivRemOpcode::CLASS_OFFSET,
+            ),
+        );
+        inventory.add_air(divrem);
         //
         // let lt = Rv32LessThanAir::new(
         //     BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
@@ -396,6 +421,25 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(multiplication);
+
+        // DivRem chip - re-uses BaseAluAdapterFiller since it has the same I/O pattern
+        let divrem_air: &DivRemAir = inventory.next_air()?;
+        let divrem_range_tuple_chip = Arc::new(
+            openvm_circuit_primitives::range_tuple::RangeTupleCheckerChip::new(
+                divrem_air.core.range_tuple_bus,
+            ),
+        );
+        inventory.add_periphery_chip(divrem_range_tuple_chip.clone());
+        let divrem = DivRemChip::new(
+            DivRemFiller::new(
+                BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                divrem_range_tuple_chip,
+                DivRemOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(divrem);
         //
         // inventory.next_air::<Rv32LessThanAir>()?;
         // let lt = Rv32LessThanChip::new(

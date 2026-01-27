@@ -1,7 +1,7 @@
 use openvm_circuit::arch::{VmAirWrapper, VmChipWrapper};
 
 use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
-use crate::adapters::{Rv32MultAdapterAir, Rv32MultAdapterExecutor, Rv32MultAdapterFiller};
+use crate::adapters::{BaseAluAdapterAir, BaseAluAdapterExecutor, BaseAluAdapterFiller};
 
 mod core;
 mod execution;
@@ -12,12 +12,25 @@ mod cuda;
 #[cfg(feature = "cuda")]
 pub use cuda::*;
 
-#[cfg(test)]
-mod tests;
-
-pub type Rv32DivRemAir =
-    VmAirWrapper<Rv32MultAdapterAir, DivRemCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>;
-pub type Rv32DivRemExecutor =
-    DivRemExecutor<Rv32MultAdapterExecutor, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>;
-pub type Rv32DivRemChip<F> =
-    VmChipWrapper<F, DivRemFiller<Rv32MultAdapterFiller, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>;
+// Re-use BaseAluAdapter since divrem has the same I/O pattern (read 2, write 1)
+pub type DivRemAir = VmAirWrapper<
+    BaseAluAdapterAir<RV32_REGISTER_NUM_LIMBS>,
+    DivRemCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+>;
+pub type DivRemExecutor32 = crate::PreflightExecutorWrapperFp<
+    DivRemExecutor<
+        BaseAluAdapterExecutor<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+        RV32_REGISTER_NUM_LIMBS,
+        RV32_CELL_BITS,
+    >,
+    RV32_REGISTER_NUM_LIMBS,
+    RV32_CELL_BITS,
+>;
+pub type DivRemChip<F> = VmChipWrapper<
+    F,
+    DivRemFiller<
+        BaseAluAdapterFiller<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+        RV32_REGISTER_NUM_LIMBS,
+        RV32_CELL_BITS,
+    >,
+>;

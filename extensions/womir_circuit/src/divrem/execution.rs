@@ -8,10 +8,10 @@ use openvm_circuit::arch::aot::common::REG_A_W;
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
-    LocalOpcode,
 };
 use openvm_rv32im_transpiler::DivRemOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;

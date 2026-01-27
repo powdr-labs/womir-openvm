@@ -1,6 +1,6 @@
 use openvm_circuit::arch::testing::{TestBuilder, memory::gen_pointer};
 use openvm_instructions::{VmOpcode, instruction::Instruction};
-use openvm_stark_backend::p3_field::FieldAlgebra;
+use openvm_stark_backend::{p3_field::FieldAlgebra, verifier::VerificationError};
 use openvm_stark_sdk::p3_baby_bear::BabyBear;
 use rand::{Rng, rngs::StdRng};
 
@@ -51,4 +51,13 @@ pub fn generate_rv32_is_type_immediate(rng: &mut StdRng) -> (usize, [u8; RV32_RE
             (imm >> 16) as u8,
         ],
     )
+}
+
+#[allow(dead_code)]
+pub fn get_verification_error(is_interaction_error: bool) -> VerificationError {
+    if is_interaction_error {
+        VerificationError::ChallengePhaseError
+    } else {
+        VerificationError::OodEvaluationMismatch
+    }
 }
