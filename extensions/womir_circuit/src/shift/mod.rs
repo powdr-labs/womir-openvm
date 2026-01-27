@@ -1,9 +1,7 @@
 use openvm_circuit::arch::{VmAirWrapper, VmChipWrapper};
 
-use super::adapters::{
-    Rv32BaseAluAdapterAir, Rv32BaseAluAdapterExecutor, Rv32BaseAluAdapterFiller, RV32_CELL_BITS,
-    RV32_REGISTER_NUM_LIMBS,
-};
+use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+use crate::adapters::{BaseAluAdapterAir, BaseAluAdapterExecutor, BaseAluAdapterFiller};
 
 mod core;
 mod execution;
@@ -14,17 +12,25 @@ mod cuda;
 #[cfg(feature = "cuda")]
 pub use cuda::*;
 
-#[cfg(test)]
-mod tests;
-
-pub type Rv32ShiftAir =
-    VmAirWrapper<Rv32BaseAluAdapterAir, ShiftCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>;
-pub type Rv32ShiftExecutor = ShiftExecutor<
-    Rv32BaseAluAdapterExecutor<RV32_CELL_BITS>,
+// Re-use BaseAluAdapter since shift has the same I/O pattern (read 2, write 1)
+pub type ShiftAir = VmAirWrapper<
+    BaseAluAdapterAir<RV32_REGISTER_NUM_LIMBS>,
+    ShiftCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+>;
+pub type ShiftExecutor32 = crate::PreflightExecutorWrapperFp<
+    ShiftExecutor<
+        BaseAluAdapterExecutor<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+        RV32_REGISTER_NUM_LIMBS,
+        RV32_CELL_BITS,
+    >,
     RV32_REGISTER_NUM_LIMBS,
     RV32_CELL_BITS,
 >;
-pub type Rv32ShiftChip<F> = VmChipWrapper<
+pub type ShiftChip<F> = VmChipWrapper<
     F,
-    ShiftFiller<Rv32BaseAluAdapterFiller<RV32_CELL_BITS>, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+    ShiftFiller<
+        BaseAluAdapterFiller<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+        RV32_REGISTER_NUM_LIMBS,
+        RV32_CELL_BITS,
+    >,
 >;

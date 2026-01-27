@@ -14,8 +14,8 @@ use crate::{
     Rv32DivRemChipGpu, Rv32HintStoreAir, Rv32HintStoreChipGpu, Rv32Io, Rv32JalLuiAir,
     Rv32JalLuiChipGpu, Rv32JalrAir, Rv32JalrChipGpu, Rv32LessThanAir, Rv32LessThanChipGpu,
     Rv32LoadSignExtendAir, Rv32LoadSignExtendChipGpu, Rv32LoadStoreAir, Rv32LoadStoreChipGpu,
-    Rv32MulHAir, Rv32MulHChipGpu, Rv32MultiplicationAir, Rv32MultiplicationChipGpu, Rv32ShiftAir,
-    Rv32ShiftChipGpu, Womir,
+    Rv32MulHAir, Rv32MulHChipGpu, Rv32MultiplicationAir, Rv32MultiplicationChipGpu, ShiftAir,
+    ShiftChipGpu, Womir,
 };
 
 pub struct WomirGpuProverExt;
@@ -52,8 +52,8 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(lt);
 
-        inventory.next_air::<Rv32ShiftAir>()?;
-        let shift = Rv32ShiftChipGpu::new(
+        inventory.next_air::<ShiftAir>()?;
+        let shift = ShiftChipGpu::new(
             range_checker.clone(),
             bitwise_lu.clone(),
             timestamp_max_bits,

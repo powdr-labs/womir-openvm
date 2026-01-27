@@ -22,7 +22,7 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, DivRemOpcode, LoadStoreOpcode, MulOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, DivRemOpcode, LoadStoreOpcode, MulOpcode, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -81,7 +81,7 @@ pub enum WomirExecutor {
     // 64-bit operations:
     BaseAlu64(BaseAlu64Executor),
     // LessThan(Rv32LessThanExecutor),
-    // Shift(Rv32ShiftExecutor),
+    Shift(ShiftExecutor32),
     LoadStore(LoadStoreExecutor32),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     Multiplication(MultiplicationExecutor32),
@@ -126,13 +126,13 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             base_alu_64,
             BaseAlu64Opcode::iter().map(|x| x.global_opcode()),
         )?;
-        //
-        // let lt = LessThanExecutor::new(BaseAluAdapterExecutor, LessThanOpcode::CLASS_OFFSET);
-        // inventory.add_executor(lt, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
-        //
-        // let shift = ShiftExecutor::new(BaseAluAdapterExecutor, ShiftOpcode::CLASS_OFFSET);
-        // inventory.add_executor(shift, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
-        //
+
+        let shift: ShiftExecutor32 = crate::PreflightExecutorWrapperFp::new(
+            ShiftExecutor::new(BaseAluAdapterExecutor::new(), ShiftOpcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(shift, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
+
         let load_store: LoadStoreExecutor32 = crate::PreflightExecutorWrapperFp::new(
             LoadStoreExecutor::new(
                 LoadStoreAdapterExecutor::new(pointer_max_bits),
@@ -221,7 +221,7 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         } = inventory.system().port();
 
         let exec_bridge = ExecutionBridge::new(execution_bus, program_bus);
-        let _range_checker = inventory.range_checker().bus;
+        let range_checker = inventory.range_checker().bus;
         let _pointer_max_bits = inventory.pointer_max_bits();
 
         let bitwise_lu = {
@@ -276,18 +276,19 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             ),
         );
         inventory.add_air(divrem);
+
+        // Shift AIR - re-uses BaseAluAdapter since it has the same I/O pattern
+        let shift = ShiftAir::new(
+            BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            ShiftCoreAir::new(bitwise_lu, range_checker, ShiftOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(shift);
         //
         // let lt = Rv32LessThanAir::new(
         //     BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
         //     LessThanCoreAir::new(bitwise_lu, LessThanOpcode::CLASS_OFFSET),
         // );
         // inventory.add_air(lt);
-        //
-        // let shift = Rv32ShiftAir::new(
-        //     BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
-        //     ShiftCoreAir::new(bitwise_lu, range_checker, ShiftOpcode::CLASS_OFFSET),
-        // );
-        // inventory.add_air(shift);
         //
         // let load_store = Rv32LoadStoreAir::new(
         //     Rv32LoadStoreAdapterAir::new(
@@ -440,6 +441,19 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(divrem);
+
+        // Shift chip - re-uses BaseAluAdapterFiller since it has the same I/O pattern
+        inventory.next_air::<ShiftAir>()?;
+        let shift = ShiftChip::new(
+            ShiftFiller::new(
+                BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                range_checker.clone(),
+                ShiftOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(shift);
         //
         // inventory.next_air::<Rv32LessThanAir>()?;
         // let lt = Rv32LessThanChip::new(
@@ -451,18 +465,6 @@ where
         //     mem_helper.clone(),
         // );
         // inventory.add_executor_chip(lt);
-        //
-        // inventory.next_air::<Rv32ShiftAir>()?;
-        // let shift = Rv32ShiftChip::new(
-        //     ShiftFiller::new(
-        //         BaseAluAdapterFiller::new(bitwise_lu.clone()),
-        //         bitwise_lu.clone(),
-        //         range_checker.clone(),
-        //         ShiftOpcode::CLASS_OFFSET,
-        //     ),
-        //     mem_helper.clone(),
-        // );
-        // inventory.add_executor_chip(shift);
         //
         // inventory.next_air::<Rv32LoadStoreAir>()?;
         // let load_store_chip = Rv32LoadStoreChip::new(
