@@ -22,8 +22,8 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, LoadStoreOpcode, MulOpcode,
-    ShiftOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, LessThan64Opcode, LessThanOpcode,
+    LoadStoreOpcode, MulOpcode, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -81,7 +81,8 @@ pub enum WomirExecutor {
     BaseAlu(BaseAluExecutor),
     // 64-bit operations:
     BaseAlu64(BaseAlu64Executor),
-    // LessThan(Rv32LessThanExecutor),
+    LessThan(LessThanExecutor32),
+    LessThan64(LessThan64Executor),
     Shift(ShiftExecutor32),
     LoadStore(LoadStoreExecutor32),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
@@ -173,6 +174,21 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             fp.clone(),
         );
         inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
+
+        let less_than: LessThanExecutor32 = crate::PreflightExecutorWrapperFp::new(
+            LessThanCoreExecutor::new(LessThanOpcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(less_than, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let less_than_64: LessThan64Executor = crate::PreflightExecutorWrapperFp::new(
+            LessThanCoreExecutor::new(LessThan64Opcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(
+            less_than_64,
+            LessThan64Opcode::iter().map(|x| x.global_opcode()),
+        )?;
 
         // let beq = BranchEqualExecutor::new(
         //     Rv32BranchAdapterExecutor,
