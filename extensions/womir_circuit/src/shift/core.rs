@@ -1,8 +1,15 @@
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::online::TracingMemory;
-use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP};
+use openvm_instructions::{
+    LocalOpcode,
+    instruction::Instruction,
+    program::DEFAULT_PC_STEP,
+    riscv::{RV32_IMM_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
+};
 use openvm_rv32im_transpiler::ShiftOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
+
+use crate::adapters::imm_to_bytes;
 
 // Re-export upstream types that we don't modify
 pub use openvm_rv32im_circuit::{ShiftCoreAir, ShiftCoreCols, ShiftCoreRecord, ShiftFiller};
@@ -51,7 +58,9 @@ where
         instruction: &Instruction<F>,
         fp: u32,
     ) -> Result<Option<u32>, ExecutionError> {
-        let Instruction { opcode, .. } = instruction;
+        let Instruction {
+            opcode, b, c, e, ..
+        } = instruction;
 
         let local_opcode = ShiftOpcode::from_usize(opcode.local_opcode_idx(self.offset));
 
@@ -60,10 +69,38 @@ where
         // Call FP-aware start
         A::start_with_fp(*state.pc, fp, state.memory, &mut adapter_record);
 
-        let [rs1, rs2] = self
-            .adapter
-            .read(state.memory, instruction, &mut adapter_record)
-            .into();
+        // Check if second operand is immediate or register
+        let e_u32 = e.as_canonical_u32();
+        let is_imm = e_u32 == RV32_IMM_AS;
+
+        let rs1: [u8; NUM_LIMBS];
+        let rs2: [u8; NUM_LIMBS];
+
+        if is_imm {
+            // Read only rs1 from adapter (first operand)
+            let rs1_addr = b.as_canonical_u32() + fp;
+            let (_counter, rs1_read) = unsafe {
+                state
+                    .memory
+                    .read::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(RV32_REGISTER_AS, rs1_addr)
+            };
+            rs1 = rs1_read;
+
+            // Construct rs2 from immediate
+            let c_u32 = c.as_canonical_u32();
+            let imm_bytes = imm_to_bytes(c_u32);
+            let mut rs2_imm = [0u8; NUM_LIMBS];
+            rs2_imm[..4.min(NUM_LIMBS)].copy_from_slice(&imm_bytes[..4.min(NUM_LIMBS)]);
+            rs2 = rs2_imm;
+        } else {
+            // Read both operands from adapter
+            let [rs1_read, rs2_read] = self
+                .adapter
+                .read(state.memory, instruction, &mut adapter_record)
+                .into();
+            rs1 = rs1_read;
+            rs2 = rs2_read;
+        }
 
         let (output, _, _) = run_shift::<NUM_LIMBS, LIMB_BITS>(local_opcode, &rs1, &rs2);
 

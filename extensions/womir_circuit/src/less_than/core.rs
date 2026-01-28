@@ -1,6 +1,11 @@
 use openvm_circuit::{arch::*, system::memory::online::TracingMemory};
 use openvm_circuit_primitives::AlignedBytesBorrow;
-use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP};
+use openvm_instructions::{
+    LocalOpcode,
+    instruction::Instruction,
+    program::DEFAULT_PC_STEP,
+    riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
+};
 use openvm_rv32im_transpiler::LessThanOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
@@ -9,7 +14,7 @@ pub use openvm_rv32im_circuit::{
     LessThanCoreAir, LessThanCoreCols, LessThanCoreRecord, LessThanFiller,
 };
 
-use crate::adapters::RV32_REGISTER_NUM_LIMBS;
+use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 
 // Core executor that implements FpPreflightExecutor
 #[derive(Clone, Copy, derive_new::new)]
@@ -36,24 +41,35 @@ where
     ) -> Result<Option<u32>, ExecutionError> {
         debug_assert!(LIMB_BITS <= 8);
         let Instruction {
-            opcode, a, b, c, ..
+            opcode, a, b, c, e, ..
         } = instruction;
 
-        // Read operands using FP
+        // Read first operand using FP
         let rs1_addr = b.as_canonical_u32() + fp;
-        let rs2_addr = c.as_canonical_u32() + fp;
-
         let (_counter1, rs1) = unsafe {
-            state.memory.read::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
-                openvm_instructions::riscv::RV32_REGISTER_AS,
-                rs1_addr,
-            )
+            state
+                .memory
+                .read::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(RV32_REGISTER_AS, rs1_addr)
         };
-        let (_counter2, rs2) = unsafe {
-            state.memory.read::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
-                openvm_instructions::riscv::RV32_REGISTER_AS,
-                rs2_addr,
-            )
+
+        // Check if second operand is immediate or register
+        let e_u32 = e.as_canonical_u32();
+        let rs2 = if e_u32 == RV32_IMM_AS {
+            // Immediate value - convert and extend
+            let c_u32 = c.as_canonical_u32();
+            let imm_bytes = imm_to_bytes(c_u32);
+            let mut result = [0u8; NUM_LIMBS];
+            result[..4.min(NUM_LIMBS)].copy_from_slice(&imm_bytes[..4.min(NUM_LIMBS)]);
+            result
+        } else {
+            // Read from register using FP
+            let rs2_addr = c.as_canonical_u32() + fp;
+            let (_counter2, rs2_read) = unsafe {
+                state
+                    .memory
+                    .read::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(RV32_REGISTER_AS, rs2_addr)
+            };
+            rs2_read
         };
 
         let local_opcode = opcode.local_opcode_idx(self.offset) as u8;
@@ -71,11 +87,7 @@ where
         unsafe {
             state
                 .memory
-                .write::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
-                    openvm_instructions::riscv::RV32_REGISTER_AS,
-                    rd_addr,
-                    output,
-                );
+                .write::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(RV32_REGISTER_AS, rd_addr, output);
         }
 
         *state.pc = state.pc.wrapping_add(DEFAULT_PC_STEP);
