@@ -1,9 +1,6 @@
-use openvm_circuit::{
-    arch::*,
-    system::memory::online::TracingMemory,
-};
+use openvm_circuit::{arch::*, system::memory::online::TracingMemory};
 use openvm_circuit_primitives::AlignedBytesBorrow;
-use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode};
+use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_rv32im_transpiler::LessThanOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
@@ -38,27 +35,25 @@ where
         fp: u32,
     ) -> Result<Option<u32>, ExecutionError> {
         debug_assert!(LIMB_BITS <= 8);
-        let Instruction { opcode, a, b, c, .. } = instruction;
+        let Instruction {
+            opcode, a, b, c, ..
+        } = instruction;
 
         // Read operands using FP
         let rs1_addr = b.as_canonical_u32() + fp;
         let rs2_addr = c.as_canonical_u32() + fp;
 
         let (_counter1, rs1) = unsafe {
-            state
-                .memory
-                .read::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
-                    openvm_instructions::riscv::RV32_REGISTER_AS,
-                    rs1_addr,
-                )
+            state.memory.read::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
+                openvm_instructions::riscv::RV32_REGISTER_AS,
+                rs1_addr,
+            )
         };
         let (_counter2, rs2) = unsafe {
-            state
-                .memory
-                .read::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
-                    openvm_instructions::riscv::RV32_REGISTER_AS,
-                    rs2_addr,
-                )
+            state.memory.read::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
+                openvm_instructions::riscv::RV32_REGISTER_AS,
+                rs2_addr,
+            )
         };
 
         let local_opcode = opcode.local_opcode_idx(self.offset) as u8;
@@ -74,11 +69,13 @@ where
         // Write result using FP
         let rd_addr = a.as_canonical_u32() + fp;
         unsafe {
-            state.memory.write::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
-                openvm_instructions::riscv::RV32_REGISTER_AS,
-                rd_addr,
-                output,
-            );
+            state
+                .memory
+                .write::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
+                    openvm_instructions::riscv::RV32_REGISTER_AS,
+                    rd_addr,
+                    output,
+                );
         }
 
         *state.pc = state.pc.wrapping_add(DEFAULT_PC_STEP);
@@ -164,7 +161,9 @@ where
     where
         Ctx: ExecutionCtxTrait,
     {
-        let Instruction { opcode, a, b, c, .. } = *inst;
+        let Instruction {
+            opcode, a, b, c, ..
+        } = *inst;
 
         let pre_compute = LessThanPreCompute::<NUM_LIMBS> {
             rd: a.as_canonical_u32(),
@@ -193,7 +192,9 @@ where
     where
         Ctx: ExecutionCtxTrait,
     {
-        let Instruction { opcode, a, b, c, .. } = *inst;
+        let Instruction {
+            opcode, a, b, c, ..
+        } = *inst;
 
         let pre_compute = LessThanPreCompute::<NUM_LIMBS> {
             rd: a.as_canonical_u32(),

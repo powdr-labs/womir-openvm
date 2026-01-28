@@ -16,8 +16,10 @@ pub use cuda::*;
 // mod tests;
 
 // Type aliases for 32-bit LessThan chip
-pub type LessThanAir =
-    VmAirWrapper<BaseAluAdapterAir<RV32_REGISTER_NUM_LIMBS>, LessThanCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>;
+pub type LessThanAir = VmAirWrapper<
+    BaseAluAdapterAir<RV32_REGISTER_NUM_LIMBS>,
+    LessThanCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+>;
 pub type LessThanExecutor32 = crate::PreflightExecutorWrapperFp<
     LessThanCoreExecutor<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
     RV32_REGISTER_NUM_LIMBS,
@@ -35,8 +37,10 @@ pub type LessThanChip<F> = VmChipWrapper<
 // Type aliases for 64-bit LessThan chip (8 limbs)
 const RV64_REGISTER_NUM_LIMBS: usize = 8;
 
-pub type LessThan64Air =
-    VmAirWrapper<BaseAluAdapterAir<RV64_REGISTER_NUM_LIMBS>, LessThanCoreAir<RV64_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>;
+pub type LessThan64Air = VmAirWrapper<
+    BaseAluAdapterAir<RV64_REGISTER_NUM_LIMBS>,
+    LessThanCoreAir<RV64_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+>;
 pub type LessThan64Executor = crate::PreflightExecutorWrapperFp<
     LessThanCoreExecutor<RV64_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
     RV64_REGISTER_NUM_LIMBS,
