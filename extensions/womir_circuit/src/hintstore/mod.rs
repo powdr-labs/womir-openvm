@@ -3,8 +3,7 @@ use openvm_circuit::arch::VmChipWrapper;
 // Re-use upstream types (exported at crate level)
 pub use openvm_rv32im_circuit::{
     Rv32HintStoreAir as HintStoreAir, Rv32HintStoreCols as HintStoreCols,
-    Rv32HintStoreFiller as HintStoreFiller,
-    Rv32HintStoreRecordHeader as HintStoreRecordHeader,
+    Rv32HintStoreFiller as HintStoreFiller, Rv32HintStoreRecordHeader as HintStoreRecordHeader,
     Rv32HintStoreVar as HintStoreVar,
 };
 

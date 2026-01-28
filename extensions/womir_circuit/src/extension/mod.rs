@@ -4,18 +4,18 @@ use derive_more::derive::From;
 use openvm_circuit::{
     arch::{
         AirInventory, AirInventoryError, ChipInventory, ChipInventoryError, ExecutionBridge,
-        ExecutorInventoryBuilder, ExecutorInventoryError, RowMajorMatrixArena,
-        VmCircuitExtension, VmExecutionExtension, VmProverExtension,
+        ExecutorInventoryBuilder, ExecutorInventoryError, RowMajorMatrixArena, VmCircuitExtension,
+        VmExecutionExtension, VmProverExtension,
     },
     system::{SystemPort, memory::SharedMemoryHelper},
 };
-use openvm_instructions::PhantomDiscriminant;
 use openvm_circuit_derive::{AnyEnum, PreflightExecutor};
 use openvm_circuit_primitives::bitwise_op_lookup::{
     BitwiseOperationLookupAir, BitwiseOperationLookupBus, BitwiseOperationLookupChip,
     SharedBitwiseOperationLookupChip,
 };
 use openvm_instructions::LocalOpcode;
+use openvm_instructions::PhantomDiscriminant;
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     engine::StarkEngine,
@@ -23,8 +23,8 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, HintStoreOpcode,
-    LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, ShiftOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, HintStoreOpcode, LessThan64Opcode,
+    LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;

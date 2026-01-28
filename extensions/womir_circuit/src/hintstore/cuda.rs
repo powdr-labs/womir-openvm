@@ -13,11 +13,11 @@ use openvm_cuda_backend::{
 };
 use openvm_cuda_common::copy::MemCopyH2D;
 use openvm_instructions::riscv::RV32_CELL_BITS;
-use openvm_stark_backend::{prover::types::AirProvingContext, Chip};
+use openvm_stark_backend::{Chip, prover::types::AirProvingContext};
 
 use crate::{
-    cuda_abi::hintstore_cuda::tracegen, Rv32HintStoreCols, Rv32HintStoreLayout,
-    Rv32HintStoreRecordMut,
+    Rv32HintStoreCols, Rv32HintStoreLayout, Rv32HintStoreRecordMut,
+    cuda_abi::hintstore_cuda::tracegen,
 };
 
 #[derive(new)]

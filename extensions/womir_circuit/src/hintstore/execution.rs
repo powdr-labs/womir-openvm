@@ -6,14 +6,14 @@ use std::{
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
-    LocalOpcode,
 };
+use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::HintStoreOpcode as Rv32HintStoreOpcode;
 use openvm_womir_transpiler::HintStoreOpcode::{HINT_BUFFER, HINT_STOREW};
-use openvm_stark_backend::p3_field::PrimeField32;
 
 use super::HintStoreCoreExecutor as Rv32HintStoreExecutor;
 
@@ -237,10 +237,12 @@ unsafe fn execute_e1_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const IS_HINT
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) -> Result<(), ExecutionError> {
-    let pre_compute: &HintStorePreCompute =
-        std::slice::from_raw_parts(pre_compute, size_of::<HintStorePreCompute>()).borrow();
-    execute_e12_impl::<F, CTX, IS_HINT_STOREW>(pre_compute, exec_state)?;
-    Ok(())
+    unsafe {
+        let pre_compute: &HintStorePreCompute =
+            std::slice::from_raw_parts(pre_compute, size_of::<HintStorePreCompute>()).borrow();
+        execute_e12_impl::<F, CTX, IS_HINT_STOREW>(pre_compute, exec_state)?;
+        Ok(())
+    }
 }
 
 #[create_handler]
@@ -253,12 +255,15 @@ unsafe fn execute_e2_impl<
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) -> Result<(), ExecutionError> {
-    let pre_compute: &E2PreCompute<HintStorePreCompute> =
-        std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<HintStorePreCompute>>())
-            .borrow();
-    let height_delta = execute_e12_impl::<F, CTX, IS_HINT_STOREW>(&pre_compute.data, exec_state)?;
-    exec_state
-        .ctx
-        .on_height_change(pre_compute.chip_idx as usize, height_delta);
-    Ok(())
+    unsafe {
+        let pre_compute: &E2PreCompute<HintStorePreCompute> =
+            std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<HintStorePreCompute>>())
+                .borrow();
+        let height_delta =
+            execute_e12_impl::<F, CTX, IS_HINT_STOREW>(&pre_compute.data, exec_state)?;
+        exec_state
+            .ctx
+            .on_height_change(pre_compute.chip_idx as usize, height_delta);
+        Ok(())
+    }
 }
