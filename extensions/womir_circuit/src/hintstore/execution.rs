@@ -11,13 +11,11 @@ use openvm_instructions::{
     riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
     LocalOpcode,
 };
-use openvm_rv32im_transpiler::{
-    Rv32HintStoreOpcode,
-    Rv32HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
-};
+use openvm_womir_transpiler::HintStoreOpcode as Rv32HintStoreOpcode;
+use openvm_womir_transpiler::HintStoreOpcode::{HINT_BUFFER, HINT_STOREW};
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use super::Rv32HintStoreExecutor;
+use super::HintStoreCoreExecutor as Rv32HintStoreExecutor;
 
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
@@ -41,10 +39,11 @@ impl Rv32HintStoreExecutor {
             b,
             c,
             d,
-            e,
+            e: _,
             ..
         } = inst;
-        if d.as_canonical_u32() != RV32_REGISTER_AS || e.as_canonical_u32() != RV32_MEMORY_AS {
+        // Womir instruction builder uses d=1 (RV32_REGISTER_AS) and e=0 (RV32_MEMORY_AS is implied)
+        if d.as_canonical_u32() != RV32_REGISTER_AS {
             return Err(StaticProgramError::InvalidInstruction(pc));
         }
         *data = {
@@ -161,15 +160,50 @@ unsafe fn execute_e12_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const IS_HIN
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) -> Result<u32, ExecutionError> {
     let pc = exec_state.pc();
+
+    if IS_HINT_STOREW {
+        // HINT_STOREW: read from hint stream and write directly to register
+        // hint_stream format: [length (4 bytes), data (4 bytes)]
+        if exec_state.streams.hint_stream.len() < RV32_REGISTER_NUM_LIMBS * 2 {
+            return Err(ExecutionError::HintOutOfBounds { pc });
+        }
+
+        // Read length (4 bytes)
+        let length_bytes: [u8; RV32_REGISTER_NUM_LIMBS] = std::array::from_fn(|_| {
+            exec_state
+                .streams
+                .hint_stream
+                .pop_front()
+                .unwrap()
+                .as_canonical_u32() as u8
+        });
+
+        // Verify length is 4
+        debug_assert_eq!(length_bytes, [4, 0, 0, 0]);
+
+        // Read data (4 bytes)
+        let data: [u8; RV32_REGISTER_NUM_LIMBS] = std::array::from_fn(|_| {
+            exec_state
+                .streams
+                .hint_stream
+                .pop_front()
+                .unwrap()
+                .as_canonical_u32() as u8
+        });
+
+        // Write directly to register at address `a` in register address space
+        exec_state.vm_write(RV32_REGISTER_AS, pre_compute.a as u32, &data);
+
+        exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
+        return Ok(1);
+    }
+
+    // HINT_BUFFER: read from registers to get memory pointer, write to memory
     let mem_ptr_limbs = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, pre_compute.b as u32);
     let mem_ptr = u32::from_le_bytes(mem_ptr_limbs);
 
-    let num_words = if IS_HINT_STOREW {
-        1
-    } else {
-        let num_words_limbs = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, pre_compute.a as u32);
-        u32::from_le_bytes(num_words_limbs)
-    };
+    let num_words_limbs = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, pre_compute.a as u32);
+    let num_words = u32::from_le_bytes(num_words_limbs);
     debug_assert_ne!(num_words, 0);
 
     if exec_state.streams.hint_stream.len() < RV32_REGISTER_NUM_LIMBS * num_words as usize {

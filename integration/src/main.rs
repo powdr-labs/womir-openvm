@@ -1622,7 +1622,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_input_hint() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),

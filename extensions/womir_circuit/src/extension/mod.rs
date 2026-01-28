@@ -4,11 +4,12 @@ use derive_more::derive::From;
 use openvm_circuit::{
     arch::{
         AirInventory, AirInventoryError, ChipInventory, ChipInventoryError, ExecutionBridge,
-        ExecutorInventoryBuilder, ExecutorInventoryError, RowMajorMatrixArena, VmCircuitExtension,
-        VmExecutionExtension, VmProverExtension,
+        ExecutorInventoryBuilder, ExecutorInventoryError, RowMajorMatrixArena,
+        VmCircuitExtension, VmExecutionExtension, VmProverExtension,
     },
     system::{SystemPort, memory::SharedMemoryHelper},
 };
+use openvm_instructions::PhantomDiscriminant;
 use openvm_circuit_derive::{AnyEnum, PreflightExecutor};
 use openvm_circuit_primitives::bitwise_op_lookup::{
     BitwiseOperationLookupAir, BitwiseOperationLookupBus, BitwiseOperationLookupChip,
@@ -22,8 +23,8 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, LessThan64Opcode, LessThanOpcode,
-    LoadStoreOpcode, MulOpcode, ShiftOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, HintStoreOpcode,
+    LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -89,6 +90,7 @@ pub enum WomirExecutor {
     Multiplication(MultiplicationExecutor32),
     DivRem(DivRemExecutor32),
     Const32(Const32Executor32),
+    HintStore(HintStoreExecutor32),
     // BranchEqual(Rv32BranchEqualExecutor),
     // BranchLessThan(Rv32BranchLessThanExecutor),
     // JalLui(Rv32JalLuiExecutor),
@@ -188,6 +190,33 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(
             less_than_64,
             LessThan64Opcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        let hintstore: HintStoreExecutor32 = crate::PreflightExecutorWrapperFp::new(
+            HintStoreCoreExecutor::new(pointer_max_bits, HintStoreOpcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(
+            hintstore,
+            HintStoreOpcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        // Register phantom sub-executors
+        inventory.add_phantom_sub_executor(
+            crate::phantom::HintInputSubEx,
+            PhantomDiscriminant(Phantom::HintInput as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            crate::phantom::HintRandomSubEx,
+            PhantomDiscriminant(Phantom::HintRandom as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            crate::phantom::PrintStrSubEx,
+            PhantomDiscriminant(Phantom::PrintStr as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            crate::phantom::HintLoadByKeySubEx,
+            PhantomDiscriminant(Phantom::HintLoadByKey as u16),
         )?;
 
         // let beq = BranchEqualExecutor::new(
