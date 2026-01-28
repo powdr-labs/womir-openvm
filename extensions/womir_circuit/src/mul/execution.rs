@@ -23,7 +23,8 @@ use crate::common::*;
 struct MultiPreCompute {
     a: u8,
     b: u8,
-    c: u8,
+    c: u32,
+    e: u8,
 }
 
 impl<A, const LIMB_BITS: usize> MultiplicationExecutor<A, { RV32_REGISTER_NUM_LIMBS }, LIMB_BITS> {
@@ -44,7 +45,8 @@ impl<A, const LIMB_BITS: usize> MultiplicationExecutor<A, { RV32_REGISTER_NUM_LI
         *data = MultiPreCompute {
             a: inst.a.as_canonical_u32() as u8,
             b: inst.b.as_canonical_u32() as u8,
-            c: inst.c.as_canonical_u32() as u8,
+            c: inst.c.as_canonical_u32(),
+            e: inst.e.as_canonical_u32() as u8,
         };
         Ok(())
     }
@@ -222,8 +224,20 @@ unsafe fn execute_e12_impl<F: PrimeField32, CTX: ExecutionCtxTrait>(
 ) {
     let rs1: [u8; RV32_REGISTER_NUM_LIMBS] =
         exec_state.vm_read(RV32_REGISTER_AS, pre_compute.b as u32);
-    let rs2: [u8; RV32_REGISTER_NUM_LIMBS] =
-        exec_state.vm_read(RV32_REGISTER_AS, pre_compute.c as u32);
+
+    // Check if second operand is a register or an immediate
+    let rs2: [u8; RV32_REGISTER_NUM_LIMBS] = if pre_compute.e as u32 == RV32_REGISTER_AS {
+        // Read from register
+        exec_state.vm_read(RV32_REGISTER_AS, pre_compute.c)
+    } else {
+        // Immediate value - sign extend to RV32_REGISTER_NUM_LIMBS bytes
+        let imm_4bytes = pre_compute.c.to_le_bytes();
+        let sign_byte = imm_4bytes[3];
+        let mut result = [sign_byte; RV32_REGISTER_NUM_LIMBS];
+        result[..4].copy_from_slice(&imm_4bytes);
+        result
+    };
+
     let rs1 = u32::from_le_bytes(rs1);
     let rs2 = u32::from_le_bytes(rs2);
     let rd = rs1.wrapping_mul(rs2);

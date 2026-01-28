@@ -25,7 +25,8 @@ use crate::common::{gpr_to_xmm, xmm_to_gpr};
 struct DivRemPreCompute {
     a: u8,
     b: u8,
-    c: u8,
+    c: u32,
+    e: u8,
 }
 
 impl<A, const LIMB_BITS: usize> DivRemExecutor<A, { RV32_REGISTER_NUM_LIMBS }, LIMB_BITS> {
@@ -37,7 +38,13 @@ impl<A, const LIMB_BITS: usize> DivRemExecutor<A, { RV32_REGISTER_NUM_LIMBS }, L
         data: &mut DivRemPreCompute,
     ) -> Result<DivRemOpcode, StaticProgramError> {
         let &Instruction {
-            opcode, a, b, c, d, ..
+            opcode,
+            a,
+            b,
+            c,
+            d,
+            e,
+            ..
         } = inst;
         let local_opcode = DivRemOpcode::from_usize(opcode.local_opcode_idx(self.offset));
         if d.as_canonical_u32() != RV32_REGISTER_AS {
@@ -47,7 +54,8 @@ impl<A, const LIMB_BITS: usize> DivRemExecutor<A, { RV32_REGISTER_NUM_LIMBS }, L
         *pre_compute = DivRemPreCompute {
             a: a.as_canonical_u32() as u8,
             b: b.as_canonical_u32() as u8,
-            c: c.as_canonical_u32() as u8,
+            c: c.as_canonical_u32(),
+            e: e.as_canonical_u32() as u8,
         };
         Ok(local_opcode)
     }
@@ -306,7 +314,16 @@ unsafe fn execute_e12_impl<F: PrimeField32, CTX: ExecutionCtxTrait, OP: DivRemOp
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     let rs1 = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, pre_compute.b as u32);
-    let rs2 = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, pre_compute.c as u32);
+
+    // Check if second operand is a register or an immediate
+    let rs2: [u8; 4] = if pre_compute.e as u32 == RV32_REGISTER_AS {
+        // Read from register
+        exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, pre_compute.c)
+    } else {
+        // Immediate value
+        pre_compute.c.to_le_bytes()
+    };
+
     let result = <OP as DivRemOp>::compute(rs1, rs2);
     exec_state.vm_write::<u8, 4>(RV32_REGISTER_AS, pre_compute.a as u32, &result);
     let pc = exec_state.pc();
