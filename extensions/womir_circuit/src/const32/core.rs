@@ -1,6 +1,10 @@
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::{MemoryAuxColsFactory, online::TracingMemory};
-use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, riscv::{RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS}};
+use openvm_instructions::{
+    instruction::Instruction,
+    program::DEFAULT_PC_STEP,
+    riscv::{RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
+};
 use openvm_stark_backend::p3_field::PrimeField32;
 
 // Minimal executor for CONST32 - no computation needed, just write immediate to register
@@ -41,7 +45,13 @@ where
         // Write to register at (fp + target_reg)
         let target_addr = a.as_canonical_u32() + fp;
         unsafe {
-            state.memory.write::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(RV32_REGISTER_AS, target_addr, value);
+            state
+                .memory
+                .write::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
+                    RV32_REGISTER_AS,
+                    target_addr,
+                    value,
+                );
         }
 
         *state.pc = state.pc.wrapping_add(DEFAULT_PC_STEP);
@@ -56,8 +66,8 @@ fn decompose_u32<const NUM_LIMBS: usize, const LIMB_BITS: usize>(value: u32) -> 
     let mut result = [0u8; NUM_LIMBS];
     let limb_mask = ((1u32 << LIMB_BITS) - 1) as u8;
 
-    for i in 0..NUM_LIMBS.min(4) {
-        result[i] = ((value >> (i * LIMB_BITS)) as u8) & limb_mask;
+    for (i, limb) in result.iter_mut().enumerate().take(NUM_LIMBS.min(4)) {
+        *limb = ((value >> (i * LIMB_BITS)) as u8) & limb_mask;
     }
 
     result
@@ -85,9 +95,7 @@ unsafe fn execute_const32<
     use crate::adapters::memory_write;
 
     // Convert raw bytes back to Const32PreCompute struct (unsafe cast)
-    let pre_compute = unsafe {
-        &*(pre_compute as *const Const32PreCompute)
-    };
+    let pre_compute = unsafe { &*(pre_compute as *const Const32PreCompute) };
 
     // Combine immediates
     let imm = (pre_compute.imm_hi as u32) << 16 | (pre_compute.imm_lo as u32);
@@ -96,7 +104,12 @@ unsafe fn execute_const32<
     let value = decompose_u32::<NUM_LIMBS, LIMB_BITS>(imm);
 
     // Write to register (FP=0 in interpreter mode)
-    memory_write(&mut exec_state.memory, RV32_REGISTER_AS, pre_compute.target_reg, value);
+    memory_write(
+        &mut exec_state.memory,
+        RV32_REGISTER_AS,
+        pre_compute.target_reg,
+        value,
+    );
 
     // Increment PC
     let next_pc = exec_state.pc().wrapping_add(DEFAULT_PC_STEP);

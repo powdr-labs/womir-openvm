@@ -6,10 +6,10 @@ use std::{
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
-    LocalOpcode,
 };
 use openvm_rv32im_transpiler::ShiftOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
@@ -297,9 +297,8 @@ unsafe fn execute_e1_impl<
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
-    let pre_compute: &ShiftPreCompute = unsafe {
-        std::slice::from_raw_parts(pre_compute, size_of::<ShiftPreCompute>()).borrow()
-    };
+    let pre_compute: &ShiftPreCompute =
+        unsafe { std::slice::from_raw_parts(pre_compute, size_of::<ShiftPreCompute>()).borrow() };
     unsafe {
         execute_e12_impl::<F, CTX, IS_IMM, OP>(pre_compute, exec_state);
     }
@@ -317,8 +316,7 @@ unsafe fn execute_e2_impl<
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     let pre_compute: &E2PreCompute<ShiftPreCompute> = unsafe {
-        std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<ShiftPreCompute>>())
-            .borrow()
+        std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<ShiftPreCompute>>()).borrow()
     };
     exec_state
         .ctx

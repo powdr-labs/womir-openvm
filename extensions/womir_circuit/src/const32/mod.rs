@@ -12,7 +12,4 @@ pub type Const32Executor32 = crate::PreflightExecutorWrapperFp<
     RV32_REGISTER_NUM_LIMBS,
     RV32_CELL_BITS,
 >;
-pub type Const32Chip<F> = VmChipWrapper<
-    F,
-    Const32Filler<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
->;
+pub type Const32Chip<F> = VmChipWrapper<F, Const32Filler<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>;

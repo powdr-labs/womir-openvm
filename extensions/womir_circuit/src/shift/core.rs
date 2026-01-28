@@ -1,13 +1,11 @@
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::online::TracingMemory;
-use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode};
+use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_rv32im_transpiler::ShiftOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
 // Re-export upstream types that we don't modify
-pub use openvm_rv32im_circuit::{
-    ShiftCoreAir, ShiftCoreCols, ShiftCoreRecord, ShiftFiller,
-};
+pub use openvm_rv32im_circuit::{ShiftCoreAir, ShiftCoreCols, ShiftCoreRecord, ShiftFiller};
 
 // Our own ShiftExecutor that uses FP-aware adapters
 #[derive(Clone, Copy)]
@@ -37,7 +35,10 @@ where
     for<'buf> RA: RecordArena<
             'buf,
             EmptyAdapterCoreLayout<F, A>,
-            (A::RecordMut<'buf>, &'buf mut ShiftCoreRecord<NUM_LIMBS, LIMB_BITS>),
+            (
+                A::RecordMut<'buf>,
+                &'buf mut ShiftCoreRecord<NUM_LIMBS, LIMB_BITS>,
+            ),
         >,
 {
     fn get_opcode_name(&self, opcode: usize) -> String {
@@ -97,9 +98,7 @@ pub(super) fn run_shift<const NUM_LIMBS: usize, const LIMB_BITS: usize>(
         ShiftOpcode::SRL => {
             run_shift_right::<NUM_LIMBS, LIMB_BITS>(x, limb_shift, bit_shift, false)
         }
-        ShiftOpcode::SRA => {
-            run_shift_right::<NUM_LIMBS, LIMB_BITS>(x, limb_shift, bit_shift, true)
-        }
+        ShiftOpcode::SRA => run_shift_right::<NUM_LIMBS, LIMB_BITS>(x, limb_shift, bit_shift, true),
     };
     (output, limb_shift, bit_shift)
 }
@@ -154,9 +153,8 @@ fn run_shift_right<const NUM_LIMBS: usize, const LIMB_BITS: usize>(
 }
 
 fn get_shift<const NUM_LIMBS: usize, const LIMB_BITS: usize>(y: &[u8]) -> (usize, usize) {
-    let shift_amount =
-        (u32::from_le_bytes(y[0..4].try_into().unwrap()) % (NUM_LIMBS as u32 * LIMB_BITS as u32))
-            as usize;
+    let shift_amount = (u32::from_le_bytes(y[0..4].try_into().unwrap())
+        % (NUM_LIMBS as u32 * LIMB_BITS as u32)) as usize;
     let limb_shift = shift_amount / LIMB_BITS;
     let bit_shift = shift_amount % LIMB_BITS;
     (limb_shift, bit_shift)

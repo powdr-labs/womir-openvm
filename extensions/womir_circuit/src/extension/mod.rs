@@ -22,7 +22,8 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, LoadStoreOpcode, MulOpcode, ShiftOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, LoadStoreOpcode, MulOpcode,
+    ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
