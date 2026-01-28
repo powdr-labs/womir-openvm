@@ -34,3 +34,28 @@ pub type ShiftChip<F> = VmChipWrapper<
         RV32_CELL_BITS,
     >,
 >;
+
+// Type aliases for 64-bit Shift chip (8 limbs)
+const RV64_REGISTER_NUM_LIMBS: usize = 8;
+
+pub type Shift64Air = VmAirWrapper<
+    BaseAluAdapterAir<RV64_REGISTER_NUM_LIMBS>,
+    ShiftCoreAir<RV64_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+>;
+pub type ShiftExecutor64 = crate::PreflightExecutorWrapperFp<
+    ShiftExecutor<
+        BaseAluAdapterExecutor<RV64_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+        RV64_REGISTER_NUM_LIMBS,
+        RV32_CELL_BITS,
+    >,
+    RV64_REGISTER_NUM_LIMBS,
+    RV32_CELL_BITS,
+>;
+pub type Shift64Chip<F> = VmChipWrapper<
+    F,
+    ShiftFiller<
+        BaseAluAdapterFiller<RV64_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
+        RV64_REGISTER_NUM_LIMBS,
+        RV32_CELL_BITS,
+    >,
+>;

@@ -25,7 +25,7 @@ use openvm_stark_backend::{
 use openvm_womir_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, Eq64Opcode, EqOpcode,
     HintStoreOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom,
-    ShiftOpcode,
+    Shift64Opcode, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -88,6 +88,7 @@ pub enum WomirExecutor {
     Eq(EqExecutor32),
     Eq64(EqExecutor64),
     Shift(ShiftExecutor32),
+    Shift64(ShiftExecutor64),
     LoadStore(LoadStoreExecutor32),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     Multiplication(MultiplicationExecutor32),
@@ -140,6 +141,15 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             fp.clone(),
         );
         inventory.add_executor(shift, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let shift_64: ShiftExecutor64 = crate::PreflightExecutorWrapperFp::new(
+            ShiftExecutor::new(
+                BaseAluAdapterExecutor::<REGISTER_NUM_LIMBS_64, RV32_CELL_BITS>::new(),
+                Shift64Opcode::CLASS_OFFSET,
+            ),
+            fp.clone(),
+        );
+        inventory.add_executor(shift_64, Shift64Opcode::iter().map(|x| x.global_opcode()))?;
 
         let load_store: LoadStoreExecutor32 = crate::PreflightExecutorWrapperFp::new(
             LoadStoreExecutor::new(
