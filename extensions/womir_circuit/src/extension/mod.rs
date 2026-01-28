@@ -23,8 +23,9 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, HintStoreOpcode, LessThan64Opcode,
-    LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom, ShiftOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, Eq64Opcode, EqOpcode,
+    HintStoreOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom,
+    ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -84,6 +85,8 @@ pub enum WomirExecutor {
     BaseAlu64(BaseAlu64Executor),
     LessThan(LessThanExecutor32),
     LessThan64(LessThan64Executor),
+    Eq(EqExecutor32),
+    Eq64(EqExecutor64),
     Shift(ShiftExecutor32),
     LoadStore(LoadStoreExecutor32),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
@@ -191,6 +194,18 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             less_than_64,
             LessThan64Opcode::iter().map(|x| x.global_opcode()),
         )?;
+
+        let eq: EqExecutor32 = crate::PreflightExecutorWrapperFp::new(
+            EqCoreExecutor::new(EqOpcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(eq, EqOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let eq_64: EqExecutor64 = crate::PreflightExecutorWrapperFp::new(
+            EqCoreExecutor::new(Eq64Opcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(eq_64, Eq64Opcode::iter().map(|x| x.global_opcode()))?;
 
         let hintstore: HintStoreExecutor32 = crate::PreflightExecutorWrapperFp::new(
             HintStoreCoreExecutor::new(pointer_max_bits, HintStoreOpcode::CLASS_OFFSET),
