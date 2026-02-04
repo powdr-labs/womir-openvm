@@ -23,6 +23,8 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
+pub mod constraints;
+
 // ============ FP Executor Traits ============
 // Traits for executors that support frame pointer (fp) tracking
 
