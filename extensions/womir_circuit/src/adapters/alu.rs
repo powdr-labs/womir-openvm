@@ -355,5 +355,6 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> AdapterTra
         adapter_row.rd_ptr = F::from_canonical_u32(record.rd_ptr);
         adapter_row.from_state.timestamp = F::from_canonical_u32(timestamp);
         adapter_row.from_state.pc = F::from_canonical_u32(record.from_pc);
+        adapter_row.from_state.fp = F::from_canonical_u32(record.fp);
     }
 }
