@@ -33,7 +33,7 @@ use strum::IntoEnumIterator;
 use crate::{
     adapters::*,
     base_alu::REGISTER_NUM_LIMBS_64,
-    constraints::{ExecutionBridge, FpBus},
+    execution::{ExecutionBridge, FpBus},
     *,
 };
 

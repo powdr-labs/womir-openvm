@@ -33,7 +33,7 @@ use openvm_stark_backend::{
 };
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::constraints::{ExecutionBridge, ExecutionState, FpKeepOrSet};
+use crate::execution::{ExecutionBridge, ExecutionState, FpKeepOrSet};
 
 use super::{RV32_CELL_BITS, tracing_read, tracing_read_imm, tracing_write};
 
