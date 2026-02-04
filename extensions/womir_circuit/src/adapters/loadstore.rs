@@ -337,6 +337,42 @@ pub struct LoadStoreAdapterFiller {
 }
 
 // FP-aware implementation - uses fp + register_address for all register accesses
+// AdapterTraceExecutor implementation - start() panics since FP-aware path uses start_with_fp()
+impl<F> openvm_circuit::arch::AdapterTraceExecutor<F> for LoadStoreAdapterExecutor
+where
+    F: PrimeField32,
+{
+    const WIDTH: usize = std::mem::size_of::<LoadStoreAdapterCols<u8>>();
+    type ReadData = <Self as crate::FpAdapterTraceExecutor<F>>::ReadData;
+    type WriteData = <Self as crate::FpAdapterTraceExecutor<F>>::WriteData;
+    type RecordMut<'a> = <Self as crate::FpAdapterTraceExecutor<F>>::RecordMut<'a>;
+
+    fn start(_pc: u32, _memory: &TracingMemory, _record: &mut Self::RecordMut<'_>) {
+        panic!("LoadStoreAdapterExecutor::start should not be called; use FpAdapterTraceExecutor::start_with_fp instead");
+    }
+
+    #[inline(always)]
+    fn read(
+        &self,
+        memory: &mut TracingMemory,
+        instruction: &Instruction<F>,
+        record: &mut Self::RecordMut<'_>,
+    ) -> Self::ReadData {
+        <Self as crate::FpAdapterTraceExecutor<F>>::read(self, memory, instruction, record)
+    }
+
+    #[inline(always)]
+    fn write(
+        &self,
+        memory: &mut TracingMemory,
+        instruction: &Instruction<F>,
+        data: Self::WriteData,
+        record: &mut Self::RecordMut<'_>,
+    ) {
+        <Self as crate::FpAdapterTraceExecutor<F>>::write(self, memory, instruction, data, record)
+    }
+}
+
 impl<F> crate::FpAdapterTraceExecutor<F> for LoadStoreAdapterExecutor
 where
     F: PrimeField32,

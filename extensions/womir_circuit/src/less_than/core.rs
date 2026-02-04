@@ -8,6 +8,8 @@ use openvm_instructions::{
 };
 use openvm_rv32im_transpiler::LessThanOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
+use std::borrow::{Borrow, BorrowMut};
+use std::mem::size_of;
 
 // Re-use upstream types
 pub use openvm_rv32im_circuit::{
@@ -27,7 +29,6 @@ impl<F, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> crate::FpPreflightEx
     for LessThanCoreExecutor<NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
-    RA: RecordArena<'static, (), ()>,
 {
     fn get_opcode_name(&self, opcode: usize) -> String {
         format!("{:?}", LessThanOpcode::from_usize(opcode - self.offset))
@@ -223,6 +224,134 @@ where
         });
 
         Ok(Box::new(execute_less_than::<F, Ctx, NUM_LIMBS, LIMB_BITS>))
+    }
+}
+
+// Metered execution function
+unsafe fn execute_less_than_metered<
+    F: PrimeField32,
+    Ctx: MeteredExecutionCtxTrait,
+    const NUM_LIMBS: usize,
+    const LIMB_BITS: usize,
+>(
+    pre_compute: *const u8,
+    exec_state: &mut VmExecState<F, openvm_circuit::system::memory::online::GuestMemory, Ctx>,
+) {
+    use crate::adapters::{memory_read, memory_write};
+
+    let pre_compute: &E2PreCompute<LessThanPreCompute<NUM_LIMBS>> = unsafe {
+        std::slice::from_raw_parts(
+            pre_compute,
+            size_of::<E2PreCompute<LessThanPreCompute<NUM_LIMBS>>>(),
+        )
+        .borrow()
+    };
+
+    // Track chip height
+    exec_state
+        .ctx
+        .on_height_change(pre_compute.chip_idx as usize, 1);
+
+    let data = &pre_compute.data;
+
+    // Read operands
+    let rs1: [u8; NUM_LIMBS] = memory_read(
+        &exec_state.memory,
+        openvm_instructions::riscv::RV32_REGISTER_AS,
+        data.rs1,
+    );
+    let rs2: [u8; NUM_LIMBS] = memory_read(
+        &exec_state.memory,
+        openvm_instructions::riscv::RV32_REGISTER_AS,
+        data.rs2,
+    );
+
+    // Compute comparison
+    let (cmp_result, _, _, _) = run_less_than::<NUM_LIMBS, LIMB_BITS>(data.is_slt, &rs1, &rs2);
+
+    let mut output = [0u8; NUM_LIMBS];
+    output[0] = cmp_result as u8;
+
+    // Write result
+    memory_write(
+        &mut exec_state.memory,
+        openvm_instructions::riscv::RV32_REGISTER_AS,
+        data.rd,
+        output,
+    );
+
+    // Increment PC
+    let next_pc = exec_state.pc().wrapping_add(DEFAULT_PC_STEP);
+    exec_state.set_pc(next_pc);
+}
+
+// InterpreterMeteredExecutor implementation
+impl<F, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
+    for LessThanCoreExecutor<NUM_LIMBS, LIMB_BITS>
+where
+    F: PrimeField32,
+{
+    fn metered_pre_compute_size(&self) -> usize {
+        size_of::<E2PreCompute<LessThanPreCompute<NUM_LIMBS>>>()
+    }
+
+    #[cfg(not(feature = "tco"))]
+    fn metered_pre_compute<Ctx>(
+        &self,
+        chip_idx: usize,
+        _pc: u32,
+        inst: &Instruction<F>,
+        data: &mut [u8],
+    ) -> Result<ExecuteFunc<F, Ctx>, StaticProgramError>
+    where
+        Ctx: MeteredExecutionCtxTrait,
+    {
+        let Instruction {
+            opcode, a, b, c, ..
+        } = *inst;
+
+        let pre_compute: &mut E2PreCompute<LessThanPreCompute<NUM_LIMBS>> = data.borrow_mut();
+        pre_compute.chip_idx = chip_idx as u32;
+        pre_compute.data = LessThanPreCompute {
+            rd: a.as_canonical_u32(),
+            rs1: b.as_canonical_u32(),
+            rs2: c.as_canonical_u32(),
+            is_slt: opcode.local_opcode_idx(self.offset) == (LessThanOpcode::SLT as usize),
+        };
+
+        Ok(execute_less_than_metered::<F, Ctx, NUM_LIMBS, LIMB_BITS>)
+    }
+
+    #[cfg(feature = "tco")]
+    fn metered_handler<Ctx>(
+        &self,
+        chip_idx: usize,
+        _pc: u32,
+        inst: &Instruction<F>,
+        data: &mut [u8],
+    ) -> Result<Handler<F, Ctx>, StaticProgramError>
+    where
+        Ctx: MeteredExecutionCtxTrait,
+    {
+        let Instruction {
+            opcode, a, b, c, ..
+        } = *inst;
+
+        let pre_compute: &mut E2PreCompute<LessThanPreCompute<NUM_LIMBS>> = data.borrow_mut();
+        pre_compute.chip_idx = chip_idx as u32;
+        pre_compute.data = LessThanPreCompute {
+            rd: a.as_canonical_u32(),
+            rs1: b.as_canonical_u32(),
+            rs2: c.as_canonical_u32(),
+            is_slt: opcode.local_opcode_idx(self.offset) == (LessThanOpcode::SLT as usize),
+        };
+
+        Ok(Box::new(execute_less_than_metered::<
+            F,
+            Ctx,
+            NUM_LIMBS,
+            LIMB_BITS,
+        >))
     }
 }
 

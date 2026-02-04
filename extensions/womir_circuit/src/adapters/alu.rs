@@ -1,9 +1,10 @@
 use std::borrow::{Borrow, BorrowMut};
+use std::mem::size_of;
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterTraceFiller, BasicAdapterInterface, MinimalInstruction,
-        VmAdapterAir, get_record_from_slice,
+        AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller, BasicAdapterInterface,
+        ExecutionBridge, ExecutionState, MinimalInstruction, VmAdapterAir, get_record_from_slice,
     },
     system::memory::{
         MemoryAddress, MemoryAuxColsFactory,
@@ -292,6 +293,47 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize>
             &mut record.writes_aux.prev_timestamp,
             &mut record.writes_aux.prev_data,
         );
+    }
+}
+
+// AdapterTraceExecutor implementation - required for type bounds but start() is never called
+// in our FP-aware execution path (we use FpAdapterTraceExecutor::start_with_fp instead)
+impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> AdapterTraceExecutor<F>
+    for BaseAluAdapterExecutor<NUM_LIMBS, LIMB_BITS>
+{
+    const WIDTH: usize = size_of::<BaseAluAdapterCols<u8, NUM_LIMBS>>();
+    type ReadData = [[u8; NUM_LIMBS]; 2];
+    type WriteData = [[u8; NUM_LIMBS]; 1];
+    type RecordMut<'a> = &'a mut BaseAluAdapterRecord<NUM_LIMBS>;
+
+    #[inline(always)]
+    fn start(_pc: u32, _memory: &TracingMemory, _record: &mut Self::RecordMut<'_>) {
+        panic!(
+            "BaseAluAdapterExecutor::start should not be called; use FpAdapterTraceExecutor::start_with_fp instead"
+        );
+    }
+
+    #[inline(always)]
+    fn read(
+        &self,
+        memory: &mut TracingMemory,
+        instruction: &Instruction<F>,
+        record: &mut Self::RecordMut<'_>,
+    ) -> Self::ReadData {
+        // Delegate to FpAdapterTraceExecutor::read (same implementation)
+        <Self as crate::FpAdapterTraceExecutor<F>>::read(self, memory, instruction, record)
+    }
+
+    #[inline(always)]
+    fn write(
+        &self,
+        memory: &mut TracingMemory,
+        instruction: &Instruction<F>,
+        data: Self::WriteData,
+        record: &mut Self::RecordMut<'_>,
+    ) {
+        // Delegate to FpAdapterTraceExecutor::write (same implementation)
+        <Self as crate::FpAdapterTraceExecutor<F>>::write(self, memory, instruction, data, record)
     }
 }
 

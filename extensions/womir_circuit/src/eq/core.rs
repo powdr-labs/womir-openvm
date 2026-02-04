@@ -8,6 +8,8 @@ use openvm_instructions::{
 };
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::EqOpcode;
+use std::borrow::BorrowMut;
+use std::mem::size_of;
 
 use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 
@@ -22,7 +24,6 @@ impl<F, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> crate::FpPreflightEx
     for EqCoreExecutor<NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
-    RA: RecordArena<'static, (), ()>,
 {
     fn get_opcode_name(&self, opcode: usize) -> String {
         format!("{:?}", EqOpcode::from_usize(opcode - self.offset))
@@ -220,7 +221,6 @@ where
     where
         Ctx: ExecutionCtxTrait,
     {
-        use std::borrow::BorrowMut;
         let pre_compute: &mut EqPreCompute = data.borrow_mut();
         let (is_imm, is_eq) = self.pre_compute_impl(pc, inst, pre_compute)?;
         dispatch!(execute_eq, is_imm, is_eq)
@@ -236,10 +236,117 @@ where
     where
         Ctx: ExecutionCtxTrait,
     {
-        use std::borrow::BorrowMut;
         let pre_compute: &mut EqPreCompute = data.borrow_mut();
         let (is_imm, is_eq) = self.pre_compute_impl(pc, inst, pre_compute)?;
         dispatch!(execute_eq, is_imm, is_eq)
+    }
+}
+
+// Metered execution function
+#[inline(always)]
+unsafe fn execute_eq_metered<
+    F: PrimeField32,
+    Ctx: MeteredExecutionCtxTrait,
+    const NUM_LIMBS: usize,
+    const LIMB_BITS: usize,
+    const IS_IMM: bool,
+    const IS_EQ: bool,
+>(
+    pre_compute: *const u8,
+    exec_state: &mut VmExecState<F, openvm_circuit::system::memory::online::GuestMemory, Ctx>,
+) {
+    use std::borrow::Borrow;
+    let pre_compute: &E2PreCompute<EqPreCompute> = unsafe {
+        std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<EqPreCompute>>()).borrow()
+    };
+
+    // Track chip height
+    exec_state
+        .ctx
+        .on_height_change(pre_compute.chip_idx as usize, 1);
+
+    let data = &pre_compute.data;
+
+    // Read first operand
+    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, data.b as u32);
+
+    // Read or construct second operand
+    let rs2 = if IS_IMM {
+        let imm_bytes = imm_to_bytes(data.c);
+        let mut result = [0u8; NUM_LIMBS];
+        result[..4.min(NUM_LIMBS)].copy_from_slice(&imm_bytes[..4.min(NUM_LIMBS)]);
+        result
+    } else {
+        exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, data.c)
+    };
+
+    // Compute comparison
+    let cmp_result = run_eq::<NUM_LIMBS>(&rs1, &rs2, IS_EQ);
+
+    let mut output = [0u8; NUM_LIMBS];
+    output[0] = cmp_result as u8;
+
+    // Write result
+    exec_state.vm_write(RV32_REGISTER_AS, data.a as u32, &output);
+
+    // Increment PC
+    let next_pc = exec_state.pc().wrapping_add(DEFAULT_PC_STEP);
+    exec_state.set_pc(next_pc);
+}
+
+macro_rules! dispatch_metered {
+    ($execute_impl:ident, $is_imm:ident, $is_eq:ident) => {
+        match ($is_imm, $is_eq) {
+            (true, true) => Ok($execute_impl::<_, _, NUM_LIMBS, LIMB_BITS, true, true>),
+            (true, false) => Ok($execute_impl::<_, _, NUM_LIMBS, LIMB_BITS, true, false>),
+            (false, true) => Ok($execute_impl::<_, _, NUM_LIMBS, LIMB_BITS, false, true>),
+            (false, false) => Ok($execute_impl::<_, _, NUM_LIMBS, LIMB_BITS, false, false>),
+        }
+    };
+}
+
+// InterpreterMeteredExecutor implementation
+impl<F, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
+    for EqCoreExecutor<NUM_LIMBS, LIMB_BITS>
+where
+    F: PrimeField32,
+{
+    fn metered_pre_compute_size(&self) -> usize {
+        size_of::<E2PreCompute<EqPreCompute>>()
+    }
+
+    #[cfg(not(feature = "tco"))]
+    fn metered_pre_compute<Ctx>(
+        &self,
+        chip_idx: usize,
+        pc: u32,
+        inst: &Instruction<F>,
+        data: &mut [u8],
+    ) -> Result<ExecuteFunc<F, Ctx>, StaticProgramError>
+    where
+        Ctx: MeteredExecutionCtxTrait,
+    {
+        let pre_compute: &mut E2PreCompute<EqPreCompute> = data.borrow_mut();
+        pre_compute.chip_idx = chip_idx as u32;
+        let (is_imm, is_eq) = self.pre_compute_impl(pc, inst, &mut pre_compute.data)?;
+        dispatch_metered!(execute_eq_metered, is_imm, is_eq)
+    }
+
+    #[cfg(feature = "tco")]
+    fn metered_handler<Ctx>(
+        &self,
+        chip_idx: usize,
+        pc: u32,
+        inst: &Instruction<F>,
+        data: &mut [u8],
+    ) -> Result<Handler<F, Ctx>, StaticProgramError>
+    where
+        Ctx: MeteredExecutionCtxTrait,
+    {
+        let pre_compute: &mut E2PreCompute<EqPreCompute> = data.borrow_mut();
+        pre_compute.chip_idx = chip_idx as u32;
+        let (is_imm, is_eq) = self.pre_compute_impl(pc, inst, &mut pre_compute.data)?;
+        dispatch_metered!(execute_eq_metered, is_imm, is_eq)
     }
 }
 

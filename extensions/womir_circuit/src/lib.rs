@@ -5,8 +5,8 @@
 use openvm_circuit::{
     arch::{
         AirInventory, ChipInventoryError, ExecutionError, InitFileGenerator, InterpreterExecutor,
-        MatrixRecordArena, PreflightExecutor, SystemConfig, VmBuilder, VmChipComplex,
-        VmProverExtension, VmStateMut,
+        InterpreterMeteredExecutor, MatrixRecordArena, MeteredExecutionCtxTrait, PreflightExecutor,
+        SystemConfig, VmBuilder, VmChipComplex, VmProverExtension, VmStateMut,
     },
     system::{
         SystemChipInventory, SystemCpuBuilder, SystemExecutor, memory::online::TracingMemory,
@@ -170,6 +170,46 @@ where
         Ctx: openvm_circuit::arch::ExecutionCtxTrait,
     {
         self.inner.handler(pc, inst, data)
+    }
+}
+
+// InterpreterMeteredExecutor - delegates to inner (required for proving)
+impl<F, Inner, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
+    for PreflightExecutorWrapperFp<Inner, NUM_LIMBS, LIMB_BITS>
+where
+    F: PrimeField32,
+    Inner: InterpreterMeteredExecutor<F>,
+{
+    fn metered_pre_compute_size(&self) -> usize {
+        self.inner.metered_pre_compute_size()
+    }
+
+    #[cfg(not(feature = "tco"))]
+    fn metered_pre_compute<Ctx>(
+        &self,
+        air_idx: usize,
+        pc: u32,
+        inst: &openvm_instructions::instruction::Instruction<F>,
+        data: &mut [u8],
+    ) -> Result<openvm_circuit::arch::ExecuteFunc<F, Ctx>, openvm_circuit::arch::StaticProgramError>
+    where
+        Ctx: MeteredExecutionCtxTrait,
+    {
+        self.inner.metered_pre_compute(air_idx, pc, inst, data)
+    }
+
+    #[cfg(feature = "tco")]
+    fn metered_handler<Ctx>(
+        &self,
+        air_idx: usize,
+        pc: u32,
+        inst: &openvm_instructions::instruction::Instruction<F>,
+        data: &mut [u8],
+    ) -> Result<openvm_circuit::arch::Handler<F, Ctx>, openvm_circuit::arch::StaticProgramError>
+    where
+        Ctx: MeteredExecutionCtxTrait,
+    {
+        self.inner.metered_handler(air_idx, pc, inst, data)
     }
 }
 

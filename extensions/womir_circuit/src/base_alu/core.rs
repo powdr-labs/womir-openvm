@@ -3,7 +3,8 @@ use openvm_circuit::system::memory::online::{GuestMemory, TracingMemory};
 use openvm_instructions::{LocalOpcode, instruction::Instruction};
 use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
+use std::mem::size_of;
 
 // Re-export upstream types that we don't modify
 pub use openvm_rv32im_circuit::{
@@ -191,6 +192,135 @@ where
         data[..std::mem::size_of::<BaseAluPreCompute>()].copy_from_slice(pre_compute.as_bytes());
 
         Ok(Box::new(execute_base_alu::<F, Ctx, NUM_LIMBS, LIMB_BITS>))
+    }
+}
+
+// Metered execution function - similar to execute_base_alu but with chip_idx tracking
+unsafe fn execute_base_alu_metered<
+    F: PrimeField32,
+    Ctx: MeteredExecutionCtxTrait,
+    const NUM_LIMBS: usize,
+    const LIMB_BITS: usize,
+>(
+    pre_compute: *const u8,
+    exec_state: &mut VmExecState<F, GuestMemory, Ctx>,
+) {
+    use crate::adapters::{memory_read, memory_write};
+    use openvm_instructions::{program::DEFAULT_PC_STEP, riscv::RV32_REGISTER_AS};
+
+    let pre_compute: &E2PreCompute<BaseAluPreCompute> = unsafe {
+        std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<BaseAluPreCompute>>())
+            .borrow()
+    };
+
+    // Track chip height
+    exec_state
+        .ctx
+        .on_height_change(pre_compute.chip_idx as usize, 1);
+
+    let data = &pre_compute.data;
+    let local_opcode = BaseAluOpcode::from_usize(data.local_opcode as usize);
+
+    // Read operands
+    let rs1_data: [u8; NUM_LIMBS] =
+        memory_read(&exec_state.memory, RV32_REGISTER_AS, data.b as u32);
+    let rs2_data: [u8; NUM_LIMBS] = if data.e as u32 == RV32_REGISTER_AS {
+        memory_read(&exec_state.memory, RV32_REGISTER_AS, data.c)
+    } else {
+        // Immediate value - sign extend to NUM_LIMBS bytes
+        let imm_4bytes = data.c.to_le_bytes();
+        let sign_byte = imm_4bytes[3];
+        let mut result = [sign_byte; NUM_LIMBS];
+        result[..4].copy_from_slice(&imm_4bytes);
+        result
+    };
+
+    // Perform ALU operation
+    let rd_data = run_alu::<NUM_LIMBS, LIMB_BITS>(local_opcode, &rs1_data, &rs2_data);
+
+    // Write result
+    memory_write(
+        &mut exec_state.memory,
+        RV32_REGISTER_AS,
+        data.a as u32,
+        rd_data,
+    );
+
+    // Increment PC
+    let next_pc = exec_state.pc().wrapping_add(DEFAULT_PC_STEP);
+    exec_state.set_pc(next_pc);
+}
+
+// InterpreterMeteredExecutor implementation - required for proving
+impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
+    for BaseAluCoreExecutor<A, NUM_LIMBS, LIMB_BITS>
+where
+    F: PrimeField32,
+{
+    fn metered_pre_compute_size(&self) -> usize {
+        size_of::<E2PreCompute<BaseAluPreCompute>>()
+    }
+
+    #[cfg(not(feature = "tco"))]
+    fn metered_pre_compute<Ctx>(
+        &self,
+        chip_idx: usize,
+        _pc: u32,
+        inst: &Instruction<F>,
+        data: &mut [u8],
+    ) -> Result<ExecuteFunc<F, Ctx>, StaticProgramError>
+    where
+        Ctx: MeteredExecutionCtxTrait,
+    {
+        use openvm_instructions::riscv::RV32_REGISTER_AS;
+
+        let Instruction { a, b, c, d, e, .. } = *inst;
+        let local_opcode = BaseAluOpcode::from_usize(inst.opcode.local_opcode_idx(self.offset));
+
+        debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+
+        let pre_compute: &mut E2PreCompute<BaseAluPreCompute> = data.borrow_mut();
+        pre_compute.chip_idx = chip_idx as u32;
+        pre_compute.data = BaseAluPreCompute {
+            local_opcode: local_opcode as u8,
+            a: a.as_canonical_u32() as u8,
+            b: b.as_canonical_u32() as u8,
+            c: c.as_canonical_u32(),
+            e: e.as_canonical_u32() as u8,
+        };
+
+        Ok(execute_base_alu_metered::<F, Ctx, NUM_LIMBS, LIMB_BITS>)
+    }
+
+    #[cfg(feature = "tco")]
+    fn metered_handler<Ctx>(
+        &self,
+        chip_idx: usize,
+        _pc: u32,
+        inst: &Instruction<F>,
+        data: &mut [u8],
+    ) -> Result<Handler<F, Ctx>, StaticProgramError>
+    where
+        Ctx: MeteredExecutionCtxTrait,
+    {
+        use openvm_instructions::riscv::RV32_REGISTER_AS;
+
+        let Instruction { a, b, c, d, e, .. } = *inst;
+        let local_opcode = BaseAluOpcode::from_usize(inst.opcode.local_opcode_idx(self.offset));
+
+        debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
+
+        let pre_compute: &mut E2PreCompute<BaseAluPreCompute> = data.borrow_mut();
+        pre_compute.chip_idx = chip_idx as u32;
+        pre_compute.data = BaseAluPreCompute {
+            local_opcode: local_opcode as u8,
+            a: a.as_canonical_u32() as u8,
+            b: b.as_canonical_u32() as u8,
+            c: c.as_canonical_u32(),
+            e: e.as_canonical_u32() as u8,
+        };
+
+        Ok(Box::new(execute_base_alu_metered::<F, Ctx, NUM_LIMBS, LIMB_BITS>))
     }
 }
 

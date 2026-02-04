@@ -6,6 +6,8 @@ use openvm_instructions::{
     riscv::{RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
 };
 use openvm_stark_backend::p3_field::PrimeField32;
+use std::borrow::{Borrow, BorrowMut};
+use std::mem::size_of;
 
 // Minimal executor for CONST32 - no computation needed, just write immediate to register
 #[derive(Clone, Copy, derive_new::new)]
@@ -18,7 +20,6 @@ impl<F, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> crate::FpPreflightEx
     for Const32Executor<NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
-    RA: RecordArena<'static, (), ()>,
 {
     fn get_opcode_name(&self, _opcode: usize) -> String {
         "CONST32".to_string()
@@ -180,6 +181,113 @@ where
         });
 
         Ok(Box::new(execute_const32::<F, Ctx, NUM_LIMBS, LIMB_BITS>))
+    }
+}
+
+// Metered execution function for CONST32
+unsafe fn execute_const32_metered<
+    F: PrimeField32,
+    Ctx: MeteredExecutionCtxTrait,
+    const NUM_LIMBS: usize,
+    const LIMB_BITS: usize,
+>(
+    pre_compute: *const u8,
+    exec_state: &mut VmExecState<F, openvm_circuit::system::memory::online::GuestMemory, Ctx>,
+) {
+    use crate::adapters::memory_write;
+
+    let pre_compute: &E2PreCompute<Const32PreCompute> = unsafe {
+        std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<Const32PreCompute>>())
+            .borrow()
+    };
+
+    // Track chip height
+    exec_state
+        .ctx
+        .on_height_change(pre_compute.chip_idx as usize, 1);
+
+    let data = &pre_compute.data;
+
+    // Combine immediates
+    let imm = (data.imm_hi as u32) << 16 | (data.imm_lo as u32);
+
+    // Decompose to limbs
+    let value = decompose_u32::<NUM_LIMBS, LIMB_BITS>(imm);
+
+    // Write to register (FP=0 in interpreter mode)
+    memory_write(
+        &mut exec_state.memory,
+        RV32_REGISTER_AS,
+        data.target_reg,
+        value,
+    );
+
+    // Increment PC
+    let next_pc = exec_state.pc().wrapping_add(DEFAULT_PC_STEP);
+    exec_state.set_pc(next_pc);
+}
+
+// InterpreterMeteredExecutor implementation
+impl<F, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
+    for Const32Executor<NUM_LIMBS, LIMB_BITS>
+where
+    F: PrimeField32,
+{
+    fn metered_pre_compute_size(&self) -> usize {
+        size_of::<E2PreCompute<Const32PreCompute>>()
+    }
+
+    #[cfg(not(feature = "tco"))]
+    fn metered_pre_compute<Ctx>(
+        &self,
+        chip_idx: usize,
+        _pc: u32,
+        inst: &Instruction<F>,
+        data: &mut [u8],
+    ) -> Result<ExecuteFunc<F, Ctx>, StaticProgramError>
+    where
+        Ctx: MeteredExecutionCtxTrait,
+    {
+        let Instruction { a, b, c, .. } = *inst;
+
+        let pre_compute: &mut E2PreCompute<Const32PreCompute> = data.borrow_mut();
+        pre_compute.chip_idx = chip_idx as u32;
+        pre_compute.data = Const32PreCompute {
+            target_reg: a.as_canonical_u32(),
+            imm_lo: (b.as_canonical_u32() & 0xFFFF) as u16,
+            imm_hi: (c.as_canonical_u32() & 0xFFFF) as u16,
+        };
+
+        Ok(execute_const32_metered::<F, Ctx, NUM_LIMBS, LIMB_BITS>)
+    }
+
+    #[cfg(feature = "tco")]
+    fn metered_handler<Ctx>(
+        &self,
+        chip_idx: usize,
+        _pc: u32,
+        inst: &Instruction<F>,
+        data: &mut [u8],
+    ) -> Result<Handler<F, Ctx>, StaticProgramError>
+    where
+        Ctx: MeteredExecutionCtxTrait,
+    {
+        let Instruction { a, b, c, .. } = *inst;
+
+        let pre_compute: &mut E2PreCompute<Const32PreCompute> = data.borrow_mut();
+        pre_compute.chip_idx = chip_idx as u32;
+        pre_compute.data = Const32PreCompute {
+            target_reg: a.as_canonical_u32(),
+            imm_lo: (b.as_canonical_u32() & 0xFFFF) as u16,
+            imm_hi: (c.as_canonical_u32() & 0xFFFF) as u16,
+        };
+
+        Ok(Box::new(execute_const32_metered::<
+            F,
+            Ctx,
+            NUM_LIMBS,
+            LIMB_BITS,
+        >))
     }
 }
 
