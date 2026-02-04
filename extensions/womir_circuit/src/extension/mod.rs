@@ -298,6 +298,7 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             memory_bridge,
         } = inventory.system().port();
 
+        // TODO: Use our execution bridge
         let exec_bridge = ExecutionBridge::new(execution_bus, program_bus);
         let range_checker = inventory.range_checker().bus;
         let _pointer_max_bits = inventory.pointer_max_bits();

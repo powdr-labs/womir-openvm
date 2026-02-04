@@ -2,8 +2,8 @@ use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterTraceFiller, BasicAdapterInterface, ExecutionBridge,
-        MinimalInstruction, VmAdapterAir, get_record_from_slice,
+        AdapterAirContext, AdapterTraceFiller, BasicAdapterInterface, MinimalInstruction,
+        VmAdapterAir, get_record_from_slice,
     },
     system::memory::{
         MemoryAddress, MemoryAuxColsFactory,
@@ -33,7 +33,7 @@ use openvm_stark_backend::{
 };
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::constraints::ExecutionState;
+use crate::constraints::{ExecutionBridge, ExecutionState};
 
 use super::{RV32_CELL_BITS, tracing_read, tracing_read_imm, tracing_write};
 
@@ -154,7 +154,7 @@ impl<AB: InteractionBuilder, const NUM_LIMBS: usize> VmAdapterAir<AB>
                     AB::Expr::from_canonical_u32(RV32_REGISTER_AS),
                     local.rs2_as.into(),
                 ],
-                local.from_state.into(),
+                local.from_state,
                 AB::F::from_canonical_usize(timestamp_delta),
                 (DEFAULT_PC_STEP, ctx.to_pc),
             )
