@@ -11,9 +11,7 @@ use serde::{Deserialize, Serialize};
 use struct_reflection::StructReflection;
 use struct_reflection::StructReflectionHelper;
 
-use openvm_circuit::arch::{
-    ExecutionBridge as OpenVmExecutionBridge, ExecutionState as OpenVmExecutionState,
-};
+use openvm_circuit::arch::ExecutionState as OpenVmExecutionState;
 
 /// Like `openvm_circuit::arch::ExecutionState`, but with `fp` added.
 #[repr(C)]
@@ -26,6 +24,7 @@ pub struct ExecutionState<T> {
     pub timestamp: T,
 }
 
+/// Discards `fp` when converting to `OpenVmExecutionState`.
 impl<T> From<ExecutionState<T>> for OpenVmExecutionState<T> {
     fn from(state: ExecutionState<T>) -> Self {
         OpenVmExecutionState {
@@ -112,12 +111,6 @@ pub struct ExecutionBridgeInteractor<AB: InteractionBuilder> {
     operands: Vec<AB::Expr>,
     from_state: ExecutionState<AB::Expr>,
     to_state: ExecutionState<AB::Expr>,
-}
-
-impl From<ExecutionBridge> for OpenVmExecutionBridge {
-    fn from(bridge: ExecutionBridge) -> Self {
-        OpenVmExecutionBridge::new(bridge.execution_bus, bridge.program_bus)
-    }
 }
 
 pub enum FpKeepOrSet<T> {
