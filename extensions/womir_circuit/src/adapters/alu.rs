@@ -115,7 +115,10 @@ impl<AB: InteractionBuilder, const NUM_LIMBS: usize> VmAdapterAir<AB>
 
         self.memory_bridge
             .read(
-                MemoryAddress::new(AB::F::from_canonical_u32(RV32_REGISTER_AS), local.rs1_ptr),
+                MemoryAddress::new(
+                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
+                    local.rs1_ptr + local.from_state.fp,
+                ),
                 ctx.reads[0].clone(),
                 timestamp_pp(),
                 &local.reads_aux[0],
@@ -128,7 +131,7 @@ impl<AB: InteractionBuilder, const NUM_LIMBS: usize> VmAdapterAir<AB>
             .assert_one(ctx.instruction.is_valid.clone());
         self.memory_bridge
             .read(
-                MemoryAddress::new(local.rs2_as, local.rs2),
+                MemoryAddress::new(local.rs2_as, local.rs2 + local.from_state.fp),
                 ctx.reads[1].clone(),
                 timestamp_pp(),
                 &local.reads_aux[1],
@@ -137,7 +140,10 @@ impl<AB: InteractionBuilder, const NUM_LIMBS: usize> VmAdapterAir<AB>
 
         self.memory_bridge
             .write(
-                MemoryAddress::new(AB::F::from_canonical_u32(RV32_REGISTER_AS), local.rd_ptr),
+                MemoryAddress::new(
+                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
+                    local.rd_ptr + local.from_state.fp,
+                ),
                 ctx.writes[0].clone(),
                 timestamp_pp(),
                 &local.writes_aux,
