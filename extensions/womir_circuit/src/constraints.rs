@@ -3,6 +3,7 @@ use openvm_circuit::arch::PcIncOrSet;
 use openvm_circuit::system::program::ProgramBus;
 use openvm_circuit_primitives::AlignedBorrow;
 use openvm_instructions::program::DEFAULT_PC_STEP;
+use openvm_stark_backend::interaction::BusIndex;
 use openvm_stark_backend::interaction::InteractionBuilder;
 use openvm_stark_backend::interaction::PermutationCheckBus;
 use openvm_stark_backend::p3_field::FieldAlgebra;
@@ -68,6 +69,19 @@ impl<T> ExecutionState<T> {
 #[derive(Clone, Copy, Debug)]
 pub struct FpBus {
     pub inner: PermutationCheckBus,
+}
+
+impl FpBus {
+    pub const fn new(index: BusIndex) -> Self {
+        Self {
+            inner: PermutationCheckBus::new(index),
+        }
+    }
+
+    #[inline(always)]
+    pub fn index(&self) -> BusIndex {
+        self.inner.index
+    }
 }
 
 impl FpBus {

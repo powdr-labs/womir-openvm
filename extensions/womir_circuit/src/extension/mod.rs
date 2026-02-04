@@ -3,7 +3,7 @@ use std::sync::Arc;
 use derive_more::derive::From;
 use openvm_circuit::{
     arch::{
-        AirInventory, AirInventoryError, ChipInventory, ChipInventoryError, ExecutionBridge,
+        AirInventory, AirInventoryError, ChipInventory, ChipInventoryError,
         ExecutorInventoryBuilder, ExecutorInventoryError, RowMajorMatrixArena, VmCircuitExtension,
         VmExecutionExtension, VmProverExtension,
     },
@@ -30,7 +30,12 @@ use openvm_womir_transpiler::{
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
-use crate::{adapters::*, base_alu::REGISTER_NUM_LIMBS_64, *};
+use crate::{
+    adapters::*,
+    base_alu::REGISTER_NUM_LIMBS_64,
+    constraints::{ExecutionBridge, FpBus},
+    *,
+};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "cuda")] {
@@ -299,7 +304,8 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         } = inventory.system().port();
 
         // TODO: Use our execution bridge
-        let exec_bridge = ExecutionBridge::new(execution_bus, program_bus);
+        let fp_bus = FpBus::new(inventory.new_bus_idx());
+        let exec_bridge = ExecutionBridge::new(execution_bus, fp_bus, program_bus);
         let range_checker = inventory.range_checker().bus;
         let _pointer_max_bits = inventory.pointer_max_bits();
 
