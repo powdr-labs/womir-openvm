@@ -70,6 +70,30 @@ pub struct FpBus {
     pub inner: PermutationCheckBus,
 }
 
+impl FpBus {
+    /// Caller must constrain that `enabled` is boolean.
+    pub fn execute<AB: InteractionBuilder>(
+        &self,
+        builder: &mut AB,
+        enabled: impl Into<AB::Expr>,
+        prev_state: ExecutionState<impl Into<AB::Expr>>,
+        next_state: ExecutionState<impl Into<AB::Expr>>,
+    ) {
+        // Like execution bus, but for FP and timestamp
+        let enabled = enabled.into();
+        self.inner.receive(
+            builder,
+            [prev_state.fp.into(), prev_state.timestamp.into()],
+            enabled.clone(),
+        );
+        self.inner.send(
+            builder,
+            [next_state.fp.into(), next_state.timestamp.into()],
+            enabled,
+        );
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct ExecutionBridge {
     execution_bus: ExecutionBus,
@@ -171,7 +195,6 @@ impl<AB: InteractionBuilder> ExecutionBridgeInteractor<AB> {
     pub fn eval(self, builder: &mut AB, enabled: impl Into<AB::Expr>) {
         let enabled = enabled.into();
 
-        // Interaction with program
         self.program_bus.lookup_instruction(
             builder,
             self.from_state.pc.clone(),
@@ -180,9 +203,17 @@ impl<AB: InteractionBuilder> ExecutionBridgeInteractor<AB> {
             enabled.clone(),
         );
 
+        self.fp_bus.execute(
+            builder,
+            enabled.clone(),
+            self.from_state.clone(),
+            self.to_state.clone(),
+        );
+
         self.execution_bus.execute(
             builder,
             enabled,
+            // Convert to OpenVmExecutionState -> discards fp
             self.from_state.into(),
             self.to_state.into(),
         );
