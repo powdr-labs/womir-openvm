@@ -1,11 +1,105 @@
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::{MemoryAuxColsFactory, online::TracingMemory};
+use openvm_circuit_primitives::{
+    AlignedBytesBorrow,
+    bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
+    utils::not,
+};
+use openvm_circuit_primitives_derive::AlignedBorrow;
+use openvm_instructions::LocalOpcode;
 use openvm_instructions::{
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
 };
 use openvm_stark_backend::p3_field::PrimeField32;
+use openvm_stark_backend::{
+    interaction::InteractionBuilder,
+    p3_air::{AirBuilder, BaseAir},
+    p3_field::{Field, FieldAlgebra},
+    rap::{BaseAirWithPublicValues, ColumnsAir},
+};
+use openvm_womir_transpiler::{
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, Eq64Opcode, EqOpcode,
+    HintStoreOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom,
+    Shift64Opcode, ShiftOpcode,
+};
+use struct_reflection::{StructReflection, StructReflectionHelper};
+#[repr(C)]
+#[derive(Debug, Clone, AlignedBorrow, StructReflection)]
+pub struct ConstsCoreCols<T> {
+    pub is_valid: T,
+}
+
+#[derive(Copy, Clone, Debug, derive_new::new)]
+pub struct Const32CoreAir<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
+    pub bus: BitwiseOperationLookupBus,
+    offset: usize,
+}
+
+impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAir<F>
+    for Const32CoreAir<NUM_LIMBS, LIMB_BITS>
+{
+    fn width(&self) -> usize {
+        ConstsCoreCols::<F>::width()
+    }
+}
+
+impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> ColumnsAir<F>
+    for Const32CoreAir<NUM_LIMBS, LIMB_BITS>
+{
+    fn columns(&self) -> Option<Vec<String>> {
+        ConstsCoreCols::<F>::struct_reflection()
+    }
+}
+
+impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAirWithPublicValues<F>
+    for Const32CoreAir<NUM_LIMBS, LIMB_BITS>
+{
+}
+
+impl<AB, I, const NUM_LIMBS: usize, const LIMB_BITS: usize> VmCoreAir<AB, I>
+    for Const32CoreAir<NUM_LIMBS, LIMB_BITS>
+where
+    AB: InteractionBuilder,
+    I: VmAdapterInterface<AB::Expr>,
+    I::Reads: From<[[AB::Expr; 0]; 0]>,
+    I::Writes: From<[[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 1]>,
+    I::ProcessedInstruction: From<MinimalInstruction<AB::Expr>>,
+{
+    fn eval(
+        &self,
+        builder: &mut AB,
+        local_core: &[AB::Var],
+        _from_pc: AB::Var,
+    ) -> AdapterAirContext<AB::Expr, I> {
+        // let core_cols: &ConstsCoreCols<_> = local_core.borrow();
+
+        // // Need at least one constraint otherwise stark-backend complains.
+        // builder.assert_bool(core_cols.is_valid);
+
+        // let opcode = VmCoreAir::<AB, I>::expr_to_global_expr(
+        //     self,
+        //     AB::Expr::from_canonical_usize(ConstOpcodes::CONST32 as usize),
+        // );
+
+        // AdapterAirContext {
+        //     to_pc: None,
+        //     reads: [].into(),
+        //     writes: [[AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS]].into(),
+        //     instruction: MinimalInstruction {
+        //         is_valid: core_cols.is_valid.into(),
+        //         opcode,
+        //     }
+        //     .into(),
+        // }
+        unimplemented!()
+    }
+
+    fn start_offset(&self) -> usize {
+        ConstOpcodes::CLASS_OFFSET
+    }
+}
 
 // Minimal executor for CONST32 - no computation needed, just write immediate to register
 #[derive(Clone, Copy, derive_new::new)]

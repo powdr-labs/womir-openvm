@@ -355,6 +355,13 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         );
         inventory.add_air(divrem);
 
+        // 32-bit Const AIR
+        let const32 = Const32Air::new(
+            crate::adapters::Const32AdapterAir::new(exec_bridge, memory_bridge),
+            Const32CoreAir::new(bitwise_lu, ConstOpcodes::CLASS_OFFSET),
+        );
+        inventory.add_air(const32);
+
         // Shift AIR - re-uses BaseAluAdapter since it has the same I/O pattern
         let shift = ShiftAir::new(
             BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
