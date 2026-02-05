@@ -303,7 +303,8 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             memory_bridge,
         } = inventory.system().port();
 
-        // TODO: Need to extend ConnectorChip to also initialize & finalize the fp bus.
+        // TODO: Need to extend VmConnectorChip to also initialize & finalize the fp bus.
+        // (https://github.com/powdr-labs/womir-openvm/issues/124)
         let fp_bus = FpBus::new(inventory.new_bus_idx());
         let exec_bridge = ExecutionBridge::new(execution_bus, fp_bus, program_bus);
         let range_checker = inventory.range_checker().bus;
