@@ -585,8 +585,9 @@ where
         inventory.add_executor_chip(multiplication);
 
         // 8. DivRem (with RangeTupleChecker periphery)
-        let divrem_range_tuple_air: &openvm_circuit_primitives::range_tuple::RangeTupleCheckerAir<2> =
-            inventory.next_air()?;
+        let divrem_range_tuple_air: &openvm_circuit_primitives::range_tuple::RangeTupleCheckerAir<
+            2,
+        > = inventory.next_air()?;
         let divrem_range_tuple_chip = Arc::new(
             openvm_circuit_primitives::range_tuple::RangeTupleCheckerChip::new(
                 divrem_range_tuple_air.bus,

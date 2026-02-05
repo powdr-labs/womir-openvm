@@ -346,12 +346,9 @@ where
             is_slt: opcode.local_opcode_idx(self.offset) == (LessThanOpcode::SLT as usize),
         };
 
-        Ok(Box::new(execute_less_than_metered::<
-            F,
-            Ctx,
-            NUM_LIMBS,
-            LIMB_BITS,
-        >))
+        Ok(Box::new(
+            execute_less_than_metered::<F, Ctx, NUM_LIMBS, LIMB_BITS>,
+        ))
     }
 }
 

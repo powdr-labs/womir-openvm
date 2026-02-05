@@ -282,12 +282,9 @@ where
             imm_hi: (c.as_canonical_u32() & 0xFFFF) as u16,
         };
 
-        Ok(Box::new(execute_const32_metered::<
-            F,
-            Ctx,
-            NUM_LIMBS,
-            LIMB_BITS,
-        >))
+        Ok(Box::new(
+            execute_const32_metered::<F, Ctx, NUM_LIMBS, LIMB_BITS>,
+        ))
     }
 }
 

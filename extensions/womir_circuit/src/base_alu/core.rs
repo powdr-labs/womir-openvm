@@ -320,7 +320,9 @@ where
             e: e.as_canonical_u32() as u8,
         };
 
-        Ok(Box::new(execute_base_alu_metered::<F, Ctx, NUM_LIMBS, LIMB_BITS>))
+        Ok(Box::new(
+            execute_base_alu_metered::<F, Ctx, NUM_LIMBS, LIMB_BITS>,
+        ))
     }
 }
 

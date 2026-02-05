@@ -14,7 +14,9 @@ use openvm_stark_backend::{
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
 
-use crate::adapters::{BaseAluAdapterAir, BaseAluAdapterFiller, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+use crate::adapters::{
+    BaseAluAdapterAir, BaseAluAdapterFiller, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS,
+};
 
 /// A stub core AIR that has zero width and no constraints.
 /// Used for executors that don't have real proving support yet.
@@ -44,7 +46,14 @@ impl<F: Field> ColumnsAir<F> for StubCoreAir {
 impl<F: Field> BaseAirWithPublicValues<F> for StubCoreAir {}
 
 // Interface type for BaseAluAdapterAir<4>
-type StubInterface<T> = BasicAdapterInterface<T, MinimalInstruction<T>, 2, 1, RV32_REGISTER_NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>;
+type StubInterface<T> = BasicAdapterInterface<
+    T,
+    MinimalInstruction<T>,
+    2,
+    1,
+    RV32_REGISTER_NUM_LIMBS,
+    RV32_REGISTER_NUM_LIMBS,
+>;
 
 // Implement VmCoreAir specifically for the BaseAluAdapterInterface
 impl<AB> VmCoreAir<AB, StubInterface<AB::Expr>> for StubCoreAir
@@ -100,8 +109,10 @@ where
 }
 
 // Type aliases for stub AIRs
-pub type StubAir = openvm_circuit::arch::VmAirWrapper<BaseAluAdapterAir<RV32_REGISTER_NUM_LIMBS>, StubCoreAir>;
-pub type StubChip<F> = VmChipWrapper<F, StubFiller<BaseAluAdapterFiller<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>>;
+pub type StubAir =
+    openvm_circuit::arch::VmAirWrapper<BaseAluAdapterAir<RV32_REGISTER_NUM_LIMBS>, StubCoreAir>;
+pub type StubChip<F> =
+    VmChipWrapper<F, StubFiller<BaseAluAdapterFiller<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>>;
 
 /// Creates a stub AIR with the given offset
 pub fn make_stub_air(

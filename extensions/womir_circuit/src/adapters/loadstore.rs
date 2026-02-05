@@ -348,7 +348,9 @@ where
     type RecordMut<'a> = <Self as crate::FpAdapterTraceExecutor<F>>::RecordMut<'a>;
 
     fn start(_pc: u32, _memory: &TracingMemory, _record: &mut Self::RecordMut<'_>) {
-        panic!("LoadStoreAdapterExecutor::start should not be called; use FpAdapterTraceExecutor::start_with_fp instead");
+        panic!(
+            "LoadStoreAdapterExecutor::start should not be called; use FpAdapterTraceExecutor::start_with_fp instead"
+        );
     }
 
     #[inline(always)]
