@@ -1,13 +1,13 @@
 //! Stub AIRs for executors that don't have real constraint implementations yet.
 //! These allow the proving path to compile and run without actual constraints.
 
+use crate::execution::ExecutionBridge;
 use openvm_circuit::arch::{
-    AdapterAirContext, BasicAdapterInterface, MinimalInstruction, TraceFiller,
-    VmChipWrapper, VmCoreAir,
+    AdapterAirContext, BasicAdapterInterface, MinimalInstruction, TraceFiller, VmChipWrapper,
+    VmCoreAir,
 };
 use openvm_circuit::system::memory::MemoryAuxColsFactory;
 use openvm_circuit::system::memory::offline_checker::MemoryBridge;
-use crate::execution::ExecutionBridge;
 use openvm_circuit_primitives::bitwise_op_lookup::BitwiseOperationLookupBus;
 use openvm_stark_backend::{
     p3_air::BaseAir,
