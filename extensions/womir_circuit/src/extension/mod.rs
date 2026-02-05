@@ -156,27 +156,26 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         );
         inventory.add_executor(shift_64, Shift64Opcode::iter().map(|x| x.global_opcode()))?;
 
-        // Note: LoadStore, LoadSignExtend executors disabled - no corresponding AIRs
-        // let load_store: LoadStoreExecutor32 = crate::PreflightExecutorWrapperFp::new(
-        //     LoadStoreExecutor::new(
-        //         LoadStoreAdapterExecutor::new(pointer_max_bits),
-        //         LoadStoreOpcode::CLASS_OFFSET,
-        //     ),
-        //     fp.clone(),
-        // );
-        // inventory.add_executor(
-        //     load_store,
-        //     LoadStoreOpcode::iter()
-        //         .take(LoadStoreOpcode::STOREB as usize + 1)
-        //         .map(|x| x.global_opcode()),
-        // )?;
-        //
-        // let load_sign_extend =
-        //     LoadSignExtendExecutor::new(LoadStoreAdapterExecutor::new(pointer_max_bits));
-        // inventory.add_executor(
-        //     load_sign_extend,
-        //     [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
-        // )?;
+        let load_store: LoadStoreExecutor32 = crate::PreflightExecutorWrapperFp::new(
+            LoadStoreExecutor::new(
+                LoadStoreAdapterExecutor::new(pointer_max_bits),
+                LoadStoreOpcode::CLASS_OFFSET,
+            ),
+            fp.clone(),
+        );
+        inventory.add_executor(
+            load_store,
+            LoadStoreOpcode::iter()
+                .take(LoadStoreOpcode::STOREB as usize + 1)
+                .map(|x| x.global_opcode()),
+        )?;
+
+        let load_sign_extend =
+            LoadSignExtendExecutor::new(LoadStoreAdapterExecutor::new(pointer_max_bits));
+        inventory.add_executor(
+            load_sign_extend,
+            [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
+        )?;
 
         let multiplication: MultiplicationExecutor32 = crate::PreflightExecutorWrapperFp::new(
             MultiplicationExecutor::new(BaseAluAdapterExecutor::new(), MulOpcode::CLASS_OFFSET),
@@ -190,48 +189,48 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         );
         inventory.add_executor(divrem, DivRemOpcode::iter().map(|x| x.global_opcode()))?;
 
-        // Note: Const32, LessThan, Eq, HintStore executors disabled - no corresponding AIRs
-        // let const32: Const32Executor32 = crate::PreflightExecutorWrapperFp::new(
-        //     Const32Executor::new(ConstOpcodes::CLASS_OFFSET),
-        //     fp.clone(),
-        // );
-        // inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
-        //
-        // let less_than: LessThanExecutor32 = crate::PreflightExecutorWrapperFp::new(
-        //     LessThanCoreExecutor::new(LessThanOpcode::CLASS_OFFSET),
-        //     fp.clone(),
-        // );
-        // inventory.add_executor(less_than, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
-        //
-        // let less_than_64: LessThan64Executor = crate::PreflightExecutorWrapperFp::new(
-        //     LessThanCoreExecutor::new(LessThan64Opcode::CLASS_OFFSET),
-        //     fp.clone(),
-        // );
-        // inventory.add_executor(
-        //     less_than_64,
-        //     LessThan64Opcode::iter().map(|x| x.global_opcode()),
-        // )?;
-        //
-        // let eq: EqExecutor32 = crate::PreflightExecutorWrapperFp::new(
-        //     EqCoreExecutor::new(EqOpcode::CLASS_OFFSET),
-        //     fp.clone(),
-        // );
-        // inventory.add_executor(eq, EqOpcode::iter().map(|x| x.global_opcode()))?;
-        //
-        // let eq_64: EqExecutor64 = crate::PreflightExecutorWrapperFp::new(
-        //     EqCoreExecutor::new(Eq64Opcode::CLASS_OFFSET),
-        //     fp.clone(),
-        // );
-        // inventory.add_executor(eq_64, Eq64Opcode::iter().map(|x| x.global_opcode()))?;
-        //
-        // let hintstore: HintStoreExecutor32 = crate::PreflightExecutorWrapperFp::new(
-        //     HintStoreCoreExecutor::new(pointer_max_bits, HintStoreOpcode::CLASS_OFFSET),
-        //     fp.clone(),
-        // );
-        // inventory.add_executor(
-        //     hintstore,
-        //     HintStoreOpcode::iter().map(|x| x.global_opcode()),
-        // )?;
+        // Note: These executors don't have AIRs yet - proving not supported
+        let const32: Const32Executor32 = crate::PreflightExecutorWrapperFp::new(
+            Const32Executor::new(ConstOpcodes::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
+
+        let less_than: LessThanExecutor32 = crate::PreflightExecutorWrapperFp::new(
+            LessThanCoreExecutor::new(LessThanOpcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(less_than, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let less_than_64: LessThan64Executor = crate::PreflightExecutorWrapperFp::new(
+            LessThanCoreExecutor::new(LessThan64Opcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(
+            less_than_64,
+            LessThan64Opcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        let eq: EqExecutor32 = crate::PreflightExecutorWrapperFp::new(
+            EqCoreExecutor::new(EqOpcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(eq, EqOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let eq_64: EqExecutor64 = crate::PreflightExecutorWrapperFp::new(
+            EqCoreExecutor::new(Eq64Opcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(eq_64, Eq64Opcode::iter().map(|x| x.global_opcode()))?;
+
+        let hintstore: HintStoreExecutor32 = crate::PreflightExecutorWrapperFp::new(
+            HintStoreCoreExecutor::new(pointer_max_bits, HintStoreOpcode::CLASS_OFFSET),
+            fp.clone(),
+        );
+        inventory.add_executor(
+            hintstore,
+            HintStoreOpcode::iter().map(|x| x.global_opcode()),
+        )?;
 
         // Register phantom sub-executors
         inventory.add_phantom_sub_executor(
@@ -310,10 +309,8 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         let fp_bus = FpBus::new(inventory.new_bus_idx());
         let exec_bridge = ExecutionBridge::new(execution_bus, fp_bus, program_bus);
         let range_checker = inventory.range_checker().bus;
-        let pointer_max_bits = inventory.pointer_max_bits();
 
         let bitwise_lu = {
-            // A trick to get around Rust's borrow rules
             let existing_air = inventory.find_air::<BitwiseOperationLookupAir<8>>().next();
             if let Some(air) = existing_air {
                 air.bus
@@ -325,27 +322,61 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             }
         };
 
+        // AIRs must be registered in the same order as executors in extend_execution:
+        // 1. BaseAlu
         let base_alu = BaseAluAir::new(
             BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
             BaseAluCoreAir::new(bitwise_lu, BaseAluOpcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu);
 
-        // 64-bit ALU AIR
+        // 2. BaseAlu64
         let base_alu_64 = BaseAlu64Air::new(
             BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
             BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu_64);
 
-        // Multiplication AIR - re-uses BaseAluAdapter since it has the same I/O pattern
+        // 3. Shift
+        let shift = ShiftAir::new(
+            BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            ShiftCoreAir::new(bitwise_lu, range_checker, ShiftOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(shift);
+
+        // 4. Shift64
+        let shift_64 = Shift64Air::new(
+            BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            ShiftCoreAir::new(bitwise_lu, range_checker, Shift64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(shift_64);
+
+        // 5. LoadStore (stub)
+        let load_store_stub = crate::stub::make_stub_air(
+            exec_bridge,
+            memory_bridge,
+            bitwise_lu,
+            LoadStoreOpcode::CLASS_OFFSET,
+        );
+        inventory.add_air(load_store_stub);
+
+        // 6. LoadSignExtend (stub)
+        let load_sign_extend_stub = crate::stub::make_stub_air(
+            exec_bridge,
+            memory_bridge,
+            bitwise_lu,
+            LoadStoreOpcode::CLASS_OFFSET, // Uses same opcode class as LoadStore
+        );
+        inventory.add_air(load_sign_extend_stub);
+
+        // 7. Multiplication (with RangeTupleChecker periphery)
         let range_tuple_bus = openvm_circuit_primitives::range_tuple::RangeTupleCheckerBus::new(
             inventory.new_bus_idx(),
             self.range_tuple_checker_sizes,
         );
-        // Add the RangeTupleCheckerAir for multiplication
-        let mul_range_tuple_air =
-            openvm_circuit_primitives::range_tuple::RangeTupleCheckerAir { bus: range_tuple_bus };
+        let mul_range_tuple_air = openvm_circuit_primitives::range_tuple::RangeTupleCheckerAir {
+            bus: range_tuple_bus,
+        };
         inventory.add_air(mul_range_tuple_air);
         let multiplication = MultiplicationAir::new(
             BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
@@ -353,15 +384,15 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         );
         inventory.add_air(multiplication);
 
-        // DivRem AIR - re-uses BaseAluAdapter since it has the same I/O pattern
+        // 8. DivRem (with RangeTupleChecker periphery)
         let divrem_range_tuple_bus =
             openvm_circuit_primitives::range_tuple::RangeTupleCheckerBus::new(
                 inventory.new_bus_idx(),
                 self.range_tuple_checker_sizes,
             );
-        // Add the RangeTupleCheckerAir for divrem
-        let divrem_range_tuple_air =
-            openvm_circuit_primitives::range_tuple::RangeTupleCheckerAir { bus: divrem_range_tuple_bus };
+        let divrem_range_tuple_air = openvm_circuit_primitives::range_tuple::RangeTupleCheckerAir {
+            bus: divrem_range_tuple_bus,
+        };
         inventory.add_air(divrem_range_tuple_air);
         let divrem = DivRemAir::new(
             BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
@@ -373,57 +404,59 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         );
         inventory.add_air(divrem);
 
-        // Shift AIR - re-uses BaseAluAdapter since it has the same I/O pattern
-        let shift = ShiftAir::new(
-            BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
-            ShiftCoreAir::new(bitwise_lu, range_checker, ShiftOpcode::CLASS_OFFSET),
+        // 9. Const32 (stub)
+        let const32_stub = crate::stub::make_stub_air(
+            exec_bridge,
+            memory_bridge,
+            bitwise_lu,
+            ConstOpcodes::CLASS_OFFSET,
         );
-        inventory.add_air(shift);
+        inventory.add_air(const32_stub);
 
-        // Shift64 AIR
-        let shift_64 = Shift64Air::new(
-            BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
-            ShiftCoreAir::new(bitwise_lu, range_checker, Shift64Opcode::CLASS_OFFSET),
+        // 10. LessThan (stub)
+        let less_than_stub = crate::stub::make_stub_air(
+            exec_bridge,
+            memory_bridge,
+            bitwise_lu,
+            LessThanOpcode::CLASS_OFFSET,
         );
-        inventory.add_air(shift_64);
+        inventory.add_air(less_than_stub);
 
-        // Note: Proving path not yet implemented for the following AIRs:
-        // - LessThanAir, LessThan64Air (LessThanFiller expects Rv32BaseAluAdapterFiller)
-        // - EqAir, Eq64Air (EqCoreAir trait implementations incomplete)
-        // - LoadStoreAir (LoadStoreAdapterAir interface mismatch with LoadStoreCoreAir)
-        // - Rv32LoadSignExtendAir (same issue as LoadStore)
-        // - Const32Air (Const32AdapterAir trait implementations incomplete)
-        // - HintStoreAir (needs custom implementation)
+        // 11. LessThan64 (stub)
+        let less_than_64_stub = crate::stub::make_stub_air(
+            exec_bridge,
+            memory_bridge,
+            bitwise_lu,
+            LessThan64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_air(less_than_64_stub);
 
-        // let beq = Rv32BranchEqualAir::new(
-        //     Rv32BranchAdapterAir::new(exec_bridge, memory_bridge),
-        //     BranchEqualCoreAir::new(BranchEqualOpcode::CLASS_OFFSET, DEFAULT_PC_STEP),
-        // );
-        // inventory.add_air(beq);
-        //
-        // let blt = Rv32BranchLessThanAir::new(
-        //     Rv32BranchAdapterAir::new(exec_bridge, memory_bridge),
-        //     BranchLessThanCoreAir::new(bitwise_lu, BranchLessThanOpcode::CLASS_OFFSET),
-        // );
-        // inventory.add_air(blt);
-        //
-        // let jal_lui = Rv32JalLuiAir::new(
-        //     Rv32CondRdWriteAdapterAir::new(Rv32RdWriteAdapterAir::new(memory_bridge, exec_bridge)),
-        //     Rv32JalLuiCoreAir::new(bitwise_lu),
-        // );
-        // inventory.add_air(jal_lui);
-        //
-        // let jalr = Rv32JalrAir::new(
-        //     Rv32JalrAdapterAir::new(memory_bridge, exec_bridge),
-        //     Rv32JalrCoreAir::new(bitwise_lu, range_checker),
-        // );
-        // inventory.add_air(jalr);
-        //
-        // let auipc = Rv32AuipcAir::new(
-        //     Rv32RdWriteAdapterAir::new(memory_bridge, exec_bridge),
-        //     Rv32AuipcCoreAir::new(bitwise_lu),
-        // );
-        // inventory.add_air(auipc);
+        // 12. Eq (stub)
+        let eq_stub = crate::stub::make_stub_air(
+            exec_bridge,
+            memory_bridge,
+            bitwise_lu,
+            EqOpcode::CLASS_OFFSET,
+        );
+        inventory.add_air(eq_stub);
+
+        // 13. Eq64 (stub)
+        let eq_64_stub = crate::stub::make_stub_air(
+            exec_bridge,
+            memory_bridge,
+            bitwise_lu,
+            Eq64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_air(eq_64_stub);
+
+        // 14. HintStore (stub)
+        let hintstore_stub = crate::stub::make_stub_air(
+            exec_bridge,
+            memory_bridge,
+            bitwise_lu,
+            HintStoreOpcode::CLASS_OFFSET,
+        );
+        inventory.add_air(hintstore_stub);
 
         Ok(())
     }
@@ -446,7 +479,7 @@ where
     ) -> Result<(), ChipInventoryError> {
         let range_checker = inventory.range_checker()?.clone();
         let timestamp_max_bits = inventory.timestamp_max_bits();
-        let pointer_max_bits = inventory.airs().pointer_max_bits();
+        let _pointer_max_bits = inventory.airs().pointer_max_bits();
         let mem_helper = SharedMemoryHelper::new(range_checker.clone(), timestamp_max_bits);
 
         let bitwise_lu = {
@@ -463,8 +496,9 @@ where
             }
         };
 
-        // These calls to next_air are not strictly necessary to construct the chips, but provide a
-        // safeguard to ensure that chip construction matches the circuit definition
+        // Chips must be registered in the same order as AIRs in extend_circuit:
+
+        // 1. BaseAlu
         inventory.next_air::<BaseAluAir>()?;
         let base_alu = BaseAluChip::new(
             BaseAluFiller::new(
@@ -476,7 +510,7 @@ where
         );
         inventory.add_executor_chip(base_alu);
 
-        // 64-bit ALU chip
+        // 2. BaseAlu64
         inventory.next_air::<BaseAlu64Air>()?;
         let base_alu_64 = BaseAlu64Chip::new(
             BaseAluFiller::new(
@@ -488,52 +522,7 @@ where
         );
         inventory.add_executor_chip(base_alu_64);
 
-        // Multiplication chip - re-uses BaseAluAdapterFiller since it has the same I/O pattern
-        // First consume the RangeTupleCheckerAir
-        let mul_range_tuple_air: &openvm_circuit_primitives::range_tuple::RangeTupleCheckerAir<2> =
-            inventory.next_air()?;
-        let range_tuple_chip = Arc::new(
-            openvm_circuit_primitives::range_tuple::RangeTupleCheckerChip::new(
-                mul_range_tuple_air.bus,
-            ),
-        );
-        inventory.add_periphery_chip(range_tuple_chip.clone());
-        // Then consume the MultiplicationAir
-        let _multiplication_air: &MultiplicationAir = inventory.next_air()?;
-        let multiplication = MultiplicationChip::new(
-            MultiplicationFiller::new(
-                BaseAluAdapterFiller::new(bitwise_lu.clone()),
-                range_tuple_chip,
-                MulOpcode::CLASS_OFFSET,
-            ),
-            mem_helper.clone(),
-        );
-        inventory.add_executor_chip(multiplication);
-
-        // DivRem chip - re-uses BaseAluAdapterFiller since it has the same I/O pattern
-        // First consume the RangeTupleCheckerAir
-        let divrem_range_tuple_air: &openvm_circuit_primitives::range_tuple::RangeTupleCheckerAir<2> =
-            inventory.next_air()?;
-        let divrem_range_tuple_chip = Arc::new(
-            openvm_circuit_primitives::range_tuple::RangeTupleCheckerChip::new(
-                divrem_range_tuple_air.bus,
-            ),
-        );
-        inventory.add_periphery_chip(divrem_range_tuple_chip.clone());
-        // Then consume the DivRemAir
-        let _divrem_air: &DivRemAir = inventory.next_air()?;
-        let divrem = DivRemChip::new(
-            DivRemFiller::new(
-                BaseAluAdapterFiller::new(bitwise_lu.clone()),
-                bitwise_lu.clone(),
-                divrem_range_tuple_chip,
-                DivRemOpcode::CLASS_OFFSET,
-            ),
-            mem_helper.clone(),
-        );
-        inventory.add_executor_chip(divrem);
-
-        // Shift chip - re-uses BaseAluAdapterFiller since it has the same I/O pattern
+        // 3. Shift
         inventory.next_air::<ShiftAir>()?;
         let shift = ShiftChip::new(
             ShiftFiller::new(
@@ -546,7 +535,7 @@ where
         );
         inventory.add_executor_chip(shift);
 
-        // Shift64 chip
+        // 4. Shift64
         inventory.next_air::<Shift64Air>()?;
         let shift_64 = Shift64Chip::new(
             ShiftFiller::new(
@@ -559,64 +548,110 @@ where
         );
         inventory.add_executor_chip(shift_64);
 
-        // Note: Proving path not yet implemented for the following chips:
-        // - LessThanChip, LessThan64Chip (LessThanFiller expects Rv32BaseAluAdapterFiller)
-        // - EqChip, Eq64Chip (EqCoreAir trait implementations incomplete)
-        // - LoadStoreChip (LoadStoreAdapterAir interface mismatch)
-        // - Rv32LoadSignExtendChip (same issue as LoadStore)
-        // - Const32Chip (Const32AdapterAir trait implementations incomplete)
-        // - HintStoreChip (needs custom implementation)
-        let _ = pointer_max_bits; // silence unused variable warning
+        // 5. LoadStore (stub)
+        inventory.next_air::<crate::stub::StubAir>()?;
+        let load_store_stub = crate::stub::StubChip::new(
+            crate::stub::StubFiller::new(BaseAluAdapterFiller::new(bitwise_lu.clone())),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(load_store_stub);
 
-        // inventory.next_air::<Rv32BranchEqualAir>()?;
-        // let beq = Rv32BranchEqualChip::new(
-        //     BranchEqualFiller::new(
-        //         Rv32BranchAdapterFiller,
-        //         BranchEqualOpcode::CLASS_OFFSET,
-        //         DEFAULT_PC_STEP,
-        //     ),
-        //     mem_helper.clone(),
-        // );
-        // inventory.add_executor_chip(beq);
-        //
-        // inventory.next_air::<Rv32BranchLessThanAir>()?;
-        // let blt = Rv32BranchLessThanChip::new(
-        //     BranchLessThanFiller::new(
-        //         Rv32BranchAdapterFiller,
-        //         bitwise_lu.clone(),
-        //         BranchLessThanOpcode::CLASS_OFFSET,
-        //     ),
-        //     mem_helper.clone(),
-        // );
-        // inventory.add_executor_chip(blt);
-        //
-        // inventory.next_air::<Rv32JalLuiAir>()?;
-        // let jal_lui = Rv32JalLuiChip::new(
-        //     Rv32JalLuiFiller::new(
-        //         Rv32CondRdWriteAdapterFiller::new(Rv32RdWriteAdapterFiller),
-        //         bitwise_lu.clone(),
-        //     ),
-        //     mem_helper.clone(),
-        // );
-        // inventory.add_executor_chip(jal_lui);
-        //
-        // inventory.next_air::<Rv32JalrAir>()?;
-        // let jalr = Rv32JalrChip::new(
-        //     Rv32JalrFiller::new(
-        //         Rv32JalrAdapterFiller,
-        //         bitwise_lu.clone(),
-        //         range_checker.clone(),
-        //     ),
-        //     mem_helper.clone(),
-        // );
-        // inventory.add_executor_chip(jalr);
-        //
-        // inventory.next_air::<Rv32AuipcAir>()?;
-        // let auipc = Rv32AuipcChip::new(
-        //     Rv32AuipcFiller::new(Rv32RdWriteAdapterFiller, bitwise_lu.clone()),
-        //     mem_helper.clone(),
-        // );
-        // inventory.add_executor_chip(auipc);
+        // 6. LoadSignExtend (stub)
+        inventory.next_air::<crate::stub::StubAir>()?;
+        let load_sign_extend_stub = crate::stub::StubChip::new(
+            crate::stub::StubFiller::new(BaseAluAdapterFiller::new(bitwise_lu.clone())),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(load_sign_extend_stub);
+
+        // 7. Multiplication (with RangeTupleChecker periphery)
+        let mul_range_tuple_air: &openvm_circuit_primitives::range_tuple::RangeTupleCheckerAir<2> =
+            inventory.next_air()?;
+        let range_tuple_chip = Arc::new(
+            openvm_circuit_primitives::range_tuple::RangeTupleCheckerChip::new(
+                mul_range_tuple_air.bus,
+            ),
+        );
+        inventory.add_periphery_chip(range_tuple_chip.clone());
+        inventory.next_air::<MultiplicationAir>()?;
+        let multiplication = MultiplicationChip::new(
+            MultiplicationFiller::new(
+                BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                range_tuple_chip,
+                MulOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(multiplication);
+
+        // 8. DivRem (with RangeTupleChecker periphery)
+        let divrem_range_tuple_air: &openvm_circuit_primitives::range_tuple::RangeTupleCheckerAir<2> =
+            inventory.next_air()?;
+        let divrem_range_tuple_chip = Arc::new(
+            openvm_circuit_primitives::range_tuple::RangeTupleCheckerChip::new(
+                divrem_range_tuple_air.bus,
+            ),
+        );
+        inventory.add_periphery_chip(divrem_range_tuple_chip.clone());
+        inventory.next_air::<DivRemAir>()?;
+        let divrem = DivRemChip::new(
+            DivRemFiller::new(
+                BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                divrem_range_tuple_chip,
+                DivRemOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(divrem);
+
+        // 9. Const32 (stub)
+        inventory.next_air::<crate::stub::StubAir>()?;
+        let const32_stub = crate::stub::StubChip::new(
+            crate::stub::StubFiller::new(BaseAluAdapterFiller::new(bitwise_lu.clone())),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(const32_stub);
+
+        // 10. LessThan (stub)
+        inventory.next_air::<crate::stub::StubAir>()?;
+        let less_than_stub = crate::stub::StubChip::new(
+            crate::stub::StubFiller::new(BaseAluAdapterFiller::new(bitwise_lu.clone())),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(less_than_stub);
+
+        // 11. LessThan64 (stub)
+        inventory.next_air::<crate::stub::StubAir>()?;
+        let less_than_64_stub = crate::stub::StubChip::new(
+            crate::stub::StubFiller::new(BaseAluAdapterFiller::new(bitwise_lu.clone())),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(less_than_64_stub);
+
+        // 12. Eq (stub)
+        inventory.next_air::<crate::stub::StubAir>()?;
+        let eq_stub = crate::stub::StubChip::new(
+            crate::stub::StubFiller::new(BaseAluAdapterFiller::new(bitwise_lu.clone())),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(eq_stub);
+
+        // 13. Eq64 (stub)
+        inventory.next_air::<crate::stub::StubAir>()?;
+        let eq_64_stub = crate::stub::StubChip::new(
+            crate::stub::StubFiller::new(BaseAluAdapterFiller::new(bitwise_lu.clone())),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(eq_64_stub);
+
+        // 14. HintStore (stub)
+        inventory.next_air::<crate::stub::StubAir>()?;
+        let hintstore_stub = crate::stub::StubChip::new(
+            crate::stub::StubFiller::new(BaseAluAdapterFiller::new(bitwise_lu.clone())),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(hintstore_stub);
 
         Ok(())
     }

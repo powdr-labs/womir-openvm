@@ -232,6 +232,7 @@ mod loadstore;
 mod mul;
 // mod mulh;
 mod shift;
+mod stub;
 
 // pub use auipc::*;
 pub use base_alu::*;
