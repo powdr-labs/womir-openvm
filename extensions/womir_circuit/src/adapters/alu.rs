@@ -2,8 +2,8 @@ use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterTraceFiller, BasicAdapterInterface, ExecutionBridge,
-        ExecutionState, MinimalInstruction, VmAdapterAir, get_record_from_slice,
+        AdapterAirContext, AdapterTraceFiller, BasicAdapterInterface, MinimalInstruction,
+        VmAdapterAir, get_record_from_slice,
     },
     system::memory::{
         MemoryAddress, MemoryAuxColsFactory,
@@ -32,6 +32,8 @@ use openvm_stark_backend::{
     rap::ColumnsAir,
 };
 use struct_reflection::{StructReflection, StructReflectionHelper};
+
+use crate::execution::{ExecutionBridge, ExecutionState, FpKeepOrSet};
 
 use super::{RV32_CELL_BITS, tracing_read, tracing_read_imm, tracing_write};
 
@@ -113,7 +115,10 @@ impl<AB: InteractionBuilder, const NUM_LIMBS: usize> VmAdapterAir<AB>
 
         self.memory_bridge
             .read(
-                MemoryAddress::new(AB::F::from_canonical_u32(RV32_REGISTER_AS), local.rs1_ptr),
+                MemoryAddress::new(
+                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
+                    local.rs1_ptr + local.from_state.fp,
+                ),
                 ctx.reads[0].clone(),
                 timestamp_pp(),
                 &local.reads_aux[0],
@@ -126,7 +131,7 @@ impl<AB: InteractionBuilder, const NUM_LIMBS: usize> VmAdapterAir<AB>
             .assert_one(ctx.instruction.is_valid.clone());
         self.memory_bridge
             .read(
-                MemoryAddress::new(local.rs2_as, local.rs2),
+                MemoryAddress::new(local.rs2_as, local.rs2 + local.from_state.fp),
                 ctx.reads[1].clone(),
                 timestamp_pp(),
                 &local.reads_aux[1],
@@ -135,7 +140,10 @@ impl<AB: InteractionBuilder, const NUM_LIMBS: usize> VmAdapterAir<AB>
 
         self.memory_bridge
             .write(
-                MemoryAddress::new(AB::F::from_canonical_u32(RV32_REGISTER_AS), local.rd_ptr),
+                MemoryAddress::new(
+                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
+                    local.rd_ptr + local.from_state.fp,
+                ),
                 ctx.writes[0].clone(),
                 timestamp_pp(),
                 &local.writes_aux,
@@ -155,6 +163,7 @@ impl<AB: InteractionBuilder, const NUM_LIMBS: usize> VmAdapterAir<AB>
                 local.from_state,
                 AB::F::from_canonical_usize(timestamp_delta),
                 (DEFAULT_PC_STEP, ctx.to_pc),
+                FpKeepOrSet::<AB::Expr>::Keep,
             )
             .eval(builder, ctx.instruction.is_valid);
     }
@@ -346,5 +355,6 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> AdapterTra
         adapter_row.rd_ptr = F::from_canonical_u32(record.rd_ptr);
         adapter_row.from_state.timestamp = F::from_canonical_u32(timestamp);
         adapter_row.from_state.pc = F::from_canonical_u32(record.from_pc);
+        adapter_row.from_state.fp = F::from_canonical_u32(record.fp);
     }
 }
