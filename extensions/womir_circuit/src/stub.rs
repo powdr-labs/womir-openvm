@@ -2,11 +2,12 @@
 //! These allow the proving path to compile and run without actual constraints.
 
 use openvm_circuit::arch::{
-    AdapterAirContext, BasicAdapterInterface, ExecutionBridge, MinimalInstruction, TraceFiller,
+    AdapterAirContext, BasicAdapterInterface, MinimalInstruction, TraceFiller,
     VmChipWrapper, VmCoreAir,
 };
 use openvm_circuit::system::memory::MemoryAuxColsFactory;
 use openvm_circuit::system::memory::offline_checker::MemoryBridge;
+use crate::execution::ExecutionBridge;
 use openvm_circuit_primitives::bitwise_op_lookup::BitwiseOperationLookupBus;
 use openvm_stark_backend::{
     p3_air::BaseAir,

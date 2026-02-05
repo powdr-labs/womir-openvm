@@ -4,7 +4,7 @@ use std::mem::size_of;
 use openvm_circuit::{
     arch::{
         AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller, BasicAdapterInterface,
-        ExecutionBridge, ExecutionState, MinimalInstruction, VmAdapterAir, get_record_from_slice,
+        MinimalInstruction, VmAdapterAir, get_record_from_slice,
     },
     system::memory::{
         MemoryAddress, MemoryAuxColsFactory,
