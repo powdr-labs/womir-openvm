@@ -616,14 +616,6 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_add_exec() -> Result<(), Box<dyn std::error::Error>> {
-        let instructions = vec![wom::add_imm::<F>(8, 0, 666_i16.into()), wom::halt()];
-
-        // Output check disabled - reveal uses LoadStore which has no AIR yet
-        run_vm_test("Basic add proof", instructions, 0, None)
-    }
-
-    #[test]
     fn test_basic_add_proof() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![wom::add_imm::<F>(8, 0, 666_i16.into()), wom::halt()];
 
