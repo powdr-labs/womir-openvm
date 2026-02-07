@@ -1,5 +1,6 @@
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::{MemoryAuxColsFactory, online::TracingMemory};
+use openvm_circuit_primitives::bitwise_op_lookup::NUM_BITWISE_OP_LOOKUP_COLS;
 use openvm_circuit_primitives::{
     AlignedBytesBorrow,
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
@@ -19,16 +20,15 @@ use openvm_stark_backend::{
     p3_field::{Field, FieldAlgebra},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
-use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, Eq64Opcode, EqOpcode,
-    HintStoreOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom,
-    Shift64Opcode, ShiftOpcode,
-};
+use openvm_womir_transpiler::ConstOpcodes;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
-pub struct ConstsCoreCols<T> {
-    pub is_valid: T,
+pub struct Const32CoreCols<T, const NUM_LIMBS: usize> {
+    pub is_valid: T, // Do we still need this?
+    target_reg: T,
+    imm_lo: [T; NUM_LIMBS], // How to divide the limbs for higher and lower bits, just divided by 2? here should be half number of limbs.
+    imm_hi: [T; NUM_LIMBS],
 }
 
 #[derive(Copy, Clone, Debug, derive_new::new)]
@@ -41,7 +41,7 @@ impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAir<F>
     for Const32CoreAir<NUM_LIMBS, LIMB_BITS>
 {
     fn width(&self) -> usize {
-        ConstsCoreCols::<F>::width()
+        Const32CoreCols::<F, NUM_LIMBS>::width()
     }
 }
 
@@ -49,7 +49,7 @@ impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> ColumnsAir<F>
     for Const32CoreAir<NUM_LIMBS, LIMB_BITS>
 {
     fn columns(&self) -> Option<Vec<String>> {
-        ConstsCoreCols::<F>::struct_reflection()
+        Const32CoreCols::<F, NUM_LIMBS>::struct_reflection()
     }
 }
 
