@@ -21,11 +21,12 @@ use openvm_stark_backend::{
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
 use openvm_womir_transpiler::ConstOpcodes;
+use std::borrow::Borrow;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
-pub struct Const32CoreCols<T, const NUM_LIMBS: usize> {
-    pub is_valid: T, // Do we still need this?
+pub struct Const32CoreCols<T, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
+    // pub is_valid: T,  in Alu chip, is valid is not in the chip cols, should it be here?
     target_reg: T,
     imm_lo: [T; NUM_LIMBS], // How to divide the limbs for higher and lower bits, just divided by 2? here should be half number of limbs.
     imm_hi: [T; NUM_LIMBS],
@@ -41,7 +42,7 @@ impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAir<F>
     for Const32CoreAir<NUM_LIMBS, LIMB_BITS>
 {
     fn width(&self) -> usize {
-        Const32CoreCols::<F, NUM_LIMBS>::width()
+        Const32CoreCols::<F, NUM_LIMBS, LIMB_BITS>::width()
     }
 }
 
@@ -49,7 +50,7 @@ impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> ColumnsAir<F>
     for Const32CoreAir<NUM_LIMBS, LIMB_BITS>
 {
     fn columns(&self) -> Option<Vec<String>> {
-        Const32CoreCols::<F, NUM_LIMBS>::struct_reflection()
+        Const32CoreCols::<F, NUM_LIMBS, LIMB_BITS>::struct_reflection()
     }
 }
 
@@ -73,27 +74,89 @@ where
         local_core: &[AB::Var],
         _from_pc: AB::Var,
     ) -> AdapterAirContext<AB::Expr, I> {
-        // let core_cols: &ConstsCoreCols<_> = local_core.borrow();
+        let core_cols: &Const32CoreCols<_, NUM_LIMBS, LIMB_BITS> = local_core.borrow();
 
-        // // Need at least one constraint otherwise stark-backend complains.
-        // builder.assert_bool(core_cols.is_valid);
+        let opcode = VmCoreAir::<AB, I>::expr_to_global_expr(
+            self,
+            AB::Expr::from_canonical_usize(ConstOpcodes::CONST32 as usize),
+        );
 
-        // let opcode = VmCoreAir::<AB, I>::expr_to_global_expr(
-        //     self,
-        //     AB::Expr::from_canonical_usize(ConstOpcodes::CONST32 as usize),
-        // );
+        let is_valid = AB::Expr::default();
+        builder.assert_bool(is_valid.clone());
 
-        // AdapterAirContext {
-        //     to_pc: None,
-        //     reads: [].into(),
-        //     writes: [[AB::Expr::ZERO; RV32_REGISTER_NUM_LIMBS]].into(),
-        //     instruction: MinimalInstruction {
-        //         is_valid: core_cols.is_valid.into(),
-        //         opcode,
+        let target_reg = &core_cols.target_reg;
+        let imm_lo = &core_cols.imm_lo;
+        let imm_hi = &core_cols.imm_hi;
+
+        // step 1: Extract immediates (16-bit values in b and c)
+        // let imm_lo = b.as_canonical_u32() & 0xFFFF;
+        // let imm_hi = c.as_canonical_u32() & 0xFFFF;
+
+        // check imm_lo and imm_hi are within 16 bits
+        let number_of_limbs = (16 + LIMB_BITS - 1) / LIMB_BITS; // Number of limbs needed to represent 16 bits
+        for i in 0..number_of_limbs {
+            self.bus
+                .send_range(imm_lo[i], imm_hi[i])
+                .eval(builder, is_valid.clone());
+        }
+
+        for i in number_of_limbs..NUM_LIMBS {
+            builder.assert_zero(imm_lo[i]);
+            builder.assert_zero(imm_hi[i]);
+        }
+
+        // step 2: Combine to form 32-bit immediate
+        // let imm = (imm_hi << 16) | imm_lo;
+        // This step can be skipped since the result immediate will be decomposed into limbs again, we can get the limbs of the results from the limbs of imm_lo and imm_hi directly
+
+        // let imm = {
+        //     let mut imm = AB::Expr::ZERO;
+        //     for i in 0..number_of_limbs {
+        //         let limb_lo = imm_lo[i];
+        //         let limb_hi = imm_hi[i];
+
+        //         let shift_lo = AB::Expr::from_canonical_usize(1 << (i * LIMB_BITS));
+        //         let shift_hi = AB::Expr::from_canonical_usize(1 << (16 + i * LIMB_BITS));
+
+        //         imm = imm + (limb_lo * shift_lo);
+        //         imm = imm + (limb_hi * shift_hi);
         //     }
-        //     .into(),
+        //     imm
+        // };
+
+        // step 3: Decompose into limbs
+        // This step can be skipped as well.
+        //let value = decompose_u32::<NUM_LIMBS, LIMB_BITS>(imm);
+
+        // Write to register at (fp + target_reg)
+        // let target_addr = a.as_canonical_u32() + fp;
+        // unsafe {
+        //     state
+        //         .memory
+        //         .write::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
+        //             RV32_REGISTER_AS,
+        //             target_addr,
+        //             value,
+        //         );
         // }
-        unimplemented!()
+
+        // Last step: Increment PC, done in adapter.
+        //*state.pc = state.pc.wrapping_add(DEFAULT_PC_STEP);
+
+        let writes = core::array::from_fn(|i| {
+            if i < number_of_limbs {
+                imm_hi[i].clone()
+            } else {
+                imm_lo[i - number_of_limbs].clone()
+            }
+        });
+
+        AdapterAirContext {
+            to_pc: None,
+            reads: [].into(),
+            writes: [writes.map(|x| x.into())].into(),
+            instruction: MinimalInstruction { is_valid, opcode }.into(),
+        }
     }
 
     fn start_offset(&self) -> usize {
