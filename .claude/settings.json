@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo doc:*)"
     ]
   }
 }

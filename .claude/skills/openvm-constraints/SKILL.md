@@ -137,7 +137,7 @@ Include `crate::execution::{ExecutionBridge, ExecutionState}`, NOT the OpenVM va
 
 ### Core (OpenVM Upstream)
 
-The core ([source](https://raw.githubusercontent.com/openvm-org/openvm/refs/heads/main/extensions/rv32im/circuit/src/base_alu/core.rs)) in this case can be re-used from OpenVM. It implements `VmCoreAir` and constrains the ALU operations.
+The core ([source](https://raw.githubusercontent.com/powdr-labs/openvm/refs/tags/v1.4.2-powdr-rc.1/extensions/rv32im/circuit/src/base_alu/core.rs)) in this case can be re-used from OpenVM. It implements `VmCoreAir` and constrains the ALU operations.
 
 Columns include the operand and result limbs, plus some internal columns (in this case flags):
 ```rust
@@ -224,7 +224,7 @@ fn eval(&self, builder: &mut AB, local: &[AB::Var], _from_pc: AB::Var) -> Adapte
 | Component | Link | Lines |
 |-----------|------|-------|
 | VmAirWrapper | [integration_api.rs](https://raw.githubusercontent.com/powdr-labs/openvm/refs/tags/v1.4.2-powdr-rc.1/crates/vm/src/arch/integration_api.rs) | 268-278 |
-| BaseAluCoreAir | [core.rs](https://raw.githubusercontent.com/openvm-org/openvm/refs/heads/main/extensions/rv32im/circuit/src/base_alu/core.rs) | 68-161 |
+| BaseAluCoreAir | [core.rs](https://raw.githubusercontent.com/powdr-labs/openvm/refs/tags/v1.4.2-powdr-rc.1/extensions/rv32im/circuit/src/base_alu/core.rs) | 68-161 |
 
 **Raw URL format**: `https://raw.githubusercontent.com/org/repo/refs/tags/TAG/path`
 
