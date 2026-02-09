@@ -32,18 +32,7 @@ use crate::{
     *,
 };
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "cuda")] {
-        mod cuda;
-        pub use cuda::{
-            WomirGpuProverExt as WomirProverExt,
-        };
-    } else {
-        pub use self::{
-            WomirCpuProverExt as WomirProverExt,
-        };
-    }
-}
+pub use self::WomirCpuProverExt as WomirProverExt;
 
 // ============ Extension Struct Definitions ============
 
