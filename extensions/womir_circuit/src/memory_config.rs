@@ -14,7 +14,7 @@ pub fn memory_config() -> MemoryConfig {
     memory_config
 }
 
-/// Utility trait to read the frame pointer from memory, used in the ALU adapter.
+/// Utility trait to read the frame pointer from memory, used in preflight and execution.
 pub trait FpMemory {
     fn fp(&self) -> u32;
 
