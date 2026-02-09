@@ -1,3 +1,10 @@
+//! This module is largely a copy of extensions/rv32im/circuit/src/base_alu/execution.rs.
+//! The only differences are:
+//! - OpenVM's `BaseAluExecutor` is wrapped to allow for trait implementations.
+//! - In `execute_e12_impl`, we retrieve and add the frame pointer.
+//!
+//! This file could be condensed a lot if more of the OpenVM code was public.
+
 use std::{
     borrow::{Borrow, BorrowMut},
     mem::size_of,
