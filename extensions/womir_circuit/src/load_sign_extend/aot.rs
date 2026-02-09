@@ -1,20 +1,20 @@
 use openvm_circuit::arch::{
+    aot::common::{convert_x86_reg, Width, RISCV_TO_X86_OVERRIDE_MAP},
     AotError, AotExecutor, AotMeteredExecutor, SystemConfig,
-    aot::common::{RISCV_TO_X86_OVERRIDE_MAP, Width, convert_x86_reg},
 };
 use openvm_instructions::{
-    LocalOpcode,
     instruction::Instruction,
     riscv::{RV32_IMM_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
+    LocalOpcode,
 };
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
 #[allow(unused_imports)]
-use crate::{BaseAluExecutor, adapters::imm_to_bytes, common::*};
+use crate::{adapters::imm_to_bytes, common::*, BaseAluExecutor};
 use crate::{
-    LoadSignExtendExecutor,
     common::{address_space_start_to_gpr, gpr_to_rv32_register},
+    LoadSignExtendExecutor,
 };
 
 impl<F, A, const LIMB_BITS: usize> AotExecutor<F>

@@ -1,18 +1,18 @@
 use openvm_circuit::arch::{
+    aot::common::{convert_x86_reg, Width, RISCV_TO_X86_OVERRIDE_MAP},
     AotError, AotExecutor, AotMeteredExecutor, SystemConfig,
-    aot::common::{RISCV_TO_X86_OVERRIDE_MAP, Width, convert_x86_reg},
 };
 use openvm_instructions::{
-    LocalOpcode, NATIVE_AS,
     instruction::Instruction,
     riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
+    LocalOpcode, NATIVE_AS,
 };
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
 #[allow(unused_imports)]
-use crate::{BaseAluExecutor, adapters::imm_to_bytes, common::*};
-use crate::{LoadStoreExecutor, common::address_space_start_to_gpr};
+use crate::{adapters::imm_to_bytes, common::*, BaseAluExecutor};
+use crate::{common::address_space_start_to_gpr, LoadStoreExecutor};
 
 impl<F, A, const NUM_CELLS: usize> AotExecutor<F> for LoadStoreExecutor<A, NUM_CELLS>
 where

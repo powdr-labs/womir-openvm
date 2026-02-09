@@ -9,26 +9,28 @@ use openvm_cuda_backend::{
     base::DeviceMatrix, chip::get_empty_air_proving_ctx, prover_backend::GpuBackend, types::F,
 };
 use openvm_cuda_common::copy::MemCopyH2D;
-use openvm_stark_backend::{Chip, prover::types::AirProvingContext};
+use openvm_stark_backend::{prover::types::AirProvingContext, Chip};
 
 use crate::{
-    BaseAluCoreCols, BaseAluCoreRecord,
-    adapters::{BaseAluAdapterCols, BaseAluAdapterRecord, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS},
+    adapters::{
+        Rv32BaseAluAdapterCols, Rv32BaseAluAdapterRecord, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS,
+    },
     cuda_abi::alu_cuda::tracegen,
+    BaseAluCoreCols, BaseAluCoreRecord,
 };
 
 #[derive(new)]
-pub struct BaseAluChipGpu<const NUM_LIMBS: usize> {
+pub struct Rv32BaseAluChipGpu {
     pub range_checker: Arc<VariableRangeCheckerChipGPU>,
     pub bitwise_lookup: Arc<BitwiseOperationLookupChipGPU<RV32_CELL_BITS>>,
     pub timestamp_max_bits: usize,
 }
 
-impl<const NUM_LIMBS: usize> Chip<DenseRecordArena, GpuBackend> for BaseAluChipGpu<NUM_LIMBS> {
+impl Chip<DenseRecordArena, GpuBackend> for Rv32BaseAluChipGpu {
     fn generate_proving_ctx(&self, arena: DenseRecordArena) -> AirProvingContext<GpuBackend> {
         const RECORD_SIZE: usize = size_of::<(
-            BaseAluAdapterRecord<NUM_LIMBS>,
-            BaseAluCoreRecord<NUM_LIMBS>,
+            Rv32BaseAluAdapterRecord,
+            BaseAluCoreRecord<RV32_REGISTER_NUM_LIMBS>,
         )>();
         let records = arena.allocated();
         if records.is_empty() {
@@ -36,8 +38,8 @@ impl<const NUM_LIMBS: usize> Chip<DenseRecordArena, GpuBackend> for BaseAluChipG
         }
         debug_assert_eq!(records.len() % RECORD_SIZE, 0);
 
-        let trace_width = BaseAluCoreCols::<F, NUM_LIMBS, RV32_CELL_BITS>::width()
-            + BaseAluAdapterCols::<F, NUM_LIMBS>::width();
+        let trace_width = BaseAluCoreCols::<F, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>::width()
+            + Rv32BaseAluAdapterCols::<F>::width();
         let trace_height = next_power_of_two_or_zero(records.len() / RECORD_SIZE);
 
         let d_records = records.to_device().unwrap();

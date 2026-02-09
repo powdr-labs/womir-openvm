@@ -546,6 +546,22 @@ mod tests {
     }
 
     #[test]
+    fn test_basic_add() -> Result<(), Box<dyn std::error::Error>> {
+        let instructions = vec![
+            // wom::const_32_imm(0, 0, 0),
+            wom::add_imm::<F>(8, 0, 666_i16.into()),
+            wom::add_imm::<F>(9, 0, 1_i16.into()),
+            wom::add::<F>(10, 8, 9),
+            // wom::reveal(10, 0),
+            wom::halt(),
+        ];
+
+        // TODO uncomment when reveal is added back
+        // run_vm_test("Basic WOM operations", instructions, 667, None)
+        run_vm_test("Basic WOM operations", instructions, 0, None)
+    }
+
+    #[test]
     fn test_basic_wom_operations() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),

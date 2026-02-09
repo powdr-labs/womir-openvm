@@ -6,14 +6,14 @@ use std::{
 
 use openvm_circuit::{
     arch::*,
-    system::memory::{POINTER_MAX_BITS, online::GuestMemory},
+    system::memory::{online::GuestMemory, POINTER_MAX_BITS},
 };
 use openvm_circuit_primitives::AlignedBytesBorrow;
 use openvm_instructions::{
-    LocalOpcode, NATIVE_AS,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_IMM_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
+    LocalOpcode, NATIVE_AS,
 };
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::p3_field::PrimeField32;
@@ -269,11 +269,9 @@ unsafe fn execute_e1_impl<
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) -> Result<(), ExecutionError> {
-    unsafe {
-        let pre_compute: &LoadStorePreCompute =
-            std::slice::from_raw_parts(pre_compute, size_of::<LoadStorePreCompute>()).borrow();
-        execute_e12_impl::<F, CTX, T, OP, ENABLED>(pre_compute, exec_state)
-    }
+    let pre_compute: &LoadStorePreCompute =
+        std::slice::from_raw_parts(pre_compute, size_of::<LoadStorePreCompute>()).borrow();
+    execute_e12_impl::<F, CTX, T, OP, ENABLED>(pre_compute, exec_state)
 }
 
 #[create_handler]
@@ -288,15 +286,13 @@ unsafe fn execute_e2_impl<
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) -> Result<(), ExecutionError> {
-    unsafe {
-        let pre_compute: &E2PreCompute<LoadStorePreCompute> =
-            std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<LoadStorePreCompute>>())
-                .borrow();
-        exec_state
-            .ctx
-            .on_height_change(pre_compute.chip_idx as usize, 1);
-        execute_e12_impl::<F, CTX, T, OP, ENABLED>(&pre_compute.data, exec_state)
-    }
+    let pre_compute: &E2PreCompute<LoadStorePreCompute> =
+        std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<LoadStorePreCompute>>())
+            .borrow();
+    exec_state
+        .ctx
+        .on_height_change(pre_compute.chip_idx as usize, 1);
+    execute_e12_impl::<F, CTX, T, OP, ENABLED>(&pre_compute.data, exec_state)
 }
 
 trait LoadStoreOp<T> {
