@@ -4,8 +4,8 @@ use derive_more::derive::From;
 use openvm_circuit::{
     arch::{
         AirInventory, AirInventoryError, ChipInventory, ChipInventoryError,
-        ExecutionBridge as OVMExecutionBridge, ExecutorInventoryBuilder, ExecutorInventoryError,
-        RowMajorMatrixArena, VmCircuitExtension, VmExecutionExtension, VmProverExtension,
+        ExecutorInventoryBuilder, ExecutorInventoryError, RowMajorMatrixArena, VmCircuitExtension,
+        VmExecutionExtension, VmProverExtension,
     },
     system::{SystemPort, memory::SharedMemoryHelper},
 };
@@ -26,7 +26,11 @@ use openvm_womir_transpiler::{BaseAluOpcode, LoadStoreOpcode};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
-use crate::{adapters::*, *};
+use crate::{
+    adapters::*,
+    execution::{ExecutionBridge, FpBus},
+    *,
+};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "cuda")] {
@@ -125,7 +129,10 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             memory_bridge,
         } = inventory.system().port();
 
-        let exec_bridge = OVMExecutionBridge::new(execution_bus, program_bus);
+        // TODO: Need to extend VmConnectorChip to also initialize & finalize the fp bus.
+        // (https://github.com/powdr-labs/womir-openvm/issues/124)
+        let fp_bus = FpBus::new(inventory.new_bus_idx());
+        let exec_bridge = ExecutionBridge::new(execution_bus, fp_bus, program_bus);
         let range_checker = inventory.range_checker().bus;
         let pointer_max_bits = inventory.pointer_max_bits();
 

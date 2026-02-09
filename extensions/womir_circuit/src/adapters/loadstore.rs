@@ -5,8 +5,8 @@ use std::{
 
 use openvm_circuit::{
     arch::{
-        AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller, ExecutionBridge,
-        ExecutionState, VmAdapterAir, VmAdapterInterface, get_record_from_slice,
+        AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller, VmAdapterAir,
+        VmAdapterInterface, get_record_from_slice,
     },
     system::{
         memory::{
@@ -40,6 +40,8 @@ use openvm_stark_backend::{
     rap::ColumnsAir,
 };
 use struct_reflection::{StructReflection, StructReflectionHelper};
+
+use crate::execution::{ExecutionBridge, ExecutionState};
 
 use super::RV32_REGISTER_NUM_LIMBS;
 use super::{RV32_CELL_BITS, memory_read, timed_write, tracing_read};
@@ -288,6 +290,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
                 local_cols.from_state,
                 ExecutionState {
                     pc: to_pc,
+                    fp: local_cols.from_state.fp.into(),
                     timestamp: timestamp + AB::F::from_canonical_usize(timestamp_delta),
                 },
             )
@@ -304,6 +307,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
 #[derive(AlignedBytesBorrow, Debug)]
 pub struct Rv32LoadStoreAdapterRecord {
     pub from_pc: u32,
+    pub fp: u32,
     pub from_timestamp: u32,
 
     pub rs1_ptr: u32,
@@ -562,6 +566,7 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for Rv32LoadStoreAdapterFiller {
         adapter_row.rs1_ptr = F::from_canonical_u32(record.rs1_ptr);
 
         adapter_row.from_state.timestamp = F::from_canonical_u32(record.from_timestamp);
+        adapter_row.from_state.fp = F::from_canonical_u32(record.fp);
         adapter_row.from_state.pc = F::from_canonical_u32(record.from_pc);
     }
 }
