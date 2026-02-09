@@ -3,6 +3,7 @@ use std::{
     mem::size_of,
 };
 
+use crate::memory_config::FpMemory;
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
@@ -276,17 +277,18 @@ unsafe fn execute_e12_impl<
     pre_compute: &BaseAluPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
-    let rs1 = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, pre_compute.b as u32);
+    let fp = exec_state.memory.fp();
+    let rs1 = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
     let rs2 = if IS_IMM {
         pre_compute.c.to_le_bytes()
     } else {
-        exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, pre_compute.c)
+        exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, fp + pre_compute.c)
     };
     let rs1 = u32::from_le_bytes(rs1);
     let rs2 = u32::from_le_bytes(rs2);
     let rd = <OP as AluOp>::compute(rs1, rs2);
     let rd = rd.to_le_bytes();
-    exec_state.vm_write::<u8, 4>(RV32_REGISTER_AS, pre_compute.a as u32, &rd);
+    exec_state.vm_write::<u8, 4>(RV32_REGISTER_AS, fp + (pre_compute.a as u32), &rd);
     let pc = exec_state.pc();
     exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
 }
