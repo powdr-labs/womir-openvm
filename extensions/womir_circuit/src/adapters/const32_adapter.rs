@@ -1,10 +1,11 @@
-use crate::execution::{ExecutionBridge, ExecutionState};
+use crate::execution::{ExecutionBridge, ExecutionState, FpKeepOrSet};
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::MemoryAddress;
 use openvm_circuit::system::memory::offline_checker::MemoryWriteAuxCols;
 use openvm_circuit::system::memory::{MemoryAuxColsFactory, offline_checker::MemoryBridge};
 use openvm_circuit_primitives::AlignedBytesBorrow;
 use openvm_circuit_primitives_derive::AlignedBorrow;
+use openvm_instructions::program::DEFAULT_PC_STEP;
 use openvm_instructions::riscv::RV32_REGISTER_AS;
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
@@ -17,10 +18,12 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 // Cols for CONST32 adapter - minimal structure since we just write immediates
 #[repr(C)]
 #[derive(AlignedBorrow, Clone, Copy, Debug, StructReflection)]
-pub struct Const32AdapterCols<T, const NUM_LIMBS: usize> {
+pub struct Consts32AdapterColsWom<T, const NUM_LIMBS: usize> {
     pub from_state: ExecutionState<T>,
     pub target_reg: T,
-    pub writes_aux: MemoryWriteAuxCols<T, NUM_LIMBS>,
+    pub lo: T,
+    pub hi: T,
+    pub write_aux: MemoryWriteAuxCols<T, NUM_LIMBS>,
 }
 
 // AIR for CONST32 adapter
@@ -32,13 +35,13 @@ pub struct Const32AdapterAir<const NUM_LIMBS: usize> {
 
 impl<F: Field, const NUM_LIMBS: usize> BaseAir<F> for Const32AdapterAir<NUM_LIMBS> {
     fn width(&self) -> usize {
-        Const32AdapterCols::<F, NUM_LIMBS>::width()
+        Consts32AdapterColsWom::<F, NUM_LIMBS>::width()
     }
 }
 
 impl<F: Field, const NUM_LIMBS: usize> ColumnsAir<F> for Const32AdapterAir<NUM_LIMBS> {
     fn columns(&self) -> Option<Vec<String>> {
-        Const32AdapterCols::<F, NUM_LIMBS>::struct_reflection()
+        Consts32AdapterColsWom::<F, NUM_LIMBS>::struct_reflection()
     }
 }
 
@@ -55,7 +58,14 @@ where
         local: &[AB::Var],
         ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local: &Const32AdapterCols<_, NUM_LIMBS> = local.borrow();
+        let local: &Consts32AdapterColsWom<_, NUM_LIMBS> = local.borrow();
+
+        let timestamp = local.from_state.timestamp;
+        let mut timestamp_delta: usize = 0;
+        let mut timestamp_pp = || {
+            timestamp_delta += 1;
+            timestamp + AB::F::from_canonical_usize(timestamp_delta - 1)
+        };
 
         self.memory_bridge
             .write(
@@ -64,14 +74,32 @@ where
                     local.target_reg + local.from_state.fp,
                 ),
                 ctx.writes[0].clone(),
-                local.from_state.timestamp + AB::F::ONE,
-                &local.writes_aux,
+                timestamp_pp(),
+                &local.write_aux,
             )
             .eval(builder, ctx.instruction.is_valid.clone());
+
+        self.execution_bridge
+            .execute_and_increment_or_set_pc(
+                ctx.instruction.opcode,
+                [
+                    local.target_reg.into(),
+                    local.lo.into(),
+                    local.hi.into(),
+                    AB::Expr::ZERO,
+                    AB::Expr::ZERO,
+                    AB::Expr::ONE,
+                ],
+                local.from_state,
+                AB::F::from_canonical_usize(timestamp_delta),
+                (DEFAULT_PC_STEP, ctx.to_pc),
+                FpKeepOrSet::<AB::Expr>::Keep,
+            )
+            .eval(builder, ctx.instruction.is_valid);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &Const32AdapterCols<_, NUM_LIMBS> = local.borrow();
+        let cols: &Consts32AdapterColsWom<_, NUM_LIMBS> = local.borrow();
         cols.target_reg
     }
 }

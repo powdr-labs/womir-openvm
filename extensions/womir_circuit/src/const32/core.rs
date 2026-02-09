@@ -1,11 +1,6 @@
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::{MemoryAuxColsFactory, online::TracingMemory};
-use openvm_circuit_primitives::bitwise_op_lookup::NUM_BITWISE_OP_LOOKUP_COLS;
-use openvm_circuit_primitives::{
-    AlignedBytesBorrow,
-    bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
-    utils::not,
-};
+use openvm_circuit_primitives::bitwise_op_lookup::BitwiseOperationLookupBus;
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::LocalOpcode;
 use openvm_instructions::{
@@ -16,7 +11,7 @@ use openvm_instructions::{
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
-    p3_air::{AirBuilder, BaseAir},
+    p3_air::BaseAir,
     p3_field::{Field, FieldAlgebra},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
@@ -26,9 +21,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 #[repr(C)]
 #[derive(Debug, Clone, AlignedBorrow, StructReflection)]
 pub struct Const32CoreCols<T, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
-    // pub is_valid: T,  in Alu chip, is valid is not in the chip cols, should it be here?
-    target_reg: T,
-    imm_lo: [T; NUM_LIMBS], // How to divide the limbs for higher and lower bits, just divided by 2? here should be half number of limbs.
+    imm_lo: [T; NUM_LIMBS],
     imm_hi: [T; NUM_LIMBS],
 }
 
@@ -84,7 +77,6 @@ where
         let is_valid = AB::Expr::default();
         builder.assert_bool(is_valid.clone());
 
-        let target_reg = &core_cols.target_reg;
         let imm_lo = &core_cols.imm_lo;
         let imm_hi = &core_cols.imm_hi;
 
@@ -109,36 +101,13 @@ where
         // let imm = (imm_hi << 16) | imm_lo;
         // This step can be skipped since the result immediate will be decomposed into limbs again, we can get the limbs of the results from the limbs of imm_lo and imm_hi directly
 
-        // let imm = {
-        //     let mut imm = AB::Expr::ZERO;
-        //     for i in 0..number_of_limbs {
-        //         let limb_lo = imm_lo[i];
-        //         let limb_hi = imm_hi[i];
-
-        //         let shift_lo = AB::Expr::from_canonical_usize(1 << (i * LIMB_BITS));
-        //         let shift_hi = AB::Expr::from_canonical_usize(1 << (16 + i * LIMB_BITS));
-
-        //         imm = imm + (limb_lo * shift_lo);
-        //         imm = imm + (limb_hi * shift_hi);
-        //     }
-        //     imm
-        // };
-
         // step 3: Decompose into limbs
         // This step can be skipped as well.
         //let value = decompose_u32::<NUM_LIMBS, LIMB_BITS>(imm);
 
-        // Write to register at (fp + target_reg)
+        // step 4: Write to register at (fp + target_reg)
         // let target_addr = a.as_canonical_u32() + fp;
-        // unsafe {
-        //     state
-        //         .memory
-        //         .write::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
-        //             RV32_REGISTER_AS,
-        //             target_addr,
-        //             value,
-        //         );
-        // }
+        // This step is handled in the adapter
 
         // Last step: Increment PC, done in adapter.
         //*state.pc = state.pc.wrapping_add(DEFAULT_PC_STEP);
