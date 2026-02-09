@@ -1,11 +1,14 @@
 use openvm_circuit::arch::*;
+use openvm_circuit::system::memory::MemoryAddress;
+use openvm_circuit::system::memory::offline_checker::MemoryWriteAuxCols;
 use openvm_circuit::system::memory::{MemoryAuxColsFactory, offline_checker::MemoryBridge};
 use openvm_circuit_primitives::AlignedBytesBorrow;
 use openvm_circuit_primitives_derive::AlignedBorrow;
+use openvm_instructions::riscv::RV32_REGISTER_AS;
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::BaseAir,
-    p3_field::{Field, PrimeField32},
+    p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
 use std::borrow::Borrow;
@@ -15,10 +18,9 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 #[repr(C)]
 #[derive(AlignedBorrow, Clone, Copy, Debug, StructReflection)]
 pub struct Const32AdapterCols<T, const NUM_LIMBS: usize> {
+    pub from_state: ExecutionState<T>,
     pub target_reg: T,
-    pub imm_lo: T,
-    pub imm_hi: T,
-    pub value: [T; NUM_LIMBS],
+    pub writes_aux: MemoryWriteAuxCols<T, NUM_LIMBS>,
 }
 
 // AIR for CONST32 adapter
@@ -49,11 +51,23 @@ where
 
     fn eval(
         &self,
-        _builder: &mut AB,
-        _local: &[AB::Var],
-        _ctx: AdapterAirContext<AB::Expr, Self::Interface>,
+        builder: &mut AB,
+        local: &[AB::Var],
+        ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        // Minimal implementation - constraints not needed yet for execution
+        let local: &Const32AdapterCols<_, NUM_LIMBS> = local.borrow();
+
+        self.memory_bridge
+            .write(
+                MemoryAddress::new(
+                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
+                    local.target_reg.clone(),
+                ),
+                ctx.writes[0].clone(),
+                local.from_state.timestamp + AB::F::ONE,
+                &local.writes_aux,
+            )
+            .eval(builder, ctx.instruction.is_valid.clone());
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
