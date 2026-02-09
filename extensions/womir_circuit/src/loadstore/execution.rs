@@ -118,7 +118,6 @@ where
         size_of::<LoadStorePreCompute>()
     }
 
-    #[cfg(not(feature = "tco"))]
     #[inline(always)]
     fn pre_compute<Ctx: ExecutionCtxTrait>(
         &self,
@@ -126,22 +125,6 @@ where
         inst: &Instruction<F>,
         data: &mut [u8],
     ) -> Result<ExecuteFunc<F, Ctx>, StaticProgramError> {
-        let pre_compute: &mut LoadStorePreCompute = data.borrow_mut();
-        let (local_opcode, enabled, is_native_store) =
-            self.pre_compute_impl(pc, inst, pre_compute)?;
-        dispatch!(execute_e1_handler, local_opcode, enabled, is_native_store)
-    }
-
-    #[cfg(feature = "tco")]
-    fn handler<Ctx>(
-        &self,
-        pc: u32,
-        inst: &Instruction<F>,
-        data: &mut [u8],
-    ) -> Result<Handler<F, Ctx>, StaticProgramError>
-    where
-        Ctx: ExecutionCtxTrait,
-    {
         let pre_compute: &mut LoadStorePreCompute = data.borrow_mut();
         let (local_opcode, enabled, is_native_store) =
             self.pre_compute_impl(pc, inst, pre_compute)?;
@@ -157,7 +140,6 @@ where
         size_of::<E2PreCompute<LoadStorePreCompute>>()
     }
 
-    #[cfg(not(feature = "tco"))]
     fn metered_pre_compute<Ctx>(
         &self,
         chip_idx: usize,
@@ -165,24 +147,6 @@ where
         inst: &Instruction<F>,
         data: &mut [u8],
     ) -> Result<ExecuteFunc<F, Ctx>, StaticProgramError>
-    where
-        Ctx: MeteredExecutionCtxTrait,
-    {
-        let pre_compute: &mut E2PreCompute<LoadStorePreCompute> = data.borrow_mut();
-        pre_compute.chip_idx = chip_idx as u32;
-        let (local_opcode, enabled, is_native_store) =
-            self.pre_compute_impl(pc, inst, &mut pre_compute.data)?;
-        dispatch!(execute_e2_handler, local_opcode, enabled, is_native_store)
-    }
-
-    #[cfg(feature = "tco")]
-    fn metered_handler<Ctx>(
-        &self,
-        chip_idx: usize,
-        pc: u32,
-        inst: &Instruction<F>,
-        data: &mut [u8],
-    ) -> Result<Handler<F, Ctx>, StaticProgramError>
     where
         Ctx: MeteredExecutionCtxTrait,
     {

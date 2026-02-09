@@ -7,13 +7,6 @@ mod core;
 mod execution;
 pub use core::*;
 
-#[cfg(feature = "cuda")]
-mod cuda;
-#[cfg(feature = "cuda")]
-pub use cuda::*;
-#[cfg(feature = "aot")]
-mod aot;
-
 pub type Rv32LoadSignExtendAir = VmAirWrapper<
     Rv32LoadStoreAdapterAir,
     LoadSignExtendCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
