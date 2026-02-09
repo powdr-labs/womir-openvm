@@ -1,4 +1,7 @@
 use openvm_circuit::arch::{VmAirWrapper, VmChipWrapper};
+use openvm_rv32im_circuit::BaseAluCoreAir;
+
+pub use crate::base_alu::core::{BaseAluExecutor, BaseAluFiller};
 
 use super::adapters::{
     RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, Rv32BaseAluAdapterAir, Rv32BaseAluAdapterExecutor,
@@ -7,12 +10,6 @@ use super::adapters::{
 
 mod core;
 mod execution;
-pub use core::*;
-
-#[cfg(feature = "cuda")]
-mod cuda;
-#[cfg(feature = "cuda")]
-pub use cuda::*;
 
 pub type Rv32BaseAluAir =
     VmAirWrapper<Rv32BaseAluAdapterAir, BaseAluCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>;
