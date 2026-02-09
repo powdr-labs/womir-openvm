@@ -2,7 +2,7 @@
 #![cfg_attr(feature = "tco", feature(explicit_tail_calls))]
 #![cfg_attr(feature = "tco", allow(internal_features))]
 #![cfg_attr(feature = "tco", feature(core_intrinsics))]
-use crate::memory_config::memory_config;
+use crate::memory_config::memory_config_with_fp;
 use openvm_circuit::{
     arch::{
         AirInventory, ChipInventoryError, InitFileGenerator, MatrixRecordArena, SystemConfig,
@@ -128,5 +128,5 @@ where
 }
 
 pub fn system_config() -> SystemConfig {
-    SystemConfig::default_from_memory(memory_config())
+    SystemConfig::default_from_memory(memory_config_with_fp())
 }
