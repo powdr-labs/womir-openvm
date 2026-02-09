@@ -1,3 +1,4 @@
+use crate::execution::{ExecutionBridge, ExecutionState};
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::MemoryAddress;
 use openvm_circuit::system::memory::offline_checker::MemoryWriteAuxCols;
@@ -13,7 +14,6 @@ use openvm_stark_backend::{
 };
 use std::borrow::Borrow;
 use struct_reflection::{StructReflection, StructReflectionHelper};
-
 // Cols for CONST32 adapter - minimal structure since we just write immediates
 #[repr(C)]
 #[derive(AlignedBorrow, Clone, Copy, Debug, StructReflection)]
@@ -61,7 +61,7 @@ where
             .write(
                 MemoryAddress::new(
                     AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local.target_reg.clone(),
+                    local.target_reg + local.from_state.fp,
                 ),
                 ctx.writes[0].clone(),
                 local.from_state.timestamp + AB::F::ONE,
