@@ -9,13 +9,6 @@ use crate::adapters::{Rv32LoadStoreAdapterAir, Rv32LoadStoreAdapterExecutor};
 
 mod execution;
 
-#[cfg(feature = "cuda")]
-mod cuda;
-#[cfg(feature = "cuda")]
-pub use cuda::*;
-#[cfg(feature = "aot")]
-mod aot;
-
 pub type Rv32LoadStoreAir =
     VmAirWrapper<Rv32LoadStoreAdapterAir, LoadStoreCoreAir<RV32_REGISTER_NUM_LIMBS>>;
 pub type Rv32LoadStoreExecutor =
