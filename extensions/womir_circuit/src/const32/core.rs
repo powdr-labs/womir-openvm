@@ -28,7 +28,7 @@ pub struct Const32CoreCols<T, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
 #[derive(Copy, Clone, Debug, derive_new::new)]
 pub struct Const32CoreAir<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
     pub bus: BitwiseOperationLookupBus,
-    offset: usize,
+    _offset: usize,
 }
 
 impl<F: Field, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAir<F>
@@ -85,7 +85,7 @@ where
         // let imm_hi = c.as_canonical_u32() & 0xFFFF;
 
         // check imm_lo and imm_hi are within 16 bits
-        let number_of_limbs = (16 + LIMB_BITS - 1) / LIMB_BITS; // Number of limbs needed to represent 16 bits
+        let number_of_limbs = 16_usize.div_ceil(LIMB_BITS); // Number of limbs needed to represent 16 bits
         for i in 0..number_of_limbs {
             self.bus
                 .send_range(imm_lo[i], imm_hi[i])
@@ -114,9 +114,9 @@ where
 
         let writes = core::array::from_fn(|i| {
             if i < number_of_limbs {
-                imm_hi[i].clone()
+                imm_hi[i]
             } else {
-                imm_lo[i - number_of_limbs].clone()
+                imm_lo[i - number_of_limbs]
             }
         });
 
