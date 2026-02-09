@@ -33,6 +33,7 @@ use openvm_instructions::{
     program::DEFAULT_PC_STEP,
     riscv::{RV32_IMM_AS, RV32_MEMORY_AS, RV32_REGISTER_AS},
 };
+use openvm_rv32im_circuit::adapters::LoadStoreInstruction;
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
@@ -46,29 +47,6 @@ use crate::execution::{ExecutionBridge, ExecutionState};
 
 use super::RV32_REGISTER_NUM_LIMBS;
 use super::{RV32_CELL_BITS, memory_read, timed_write, tracing_read};
-
-/// LoadStore Adapter handles all memory and register operations, so it must be aware
-/// of the instruction type, specifically whether it is a load or store
-/// LoadStore Adapter handles 4 byte aligned lw, sw instructions,
-///                           2 byte aligned lh, lhu, sh instructions and
-///                           1 byte aligned lb, lbu, sb instructions
-/// This adapter always batch reads/writes 4 bytes,
-/// thus it needs to shift left the memory pointer by some amount in case of not 4 byte aligned
-/// intermediate pointers
-pub struct LoadStoreInstruction<T> {
-    /// is_valid is constrained to be bool
-    pub is_valid: T,
-    /// Absolute opcode number
-    pub opcode: T,
-    /// is_load is constrained to be bool, and can only be 1 if is_valid is 1
-    pub is_load: T,
-
-    /// Keeping two separate shift amounts is needed for getting the read_ptr/write_ptr with degree
-    /// 2 load_shift_amount will be the shift amount if load and 0 if store
-    pub load_shift_amount: T,
-    /// store_shift_amount will be 0 if load and the shift amount if store
-    pub store_shift_amount: T,
-}
 
 pub struct Rv32LoadStoreAdapterAirInterface<AB: InteractionBuilder>(PhantomData<AB>);
 
