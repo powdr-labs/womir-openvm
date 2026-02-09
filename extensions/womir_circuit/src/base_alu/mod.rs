@@ -1,15 +1,14 @@
 use openvm_circuit::arch::{VmAirWrapper, VmChipWrapper};
-use openvm_rv32im_circuit::BaseAluCoreAir;
-
-pub use crate::base_alu::core::{BaseAluExecutor, BaseAluFiller};
+use openvm_rv32im_circuit::{BaseAluCoreAir, BaseAluFiller};
 
 use super::adapters::{
     RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, Rv32BaseAluAdapterAir, Rv32BaseAluAdapterExecutor,
     Rv32BaseAluAdapterFiller,
 };
 
-mod core;
 mod execution;
+
+use execution::BaseAluExecutor;
 
 pub type Rv32BaseAluAir =
     VmAirWrapper<Rv32BaseAluAdapterAir, BaseAluCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>>;
