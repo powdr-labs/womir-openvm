@@ -3455,34 +3455,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "openvm-womir-circuit"
-version = "0.0.1"
-dependencies = [
- "derive-new 0.6.0",
- "derive_more 1.0.0",
- "eyre",
- "itertools 0.14.0",
- "num-bigint 0.4.6",
- "num-integer",
- "openvm-circuit",
- "openvm-circuit-derive",
- "openvm-circuit-primitives",
- "openvm-circuit-primitives-derive",
- "openvm-instructions",
- "openvm-rv32im-circuit",
- "openvm-stark-backend",
- "openvm-stark-sdk",
- "openvm-womir-transpiler",
- "rand 0.8.5",
- "rustc-hash 2.1.1",
- "serde",
- "serde-big-array",
- "struct-reflection",
- "strum 0.26.3",
- "thiserror",
-]
-
-[[package]]
 name = "openvm-womir-transpiler"
 version = "0.0.1"
 dependencies = [
@@ -6078,7 +6050,6 @@ dependencies = [
  "openvm-stark-backend",
  "openvm-stark-sdk",
  "openvm-transpiler",
- "openvm-womir-circuit",
  "openvm-womir-transpiler",
  "powdr-autoprecompiles",
  "powdr-openvm",

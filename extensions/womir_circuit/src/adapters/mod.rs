@@ -11,19 +11,11 @@ use openvm_instructions::riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS};
 use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
 
 mod alu;
-mod branch;
-mod jalr;
 mod loadstore;
-// mod mul;
-// mod const32_adapter;
 mod rdwrite;
 
 pub use alu::*;
-pub use branch::*;
-pub use jalr::*;
 pub use loadstore::*;
-// pub use mul::*;
-// pub use const32_adapter::*;
 pub use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 pub use rdwrite::*;
 
