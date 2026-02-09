@@ -718,7 +718,8 @@ mod tests {
     }
 
     #[test]
-    fn test_mul_one() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_one() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 999_i16.into()),
@@ -727,7 +728,7 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Multiplication by one", instructions, 999, None)
+        run_vm_test("Multiplication by one", instructions, 999, None).unwrap()
     }
 
     #[test]
@@ -753,7 +754,8 @@ mod tests {
     }
 
     #[test]
-    fn test_mul_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_powers_of_two() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 7_i16.into()),
@@ -762,11 +764,12 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Multiplication by power of 2", instructions, 56, None)
+        run_vm_test("Multiplication by power of 2", instructions, 56, None).unwrap()
     }
 
     #[test]
-    fn test_mul_large_numbers() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_large_numbers() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             // Load large numbers
@@ -782,10 +785,12 @@ mod tests {
             4294049777u32,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    fn test_mul_overflow() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_overflow() {
         let instructions = vec![
             // Test multiplication that would overflow 32-bit
             wom::const_32_imm(0, 0, 0),
@@ -796,11 +801,12 @@ mod tests {
             wom::halt(),
         ];
         // In 32-bit arithmetic: 4,295,032,832 & 0xFFFFFFFF = 65536
-        run_vm_test("Multiplication with overflow", instructions, 65536, None)
+        run_vm_test("Multiplication with overflow", instructions, 65536, None).unwrap()
     }
 
     #[test]
-    fn test_mul_commutative() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_commutative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 13_i16.into()),
@@ -811,11 +817,12 @@ mod tests {
             wom::reveal(12, 0),
             wom::halt(),
         ];
-        run_vm_test("Multiplication commutativity", instructions, 0, None)
+        run_vm_test("Multiplication commutativity", instructions, 0, None).unwrap()
     }
 
     #[test]
-    fn test_mul_chain() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_chain() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 2_i16.into()),
@@ -826,11 +833,12 @@ mod tests {
             wom::reveal(12, 0),
             wom::halt(),
         ];
-        run_vm_test("Chained multiplication", instructions, 30, None)
+        run_vm_test("Chained multiplication", instructions, 30, None).unwrap()
     }
 
     #[test]
-    fn test_mul_max_value() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_max_value() {
         let instructions = vec![
             // Test with maximum 32-bit value
             wom::const_32_imm(0, 0, 0),
@@ -846,10 +854,12 @@ mod tests {
             0xFFFFFFFF,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    fn test_mul_negative_positive() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_negative_positive() {
         // Test multiplication of negative and positive numbers
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -866,10 +876,12 @@ mod tests {
             0xFFFFFFF1,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    fn test_mul_positive_negative() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_positive_negative() {
         // Test multiplication of positive and negative numbers
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -886,10 +898,12 @@ mod tests {
             0xFFFFFFE8,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    fn test_mul_both_negative() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_both_negative() {
         // Test multiplication of two negative numbers
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -899,11 +913,12 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Multiplication both negative", instructions, 21, None)
+        run_vm_test("Multiplication both negative", instructions, 21, None).unwrap()
     }
 
     #[test]
-    fn test_mul_negative_one() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_negative_one() {
         // Test multiplication by -1
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -920,10 +935,12 @@ mod tests {
             0xFFFFFFD6,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    fn test_mul_negative_overflow() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mul_negative_overflow() {
         // Test multiplication that would overflow with signed numbers
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -940,10 +957,12 @@ mod tests {
             0x80000000,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    fn test_basic_div() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_basic_div() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 100_i16.into()),
@@ -952,11 +971,12 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Basic division", instructions, 10, None)
+        run_vm_test("Basic division", instructions, 10, None).unwrap()
     }
 
     #[test]
-    fn test_div_by_one() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_div_by_one() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 999_i16.into()),
@@ -965,11 +985,12 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division by one", instructions, 999, None)
+        run_vm_test("Division by one", instructions, 999, None).unwrap()
     }
 
     #[test]
-    fn test_div_equal_numbers() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_div_equal_numbers() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 42_i16.into()),
@@ -978,11 +999,12 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division of equal numbers", instructions, 1, None)
+        run_vm_test("Division of equal numbers", instructions, 1, None).unwrap()
     }
 
     #[test]
-    fn test_div_with_remainder() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_div_with_remainder() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 17_i16.into()),
@@ -991,11 +1013,12 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division with remainder", instructions, 3, None)
+        run_vm_test("Division with remainder", instructions, 3, None).unwrap()
     }
 
     #[test]
-    fn test_div_zero_dividend() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_div_zero_dividend() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 0_i16.into()),
@@ -1004,11 +1027,12 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division of zero", instructions, 0, None)
+        run_vm_test("Division of zero", instructions, 0, None).unwrap()
     }
 
     #[test]
-    fn test_div_large_numbers() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_div_large_numbers() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0, 1000), // 65536000
@@ -1017,11 +1041,12 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division of large numbers", instructions, 256000, None)
+        run_vm_test("Division of large numbers", instructions, 256000, None).unwrap()
     }
 
     #[test]
-    fn test_div_powers_of_two() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_div_powers_of_two() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 128_i16.into()),
@@ -1030,11 +1055,12 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Division by power of 2", instructions, 16, None)
+        run_vm_test("Division by power of 2", instructions, 16, None).unwrap()
     }
 
     #[test]
-    fn test_div_chain() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_div_chain() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 120_i16.into()),
@@ -1045,11 +1071,12 @@ mod tests {
             wom::reveal(12, 0),
             wom::halt(),
         ];
-        run_vm_test("Chained division", instructions, 20, None)
+        run_vm_test("Chained division", instructions, 20, None).unwrap()
     }
 
     #[test]
-    fn test_div_negative_signed() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_div_negative_signed() {
         // Testing signed division with negative numbers
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1066,10 +1093,12 @@ mod tests {
             0xFFFFFFFB,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    fn test_div_both_negative() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_div_both_negative() {
         // Testing signed division with both numbers negative
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1079,11 +1108,12 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Signed division with both negative", instructions, 4, None)
+        run_vm_test("Signed division with both negative", instructions, 4, None).unwrap()
     }
 
     #[test]
-    fn test_div_and_mul_inverse() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_div_and_mul_inverse() {
         // Test that (a / b) * b ≈ a (with integer truncation)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1100,6 +1130,7 @@ mod tests {
             98,
             None,
         )
+        .unwrap()
     }
 
     #[test]
@@ -1412,7 +1443,8 @@ mod tests {
     }
 
     #[test]
-    fn test_const32_simple() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_const32_simple() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0x1234, 0x5678), // Load 0x56781234 into x8
@@ -1420,11 +1452,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CONST32 simple test", instructions, 0x56781234, None)
+        run_vm_test("CONST32 simple test", instructions, 0x56781234, None).unwrap()
     }
 
     #[test]
-    fn test_const32_zero() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_const32_zero() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(10, 0, 0), // Load 0 into x10
@@ -1432,11 +1465,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CONST32 zero test", instructions, 0, None)
+        run_vm_test("CONST32 zero test", instructions, 0, None).unwrap()
     }
 
     #[test]
-    fn test_const32_max_value() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_const32_max_value() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(12, 0xFFFF, 0xFFFF), // Load 0xFFFFFFFF into x12
@@ -1444,11 +1478,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CONST32 max value test", instructions, 0xFFFFFFFF, None)
+        run_vm_test("CONST32 max value test", instructions, 0xFFFFFFFF, None).unwrap()
     }
 
     #[test]
-    fn test_const32_multiple_registers() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_const32_multiple_registers() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
@@ -1458,11 +1493,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CONST32 multiple registers test", instructions, 300, None)
+        run_vm_test("CONST32 multiple registers test", instructions, 300, None).unwrap()
     }
 
     #[test]
-    fn test_const32_with_arithmetic() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_const32_with_arithmetic() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 1000, 0), // Load 1000 into x8
@@ -1474,11 +1510,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CONST32 with arithmetic test", instructions, 1200, None)
+        run_vm_test("CONST32 with arithmetic test", instructions, 1200, None).unwrap()
     }
 
     #[test]
-    fn test_lt_u_true() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_lt_u_true() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
@@ -1488,11 +1525,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLTU true test", instructions, 1, None)
+        run_vm_test("SLTU true test", instructions, 1, None).unwrap()
     }
 
     #[test]
-    fn test_lt_u_false() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_lt_u_false() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 200, 0), // Load 200 into x8
@@ -1502,11 +1540,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLTU false test", instructions, 0, None)
+        run_vm_test("SLTU false test", instructions, 0, None).unwrap()
     }
 
     #[test]
-    fn test_lt_u_equal() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_lt_u_equal() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 150, 0), // Load 150 into x8
@@ -1516,11 +1555,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLTU equal test", instructions, 0, None)
+        run_vm_test("SLTU equal test", instructions, 0, None).unwrap()
     }
 
     #[test]
-    fn test_lt_s_positive() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_lt_s_positive() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 50, 0),  // Load 50 into x8
@@ -1530,11 +1570,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLT positive numbers test", instructions, 1, None)
+        run_vm_test("SLT positive numbers test", instructions, 1, None).unwrap()
     }
 
     #[test]
-    fn test_lt_s_negative() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_lt_s_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFF, 0xFFFF), // Load -1 into x8
@@ -1544,11 +1585,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLT negative vs positive test", instructions, 1, None)
+        run_vm_test("SLT negative vs positive test", instructions, 1, None).unwrap()
     }
 
     #[test]
-    fn test_lt_s_both_negative() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_lt_s_both_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFE, 0xFFFF), // Load -2 into x8
@@ -1558,11 +1600,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("SLT both negative test", instructions, 0, None)
+        run_vm_test("SLT both negative test", instructions, 0, None).unwrap()
     }
 
     #[test]
-    fn test_lt_comparison_chain() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_lt_comparison_chain() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 10, 0),  // x8 = 10
@@ -1575,11 +1618,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("Less than comparison chain test", instructions, 1, None)
+        run_vm_test("Less than comparison chain test", instructions, 1, None).unwrap()
     }
 
     #[test]
-    fn test_gt_u_true() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_gt_u_true() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 200, 0), // Load 200 into x8
@@ -1589,11 +1633,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_U true test", instructions, 1, None)
+        run_vm_test("GT_U true test", instructions, 1, None).unwrap()
     }
 
     #[test]
-    fn test_gt_u_false() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_gt_u_false() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
@@ -1603,11 +1648,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_U false test", instructions, 0, None)
+        run_vm_test("GT_U false test", instructions, 0, None).unwrap()
     }
 
     #[test]
-    fn test_gt_u_equal() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_gt_u_equal() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 150, 0), // Load 150 into x8
@@ -1617,11 +1663,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_U equal test", instructions, 0, None)
+        run_vm_test("GT_U equal test", instructions, 0, None).unwrap()
     }
 
     #[test]
-    fn test_gt_s_positive() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_gt_s_positive() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 100, 0), // Load 100 into x8
@@ -1631,11 +1678,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_S positive numbers test", instructions, 1, None)
+        run_vm_test("GT_S positive numbers test", instructions, 1, None).unwrap()
     }
 
     #[test]
-    fn test_gt_s_negative() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_gt_s_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 5, 0), // Load 5 into x8
@@ -1645,11 +1693,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_S positive vs negative test", instructions, 1, None)
+        run_vm_test("GT_S positive vs negative test", instructions, 1, None).unwrap()
     }
 
     #[test]
-    fn test_gt_s_both_negative() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_gt_s_both_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFE, 0xFFFF), // Load -2 into x8
@@ -1659,11 +1708,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT_S both negative test", instructions, 1, None)
+        run_vm_test("GT_S both negative test", instructions, 1, None).unwrap()
     }
 
     #[test]
-    fn test_gt_edge_cases() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_gt_edge_cases() {
         let instructions = vec![
             // Test max unsigned value
             wom::const_32_imm(0, 0, 0),
@@ -1680,11 +1730,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("GT edge cases test", instructions, 1, None)
+        run_vm_test("GT edge cases test", instructions, 1, None).unwrap()
     }
 
     #[test]
-    fn test_comparison_equivalence() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_comparison_equivalence() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 25, 0), // x8 = 25
@@ -1698,11 +1749,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("Comparison equivalence test", instructions, 0, None)
+        run_vm_test("Comparison equivalence test", instructions, 0, None).unwrap()
     }
 
     #[test]
-    fn test_mixed_comparisons() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_mixed_comparisons() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm::<F>(8, 0xFFFE, 0xFFFF), // x8 = -2 (signed)
@@ -1723,10 +1775,12 @@ mod tests {
             1,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    fn test_input_hint() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_input_hint() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::prepare_read::<F>(),
@@ -1737,7 +1791,7 @@ mod tests {
         let mut stdin = StdIn::default();
         stdin.write(&42u32);
 
-        run_vm_test("Input hint", instructions, 42, Some(stdin))
+        run_vm_test("Input hint", instructions, 42, Some(stdin)).unwrap()
     }
 
     #[test]
@@ -1777,7 +1831,8 @@ mod tests {
     }
 
     #[test]
-    fn test_loadw_basic() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_loadw_basic() {
         // Test basic LOADW instruction
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1789,11 +1844,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("LOADW basic test", instructions, 42, None)
+        run_vm_test("LOADW basic test", instructions, 42, None).unwrap()
     }
 
     #[test]
-    fn test_storew_with_offset() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_storew_with_offset() {
         // Test STOREW with positive offset
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1810,11 +1866,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("STOREW with offset test", instructions, 333, None)
+        run_vm_test("STOREW with offset test", instructions, 333, None).unwrap()
     }
 
     #[test]
-    fn test_loadbu_basic() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_loadbu_basic() {
         // Test LOADBU instruction (load byte unsigned)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1825,11 +1882,12 @@ mod tests {
             wom::reveal(10, 0),                      // Reveal x10 (should be 255)
             wom::halt(),
         ];
-        run_vm_test("LOADBU basic test", instructions, 255, None)
+        run_vm_test("LOADBU basic test", instructions, 255, None).unwrap()
     }
 
     #[test]
-    fn test_loadhu_basic() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_loadhu_basic() {
         // Test LOADHU instruction (load halfword unsigned)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1840,11 +1898,12 @@ mod tests {
             wom::reveal(10, 0),                      // Reveal x10 (should be 0xABCD = 43981)
             wom::halt(),
         ];
-        run_vm_test("LOADHU basic test", instructions, 0xABCD, None)
+        run_vm_test("LOADHU basic test", instructions, 0xABCD, None).unwrap()
     }
 
     #[test]
-    fn test_storeb_with_offset() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_storeb_with_offset() {
         // Test STOREB with offset and masking
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1858,11 +1917,12 @@ mod tests {
             wom::reveal(12, 0),                   // Reveal x12 (should be 104)
             wom::halt(),
         ];
-        run_vm_test("STOREB with offset test", instructions, 104, None)
+        run_vm_test("STOREB with offset test", instructions, 104, None).unwrap()
     }
 
     #[test]
-    fn test_storeh_with_offset() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_storeh_with_offset() {
         // Test STOREH with offset
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1877,7 +1937,7 @@ mod tests {
             wom::reveal(13, 0),                      // Reveal x13 (should be 13107)
             wom::halt(),
         ];
-        run_vm_test("STOREH with offset test", instructions, 13107, None)
+        run_vm_test("STOREH with offset test", instructions, 13107, None).unwrap()
     }
 }
 
