@@ -24,7 +24,6 @@ use crate::{adapters::imm_to_bytes, common::*};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]
-#[repr(transparent)]
 pub struct BaseAluExecutor<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>(
     pub BaseAluExecutorInner<A, NUM_LIMBS, LIMB_BITS>,
 );
