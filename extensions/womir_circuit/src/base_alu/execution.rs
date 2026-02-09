@@ -1,10 +1,20 @@
+//! This module is largely a copy of extensions/rv32im/circuit/src/base_alu/execution.rs.
+//! The only differences are:
+//! - OpenVM's `BaseAluExecutor` is wrapped to allow for trait implementations.
+//! - In `execute_e12_impl`, we retrieve and add the frame pointer.
+//!
+//! This file could be condensed a lot if more of the OpenVM code was public.
+
 use std::{
     borrow::{Borrow, BorrowMut},
     mem::size_of,
 };
 
 use crate::memory_config::FpMemory;
-use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
+use openvm_circuit::{
+    arch::*,
+    system::memory::online::{GuestMemory, TracingMemory},
+};
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
     LocalOpcode,
@@ -12,11 +22,53 @@ use openvm_instructions::{
     program::DEFAULT_PC_STEP,
     riscv::{RV32_IMM_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
 };
+use openvm_rv32im_circuit::BaseAluExecutor as BaseAluExecutorInner;
 use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
 #[allow(unused_imports)]
-use crate::{BaseAluExecutor, adapters::imm_to_bytes, common::*};
+use crate::{adapters::imm_to_bytes, common::*};
+
+/// Newtype wrapper to satisfy orphan rules for trait implementations.
+#[derive(Clone, Copy)]
+pub struct BaseAluExecutor<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>(
+    pub BaseAluExecutorInner<A, NUM_LIMBS, LIMB_BITS>,
+);
+
+impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS> {
+    pub fn new(adapter: A, offset: usize) -> Self {
+        Self(BaseAluExecutorInner::new(adapter, offset))
+    }
+}
+
+impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> std::ops::Deref
+    for BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>
+{
+    type Target = BaseAluExecutorInner<A, NUM_LIMBS, LIMB_BITS>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<F, A, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> PreflightExecutor<F, RA>
+    for BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>
+where
+    F: PrimeField32,
+    BaseAluExecutorInner<A, NUM_LIMBS, LIMB_BITS>: PreflightExecutor<F, RA>,
+{
+    fn get_opcode_name(&self, opcode: usize) -> String {
+        self.0.get_opcode_name(opcode)
+    }
+
+    fn execute(
+        &self,
+        state: VmStateMut<F, TracingMemory, RA>,
+        instruction: &Instruction<F>,
+    ) -> Result<(), ExecutionError> {
+        self.0.execute(state, instruction)
+    }
+}
 
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
@@ -102,23 +154,7 @@ where
         let data: &mut BaseAluPreCompute = data.borrow_mut();
         let is_imm = self.pre_compute_impl(pc, inst, data)?;
 
-        dispatch!(execute_e1_handler, is_imm, inst.opcode, self.offset)
-    }
-
-    #[cfg(feature = "tco")]
-    fn handler<Ctx>(
-        &self,
-        pc: u32,
-        inst: &Instruction<F>,
-        data: &mut [u8],
-    ) -> Result<Handler<F, Ctx>, StaticProgramError>
-    where
-        Ctx: ExecutionCtxTrait,
-    {
-        let data: &mut BaseAluPreCompute = data.borrow_mut();
-        let is_imm = self.pre_compute_impl(pc, inst, data)?;
-
-        dispatch!(execute_e1_handler, is_imm, inst.opcode, self.offset)
+        dispatch!(execute_e1_handler, is_imm, inst.opcode, self.0.offset)
     }
 }
 
@@ -147,123 +183,7 @@ where
         data.chip_idx = chip_idx as u32;
         let is_imm = self.pre_compute_impl(pc, inst, &mut data.data)?;
 
-        dispatch!(execute_e2_handler, is_imm, inst.opcode, self.offset)
-    }
-
-    #[cfg(feature = "tco")]
-    fn metered_handler<Ctx>(
-        &self,
-        chip_idx: usize,
-        pc: u32,
-        inst: &Instruction<F>,
-        data: &mut [u8],
-    ) -> Result<Handler<F, Ctx>, StaticProgramError>
-    where
-        Ctx: MeteredExecutionCtxTrait,
-    {
-        let data: &mut E2PreCompute<BaseAluPreCompute> = data.borrow_mut();
-        data.chip_idx = chip_idx as u32;
-        let is_imm = self.pre_compute_impl(pc, inst, &mut data.data)?;
-
-        dispatch!(execute_e2_handler, is_imm, inst.opcode, self.offset)
-    }
-}
-
-#[cfg(feature = "aot")]
-impl<F, A, const LIMB_BITS: usize> AotExecutor<F>
-    for BaseAluExecutor<A, { RV32_REGISTER_NUM_LIMBS }, LIMB_BITS>
-where
-    F: PrimeField32,
-{
-    fn is_aot_supported(&self, _instruction: &Instruction<F>) -> bool {
-        true
-    }
-
-    fn generate_x86_asm(&self, inst: &Instruction<F>, _pc: u32) -> Result<String, AotError> {
-        let to_i16 = |c: F| -> i16 {
-            let c_u24 = (c.as_canonical_u64() & 0xFFFFFF) as u32;
-            let c_i24 = ((c_u24 << 8) as i32) >> 8;
-            c_i24 as i16
-        };
-        let mut asm_str = String::new();
-
-        let a: i16 = to_i16(inst.a);
-        let b: i16 = to_i16(inst.b);
-        let c: i16 = to_i16(inst.c);
-        let e: i16 = to_i16(inst.e);
-
-        let str_reg_a = if RISCV_TO_X86_OVERRIDE_MAP[(a / 4) as usize].is_some() {
-            RISCV_TO_X86_OVERRIDE_MAP[(a / 4) as usize].unwrap()
-        } else {
-            REG_A_W
-        };
-
-        let mut asm_opcode = String::new();
-        if inst.opcode == BaseAluOpcode::ADD.global_opcode() {
-            asm_opcode += "add";
-        } else if inst.opcode == BaseAluOpcode::SUB.global_opcode() {
-            asm_opcode += "sub";
-        } else if inst.opcode == BaseAluOpcode::AND.global_opcode() {
-            asm_opcode += "and";
-        } else if inst.opcode == BaseAluOpcode::OR.global_opcode() {
-            asm_opcode += "or";
-        } else if inst.opcode == BaseAluOpcode::XOR.global_opcode() {
-            asm_opcode += "xor";
-        }
-
-        if e == 0 {
-            // [a:4]_1 = [a:4]_1 + c
-            let (gpr_reg_b, delta_str_b) = xmm_to_gpr((b / 4) as u8, str_reg_a, a != b);
-            asm_str += &delta_str_b;
-            asm_str += &format!("   {asm_opcode} {gpr_reg_b}, {c}\n");
-            asm_str += &gpr_to_xmm(&gpr_reg_b, (a / 4) as u8);
-        } else if a == c {
-            let (gpr_reg_c, delta_str_c) = xmm_to_gpr((c / 4) as u8, REG_C_W, true);
-            asm_str += &delta_str_c;
-            let (gpr_reg_b, delta_str_b) = xmm_to_gpr((b / 4) as u8, str_reg_a, true);
-            asm_str += &delta_str_b;
-            asm_str += &format!("   {asm_opcode} {gpr_reg_b}, {gpr_reg_c}\n");
-            asm_str += &gpr_to_xmm(&gpr_reg_b, (a / 4) as u8);
-        } else {
-            let (gpr_reg_b, delta_str_b) = xmm_to_gpr((b / 4) as u8, str_reg_a, true);
-            asm_str += &delta_str_b; // data is now in gpr_reg_b
-            let (gpr_reg_c, delta_str_c) = xmm_to_gpr((c / 4) as u8, REG_C_W, false); // data is in gpr_reg_c now
-            asm_str += &delta_str_c; // have to get a return value here, since it modifies further registers too
-            asm_str += &format!("   {asm_opcode} {gpr_reg_b}, {gpr_reg_c}\n");
-            asm_str += &gpr_to_xmm(&gpr_reg_b, (a / 4) as u8);
-        }
-
-        Ok(asm_str)
-    }
-}
-
-#[cfg(feature = "aot")]
-impl<F, A, const LIMB_BITS: usize> AotMeteredExecutor<F>
-    for BaseAluExecutor<A, { RV32_REGISTER_NUM_LIMBS }, LIMB_BITS>
-where
-    F: PrimeField32,
-{
-    fn is_aot_metered_supported(&self, _inst: &Instruction<F>) -> bool {
-        true
-    }
-    fn generate_x86_metered_asm(
-        &self,
-        inst: &Instruction<F>,
-        pc: u32,
-        chip_idx: usize,
-        config: &SystemConfig,
-    ) -> Result<String, AotError> {
-        let mut asm_str = self.generate_x86_asm(inst, pc)?;
-        asm_str += &update_height_change_asm(chip_idx, 1)?;
-        // read [b:4]_1
-        asm_str += &update_adapter_heights_asm(config, RV32_REGISTER_AS)?;
-        // read [c:4]_1
-        asm_str += &update_adapter_heights_asm(config, RV32_REGISTER_AS)?;
-        if inst.e.as_canonical_u32() != RV32_IMM_AS {
-            // read [a:4]_1
-            asm_str += &update_adapter_heights_asm(config, RV32_REGISTER_AS)?;
-        }
-        Ok(asm_str)
+        dispatch!(execute_e2_handler, is_imm, inst.opcode, self.0.offset)
     }
 }
 
