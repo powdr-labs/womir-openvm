@@ -15,25 +15,20 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
     SharedBitwiseOperationLookupChip,
 };
 use openvm_instructions::LocalOpcode;
-use openvm_instructions::PhantomDiscriminant;
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     engine::StarkEngine,
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
-use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRemOpcode, Eq64Opcode, EqOpcode,
-    HintStoreOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, MulOpcode, Phantom,
-    Shift64Opcode, ShiftOpcode,
-};
+use openvm_womir_transpiler::{BaseAluOpcode, LoadStoreOpcode};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use crate::{
     adapters::*,
     // base_alu::REGISTER_NUM_LIMBS_64,
-    execution::{ExecutionBridge, FpBus},
+    execution::FpBus,
     *,
 };
 

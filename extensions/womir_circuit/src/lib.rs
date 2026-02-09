@@ -4,16 +4,12 @@
 #![cfg_attr(feature = "tco", feature(core_intrinsics))]
 use openvm_circuit::{
     arch::{
-        AirInventory, ChipInventoryError, ExecutionError, InitFileGenerator, InterpreterExecutor,
-        MatrixRecordArena, PreflightExecutor, SystemConfig, VmBuilder, VmChipComplex,
-        VmProverExtension, VmStateMut,
+        AirInventory, ChipInventoryError, InitFileGenerator, MatrixRecordArena, SystemConfig,
+        VmBuilder, VmChipComplex, VmProverExtension,
     },
-    system::{
-        SystemChipInventory, SystemCpuBuilder, SystemExecutor, memory::online::TracingMemory,
-    },
+    system::{SystemChipInventory, SystemCpuBuilder, SystemExecutor},
 };
 use openvm_circuit_derive::{Executor, MeteredExecutor, VmConfig};
-use openvm_instructions::instruction::Instruction;
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     engine::StarkEngine,
@@ -21,7 +17,6 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
 
 pub mod execution;
 

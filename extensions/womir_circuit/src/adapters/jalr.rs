@@ -2,19 +2,19 @@ use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::{
     arch::{
-        get_record_from_slice, AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller,
-        BasicAdapterInterface, ExecutionBridge, ExecutionState, SignedImmInstruction, VmAdapterAir,
+        AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller, BasicAdapterInterface,
+        ExecutionBridge, ExecutionState, SignedImmInstruction, VmAdapterAir, get_record_from_slice,
     },
     system::memory::{
+        MemoryAddress, MemoryAuxColsFactory,
         offline_checker::{
             MemoryBridge, MemoryReadAuxCols, MemoryReadAuxRecord, MemoryWriteAuxCols,
             MemoryWriteBytesAuxRecord,
         },
         online::TracingMemory,
-        MemoryAddress, MemoryAuxColsFactory,
     },
 };
-use openvm_circuit_primitives::{utils::not, AlignedBytesBorrow};
+use openvm_circuit_primitives::{AlignedBytesBorrow, utils::not};
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
     instruction::Instruction, program::DEFAULT_PC_STEP, riscv::RV32_REGISTER_AS,

@@ -2,22 +2,22 @@ use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::{
     arch::{
-        get_record_from_slice, AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller,
-        BasicAdapterInterface, ExecutionBridge, ExecutionState, MinimalInstruction, VmAdapterAir,
+        AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller, BasicAdapterInterface,
+        ExecutionBridge, ExecutionState, MinimalInstruction, VmAdapterAir, get_record_from_slice,
     },
     system::memory::{
+        MemoryAddress, MemoryAuxColsFactory,
         offline_checker::{
             MemoryBridge, MemoryReadAuxCols, MemoryReadAuxRecord, MemoryWriteAuxCols,
             MemoryWriteBytesAuxRecord,
         },
         online::TracingMemory,
-        MemoryAddress, MemoryAuxColsFactory,
     },
 };
 use openvm_circuit_primitives::{
+    AlignedBytesBorrow,
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
     utils::not,
-    AlignedBytesBorrow,
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
@@ -34,7 +34,7 @@ use openvm_stark_backend::{
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use super::{
-    tracing_read, tracing_read_imm, tracing_write, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS,
+    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_imm, tracing_write,
 };
 
 #[repr(C)]

@@ -9,14 +9,14 @@ use openvm_cuda_backend::{
     base::DeviceMatrix, chip::get_empty_air_proving_ctx, prover_backend::GpuBackend, types::F,
 };
 use openvm_cuda_common::copy::MemCopyH2D;
-use openvm_stark_backend::{prover::types::AirProvingContext, Chip};
+use openvm_stark_backend::{Chip, prover::types::AirProvingContext};
 
 use crate::{
+    BaseAluCoreCols, BaseAluCoreRecord,
     adapters::{
-        Rv32BaseAluAdapterCols, Rv32BaseAluAdapterRecord, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS,
+        RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, Rv32BaseAluAdapterCols, Rv32BaseAluAdapterRecord,
     },
     cuda_abi::alu_cuda::tracegen,
-    BaseAluCoreCols, BaseAluCoreRecord,
 };
 
 #[derive(new)]

@@ -6,15 +6,15 @@ use std::{
 
 use openvm_circuit::{
     arch::*,
-    system::memory::{online::TracingMemory, MemoryAuxColsFactory},
+    system::memory::{MemoryAuxColsFactory, online::TracingMemory},
 };
 use openvm_circuit_primitives::{
+    AlignedBytesBorrow,
     bitwise_op_lookup::{BitwiseOperationLookupBus, SharedBitwiseOperationLookupChip},
     utils::not,
-    AlignedBytesBorrow,
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
-use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode};
+use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
@@ -208,10 +208,10 @@ where
             WriteData: From<[[u8; NUM_LIMBS]; 1]>,
         >,
     for<'buf> RA: RecordArena<
-        'buf,
-        EmptyAdapterCoreLayout<F, A>,
-        (A::RecordMut<'buf>, &'buf mut BaseAluCoreRecord<NUM_LIMBS>),
-    >,
+            'buf,
+            EmptyAdapterCoreLayout<F, A>,
+            (A::RecordMut<'buf>, &'buf mut BaseAluCoreRecord<NUM_LIMBS>),
+        >,
 {
     fn get_opcode_name(&self, opcode: usize) -> String {
         format!("{:?}", BaseAluOpcode::from_usize(opcode - self.offset))

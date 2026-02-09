@@ -2,13 +2,13 @@ use std::borrow::{Borrow, BorrowMut};
 
 use openvm_circuit::{
     arch::{
-        get_record_from_slice, AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller,
-        BasicAdapterInterface, ExecutionBridge, ExecutionState, ImmInstruction, VmAdapterAir,
+        AdapterAirContext, AdapterTraceExecutor, AdapterTraceFiller, BasicAdapterInterface,
+        ExecutionBridge, ExecutionState, ImmInstruction, VmAdapterAir, get_record_from_slice,
     },
     system::memory::{
+        MemoryAddress, MemoryAuxColsFactory,
         offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryReadAuxRecord},
         online::TracingMemory,
-        MemoryAddress, MemoryAuxColsFactory,
     },
 };
 use openvm_circuit_primitives::AlignedBytesBorrow;

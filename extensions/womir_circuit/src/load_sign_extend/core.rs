@@ -5,19 +5,19 @@ use std::{
 
 use openvm_circuit::{
     arch::*,
-    system::memory::{online::TracingMemory, MemoryAuxColsFactory},
+    system::memory::{MemoryAuxColsFactory, online::TracingMemory},
 };
 use openvm_circuit_primitives::{
+    AlignedBytesBorrow,
     utils::select,
     var_range::{SharedVariableRangeCheckerChip, VariableRangeCheckerBus},
-    AlignedBytesBorrow,
 };
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS},
-    LocalOpcode,
 };
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::{
@@ -214,13 +214,13 @@ where
             WriteData = [u32; NUM_CELLS],
         >,
     for<'buf> RA: RecordArena<
-        'buf,
-        EmptyAdapterCoreLayout<F, A>,
-        (
-            A::RecordMut<'buf>,
-            &'buf mut LoadSignExtendCoreRecord<NUM_CELLS>,
-        ),
-    >,
+            'buf,
+            EmptyAdapterCoreLayout<F, A>,
+            (
+                A::RecordMut<'buf>,
+                &'buf mut LoadSignExtendCoreRecord<NUM_CELLS>,
+            ),
+        >,
 {
     fn get_opcode_name(&self, opcode: usize) -> String {
         format!(
@@ -249,8 +249,8 @@ where
             .read(state.memory, instruction, &mut adapter_record);
 
         core_record.is_byte = local_opcode == LOADB;
-        core_record.prev_data = tmp.0 .0.map(|x| x as u8);
-        core_record.read_data = tmp.0 .1;
+        core_record.prev_data = tmp.0.0.map(|x| x as u8);
+        core_record.read_data = tmp.0.1;
         core_record.shift_amount = tmp.1;
 
         let write_data = run_write_data_sign_extend(
@@ -333,13 +333,7 @@ pub(super) fn run_write_data_sign_extend<const NUM_CELLS: usize>(
         }
         (LOADB, 0) | (LOADB, 1) | (LOADB, 2) | (LOADB, 3) => {
             let ext = (read_data[shift] >> 7) * u8::MAX;
-            array::from_fn(|i| {
-                if i == 0 {
-                    read_data[i + shift]
-                } else {
-                    ext
-                }
-            })
+            array::from_fn(|i| if i == 0 { read_data[i + shift] } else { ext })
         }
         // Currently the adapter AIR requires `ptr_val` to be aligned to the data size in bytes.
         // The circuit requires that `shift = ptr_val % 4` so that `ptr_val - shift` is a multiple of 4.

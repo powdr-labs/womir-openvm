@@ -6,16 +6,16 @@ use std::{
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_IMM_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
-    LocalOpcode,
 };
 use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
 #[allow(unused_imports)]
-use crate::{adapters::imm_to_bytes, common::*, BaseAluExecutor};
+use crate::{BaseAluExecutor, adapters::imm_to_bytes, common::*};
 
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
@@ -302,9 +302,11 @@ unsafe fn execute_e1_impl<
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
-    let pre_compute: &BaseAluPreCompute =
-        std::slice::from_raw_parts(pre_compute, size_of::<BaseAluPreCompute>()).borrow();
-    execute_e12_impl::<F, CTX, IS_IMM, OP>(pre_compute, exec_state);
+    unsafe {
+        let pre_compute: &BaseAluPreCompute =
+            std::slice::from_raw_parts(pre_compute, size_of::<BaseAluPreCompute>()).borrow();
+        execute_e12_impl::<F, CTX, IS_IMM, OP>(pre_compute, exec_state);
+    }
 }
 
 #[create_handler]
@@ -318,13 +320,15 @@ unsafe fn execute_e2_impl<
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
-    let pre_compute: &E2PreCompute<BaseAluPreCompute> =
-        std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<BaseAluPreCompute>>())
-            .borrow();
-    exec_state
-        .ctx
-        .on_height_change(pre_compute.chip_idx as usize, 1);
-    execute_e12_impl::<F, CTX, IS_IMM, OP>(&pre_compute.data, exec_state);
+    unsafe {
+        let pre_compute: &E2PreCompute<BaseAluPreCompute> =
+            std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<BaseAluPreCompute>>())
+                .borrow();
+        exec_state
+            .ctx
+            .on_height_change(pre_compute.chip_idx as usize, 1);
+        execute_e12_impl::<F, CTX, IS_IMM, OP>(&pre_compute.data, exec_state);
+    }
 }
 
 trait AluOp {
