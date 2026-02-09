@@ -732,8 +732,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn test_skip() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_skip() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             // Sets to skip 5 instructions.
@@ -750,7 +750,7 @@ mod tests {
             wom::reveal(10, 0),
             wom::halt(),
         ];
-        run_vm_test("Skipping 5 instructions", instructions, 42, None)
+        run_vm_test("Skipping 5 instructions", instructions, 42, None).unwrap()
     }
 
     #[test]
@@ -1134,8 +1134,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn test_jaaf_instruction() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_jaaf_instruction() {
         // Simple test with JAAF instruction
         // We'll set up a value, jump with JAAF, and verify the result
         let instructions = vec![
@@ -1151,12 +1151,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("JAAF instruction", instructions, 42, None)
+        run_vm_test("JAAF instruction", instructions, 42, None).unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_jaaf_save_instruction() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_jaaf_save_instruction() {
         // Test JAAF_SAVE: jump and save FP
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1172,12 +1172,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("JAAF_SAVE instruction", instructions, 0, None)
+        run_vm_test("JAAF_SAVE instruction", instructions, 0, None).unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_ret_instruction() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_ret_instruction() {
         // Test RET: return to saved PC and FP
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1192,12 +1192,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("RET instruction", instructions, 88, None)
+        run_vm_test("RET instruction", instructions, 88, None).unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_call_instruction() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_call_instruction() {
         // Test CALL: save PC and FP, then jump
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1212,12 +1212,12 @@ mod tests {
             wom::halt(),        // End the test here, don't return
         ];
 
-        run_vm_test("CALL instruction", instructions, 12, None)
+        run_vm_test("CALL instruction", instructions, 12, None).unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_call_indirect_instruction() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_call_indirect_instruction() {
         // Test CALL_INDIRECT: save PC and FP, jump to register value
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1234,12 +1234,12 @@ mod tests {
             wom::halt(),        // End the test here, don't return
         ];
 
-        run_vm_test("CALL_INDIRECT instruction", instructions, 0, None)
+        run_vm_test("CALL_INDIRECT instruction", instructions, 0, None).unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_call_and_return() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_call_and_return() {
         // Test a complete call and return sequence
         // Note: When FP changes, register addressing changes too
         let instructions = vec![
@@ -1256,12 +1256,12 @@ mod tests {
             wom::halt(),
         ];
 
-        run_vm_test("CALL and RETURN sequence", instructions, 50, None)
+        run_vm_test("CALL and RETURN sequence", instructions, 50, None).unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_jump_instruction() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_jump_instruction() {
         // Test unconditional JUMP
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),              // PC=0:
@@ -1275,12 +1275,12 @@ mod tests {
             wom::halt(),                            // PC=28: End
         ];
 
-        run_vm_test("JUMP instruction", instructions, 58, None)
+        run_vm_test("JUMP instruction", instructions, 58, None).unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_jump_if_instruction() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_jump_if_instruction() {
         // Test conditional JUMP_IF (condition != 0)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),              // PC=0
@@ -1301,11 +1301,12 @@ mod tests {
             15,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_jump_if_false_condition() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_jump_if_false_condition() {
         // Test conditional JUMP_IF with false condition (should not jump)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1326,11 +1327,12 @@ mod tests {
             20,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_jump_if_zero_instruction() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_jump_if_zero_instruction() {
         // Test conditional JUMP_IF_ZERO (condition == 0)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1351,11 +1353,12 @@ mod tests {
             23,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_jump_if_zero_false_condition() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_jump_if_zero_false_condition() {
         // Test conditional JUMP_IF_ZERO with false condition (should not jump)
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1376,11 +1379,12 @@ mod tests {
             40,
             None,
         )
+        .unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_allocate_frame_instruction() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_allocate_frame_instruction() {
         // Test ALLOCATE_FRAME instruction
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1390,12 +1394,12 @@ mod tests {
         ];
 
         // The expected value comes from the frame allocator (`AllocateFrameAdapterChipWom`) initial frame pointer value
-        run_vm_test("ALLOCATE_FRAME instruction", instructions, 8, None)
+        run_vm_test("ALLOCATE_FRAME instruction", instructions, 8, None).unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_copy_into_frame_instruction() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_copy_into_frame_instruction() {
         // Test COPY_INTO_FRAME instruction
         // This test verifies that copy_into_frame actually writes to memory
         let instructions = vec![
@@ -1412,12 +1416,12 @@ mod tests {
             wom::halt(),        // PC=28: End
         ];
 
-        run_vm_test("COPY_INTO_FRAME instruction", instructions, 42, None)
+        run_vm_test("COPY_INTO_FRAME instruction", instructions, 42, None).unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_allocate_and_copy_sequence() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_allocate_and_copy_sequence() {
         // Test sequence: allocate frame, then copy into it
         // This test verifies that copy_into_frame actually writes the value
         let instructions = vec![
@@ -1440,6 +1444,7 @@ mod tests {
             123,
             None,
         )
+        .unwrap()
     }
 
     #[test]
@@ -1795,8 +1800,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn test_input_hint_with_frame_jump_and_xor() -> Result<(), Box<dyn std::error::Error>> {
+    #[should_panic]
+    fn test_input_hint_with_frame_jump_and_xor() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             // Read first value into r8
@@ -1828,6 +1833,7 @@ mod tests {
             102,
             Some(stdin),
         )
+        .unwrap()
     }
 
     #[test]
@@ -2174,69 +2180,69 @@ mod wast_tests {
     }
 
     #[test]
-    #[ignore]
-    fn test_i32() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/i32.wast")
+    #[should_panic]
+    fn test_i32() {
+        run_wasm_test("../wasm_tests/i32.wast").unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_i64() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/i64.wast")
+    #[should_panic]
+    fn test_i64() {
+        run_wasm_test("../wasm_tests/i64.wast").unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_address() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/address.wast")
+    #[should_panic]
+    fn test_address() {
+        run_wasm_test("../wasm_tests/address.wast").unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_memory_grow() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/memory_grow.wast")
+    #[should_panic]
+    fn test_memory_grow() {
+        run_wasm_test("../wasm_tests/memory_grow.wast").unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_call_indirect() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/call_indirect.wast")
+    #[should_panic]
+    fn test_call_indirect() {
+        run_wasm_test("../wasm_tests/call_indirect.wast").unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_func() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/func.wast")
+    #[should_panic]
+    fn test_func() {
+        run_wasm_test("../wasm_tests/func.wast").unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_call() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/call.wast")
+    #[should_panic]
+    fn test_call() {
+        run_wasm_test("../wasm_tests/call.wast").unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_br_if() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/br_if.wast")
+    #[should_panic]
+    fn test_br_if() {
+        run_wasm_test("../wasm_tests/br_if.wast").unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_return() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/return.wast")
+    #[should_panic]
+    fn test_return() {
+        run_wasm_test("../wasm_tests/return.wast").unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_loop() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/loop.wast")
+    #[should_panic]
+    fn test_loop() {
+        run_wasm_test("../wasm_tests/loop.wast").unwrap()
     }
 
     #[test]
-    #[ignore]
-    fn test_memory_fill() -> Result<(), Box<dyn std::error::Error>> {
-        run_wasm_test("../wasm_tests/memory_fill.wast")
+    #[should_panic]
+    fn test_memory_fill() {
+        run_wasm_test("../wasm_tests/memory_fill.wast").unwrap()
     }
 
     fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -2261,13 +2267,13 @@ mod wast_tests {
     }
 
     #[test]
-    #[ignore]
+    #[should_panic]
     fn test_fib() {
         run_single_wasm_test("../sample-programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
     }
 
     #[test]
-    #[ignore]
+    #[should_panic]
     fn test_n_first_sums() {
         run_single_wasm_test(
             "../sample-programs/n_first_sum.wasm",
@@ -2279,7 +2285,7 @@ mod wast_tests {
     }
 
     #[test]
-    #[ignore]
+    #[should_panic]
     fn test_call_indirect_wasm() {
         run_single_wasm_test("../sample-programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
         run_single_wasm_test(
@@ -2299,13 +2305,13 @@ mod wast_tests {
     }
 
     #[test]
-    #[ignore]
+    #[should_panic]
     fn test_keccak() {
         run_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
     }
 
     #[test]
-    #[ignore]
+    #[should_panic]
     fn test_keeper_js() {
         // This is program is a stripped down version of geth, compiled for Go's js target.
         // Source: https://github.com/ethereum/go-ethereum/tree/master/cmd/keeper
@@ -2315,7 +2321,7 @@ mod wast_tests {
     }
 
     #[test]
-    #[ignore]
+    #[should_panic]
     fn test_keccak_rust_womir() {
         run_womir_guest(
             "keccak_with_inputs",
@@ -2328,13 +2334,12 @@ mod wast_tests {
     }
 
     #[test]
-    #[ignore]
+    #[should_panic]
     fn test_keccak_rust_read_vec() {
         run_womir_guest("read_vec", "main", &[0, 0], &[0xffaabbcc, 0xeedd0066], &[])
     }
 
     #[test]
-    #[ignore]
     fn test_keccak_rust_openvm() {
         let path = format!(
             "{}/../sample-programs/keccak_with_inputs",
