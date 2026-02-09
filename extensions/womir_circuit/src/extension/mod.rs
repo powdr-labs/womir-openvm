@@ -364,17 +364,6 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         );
         inventory.add_air(load_sign_extend);
 
-        let load_sign_extend = Rv32LoadSignExtendAir::new(
-            Rv32LoadStoreAdapterAir::new(
-                memory_bridge,
-                exec_bridge,
-                range_checker,
-                pointer_max_bits,
-            ),
-            LoadSignExtendCoreAir::new(range_checker),
-        );
-        inventory.add_air(load_sign_extend);
-
         // 64-bit ALU AIR
         // let base_alu_64 = BaseAlu64Air::new(
         //     BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
