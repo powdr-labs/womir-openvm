@@ -12,6 +12,8 @@ A chip = *Adapter* (fetching operands, PC/FP updates, writebacks) + *Core* (main
 
 ## Adding a Chip
 
+Check powdr-labs/womir-openvm#130 for the current status of existing chips and some additional information. Also, read `extensions/transpiler/src/instructions.rs` to understand the opcode → chip mapping.
+
 **1. Check WOMIR instruction semantics:**
 https://raw.githubusercontent.com/powdr-labs/womir/refs/heads/main/src/wom_interpreter/mod.rs
 

@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 [WOMIR-OpenVM](https://github.com/powdr-labs/womir-openvm) (this repository) implements the [WOMIR](https://github.com/powdr-labs/womir) ISA extension for [OpenVM](https://github.com/openvm-org/openvm/), enabling WebAssembly programs to be proven in a zkVM.
 
+Use the `gh` CLI tool to interact with GitHub when needed. For example, to access issues, pull requests, comments, files, etc.
+
 ## Build & Test Commands
 
 ```bash
