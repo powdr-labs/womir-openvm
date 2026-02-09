@@ -2,6 +2,7 @@
 #![cfg_attr(feature = "tco", feature(explicit_tail_calls))]
 #![cfg_attr(feature = "tco", allow(internal_features))]
 #![cfg_attr(feature = "tco", feature(core_intrinsics))]
+use crate::memory_config::memory_config;
 use openvm_circuit::{
     arch::{
         AirInventory, ChipInventoryError, InitFileGenerator, MatrixRecordArena, SystemConfig,
@@ -32,6 +33,8 @@ pub use loadstore::*;
 
 mod extension;
 pub use extension::*;
+
+mod memory_config;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "cuda")] {
@@ -67,7 +70,7 @@ impl InitFileGenerator for WomirConfig {}
 
 impl Default for WomirConfig {
     fn default() -> Self {
-        let system = SystemConfig::default();
+        let system = system_config();
         Self {
             system,
             base: Default::default(),
@@ -77,7 +80,7 @@ impl Default for WomirConfig {
 
 impl WomirConfig {
     pub fn with_public_values(public_values: usize) -> Self {
-        let system = SystemConfig::default().with_public_values(public_values);
+        let system = system_config().with_public_values(public_values);
         Self {
             system,
             base: Default::default(),
@@ -85,7 +88,7 @@ impl WomirConfig {
     }
 
     pub fn with_public_values_and_segment_len(public_values: usize, segment_len: usize) -> Self {
-        let system = SystemConfig::default()
+        let system = system_config()
             .with_public_values(public_values)
             .with_max_segment_len(segment_len);
         Self {
@@ -124,40 +127,6 @@ where
     }
 }
 
-#[cfg(feature = "cuda")]
-#[derive(Clone)]
-pub struct WomirGpuBuilder;
-
-#[cfg(feature = "cuda")]
-impl VmBuilder<GpuBabyBearPoseidon2Engine> for WomirGpuBuilder {
-    type VmConfig = WomirConfig;
-    type SystemChipInventory = SystemChipInventoryGPU;
-    type RecordArena = DenseRecordArena;
-
-    fn create_chip_complex(
-        &self,
-        config: &WomirConfig,
-        circuit: AirInventory<BabyBearPoseidon2Config>,
-    ) -> Result<
-        VmChipComplex<
-            BabyBearPoseidon2Config,
-            Self::RecordArena,
-            GpuBackend,
-            Self::SystemChipInventory,
-        >,
-        ChipInventoryError,
-    > {
-        let mut chip_complex = VmBuilder::<GpuBabyBearPoseidon2Engine>::create_chip_complex(
-            &SystemGpuBuilder,
-            &config.system,
-            circuit,
-        )?;
-        let inventory = &mut chip_complex.inventory;
-        VmProverExtension::<GpuBabyBearPoseidon2Engine, _, _>::extend_prover(
-            &WomirGpuProverExt,
-            &config.base,
-            inventory,
-        )?;
-        Ok(chip_complex)
-    }
+pub fn system_config() -> SystemConfig {
+    SystemConfig::default_from_memory(memory_config())
 }

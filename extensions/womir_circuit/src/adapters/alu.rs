@@ -33,7 +33,10 @@ use openvm_stark_backend::{
 };
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::execution::{ExecutionBridge, ExecutionState, FpKeepOrSet};
+use crate::{
+    execution::{ExecutionBridge, ExecutionState, FpKeepOrSet},
+    memory_config::FpMemory,
+};
 
 use super::{
     RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_imm, tracing_write,
@@ -218,6 +221,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
     #[inline(always)]
     fn start(pc: u32, memory: &TracingMemory, record: &mut &mut Rv32BaseAluAdapterRecord) {
         record.from_pc = pc;
+        record.fp = memory.data().fp();
         record.from_timestamp = memory.timestamp;
     }
 

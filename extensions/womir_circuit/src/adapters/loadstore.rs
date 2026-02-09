@@ -1,3 +1,4 @@
+use crate::memory_config::FpMemory;
 use std::{
     borrow::{Borrow, BorrowMut},
     marker::PhantomData,
@@ -356,6 +357,7 @@ where
     #[inline(always)]
     fn start(pc: u32, memory: &TracingMemory, record: &mut Self::RecordMut<'_>) {
         record.from_pc = pc;
+        record.fp = memory.data().fp();
         record.from_timestamp = memory.timestamp;
     }
 
