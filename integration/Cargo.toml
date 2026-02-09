@@ -15,7 +15,6 @@ derive_more.workspace = true
 
 womir-circuit = { workspace = true }
 
-openvm-womir-circuit = { workspace = true }
 openvm-womir-transpiler = { workspace = true }
 openvm-sdk = { workspace = true }
 openvm-circuit-primitives = { workspace = true }
