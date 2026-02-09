@@ -35,5 +35,4 @@ cargo fmt --all -- --check
 
 ### Key Dependencies
 
-- Uses powdr-labs forks of OpenVM and stark-backend (see workspace `Cargo.toml` for exact revisions)
-- WOMIR library from `github.com/powdr-labs/womir`
+Before any task, read `Cargo.toml` to understand the key dependencies.

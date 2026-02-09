@@ -27,13 +27,11 @@ Study the `extensions/womir_circuit/src/base_alu` directory. The main files are:
 
 This chip is used with the Base ALU adapter. Study the differences between the [OpenVM variant](https://raw.githubusercontent.com/powdr-labs/openvm/refs/tags/v1.4.2-powdr-rc.1/extensions/rv32im/circuit/src/adapters/alu.rs) and ours at `extensions/womir_circuit/src/adapters/alu.rs`.
 
+Use the `openvm-constraints` skill for guidance on writing OpenVM circuit constraints.
+
 ## Testing
 
 ```bash
 # Run tests for this crate
 cargo test -p womir-circuit --release
 ```
-
-## Writing Constraints
-
-Use the `openvm-constraints` skill for guidance on writing OpenVM circuit constraints.

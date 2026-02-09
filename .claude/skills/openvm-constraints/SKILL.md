@@ -1,8 +1,6 @@
 ---
 name: openvm-constraints
-description: Reference for writing OpenVM circuit constraints. Covers VmAirWrapper, adapters, core chips, and bus interactions.
-autoContext:
-  - glob: extensions/**/womir_circuit/**/*.rs
+description: Reference for writing OpenVM circuit constraints. Covers VmAirWrapper, adapters, core chips, and bus interactions. Use this when writing any constraints, in adapter or core chips.
 ---
 
 # OpenVM Circuit Constraints
