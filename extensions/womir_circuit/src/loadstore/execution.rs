@@ -6,10 +6,7 @@ use std::{
 
 use openvm_circuit::{
     arch::*,
-    system::memory::{
-        POINTER_MAX_BITS,
-        online::{GuestMemory, TracingMemory},
-    },
+    system::memory::{POINTER_MAX_BITS, online::GuestMemory},
 };
 use openvm_circuit_primitives::AlignedBytesBorrow;
 use openvm_instructions::{
@@ -22,40 +19,13 @@ use openvm_rv32im_circuit::LoadStoreExecutor as LoadStoreExecutorInner;
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::p3_field::PrimeField32;
 
-/// Newtype wrapper to satisfy orphan rules for trait implementations.
-#[derive(Clone, Copy)]
-pub struct LoadStoreExecutor<A, const NUM_LIMBS: usize>(pub LoadStoreExecutorInner<A, NUM_LIMBS>);
-
-impl<A, const NUM_LIMBS: usize> LoadStoreExecutor<A, NUM_LIMBS> {
-    pub fn new(adapter: A, offset: usize) -> Self {
-        Self(LoadStoreExecutorInner::new(adapter, offset))
-    }
-}
-
-impl<A, const NUM_LIMBS: usize> std::ops::Deref for LoadStoreExecutor<A, NUM_LIMBS> {
-    type Target = LoadStoreExecutorInner<A, NUM_LIMBS>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<F, A, RA, const NUM_LIMBS: usize> PreflightExecutor<F, RA> for LoadStoreExecutor<A, NUM_LIMBS>
-where
-    F: PrimeField32,
-    LoadStoreExecutorInner<A, NUM_LIMBS>: PreflightExecutor<F, RA>,
-{
-    fn get_opcode_name(&self, opcode: usize) -> String {
-        self.0.get_opcode_name(opcode)
-    }
-
-    fn execute(
-        &self,
-        state: VmStateMut<F, TracingMemory, RA>,
-        instruction: &Instruction<F>,
-    ) -> Result<(), ExecutionError> {
-        self.0.execute(state, instruction)
-    }
+executor_newtype! {
+    /// Newtype wrapper to satisfy orphan rules for trait implementations.
+    #[derive(Clone, Copy)]
+    pub struct LoadStoreExecutor<A, const NUM_LIMBS: usize>(
+        pub LoadStoreExecutorInner<A, NUM_LIMBS>
+    );
+    new(adapter, offset: usize) => LoadStoreExecutorInner::new(adapter, offset)
 }
 
 #[derive(AlignedBytesBorrow, Clone)]
