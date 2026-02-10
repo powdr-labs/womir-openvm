@@ -5,10 +5,12 @@
       "WebFetch(domain:github.com)",
       "Bash(find:*)",
       "Bash(cargo check:*)",
+      "Bash(cargo build:*)",
       "Bash(cargo fmt:*)",
       "Bash(cargo clippy:*)",
       "Bash(cargo test:*)",
       "Bash(cargo doc:*)",
+      "Bash(git show:*)",
       "Bash(gh issue view:*)",
       "Bash(gh pr checks:*)"
     ]
