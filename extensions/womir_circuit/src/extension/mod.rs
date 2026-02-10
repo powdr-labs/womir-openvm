@@ -22,12 +22,13 @@ use openvm_stark_backend::{
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
-use openvm_womir_transpiler::{BaseAluOpcode, LoadStoreOpcode};
+use openvm_womir_transpiler::{BaseAluOpcode, ConstOpcodes, LoadStoreOpcode};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use crate::{
     adapters::*,
+    const32::Const32Executor32,
     execution::{ExecutionBridge, FpBus},
     *,
 };
@@ -82,6 +83,7 @@ pub enum WomirExecutor {
     BaseAlu(Rv32BaseAluExecutor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
+    Const32(Const32Executor32),
 }
 
 // ============ VmExtension Implementations ============
@@ -116,6 +118,10 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
         )?;
+
+        let const32 = Const32Executor32::new(ConstOpcodes::CLASS_OFFSET);
+
+        inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 
         Ok(())
     }
