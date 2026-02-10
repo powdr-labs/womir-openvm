@@ -1,16 +1,16 @@
-mod core;
-
-pub use core::*;
-
 use openvm_circuit::arch::{VmAirWrapper, VmChipWrapper};
+use openvm_rv32im_circuit::{LoadStoreCoreAir, LoadStoreFiller};
 
 use super::adapters::RV32_REGISTER_NUM_LIMBS;
-use crate::adapters::{Rv32LoadStoreAdapterAir, Rv32LoadStoreAdapterExecutor};
+use crate::{
+    adapters::{Rv32LoadStoreAdapterAir, Rv32LoadStoreAdapterExecutor, Rv32LoadStoreAdapterFiller},
+    loadstore::execution::LoadStoreExecutor,
+};
 
-mod execution;
+pub mod execution;
 
 pub type Rv32LoadStoreAir =
     VmAirWrapper<Rv32LoadStoreAdapterAir, LoadStoreCoreAir<RV32_REGISTER_NUM_LIMBS>>;
 pub type Rv32LoadStoreExecutor =
     LoadStoreExecutor<Rv32LoadStoreAdapterExecutor, RV32_REGISTER_NUM_LIMBS>;
-pub type Rv32LoadStoreChip<F> = VmChipWrapper<F, LoadStoreFiller>;
+pub type Rv32LoadStoreChip<F> = VmChipWrapper<F, LoadStoreFiller<Rv32LoadStoreAdapterFiller>>;

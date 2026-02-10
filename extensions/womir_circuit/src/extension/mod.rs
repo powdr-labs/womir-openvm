@@ -15,7 +15,10 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
     SharedBitwiseOperationLookupChip,
 };
 use openvm_instructions::LocalOpcode;
-use openvm_rv32im_circuit::{BaseAluCoreAir, BaseAluFiller};
+use openvm_rv32im_circuit::{
+    BaseAluCoreAir, BaseAluFiller, LoadSignExtendCoreAir, LoadSignExtendFiller, LoadStoreCoreAir,
+    LoadStoreFiller,
+};
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     engine::StarkEngine,
@@ -29,6 +32,8 @@ use strum::IntoEnumIterator;
 use crate::{
     adapters::*,
     execution::{ExecutionBridge, FpBus},
+    load_sign_extend::execution::LoadSignExtendExecutor,
+    loadstore::execution::LoadStoreExecutor,
     *,
 };
 
