@@ -33,7 +33,7 @@ pub use loadstore::*;
 mod extension;
 pub use extension::*;
 
-mod memory_config;
+pub mod memory_config;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "cuda")] {
