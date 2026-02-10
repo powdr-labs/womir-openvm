@@ -2,9 +2,10 @@ use openvm_circuit::arch::{VmAirWrapper, VmChipWrapper};
 use openvm_rv32im_circuit::{LoadSignExtendCoreAir, LoadSignExtendFiller};
 
 use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
-use crate::{adapters::{
-    Rv32LoadStoreAdapterAir, Rv32LoadStoreAdapterExecutor, Rv32LoadStoreAdapterFiller,
-}, load_sign_extend::execution::LoadSignExtendExecutor};
+use crate::{
+    adapters::{Rv32LoadStoreAdapterAir, Rv32LoadStoreAdapterExecutor, Rv32LoadStoreAdapterFiller},
+    load_sign_extend::execution::LoadSignExtendExecutor,
+};
 
 pub mod execution;
 
