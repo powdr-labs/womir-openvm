@@ -27,7 +27,7 @@ use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
 #[allow(unused_imports)]
-use crate::{adapters::imm_to_bytes, common::*};
+use crate::adapters::imm_to_bytes;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]

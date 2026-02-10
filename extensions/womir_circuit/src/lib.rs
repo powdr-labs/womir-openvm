@@ -23,7 +23,6 @@ pub mod execution;
 
 pub mod adapters;
 mod base_alu;
-pub mod common;
 mod load_sign_extend;
 mod loadstore;
 
