@@ -20,6 +20,8 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 
 pub mod execution;
+#[macro_use]
+pub mod macros;
 
 pub mod adapters;
 mod base_alu;

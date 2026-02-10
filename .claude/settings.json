@@ -12,7 +12,8 @@
       "Bash(cargo doc:*)",
       "Bash(git show:*)",
       "Bash(gh issue view:*)",
-      "Bash(gh pr checks:*)"
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr view:*)"
     ]
   }
 }
