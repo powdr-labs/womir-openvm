@@ -244,7 +244,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
         let rs1 = tracing_read(
             memory,
             RV32_REGISTER_AS,
-            record.rs1_ptr,
+            record.rs1_ptr + record.fp,
             &mut record.reads_aux[0].prev_timestamp,
         );
 
@@ -255,7 +255,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
             tracing_read(
                 memory,
                 RV32_REGISTER_AS,
-                record.rs2,
+                record.rs2 + record.fp,
                 &mut record.reads_aux[1].prev_timestamp,
             )
         } else {
@@ -283,7 +283,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
         tracing_write(
             memory,
             RV32_REGISTER_AS,
-            record.rd_ptr,
+            record.rd_ptr + record.fp,
             data[0],
             &mut record.writes_aux.prev_timestamp,
             &mut record.writes_aux.prev_data,
