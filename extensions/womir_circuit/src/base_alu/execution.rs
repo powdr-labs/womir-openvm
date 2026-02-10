@@ -27,11 +27,8 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use crate::adapters::imm_to_bytes;
 
 executor_newtype! {
-    /// Newtype wrapper to satisfy orphan rules for trait implementations.
-    #[derive(Clone, Copy)]
-    pub struct BaseAluExecutor<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>(
-        pub BaseAluExecutorInner<A, NUM_LIMBS, LIMB_BITS>
-    );
+    pub struct BaseAluExecutor(pub BaseAluExecutorInner)
+        <A, const NUM_LIMBS: usize, const LIMB_BITS: usize>;
     new(adapter, offset: usize) => BaseAluExecutorInner::new(adapter, offset)
 }
 

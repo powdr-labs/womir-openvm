@@ -20,11 +20,8 @@ use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::p3_field::PrimeField32;
 
 executor_newtype! {
-    /// Newtype wrapper to satisfy orphan rules for trait implementations.
-    #[derive(Clone, Copy)]
-    pub struct LoadStoreExecutor<A, const NUM_LIMBS: usize>(
-        pub LoadStoreExecutorInner<A, NUM_LIMBS>
-    );
+    pub struct LoadStoreExecutor(pub LoadStoreExecutorInner)
+        <A, const NUM_LIMBS: usize>;
     new(adapter, offset: usize) => LoadStoreExecutorInner::new(adapter, offset)
 }
 
