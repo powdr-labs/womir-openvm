@@ -777,7 +777,7 @@ mod tests {
     fn test_less_than_unsigned_imm() -> Result<(), Box<dyn std::error::Error>> {
         // Test SLTU with immediate: 10 < 20 = 1
         let instructions = vec![
-            wom::add_imm::<F>(8, 0, 10_i16.into()), // x8 = 10
+            wom::add_imm::<F>(8, 0, 10_i16.into()),   // x8 = 10
             wom::lt_u_imm::<F>(10, 8, 20_i16.into()), // x10 = (x8 < 20) = 1
             wom::reveal(10, 0),
             wom::halt(),
