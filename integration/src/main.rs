@@ -673,6 +673,133 @@ mod tests {
         Ok(())
     }
 
+    // ============ Less Than (32-bit) Tests ============
+
+    #[test]
+    fn test_less_than_unsigned_true() -> Result<(), Box<dyn std::error::Error>> {
+        // Test SLTU: 10 < 20 = 1 (true)
+        let instructions = vec![
+            wom::add_imm::<F>(8, 0, 10_i16.into()), // x8 = 10
+            wom::add_imm::<F>(9, 0, 20_i16.into()), // x9 = 20
+            wom::lt_u::<F>(10, 8, 9),               // x10 = (x8 < x9) = 1
+            wom::reveal(10, 0),
+            wom::halt(),
+        ];
+
+        run_vm_test("SLTU true", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_less_than_unsigned_false() -> Result<(), Box<dyn std::error::Error>> {
+        // Test SLTU: 30 < 20 = 0 (false)
+        let instructions = vec![
+            wom::add_imm::<F>(8, 0, 30_i16.into()), // x8 = 30
+            wom::add_imm::<F>(9, 0, 20_i16.into()), // x9 = 20
+            wom::lt_u::<F>(10, 8, 9),               // x10 = (x8 < x9) = 0
+            wom::reveal(10, 0),
+            wom::halt(),
+        ];
+
+        run_vm_test("SLTU false", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_less_than_unsigned_equal() -> Result<(), Box<dyn std::error::Error>> {
+        // Test SLTU: 25 < 25 = 0 (equal values)
+        let instructions = vec![
+            wom::add_imm::<F>(8, 0, 25_i16.into()), // x8 = 25
+            wom::add_imm::<F>(9, 0, 25_i16.into()), // x9 = 25
+            wom::lt_u::<F>(10, 8, 9),               // x10 = (x8 < x9) = 0
+            wom::reveal(10, 0),
+            wom::halt(),
+        ];
+
+        run_vm_test("SLTU equal", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_less_than_signed_positive() -> Result<(), Box<dyn std::error::Error>> {
+        // Test SLT: 5 < 10 = 1 (both positive)
+        let instructions = vec![
+            wom::add_imm::<F>(8, 0, 5_i16.into()),  // x8 = 5
+            wom::add_imm::<F>(9, 0, 10_i16.into()), // x9 = 10
+            wom::lt_s::<F>(10, 8, 9),               // x10 = (x8 < x9) = 1
+            wom::reveal(10, 0),
+            wom::halt(),
+        ];
+
+        run_vm_test("SLT positive", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_less_than_signed_negative_vs_positive() -> Result<(), Box<dyn std::error::Error>> {
+        // Test SLT: -5 < 10 = 1 (negative vs positive)
+        let instructions = vec![
+            wom::add_imm::<F>(8, 0, (-5_i16).into()), // x8 = -5
+            wom::add_imm::<F>(9, 0, 10_i16.into()),   // x9 = 10
+            wom::lt_s::<F>(10, 8, 9),                 // x10 = (x8 < x9) = 1
+            wom::reveal(10, 0),
+            wom::halt(),
+        ];
+
+        run_vm_test("SLT negative vs positive", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_less_than_signed_positive_vs_negative() -> Result<(), Box<dyn std::error::Error>> {
+        // Test SLT: 10 < -5 = 0 (positive vs negative)
+        let instructions = vec![
+            wom::add_imm::<F>(8, 0, 10_i16.into()),   // x8 = 10
+            wom::add_imm::<F>(9, 0, (-5_i16).into()), // x9 = -5
+            wom::lt_s::<F>(10, 8, 9),                 // x10 = (x8 < x9) = 0
+            wom::reveal(10, 0),
+            wom::halt(),
+        ];
+
+        run_vm_test("SLT positive vs negative", instructions, 0, None)
+    }
+
+    #[test]
+    fn test_less_than_signed_both_negative() -> Result<(), Box<dyn std::error::Error>> {
+        // Test SLT: -10 < -5 = 1 (both negative)
+        let instructions = vec![
+            wom::add_imm::<F>(8, 0, (-10_i16).into()), // x8 = -10
+            wom::add_imm::<F>(9, 0, (-5_i16).into()),  // x9 = -5
+            wom::lt_s::<F>(10, 8, 9),                  // x10 = (x8 < x9) = 1
+            wom::reveal(10, 0),
+            wom::halt(),
+        ];
+
+        run_vm_test("SLT both negative", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_less_than_unsigned_imm() -> Result<(), Box<dyn std::error::Error>> {
+        // Test SLTU with immediate: 10 < 20 = 1
+        let instructions = vec![
+            wom::add_imm::<F>(8, 0, 10_i16.into()), // x8 = 10
+            wom::lt_u_imm::<F>(10, 8, 20_i16.into()), // x10 = (x8 < 20) = 1
+            wom::reveal(10, 0),
+            wom::halt(),
+        ];
+
+        run_vm_test("SLTU with immediate", instructions, 1, None)
+    }
+
+    #[test]
+    fn test_less_than_proof() -> Result<(), Box<dyn std::error::Error>> {
+        // Test that Less Than works with proof generation
+        let instructions = vec![
+            wom::add_imm::<F>(8, 0, 100_i16.into()), // x8 = 100
+            wom::add_imm::<F>(9, 0, 200_i16.into()), // x9 = 200
+            wom::lt_u::<F>(10, 8, 9),                // x10 = (x8 < x9) = 1
+            wom::reveal(10, 0),
+            wom::halt(),
+        ];
+
+        run_vm_test_proof("Less Than with proof", instructions, 1, None)
+    }
+
     #[test]
     #[should_panic]
     fn test_basic_addi_64() {

@@ -15,14 +15,14 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
     SharedBitwiseOperationLookupChip,
 };
 use openvm_instructions::LocalOpcode;
-use openvm_rv32im_circuit::{BaseAluCoreAir, BaseAluFiller};
+use openvm_rv32im_circuit::{BaseAluCoreAir, BaseAluFiller, LessThanCoreAir, LessThanFiller};
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     engine::StarkEngine,
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
-use openvm_womir_transpiler::{BaseAluOpcode, LoadStoreOpcode};
+use openvm_womir_transpiler::{BaseAluOpcode, LessThanOpcode, LoadStoreOpcode};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
@@ -69,6 +69,7 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 )]
 pub enum WomirExecutor {
     BaseAlu(Rv32BaseAluExecutor),
+    LessThan(Rv32LessThanExecutor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
 }
@@ -87,6 +88,10 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         let base_alu =
             Rv32BaseAluExecutor::new(Rv32BaseAluAdapterExecutor, BaseAluOpcode::CLASS_OFFSET);
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let less_than =
+            Rv32LessThanExecutor::new(Rv32BaseAluAdapterExecutor, LessThanOpcode::CLASS_OFFSET);
+        inventory.add_executor(less_than, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
 
         let load_store = LoadStoreExecutor::new(
             Rv32LoadStoreAdapterExecutor::new(pointer_max_bits),
@@ -143,6 +148,12 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             BaseAluCoreAir::new(bitwise_lu, BaseAluOpcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu);
+
+        let less_than = Rv32LessThanAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            LessThanCoreAir::new(bitwise_lu, LessThanOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(less_than);
 
         let load_store = Rv32LoadStoreAir::new(
             Rv32LoadStoreAdapterAir::new(
@@ -216,6 +227,17 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(base_alu);
+
+        inventory.next_air::<Rv32LessThanAir>()?;
+        let less_than = Rv32LessThanChip::new(
+            LessThanFiller::new(
+                Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                LessThanOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(less_than);
 
         inventory.next_air::<Rv32LoadStoreAir>()?;
         let load_store_chip = Rv32LoadStoreChip::new(
