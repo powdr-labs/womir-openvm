@@ -37,6 +37,9 @@ Look for related chips too (e.g., for comparison logic, check both `less_than/` 
 
 Compare adapters: [OpenVM alu.rs](https://raw.githubusercontent.com/powdr-labs/openvm/refs/tags/v1.4.2-powdr-rc.1/extensions/rv32im/circuit/src/adapters/alu.rs) vs `src/adapters/alu.rs`
 
+**5. Make sure your changes are tested**:
+There should be an integration test in `integration/src/main.rs` that covers the new instruction(s). Add more if needed. It might also exist but marked as should_panic if the instruction was not previously implemented; remove the should_panic.
+
 **Key differences from RISC-V:** registers are frame-pointer-relative; no AOT/TCO/CUDA support needed.
 
 Use the `openvm-constraints` skill for constraint-writing guidance.
