@@ -73,8 +73,11 @@ where
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
 pub(super) struct BaseAluPreCompute {
+    /// Second operand value (if immediate) or register index (if register)
     c: u32,
+    /// Result register index
     a: u8,
+    /// First operand register index
     b: u8,
 }
 
