@@ -30,26 +30,26 @@ type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 /// Memory address space for RAM (heap memory).
 const RV32_MEMORY_AS: u32 = openvm_instructions::riscv::RV32_MEMORY_AS;
 
-/// Specification for an isolated instruction test.
+/// Specification for an test case.
 /// Defines the start state, program, and expected end state.
 #[derive(Clone, Default)]
-pub struct IsolatedTestSpec {
+pub struct TestSpec {
     /// The program to execute (should end with halt instruction).
     pub program: Vec<Instruction<F>>,
 
     /// Initial PC (default: 0).
-    pub start_pc: Option<u32>,
+    pub start_pc: u32,
     /// Initial FP (default: 0).
-    pub start_fp: Option<u32>,
+    pub start_fp: u32,
     /// Initial register values: (register_index, value).
     pub start_registers: Vec<(usize, u32)>,
     /// Initial RAM values: (address, value).
     pub start_ram: Vec<(u32, u32)>,
 
     /// Expected PC after execution (if None, not checked).
-    pub expected_pc: Option<u32>,
+    pub expected_pc: u32,
     /// Expected FP after execution (if None, not checked).
-    pub expected_fp: Option<u32>,
+    pub expected_fp: u32,
     /// Expected register values after execution: (register_index, value).
     pub expected_registers: Vec<(usize, u32)>,
     /// Expected RAM values after execution: (address, value).
@@ -76,25 +76,14 @@ fn read_fp(memory: &GuestMemory) -> u32 {
 }
 
 /// Build a VmExe from a test specification (program and PC only).
-fn build_exe(spec: &IsolatedTestSpec) -> VmExe<F> {
+fn build_exe(spec: &TestSpec) -> VmExe<F> {
     let program = Program::from_instructions(&spec.program);
-    let mut exe = VmExe::new(program);
-
-    // Set start PC if specified
-    if let Some(pc) = spec.start_pc {
-        exe = exe.with_pc_start(pc);
-    }
-
-    exe
+    VmExe::new(program).with_pc_start(spec.start_pc)
 }
 
 /// Create initial VmState from spec, exe, and config.
 /// Sets up memory with initial register values, RAM values, and FP from the spec.
-fn build_initial_state(
-    spec: &IsolatedTestSpec,
-    exe: &VmExe<F>,
-    vm_config: &WomirConfig,
-) -> VmState<F> {
+fn build_initial_state(spec: &TestSpec, exe: &VmExe<F>, vm_config: &WomirConfig) -> VmState<F> {
     let mut state = VmState::initial(
         &vm_config.system,
         &exe.init_memory,
@@ -122,16 +111,14 @@ fn build_initial_state(
     }
 
     // Set initial FP
-    if let Some(fp) = spec.start_fp {
-        state.memory.set_fp(fp);
-    }
+    state.memory.set_fp(spec.start_fp);
 
     state
 }
 
 /// Verify the final state matches expected values.
 fn verify_state(
-    spec: &IsolatedTestSpec,
+    spec: &TestSpec,
     final_state: &VmState<F>,
     stage_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -158,19 +145,23 @@ fn verify_state(
     }
 
     // Verify expected FP
-    if let Some(expected_fp) = spec.expected_fp {
-        let actual_fp = read_fp(&final_state.memory);
-        if actual_fp != expected_fp {
-            return Err(format!("{stage_name}: FP expected {expected_fp}, got {actual_fp}").into());
-        }
+    let actual_fp = read_fp(&final_state.memory);
+    if actual_fp != spec.expected_fp {
+        return Err(format!(
+            "{stage_name}: FP expected {}, got {actual_fp}",
+            spec.expected_fp
+        )
+        .into());
     }
 
     // Verify expected PC
-    if let Some(expected_pc) = spec.expected_pc {
-        let actual_pc = final_state.pc();
-        if actual_pc != expected_pc {
-            return Err(format!("{stage_name}: PC expected {expected_pc}, got {actual_pc}").into());
-        }
+    let actual_pc = final_state.pc();
+    if actual_pc != spec.expected_pc {
+        return Err(format!(
+            "{stage_name}: PC expected {}, got {actual_pc}",
+            spec.expected_pc
+        )
+        .into());
     }
 
     Ok(())
@@ -183,7 +174,7 @@ fn default_engine() -> BabyBearPoseidon2Engine {
 }
 
 /// Test Stage 1: Raw Execution using InterpretedInstance::execute_from_state
-pub fn test_execution(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error::Error>> {
+pub fn test_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
     let vm = VmExecutor::new(vm_config.clone()).unwrap();
@@ -196,7 +187,7 @@ pub fn test_execution(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error:
 }
 
 /// Test Stage 2: Metered Execution using InterpretedInstance::execute_metered_from_state
-pub fn test_metered_execution(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error::Error>> {
+pub fn test_metered_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
     let (vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
@@ -216,7 +207,7 @@ pub fn test_metered_execution(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std
 }
 
 /// Test Stage 3: Preflight using VirtualMachine::execute_preflight
-pub fn test_preflight(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error::Error>> {
+pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
     let (vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
@@ -251,7 +242,7 @@ pub fn test_preflight(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error:
 }
 
 /// Test Stage 4: Proof Generation using VirtualMachine::prove
-pub fn test_proof(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error::Error>> {
+pub fn test_proof(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
     let (mut vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
@@ -289,32 +280,48 @@ pub fn test_proof(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
+pub fn test_spec(spec: &TestSpec) {
+    let mut is_error = false;
+    if let Err(e) = test_execution(&spec) {
+        println!("{e}");
+        is_error = true;
+    }
+    if let Err(e) = test_metered_execution(&spec) {
+        println!("{e}");
+        is_error = true;
+    }
+    if let Err(e) = test_preflight(&spec) {
+        println!("{e}");
+        is_error = true;
+    }
+    if let Err(e) = test_proof(&spec) {
+        println!("{e}");
+        is_error = true;
+    }
+
+    assert!(!is_error)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::setup_tracing_with_log_level;
     use tracing::Level;
 
-    /// Test a single instruction through all isolated stages.
     #[test]
-    fn test_add_imm_isolated_stages() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_add_imm() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // Test specification:
-        // - Start state: all memory zero (fp=0)
-        // - Program: [add_imm reg[8], reg[0], 100; halt]
-        // - Expected: reg[8] = 100
-        let spec = IsolatedTestSpec {
+        let spec = TestSpec {
             program: vec![wom::add_imm::<F>(8, 0, 100_i16.into()), wom::halt()],
-            expected_registers: vec![(8, 100)],
+            start_fp: 124,
+            start_pc: 0,
+            expected_registers: vec![(124 + 8, 100)],
+            expected_fp: 124,
+            expected_pc: 4,
             ..Default::default()
         };
 
-        test_execution(&spec)?;
-        test_metered_execution(&spec)?;
-        test_preflight(&spec)?;
-        test_proof(&spec)?;
-
-        Ok(())
+        test_spec(&spec)
     }
 }
