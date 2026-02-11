@@ -438,12 +438,8 @@ mod tests {
     }
 
     // ==================== LoadStore Tests ====================
-    // NOTE: These tests are marked should_panic because the loadstore executor
-    // doesn't add the frame pointer for register addressing (bug in loadstore/execution.rs).
-    // The adapter (used for tracing/proving) does add FP, but the interpreter doesn't.
 
     #[test]
-    #[should_panic]
     fn test_loadw() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -462,7 +458,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadw_with_offset() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -481,7 +476,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_storew() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -499,7 +493,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_storew_with_offset() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -517,7 +510,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadbu() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -536,7 +528,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadhu() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -555,7 +546,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_storeb() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -574,7 +564,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_storeh() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -593,10 +582,8 @@ mod tests {
     }
 
     // ==================== LoadSignExtend Tests ====================
-    // NOTE: These tests also fail due to the same FP issue in the interpreter.
 
     #[test]
-    #[should_panic]
     fn test_loadb_positive() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -615,7 +602,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadb_negative() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -634,7 +620,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadh_positive() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -653,7 +638,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadh_negative() {
         setup_tracing_with_log_level(Level::WARN);
 

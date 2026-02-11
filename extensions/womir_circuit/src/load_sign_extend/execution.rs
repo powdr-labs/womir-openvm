@@ -22,6 +22,8 @@ use openvm_rv32im_circuit::LoadSignExtendExecutor as LoadSignExtendExecutorInner
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::p3_field::PrimeField32;
 
+use crate::memory_config::FpMemory;
+
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]
 pub struct LoadSignExtendExecutor<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>(
@@ -192,8 +194,9 @@ unsafe fn execute_e12_impl<
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) -> Result<(), ExecutionError> {
     let pc = exec_state.pc();
+    let fp = exec_state.memory.fp();
     let rs1_bytes: [u8; RV32_REGISTER_NUM_LIMBS] =
-        exec_state.vm_read(RV32_REGISTER_AS, pre_compute.b as u32);
+        exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.b as u32);
     let rs1_val = u32::from_le_bytes(rs1_bytes);
     let ptr_val = rs1_val.wrapping_add(pre_compute.imm_extended);
     // sign_extend([r32{c,g}(b):2]_e)`
@@ -221,7 +224,7 @@ unsafe fn execute_e12_impl<
     };
 
     if ENABLED {
-        exec_state.vm_write(RV32_REGISTER_AS, pre_compute.a as u32, &write_data);
+        exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a as u32, &write_data);
     }
 
     exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
