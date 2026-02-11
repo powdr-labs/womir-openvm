@@ -722,4 +722,18 @@ mod tests {
 
         test_spec(spec)
     }
+
+    #[test]
+    fn test_add_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::add_imm_64::<F>(1, 0, 100_i16.into())],
+            start_fp: 124,
+            expected_registers: vec![(125, 100)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
 }

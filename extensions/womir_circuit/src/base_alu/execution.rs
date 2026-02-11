@@ -235,7 +235,16 @@ unsafe fn execute_e12_impl<
     } else {
         exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c)
     };
-    let rd = OP::compute::<NUM_LIMBS>(rs1, rs2);
+    let mut rd = [0u8; NUM_LIMBS];
+    let mut carry = 0u32;
+    for w in 0..NUM_LIMBS / 4 {
+        let i = w * 4;
+        let a = u32::from_le_bytes(rs1[i..i + 4].try_into().unwrap());
+        let b = u32::from_le_bytes(rs2[i..i + 4].try_into().unwrap());
+        let (result, new_carry) = OP::compute(a, b, carry);
+        carry = new_carry;
+        rd[i..i + 4].copy_from_slice(&result.to_le_bytes());
+    }
     exec_state.vm_write::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.a as u32), &rd);
     let pc = exec_state.pc();
     exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
@@ -286,7 +295,9 @@ unsafe fn execute_e2_impl<
 // ==================== ALU operation trait ====================
 
 trait AluOp {
-    fn compute<const N: usize>(rs1: [u8; N], rs2: [u8; N]) -> [u8; N];
+    /// Compute the operation on a single u32 word with carry/borrow propagation.
+    /// Returns (result, carry_out).
+    fn compute(a: u32, b: u32, carry: u32) -> (u32, u32);
 }
 
 struct AddOp;
@@ -297,45 +308,33 @@ struct AndOp;
 
 impl AluOp for AddOp {
     #[inline(always)]
-    fn compute<const N: usize>(rs1: [u8; N], rs2: [u8; N]) -> [u8; N] {
-        let mut result = [0u8; N];
-        let mut carry = 0u16;
-        for i in 0..N {
-            let sum = rs1[i] as u16 + rs2[i] as u16 + carry;
-            result[i] = sum as u8;
-            carry = sum >> 8;
-        }
-        result
+    fn compute(a: u32, b: u32, carry: u32) -> (u32, u32) {
+        let sum = a as u64 + b as u64 + carry as u64;
+        (sum as u32, (sum >> 32) as u32)
     }
 }
 impl AluOp for SubOp {
     #[inline(always)]
-    fn compute<const N: usize>(rs1: [u8; N], rs2: [u8; N]) -> [u8; N] {
-        let mut result = [0u8; N];
-        let mut borrow = 0i16;
-        for i in 0..N {
-            let diff = rs1[i] as i16 - rs2[i] as i16 - borrow;
-            result[i] = diff as u8;
-            borrow = if diff < 0 { 1 } else { 0 };
-        }
-        result
+    fn compute(a: u32, b: u32, borrow: u32) -> (u32, u32) {
+        let diff = a as u64 as i64 - b as u64 as i64 - borrow as i64;
+        (diff as u32, if diff < 0 { 1 } else { 0 })
     }
 }
 impl AluOp for XorOp {
     #[inline(always)]
-    fn compute<const N: usize>(rs1: [u8; N], rs2: [u8; N]) -> [u8; N] {
-        std::array::from_fn(|i| rs1[i] ^ rs2[i])
+    fn compute(a: u32, b: u32, _: u32) -> (u32, u32) {
+        (a ^ b, 0)
     }
 }
 impl AluOp for OrOp {
     #[inline(always)]
-    fn compute<const N: usize>(rs1: [u8; N], rs2: [u8; N]) -> [u8; N] {
-        std::array::from_fn(|i| rs1[i] | rs2[i])
+    fn compute(a: u32, b: u32, _: u32) -> (u32, u32) {
+        (a | b, 0)
     }
 }
 impl AluOp for AndOp {
     #[inline(always)]
-    fn compute<const N: usize>(rs1: [u8; N], rs2: [u8; N]) -> [u8; N] {
-        std::array::from_fn(|i| rs1[i] & rs2[i])
+    fn compute(a: u32, b: u32, _: u32) -> (u32, u32) {
+        (a & b, 0)
     }
 }
