@@ -10,6 +10,8 @@ use openvm_circuit::{
 use openvm_instructions::riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS};
 use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
 
+use crate::memory_config::FP_AS;
+
 mod alu;
 mod loadstore;
 
@@ -244,6 +246,16 @@ pub fn abstract_compose<T: FieldAlgebra, V: Mul<T, Output = T>>(
         .fold(T::ZERO, |acc, (i, limb)| {
             acc + limb * T::from_canonical_u32(1 << (i * RV32_CELL_BITS))
         })
+}
+
+/// Tracing read of the frame pointer from FP_AS address 0.
+/// Returns the fp value and records the previous timestamp for trace generation.
+#[inline(always)]
+pub fn tracing_read_fp(memory: &mut TracingMemory, prev_timestamp: &mut u32) -> u32 {
+    // SAFETY: FP_AS uses native32 cell type (u32), block size 1, align 1.
+    let (t_prev, data) = unsafe { memory.read::<u32, 1, 1>(FP_AS, 0) };
+    *prev_timestamp = t_prev;
+    data[0]
 }
 
 // TEMP[jpw]
