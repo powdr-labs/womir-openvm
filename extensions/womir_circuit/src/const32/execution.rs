@@ -161,22 +161,15 @@ unsafe fn execute_e12_impl<
     pre_compute: &Const32PreCompute,
     exec_state: &mut VmExecState<F, openvm_circuit::system::memory::online::GuestMemory, Ctx>,
 ) {
-    use crate::adapters::memory_write;
-
     // Combine immediates
     let imm = (pre_compute.imm_hi as u32) << 16 | (pre_compute.imm_lo as u32);
 
-    // Decompose to limbs
-    let value = decompose_u32::<NUM_LIMBS, LIMB_BITS>(imm);
-
     let fp = exec_state.memory.fp();
 
-    // Write to register (FP=0 in interpreter mode)
-    memory_write(
-        &mut exec_state.memory,
+    exec_state.vm_write::<u8, 4>(
         RV32_REGISTER_AS,
-        pre_compute.target_reg + fp,
-        value,
+        fp + (pre_compute.target_reg as u32),
+        &imm.to_le_bytes(),
     );
 
     // Increment PC
