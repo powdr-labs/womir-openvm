@@ -8,19 +8,19 @@
 //! - Proof generation (VirtualMachine::prove)
 
 use openvm_circuit::{
-    arch::{execution_mode::Segment, VirtualMachine, VmExecutor, VmState},
+    arch::{VirtualMachine, VmExecutor, VmState, execution_mode::Segment},
     system::memory::online::GuestMemory,
 };
 use openvm_instructions::{
     exe::VmExe, instruction::Instruction, program::Program, riscv::RV32_REGISTER_AS,
 };
-use openvm_sdk::{config::DEFAULT_APP_LOG_BLOWUP, StdIn};
+use openvm_sdk::{StdIn, config::DEFAULT_APP_LOG_BLOWUP};
 use openvm_stark_sdk::{
-    config::{baby_bear_poseidon2::BabyBearPoseidon2Engine, FriParameters},
+    config::{FriParameters, baby_bear_poseidon2::BabyBearPoseidon2Engine},
     engine::StarkFriEngine,
 };
 use womir_circuit::{
-    adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory, WomirConfig, WomirCpuBuilder,
+    WomirConfig, WomirCpuBuilder, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory,
 };
 
 use crate::instruction_builder as wom;
@@ -177,7 +177,8 @@ fn verify_state(
 }
 
 fn default_engine() -> BabyBearPoseidon2Engine {
-    let fri_params = FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+    let fri_params =
+        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
     BabyBearPoseidon2Engine::new(fri_params)
 }
 
@@ -210,7 +211,7 @@ pub fn test_metered_execution(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std
     let (segments, final_state) =
         metered_instance.execute_metered_from_state(from_state, metered_ctx)?;
 
-    assert!(!segments.is_empty(), "expected at least one segment");
+    assert_eq!(segments.len(), 1, "expected a single segment");
     verify_state(spec, &final_state, "test_metered_execution")
 }
 
@@ -229,7 +230,12 @@ pub fn test_preflight(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error:
     let metered_instance = vm.metered_interpreter(&exe)?;
     let from_state = build_initial_state(spec, &exe, &vm_config);
     let (segments, _) = metered_instance.execute_metered_from_state(from_state, metered_ctx)?;
-    let Segment { num_insns, trace_heights, .. } = &segments[0];
+    assert_eq!(segments.len(), 1, "Expected a single segment.");
+    let Segment {
+        num_insns,
+        trace_heights,
+        ..
+    } = &segments[0];
 
     // Run preflight
     let mut preflight_interpreter = vm.preflight_interpreter(&exe)?;
@@ -259,7 +265,12 @@ pub fn test_proof(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error::Err
     let metered_instance = vm.metered_interpreter(&exe)?;
     let from_state = build_initial_state(spec, &exe, &vm_config);
     let (segments, _) = metered_instance.execute_metered_from_state(from_state, metered_ctx)?;
-    let Segment { num_insns, trace_heights, .. } = &segments[0];
+    assert_eq!(segments.len(), 1, "Expected a single segment.");
+    let Segment {
+        num_insns,
+        trace_heights,
+        ..
+    } = &segments[0];
 
     // Load program trace (required before prove)
     let cached_program_trace = vm.commit_program_on_device(&exe.program);
