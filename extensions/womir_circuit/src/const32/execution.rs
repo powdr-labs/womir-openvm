@@ -8,7 +8,7 @@ use openvm_instructions::{
     riscv::{RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
 };
 use openvm_stark_backend::p3_field::PrimeField32;
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 // Minimal executor for CONST32 - no computation needed, just write immediate to register
 #[derive(Clone, Copy, derive_new::new)]
 pub struct Const32Executor<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
@@ -34,6 +34,22 @@ struct Const32PreCompute {
     target_reg: u32,
     imm_lo: u16,
     imm_hi: u16,
+}
+
+impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> Const32Executor<NUM_LIMBS, LIMB_BITS> {
+    #[inline(always)]
+    fn pre_compute_impl<F: PrimeField32>(
+        &self,
+        inst: &Instruction<F>,
+        data: &mut Const32PreCompute,
+    ) {
+        let Instruction { a, b, c, .. } = *inst;
+        *data = Const32PreCompute {
+            target_reg: a.as_canonical_u32(),
+            imm_lo: (b.as_canonical_u32() & 0xFFFF) as u16,
+            imm_hi: (c.as_canonical_u32() & 0xFFFF) as u16,
+        };
+    }
 }
 
 impl<F, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> PreflightExecutor<F, RA>
@@ -99,20 +115,8 @@ where
     where
         Ctx: ExecutionCtxTrait,
     {
-        let Instruction { a, b, c, .. } = *inst;
-
-        let pre_compute = Const32PreCompute {
-            target_reg: a.as_canonical_u32(),
-            imm_lo: (b.as_canonical_u32() & 0xFFFF) as u16,
-            imm_hi: (c.as_canonical_u32() & 0xFFFF) as u16,
-        };
-
-        data[..std::mem::size_of::<Const32PreCompute>()].copy_from_slice(unsafe {
-            std::slice::from_raw_parts(
-                &pre_compute as *const _ as *const u8,
-                std::mem::size_of::<Const32PreCompute>(),
-            )
-        });
+        let data: &mut Const32PreCompute = data.borrow_mut();
+        self.pre_compute_impl(inst, data);
 
         Ok(execute_e1_handler::<F, Ctx, NUM_LIMBS, LIMB_BITS>)
     }
@@ -131,14 +135,18 @@ where
     #[cfg(not(feature = "tco"))]
     fn metered_pre_compute<Ctx>(
         &self,
-        _chip_idx: usize,
+        chip_idx: usize,
         _pc: u32,
-        _inst: &Instruction<F>,
-        _data: &mut [u8],
+        inst: &Instruction<F>,
+        data: &mut [u8],
     ) -> Result<ExecuteFunc<F, Ctx>, StaticProgramError>
     where
         Ctx: MeteredExecutionCtxTrait,
     {
+        let data: &mut E2PreCompute<Const32PreCompute> = data.borrow_mut();
+        data.chip_idx = chip_idx as u32;
+        self.pre_compute_impl(inst, &mut data.data);
+
         Ok(execute_e2_handler::<F, Ctx, RV32_REGISTER_NUM_LIMBS, LIMB_BITS>)
     }
 }
@@ -155,20 +163,19 @@ unsafe fn execute_e12_impl<
 ) {
     use crate::adapters::memory_write;
 
-    // Convert raw bytes back to Const32PreCompute struct (unsafe cast)
-    let pre_compute = unsafe { &*(pre_compute as *const Const32PreCompute) };
-
     // Combine immediates
     let imm = (pre_compute.imm_hi as u32) << 16 | (pre_compute.imm_lo as u32);
 
     // Decompose to limbs
     let value = decompose_u32::<NUM_LIMBS, LIMB_BITS>(imm);
 
+    let fp = exec_state.memory.fp();
+
     // Write to register (FP=0 in interpreter mode)
     memory_write(
         &mut exec_state.memory,
         RV32_REGISTER_AS,
-        pre_compute.target_reg,
+        pre_compute.target_reg + fp,
         value,
     );
 
