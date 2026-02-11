@@ -57,8 +57,9 @@ pub struct TestSpec {
 }
 
 /// Read a register value from memory.
-/// Register address = reg_index * RV32_REGISTER_NUM_LIMBS
 fn read_register(memory: &GuestMemory, reg: usize) -> u32 {
+    // The instruction builder multiplies all registers by RV32_REGISTER_NUM_LIMBS, so this is the
+    // address that actually hits the key/value store.
     let addr = (reg * RV32_REGISTER_NUM_LIMBS) as u32;
     let bytes: [u8; 4] = unsafe { memory.read(RV32_REGISTER_AS, addr) };
     u32::from_le_bytes(bytes)
@@ -93,6 +94,8 @@ fn build_initial_state(spec: &TestSpec, exe: &VmExe<F>, vm_config: &WomirConfig)
 
     // Set initial registers
     for &(reg, value) in &spec.start_registers {
+        // The instruction builder multiplies all registers by RV32_REGISTER_NUM_LIMBS, so this is the
+        // address that actually hits the key/value store.
         let addr = (reg * RV32_REGISTER_NUM_LIMBS) as u32;
         unsafe {
             state
@@ -111,7 +114,10 @@ fn build_initial_state(spec: &TestSpec, exe: &VmExe<F>, vm_config: &WomirConfig)
     }
 
     // Set initial FP
-    state.memory.set_fp(spec.start_fp);
+    // Again, the raw value stored in the state is the FP multiplied by RV32_REGISTER_NUM_LIMBS.
+    state
+        .memory
+        .set_fp(spec.start_fp * RV32_REGISTER_NUM_LIMBS as u32);
 
     state
 }
@@ -145,7 +151,8 @@ fn verify_state(
     }
 
     // Verify expected FP
-    let actual_fp = read_fp(&final_state.memory);
+    // The raw value stored in the state is the FP multiplied by RV32_REGISTER_NUM_LIMBS, so we need to divide it to get the actual FP.
+    let actual_fp = read_fp(&final_state.memory) / RV32_REGISTER_NUM_LIMBS as u32;
     if actual_fp != spec.expected_fp {
         return Err(format!(
             "{stage_name}: FP expected {}, got {actual_fp}",
@@ -280,7 +287,11 @@ pub fn test_proof(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn test_spec(spec: &TestSpec) {
+pub fn test_spec(mut spec: TestSpec) {
+    // Append halt instruction:
+    spec.program.push(wom::halt());
+
+    // Test all stages and collect errors
     let mut is_error = false;
     if let Err(e) = test_execution(&spec) {
         println!("{e}");
@@ -313,15 +324,15 @@ mod tests {
         setup_tracing_with_log_level(Level::WARN);
 
         let spec = TestSpec {
-            program: vec![wom::add_imm::<F>(8, 0, 100_i16.into()), wom::halt()],
+            program: vec![wom::add_imm::<F>(1, 0, 100_i16.into())],
             start_fp: 124,
             start_pc: 0,
-            expected_registers: vec![(124 + 8, 100)],
+            expected_registers: vec![(125, 100)],
             expected_fp: 124,
             expected_pc: 4,
             ..Default::default()
         };
 
-        test_spec(&spec)
+        test_spec(spec)
     }
 }
