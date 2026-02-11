@@ -7,19 +7,20 @@
 //! - Preflight (VirtualMachine::execute_preflight)
 //! - Proof generation (VirtualMachine::prove)
 
-use openvm_circuit::arch::{VirtualMachine, VmExecutor, VmState, execution_mode::Segment};
+use openvm_circuit::{
+    arch::{execution_mode::Segment, VirtualMachine, VmExecutor, VmState},
+    system::memory::online::GuestMemory,
+};
 use openvm_instructions::{
     exe::VmExe, instruction::Instruction, program::Program, riscv::RV32_REGISTER_AS,
 };
-use openvm_sdk::{StdIn, config::DEFAULT_APP_LOG_BLOWUP};
+use openvm_sdk::{config::DEFAULT_APP_LOG_BLOWUP, StdIn};
 use openvm_stark_sdk::{
-    config::{FriParameters, baby_bear_poseidon2::BabyBearPoseidon2Engine},
+    config::{baby_bear_poseidon2::BabyBearPoseidon2Engine, FriParameters},
     engine::StarkFriEngine,
 };
 use womir_circuit::{
-    WomirConfig, WomirCpuBuilder,
-    adapters::RV32_REGISTER_NUM_LIMBS,
-    memory_config::{FP_AS, FpMemory},
+    adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory, WomirConfig, WomirCpuBuilder,
 };
 
 use crate::instruction_builder as wom;
@@ -31,7 +32,7 @@ const RV32_MEMORY_AS: u32 = openvm_instructions::riscv::RV32_MEMORY_AS;
 
 /// Specification for an isolated instruction test.
 /// Defines the start state, program, and expected end state.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct IsolatedTestSpec {
     /// The program to execute (should end with halt instruction).
     pub program: Vec<Instruction<F>>,
@@ -55,42 +56,26 @@ pub struct IsolatedTestSpec {
     pub expected_ram: Vec<(u32, u32)>,
 }
 
-impl Default for IsolatedTestSpec {
-    fn default() -> Self {
-        Self {
-            program: vec![wom::halt()],
-            start_pc: None,
-            start_fp: None,
-            start_registers: vec![],
-            start_ram: vec![],
-            expected_pc: None,
-            expected_fp: None,
-            expected_registers: vec![],
-            expected_ram: vec![],
-        }
-    }
-}
-
 /// Read a register value from memory.
 /// Register address = reg_index * RV32_REGISTER_NUM_LIMBS
-fn read_register(memory: &openvm_circuit::system::memory::online::GuestMemory, reg: usize) -> u32 {
+fn read_register(memory: &GuestMemory, reg: usize) -> u32 {
     let addr = (reg * RV32_REGISTER_NUM_LIMBS) as u32;
     let bytes: [u8; 4] = unsafe { memory.read(RV32_REGISTER_AS, addr) };
     u32::from_le_bytes(bytes)
 }
 
 /// Read a 32-bit value from RAM.
-fn read_ram(memory: &openvm_circuit::system::memory::online::GuestMemory, addr: u32) -> u32 {
+fn read_ram(memory: &GuestMemory, addr: u32) -> u32 {
     let bytes: [u8; 4] = unsafe { memory.read(RV32_MEMORY_AS, addr) };
     u32::from_le_bytes(bytes)
 }
 
 /// Read FP from memory.
-fn read_fp(memory: &openvm_circuit::system::memory::online::GuestMemory) -> u32 {
+fn read_fp(memory: &GuestMemory) -> u32 {
     memory.fp()
 }
 
-/// Build a VmExe from a test specification.
+/// Build a VmExe from a test specification (program and PC only).
 fn build_exe(spec: &IsolatedTestSpec) -> VmExe<F> {
     let program = Program::from_instructions(&spec.program);
     let mut exe = VmExe::new(program);
@@ -100,50 +85,48 @@ fn build_exe(spec: &IsolatedTestSpec) -> VmExe<F> {
         exe = exe.with_pc_start(pc);
     }
 
-    // Set initial memory state (registers, RAM, FP)
-    for &(reg, value) in &spec.start_registers {
-        let addr = (reg * RV32_REGISTER_NUM_LIMBS) as u32;
-        for (i, byte) in value.to_le_bytes().iter().enumerate() {
-            if *byte != 0 {
-                exe.init_memory
-                    .insert((RV32_REGISTER_AS, addr + i as u32), *byte);
-            }
-        }
-    }
-
-    for &(addr, value) in &spec.start_ram {
-        for (i, byte) in value.to_le_bytes().iter().enumerate() {
-            if *byte != 0 {
-                exe.init_memory
-                    .insert((RV32_MEMORY_AS, addr + i as u32), *byte);
-            }
-        }
-    }
-
-    // Set initial FP if specified
-    if let Some(fp) = spec.start_fp {
-        for (i, byte) in fp.to_le_bytes().iter().enumerate() {
-            if *byte != 0 {
-                exe.init_memory.insert((FP_AS, i as u32), *byte);
-            }
-        }
-    }
-
     exe
 }
 
-/// Create initial VmState from spec and exe.
+/// Create initial VmState from spec, exe, and config.
+/// Sets up memory with initial register values, RAM values, and FP from the spec.
 fn build_initial_state(
-    _spec: &IsolatedTestSpec,
+    spec: &IsolatedTestSpec,
     exe: &VmExe<F>,
     vm_config: &WomirConfig,
 ) -> VmState<F> {
-    VmState::initial(
+    let mut state = VmState::initial(
         &vm_config.system,
         &exe.init_memory,
         exe.pc_start,
         StdIn::default(),
-    )
+    );
+
+    // Set initial registers
+    for &(reg, value) in &spec.start_registers {
+        let addr = (reg * RV32_REGISTER_NUM_LIMBS) as u32;
+        unsafe {
+            state
+                .memory
+                .write::<u8, 4>(RV32_REGISTER_AS, addr, value.to_le_bytes());
+        }
+    }
+
+    // Set initial RAM
+    for &(addr, value) in &spec.start_ram {
+        unsafe {
+            state
+                .memory
+                .write::<u8, 4>(RV32_MEMORY_AS, addr, value.to_le_bytes());
+        }
+    }
+
+    // Set initial FP
+    if let Some(fp) = spec.start_fp {
+        state.memory.set_fp(fp);
+    }
+
+    state
 }
 
 /// Verify the final state matches expected values.
@@ -193,6 +176,11 @@ fn verify_state(
     Ok(())
 }
 
+fn default_engine() -> BabyBearPoseidon2Engine {
+    let fri_params = FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+    BabyBearPoseidon2Engine::new(fri_params)
+}
+
 /// Test Stage 1: Raw Execution using InterpretedInstance::execute_from_state
 pub fn test_execution(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
@@ -210,30 +198,19 @@ pub fn test_execution(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error:
 pub fn test_metered_execution(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-
-    let app_fri_params =
-        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
-    let engine = BabyBearPoseidon2Engine::new(app_fri_params);
-
     let (vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
-        engine,
+        default_engine(),
         WomirCpuBuilder,
         vm_config.clone(),
     )?;
 
     let metered_ctx = vm.build_metered_ctx(&exe);
     let metered_instance = vm.metered_interpreter(&exe)?;
-
     let from_state = build_initial_state(spec, &exe, &vm_config);
     let (segments, final_state) =
         metered_instance.execute_metered_from_state(from_state, metered_ctx)?;
 
-    // Verify we got at least one segment
-    assert!(
-        !segments.is_empty(),
-        "test_metered_execution: expected at least one segment"
-    );
-
+    assert!(!segments.is_empty(), "expected at least one segment");
     verify_state(spec, &final_state, "test_metered_execution")
 }
 
@@ -241,32 +218,21 @@ pub fn test_metered_execution(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std
 pub fn test_preflight(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-
-    let app_fri_params =
-        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
-    let engine = BabyBearPoseidon2Engine::new(app_fri_params);
-
     let (vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
-        engine,
+        default_engine(),
         WomirCpuBuilder,
         vm_config.clone(),
     )?;
 
-    // First run metered execution to get segment info
+    // Run metered execution to get segment info
     let metered_ctx = vm.build_metered_ctx(&exe);
     let metered_instance = vm.metered_interpreter(&exe)?;
     let from_state = build_initial_state(spec, &exe, &vm_config);
-    let (segments, _) =
-        metered_instance.execute_metered_from_state(from_state.clone(), metered_ctx)?;
+    let (segments, _) = metered_instance.execute_metered_from_state(from_state, metered_ctx)?;
+    let Segment { num_insns, trace_heights, .. } = &segments[0];
 
-    // Now run preflight
+    // Run preflight
     let mut preflight_interpreter = vm.preflight_interpreter(&exe)?;
-    let Segment {
-        num_insns,
-        trace_heights,
-        ..
-    } = &segments[0];
-
     let preflight_from_state = build_initial_state(spec, &exe, &vm_config);
     let preflight_output = vm.execute_preflight(
         &mut preflight_interpreter,
@@ -282,36 +248,25 @@ pub fn test_preflight(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error:
 pub fn test_proof(spec: &IsolatedTestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-
-    let app_fri_params =
-        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
-    let engine = BabyBearPoseidon2Engine::new(app_fri_params);
-
     let (mut vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
-        engine,
+        default_engine(),
         WomirCpuBuilder,
         vm_config.clone(),
     )?;
 
-    // First run metered execution to get segment info (trace heights)
+    // Run metered execution to get segment info
     let metered_ctx = vm.build_metered_ctx(&exe);
     let metered_instance = vm.metered_interpreter(&exe)?;
     let from_state = build_initial_state(spec, &exe, &vm_config);
     let (segments, _) = metered_instance.execute_metered_from_state(from_state, metered_ctx)?;
+    let Segment { num_insns, trace_heights, .. } = &segments[0];
 
-    // Load the program trace (required before calling prove)
+    // Load program trace (required before prove)
     let cached_program_trace = vm.commit_program_on_device(&exe.program);
     vm.load_program(cached_program_trace);
 
-    // Get the preflight interpreter and trace heights from first segment
+    // Generate proof
     let mut preflight_interpreter = vm.preflight_interpreter(&exe)?;
-    let Segment {
-        num_insns,
-        trace_heights,
-        ..
-    } = &segments[0];
-
-    // Generate proof from initial state using VirtualMachine::prove
     let proof_from_state = build_initial_state(spec, &exe, &vm_config);
     let (_proof, _final_memory) = vm.prove(
         &mut preflight_interpreter,
