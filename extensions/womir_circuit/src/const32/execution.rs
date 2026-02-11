@@ -1,3 +1,4 @@
+use crate::adapters::decompose;
 use crate::memory_config::FpMemory;
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::online::TracingMemory;
@@ -15,25 +16,12 @@ pub struct Const32Executor<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
     pub offset: usize,
 }
 
-// Helper to decompose u32 into limbs
-fn decompose_u32<const NUM_LIMBS: usize, const LIMB_BITS: usize>(value: u32) -> [u8; NUM_LIMBS] {
-    let mut result = [0u8; NUM_LIMBS];
-    let limb_mask = ((1u32 << LIMB_BITS) - 1) as u8;
-
-    for (i, limb) in result.iter_mut().enumerate().take(NUM_LIMBS.min(4)) {
-        *limb = ((value >> (i * LIMB_BITS)) as u8) & limb_mask;
-    }
-
-    result
-}
-
 // PreCompute struct for CONST32
 #[repr(C)]
 #[derive(AlignedBytesBorrow, Clone, Copy)]
 struct Const32PreCompute {
     target_reg: u32,
-    imm_lo: u16,
-    imm_hi: u16,
+    imm: u32,
 }
 
 impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> Const32Executor<NUM_LIMBS, LIMB_BITS> {
@@ -44,16 +32,16 @@ impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> Const32Executor<NUM_LIMBS, 
         data: &mut Const32PreCompute,
     ) {
         let Instruction { a, b, c, .. } = *inst;
+        let imm = (b.as_canonical_u32() & 0xFFFF) | ((c.as_canonical_u32() & 0xFFFF) << 16);
         *data = Const32PreCompute {
             target_reg: a.as_canonical_u32(),
-            imm_lo: (b.as_canonical_u32() & 0xFFFF) as u16,
-            imm_hi: (c.as_canonical_u32() & 0xFFFF) as u16,
+            imm,
         };
     }
 }
 
-impl<F, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> PreflightExecutor<F, RA>
-    for Const32Executor<NUM_LIMBS, LIMB_BITS>
+impl<F, RA, const LIMB_BITS: usize> PreflightExecutor<F, RA>
+    for Const32Executor<RV32_REGISTER_NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -76,18 +64,17 @@ where
         let imm = (imm_hi << 16) | imm_lo;
 
         // Decompose into limbs
-        let value = decompose_u32::<NUM_LIMBS, LIMB_BITS>(imm);
+        let value: [F; RV32_REGISTER_NUM_LIMBS] = decompose(imm);
+        let value_bytes = value.map(|x| x.as_canonical_u32() as u8);
 
         // Write to register at (fp + target_reg)
         let target_addr = a.as_canonical_u32() + state.memory.data().fp();
         unsafe {
-            state
-                .memory
-                .write::<u8, NUM_LIMBS, RV32_REGISTER_NUM_LIMBS>(
-                    RV32_REGISTER_AS,
-                    target_addr,
-                    value,
-                );
+            state.memory.write::<u8, 4, RV32_REGISTER_NUM_LIMBS>(
+                RV32_REGISTER_AS,
+                target_addr,
+                value_bytes,
+            );
         }
 
         *state.pc = state.pc.wrapping_add(DEFAULT_PC_STEP);
@@ -96,8 +83,8 @@ where
 }
 
 // InterpreterExecutor implementation
-impl<F, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F>
-    for Const32Executor<NUM_LIMBS, LIMB_BITS>
+impl<F, const LIMB_BITS: usize> InterpreterExecutor<F>
+    for Const32Executor<RV32_REGISTER_NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -118,7 +105,7 @@ where
         let data: &mut Const32PreCompute = data.borrow_mut();
         self.pre_compute_impl(inst, data);
 
-        Ok(execute_e1_handler::<F, Ctx, NUM_LIMBS, LIMB_BITS>)
+        Ok(execute_e1_handler::<F, Ctx, RV32_REGISTER_NUM_LIMBS, LIMB_BITS>)
     }
 }
 
@@ -161,15 +148,12 @@ unsafe fn execute_e12_impl<
     pre_compute: &Const32PreCompute,
     exec_state: &mut VmExecState<F, openvm_circuit::system::memory::online::GuestMemory, Ctx>,
 ) {
-    // Combine immediates
-    let imm = (pre_compute.imm_hi as u32) << 16 | (pre_compute.imm_lo as u32);
-
     let fp = exec_state.memory.fp();
 
     exec_state.vm_write::<u8, 4>(
         RV32_REGISTER_AS,
-        fp + (pre_compute.target_reg as u32),
-        &imm.to_le_bytes(),
+        fp + pre_compute.target_reg,
+        &pre_compute.imm.to_le_bytes(),
     );
 
     // Increment PC
