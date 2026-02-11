@@ -676,11 +676,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_basic_addi_64() {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::const_32_imm(1, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(1, 0, 0),
             wom::add_imm_64::<F>(8, 0, 666_i16.into()),
             wom::add_imm_64::<F>(10, 8, 1_i16.into()),
             wom::reveal(10, 0),
