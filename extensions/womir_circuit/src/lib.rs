@@ -3,11 +3,10 @@
 #![cfg_attr(feature = "tco", allow(internal_features))]
 #![cfg_attr(feature = "tco", feature(core_intrinsics))]
 use crate::memory_config::memory_config_with_fp;
-use openvm_circuit::arch::SystemConfig;
 use openvm_circuit::{
     arch::{
-        AirInventory, ChipInventoryError, InitFileGenerator, MatrixRecordArena, VmBuilder,
-        VmChipComplex, VmProverExtension,
+        AirInventory, ChipInventoryError, InitFileGenerator, MatrixRecordArena, SystemConfig,
+        VmBuilder, VmChipComplex, VmProverExtension,
     },
     system::{SystemChipInventory, SystemCpuBuilder, SystemExecutor},
 };
