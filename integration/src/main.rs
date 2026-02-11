@@ -619,7 +619,7 @@ mod tests {
     fn test_basic_add() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             // TODO uncomment when const32 is implemented
-            // wom::const_32_imm(0, 0, 0),
+            wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 666_i16.into()),
             wom::add_imm::<F>(9, 0, 1_i16.into()),
             wom::add::<F>(10, 8, 9),
@@ -634,7 +634,7 @@ mod tests {
     fn test_basic_add_proof() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             // TODO uncomment when const32 is implemented
-            wom::const_32_imm(0, 0, 0),
+            //wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 666_i16.into()),
             wom::add_imm::<F>(9, 0, 1_i16.into()),
             wom::add::<F>(10, 8, 9),
