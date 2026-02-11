@@ -56,6 +56,14 @@ pub fn imm_to_bytes(imm: u32) -> [u8; RV32_REGISTER_NUM_LIMBS] {
 }
 
 #[inline(always)]
+pub fn imm_to_bytes_n<const N: usize>(imm: u32) -> [u8; N] {
+    debug_assert_eq!(imm >> 24, 0);
+    let imm_le = imm.to_le_bytes();
+    let sign_byte = imm_le[2];
+    std::array::from_fn(|i| if i < 3 { imm_le[i] } else { sign_byte })
+}
+
+#[inline(always)]
 pub fn memory_read<const N: usize>(memory: &GuestMemory, address_space: u32, ptr: u32) -> [u8; N] {
     debug_assert!(
         address_space == RV32_REGISTER_AS
@@ -176,6 +184,22 @@ pub fn tracing_read_imm(
     // that imm is at most 24 bits
     imm_le[3] = imm_le[2];
     imm_le
+}
+
+#[inline(always)]
+pub fn tracing_read_imm_n<const N: usize>(
+    memory: &mut TracingMemory,
+    imm: u32,
+    imm_mut: &mut u32,
+) -> [u8; N] {
+    *imm_mut = imm;
+    debug_assert_eq!(imm >> 24, 0);
+
+    memory.increment_timestamp();
+
+    let imm_le = imm.to_le_bytes();
+    let sign_byte = imm_le[2];
+    std::array::from_fn(|i| if i < 3 { imm_le[i] } else { sign_byte })
 }
 
 /// Writes `reg_ptr, reg_val` into memory and records the memory access in mutable buffer.
