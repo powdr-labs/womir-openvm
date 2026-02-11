@@ -1,6 +1,8 @@
 mod builtin_functions;
 mod const_collapse;
 mod instruction_builder;
+#[cfg(test)]
+mod isolated_tests;
 mod womir_translation;
 
 use std::fs;
