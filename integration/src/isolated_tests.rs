@@ -12,7 +12,10 @@ use openvm_circuit::{
     system::memory::online::GuestMemory,
 };
 use openvm_instructions::{
-    exe::VmExe, instruction::Instruction, program::Program, riscv::RV32_REGISTER_AS,
+    exe::VmExe,
+    instruction::Instruction,
+    program::{DEFAULT_PC_STEP, Program},
+    riscv::RV32_REGISTER_AS,
 };
 use openvm_sdk::{StdIn, config::DEFAULT_APP_LOG_BLOWUP};
 use openvm_stark_sdk::{
@@ -46,10 +49,10 @@ pub struct TestSpec {
     /// Initial RAM values: (address, value).
     pub start_ram: Vec<(u32, u32)>,
 
-    /// Expected PC after execution (if None, not checked).
-    pub expected_pc: u32,
-    /// Expected FP after execution (if None, not checked).
-    pub expected_fp: u32,
+    /// Expected PC after execution (if None, start_pc + num_instructions * DEFAULT_PC_STEP).
+    pub expected_pc: Option<u32>,
+    /// Expected FP after execution (if None, start_fp).
+    pub expected_fp: Option<u32>,
     /// Expected register values after execution: (register_index, value).
     pub expected_registers: Vec<(usize, u32)>,
     /// Expected RAM values after execution: (address, value).
@@ -153,22 +156,19 @@ fn verify_state(
     // Verify expected FP
     // The raw value stored in the state is the FP multiplied by RV32_REGISTER_NUM_LIMBS, so we need to divide it to get the actual FP.
     let actual_fp = read_fp(&final_state.memory) / RV32_REGISTER_NUM_LIMBS as u32;
-    if actual_fp != spec.expected_fp {
-        return Err(format!(
-            "{stage_name}: FP expected {}, got {actual_fp}",
-            spec.expected_fp
-        )
-        .into());
+    let expected_fp = spec.expected_fp.unwrap_or(spec.start_fp);
+    if actual_fp != expected_fp {
+        return Err(format!("{stage_name}: FP expected {expected_fp}, got {actual_fp}").into());
     }
 
     // Verify expected PC
     let actual_pc = final_state.pc();
-    if actual_pc != spec.expected_pc {
-        return Err(format!(
-            "{stage_name}: PC expected {}, got {actual_pc}",
-            spec.expected_pc
-        )
-        .into());
+    let expected_pc = spec
+        .expected_pc
+        // The added HALT instruction does not advance the PC!
+        .unwrap_or(spec.start_pc + ((spec.program.len() - 1) as u32 * DEFAULT_PC_STEP));
+    if actual_pc != expected_pc {
+        return Err(format!("{stage_name}: PC expected {expected_pc}, got {actual_pc}").into());
     }
 
     Ok(())
@@ -326,10 +326,7 @@ mod tests {
         let spec = TestSpec {
             program: vec![wom::add_imm::<F>(1, 0, 100_i16.into())],
             start_fp: 124,
-            start_pc: 0,
             expected_registers: vec![(125, 100)],
-            expected_fp: 124,
-            expected_pc: 4,
             ..Default::default()
         };
 
