@@ -367,7 +367,7 @@ where
         record.rs1_val = u32::from_le_bytes(tracing_read(
             memory,
             RV32_REGISTER_AS,
-            record.rs1_ptr,
+            record.rs1_ptr + record.fp,
             &mut record.rs1_aux_record.prev_timestamp,
         ));
 
@@ -398,8 +398,12 @@ where
                     ptr_val,
                     &mut record.read_data_aux.prev_timestamp,
                 );
-                let prev_data = memory_read(memory.data(), RV32_REGISTER_AS, a.as_canonical_u32())
-                    .map(u32::from);
+                let prev_data = memory_read(
+                    memory.data(),
+                    RV32_REGISTER_AS,
+                    a.as_canonical_u32() + record.fp,
+                )
+                .map(u32::from);
                 (read_data, prev_data)
             }
             STOREW | STOREH | STOREB => {
@@ -410,7 +414,7 @@ where
                 let read_data = tracing_read(
                     memory,
                     RV32_REGISTER_AS,
-                    a.as_canonical_u32(),
+                    a.as_canonical_u32() + record.fp,
                     &mut record.read_data_aux.prev_timestamp,
                 );
                 let prev_data = if e == NATIVE_AS {
@@ -468,7 +472,7 @@ where
                     timed_write(
                         memory,
                         RV32_REGISTER_AS,
-                        record.rd_rs2_ptr,
+                        record.rd_rs2_ptr + record.fp,
                         data.map(|x| x as u8),
                     )
                     .0

@@ -15,7 +15,10 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
     SharedBitwiseOperationLookupChip,
 };
 use openvm_instructions::LocalOpcode;
-use openvm_rv32im_circuit::{BaseAluCoreAir, BaseAluFiller};
+use openvm_rv32im_circuit::{
+    BaseAluCoreAir, BaseAluFiller, LoadSignExtendCoreAir, LoadSignExtendFiller, LoadStoreCoreAir,
+    LoadStoreFiller,
+};
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     engine::StarkEngine,
@@ -30,21 +33,12 @@ use crate::{
     adapters::*,
     const32::Const32Executor32,
     execution::{ExecutionBridge, FpBus},
+    load_sign_extend::execution::LoadSignExtendExecutor,
+    loadstore::execution::LoadStoreExecutor,
     *,
 };
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "cuda")] {
-        mod cuda;
-        pub use cuda::{
-            WomirGpuProverExt as WomirProverExt,
-        };
-    } else {
-        pub use self::{
-            WomirCpuProverExt as WomirProverExt,
-        };
-    }
-}
+pub use self::WomirCpuProverExt as WomirProverExt;
 
 // ============ Extension Struct Definitions ============
 
