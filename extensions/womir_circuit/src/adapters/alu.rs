@@ -41,8 +41,7 @@ use openvm_circuit::arch::ExecutionBridge;
 use crate::{execution::ExecutionState, memory_config::FP_AS};
 
 use super::{
-    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp, tracing_read_imm,
-    tracing_write,
+    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_imm, tracing_write,
 };
 
 #[repr(C)]
@@ -55,6 +54,8 @@ pub struct Rv32BaseAluAdapterCols<T> {
     pub rs2: T,
     /// 1 if rs2 was a read, 0 if an immediate
     pub rs2_as: T,
+    /// FP value as 4 bytes read from FP_AS
+    pub fp_limbs: [T; RV32_REGISTER_NUM_LIMBS],
     pub fp_read_aux: MemoryReadAuxCols<T>,
     pub reads_aux: [MemoryReadAuxCols<T>; 2],
     pub writes_aux: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
@@ -107,14 +108,21 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
         };
 
         // Read fp from FP address space (address space FP_AS, address 0).
+        // FP_AS uses U8 cells, so we read 4 bytes and compose to get the FP value.
         self.memory_bridge
             .read(
                 MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
-                [local.from_state.fp],
+                local.fp_limbs,
                 timestamp_pp(),
                 &local.fp_read_aux,
             )
             .eval(builder, ctx.instruction.is_valid.clone());
+
+        // Constrain from_state.fp equals the composed fp_limbs
+        let fp_composed: AB::Expr = super::abstract_compose(local.fp_limbs.map(Into::into));
+        builder
+            .when(ctx.instruction.is_valid.clone())
+            .assert_eq(local.from_state.fp, fp_composed);
 
         // If rs2 is an immediate value, constrain that:
         // 1. It's a 16-bit two's complement integer (stored in rs2_limbs[0] and rs2_limbs[1])
@@ -220,6 +228,8 @@ pub struct Rv32BaseAluAdapterRecord {
     pub rs2: u32,
     /// 1 if rs2 was a read, 0 if an immediate
     pub rs2_as: u8,
+    /// FP value as 4 bytes (stored separately for trace generation)
+    pub fp_limbs: [u8; RV32_REGISTER_NUM_LIMBS],
 
     pub fp_read_aux: MemoryReadAuxRecord,
     pub reads_aux: [MemoryReadAuxRecord; 2],
@@ -228,7 +238,11 @@ pub struct Rv32BaseAluAdapterRecord {
 
 impl<const LIMB_BITS: usize> Rv32BaseAluAdapterExecutor<LIMB_BITS> {
     fn fetch_fp(memory: &mut TracingMemory, record: &mut &mut Rv32BaseAluAdapterRecord) {
-        record.fp = tracing_read_fp(memory, &mut record.fp_read_aux.prev_timestamp);
+        // SAFETY: FP_AS uses U8 cell type with block size 4, align 4 (same as registers).
+        let (t_prev, fp_limbs) = unsafe { memory.read::<u8, 4, 4>(FP_AS, 0) };
+        record.fp_read_aux.prev_timestamp = t_prev;
+        record.fp_limbs = fp_limbs;
+        record.fp = u32::from_le_bytes(fp_limbs);
     }
 }
 
@@ -380,6 +394,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceFiller<F>
             adapter_row.fp_read_aux.as_mut(),
         );
 
+        adapter_row.fp_limbs = record.fp_limbs.map(F::from_canonical_u8);
         adapter_row.rs2_as = F::from_canonical_u8(record.rs2_as);
         adapter_row.rs2 = F::from_canonical_u32(record.rs2);
         adapter_row.rs1_ptr = F::from_canonical_u32(record.rs1_ptr);

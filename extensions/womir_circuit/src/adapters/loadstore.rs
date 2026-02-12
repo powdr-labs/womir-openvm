@@ -49,7 +49,7 @@ use crate::execution::ExecutionState;
 use crate::memory_config::FP_AS;
 
 use super::RV32_REGISTER_NUM_LIMBS;
-use super::{RV32_CELL_BITS, memory_read, timed_write, tracing_read, tracing_read_fp};
+use super::{RV32_CELL_BITS, memory_read, timed_write, tracing_read};
 
 pub struct Rv32LoadStoreAdapterAirInterface<AB: InteractionBuilder>(PhantomData<AB>);
 
@@ -69,6 +69,8 @@ pub struct Rv32LoadStoreAdapterCols<T> {
     pub from_state: ExecutionState<T>,
     pub rs1_ptr: T,
     pub rs1_data: [T; RV32_REGISTER_NUM_LIMBS],
+    /// FP value as 4 bytes read from FP_AS
+    pub fp_limbs: [T; RV32_REGISTER_NUM_LIMBS],
     pub fp_read_aux: MemoryReadAuxCols<T>,
     pub rs1_aux_cols: MemoryReadAuxCols<T>,
 
@@ -151,21 +153,28 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             .assert_zero(local_cols.rd_rs2_ptr);
 
         // Read fp from FP address space (address space FP_AS, address 0).
+        // FP_AS uses U8 cells, so we read 4 bytes and compose to get the FP value.
         self.memory_bridge
             .read(
                 MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
-                [local_cols.from_state.fp],
+                local_cols.fp_limbs,
                 timestamp_pp(),
                 &local_cols.fp_read_aux,
             )
             .eval(builder, is_valid.clone());
 
-        // read rs1
+        // Constrain from_state.fp equals the composed fp_limbs
+        let fp_composed: AB::Expr = super::abstract_compose(local_cols.fp_limbs.map(Into::into));
+        builder
+            .when(is_valid.clone())
+            .assert_eq(local_cols.from_state.fp, fp_composed);
+
+        // read rs1 at FP-relative address
         self.memory_bridge
             .read(
                 MemoryAddress::new(
                     AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.rs1_ptr,
+                    local_cols.rs1_ptr + local_cols.from_state.fp,
                 ),
                 local_cols.rs1_data,
                 timestamp_pp(),
@@ -226,13 +235,16 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             AB::F::from_canonical_u32(RV32_REGISTER_AS),
         );
 
-        // read_ptr is mem_ptr for loads and rd_rs2_ptr for stores
+        // read_ptr is mem_ptr for loads and rd_rs2_ptr + fp for stores (register is FP-relative)
         // Note: shift_amount is expected to have degree 2, thus we can't put it in the select
         // clause       since the resulting read_ptr/write_ptr's degree will be 3 which is
         // too high.       Instead, the solution without using additional columns is to get
         // two different shift amounts from core chip
-        let read_ptr = select::<AB::Expr>(is_load.clone(), mem_ptr.clone(), local_cols.rd_rs2_ptr)
-            - load_shift_amount;
+        let read_ptr = select::<AB::Expr>(
+            is_load.clone(),
+            mem_ptr.clone(),
+            local_cols.rd_rs2_ptr + local_cols.from_state.fp,
+        ) - load_shift_amount;
 
         self.memory_bridge
             .read(
@@ -252,9 +264,12 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             local_cols.mem_as,
         );
 
-        // write_ptr is rd_rs2_ptr for loads and mem_ptr for stores
-        let write_ptr = select::<AB::Expr>(is_load.clone(), local_cols.rd_rs2_ptr, mem_ptr.clone())
-            - store_shift_amount;
+        // write_ptr is rd_rs2_ptr + fp for loads (register is FP-relative) and mem_ptr for stores
+        let write_ptr = select::<AB::Expr>(
+            is_load.clone(),
+            local_cols.rd_rs2_ptr + local_cols.from_state.fp,
+            mem_ptr.clone(),
+        ) - store_shift_amount;
 
         self.memory_bridge
             .write(
@@ -304,6 +319,8 @@ pub struct Rv32LoadStoreAdapterRecord {
 
     pub rs1_ptr: u32,
     pub rs1_val: u32,
+    /// FP value as 4 bytes (stored separately for trace generation)
+    pub fp_limbs: [u8; RV32_REGISTER_NUM_LIMBS],
     pub fp_read_aux: MemoryReadAuxRecord,
     pub rs1_aux_record: MemoryReadAuxRecord,
 
@@ -378,7 +395,11 @@ where
         );
 
         // Tracing read of fp from FP address space (for memory constraint proof).
-        let fp = tracing_read_fp(memory, &mut record.fp_read_aux.prev_timestamp);
+        // SAFETY: FP_AS uses U8 cell type with block size 4, align 4 (same as registers).
+        let (t_prev, fp_limbs) = unsafe { memory.read::<u8, 4, 4>(FP_AS, 0) };
+        record.fp_read_aux.prev_timestamp = t_prev;
+        record.fp_limbs = fp_limbs;
+        let fp = u32::from_le_bytes(fp_limbs);
         debug_assert_eq!(fp, record.fp);
 
         record.rs1_ptr = b.as_canonical_u32();
@@ -570,6 +591,7 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for Rv32LoadStoreAdapterFiller {
             adapter_row.fp_read_aux.as_mut(),
         );
 
+        adapter_row.fp_limbs = record.fp_limbs.map(F::from_canonical_u8);
         adapter_row.rs1_data = record.rs1_val.to_le_bytes().map(F::from_canonical_u8);
         adapter_row.rs1_ptr = F::from_canonical_u32(record.rs1_ptr);
 

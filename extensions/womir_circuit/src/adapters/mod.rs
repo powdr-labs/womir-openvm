@@ -252,10 +252,10 @@ pub fn abstract_compose<T: FieldAlgebra, V: Mul<T, Output = T>>(
 /// Returns the fp value and records the previous timestamp for trace generation.
 #[inline(always)]
 pub fn tracing_read_fp(memory: &mut TracingMemory, prev_timestamp: &mut u32) -> u32 {
-    // SAFETY: FP_AS uses native32 cell type (u32), block size 1, align 1.
-    let (t_prev, data) = unsafe { memory.read::<u32, 1, 1>(FP_AS, 0) };
+    // SAFETY: FP_AS uses U8 cell type with block size 4, align 4 (same as registers).
+    let (t_prev, data) = unsafe { memory.read::<u8, 4, 4>(FP_AS, 0) };
     *prev_timestamp = t_prev;
-    data[0]
+    u32::from_le_bytes(data)
 }
 
 // TEMP[jpw]
