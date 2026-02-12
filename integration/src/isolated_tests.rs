@@ -817,6 +817,71 @@ mod tests {
         test_spec(spec)
     }
 
+    // ==================== LessThan64 Tests ====================
+
+    #[test]
+    fn test_lt_u_64_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0000 < 0x0000_0002_0000_0000 = 1 (unsigned)
+        let spec = TestSpec {
+            program: vec![wom::lt_u_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x0000_0001_0000_0000
+                (126, 0),
+                (127, 2), // reg 2 = 0x0000_0002_0000_0000
+            ],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_u_64_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0002_0000_0000 < 0x0000_0001_0000_0000 = 0 (unsigned)
+        let spec = TestSpec {
+            program: vec![wom::lt_u_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 2), // reg 0 = 0x0000_0002_0000_0000
+                (126, 0),
+                (127, 1), // reg 2 = 0x0000_0001_0000_0000
+            ],
+            expected_registers: vec![(128, 0), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_s_64_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // -1 (0xFFFF_FFFF_FFFF_FFFF) < 1 (0x0000_0000_0000_0001) = 1 (signed)
+        let spec = TestSpec {
+            program: vec![wom::lt_s_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0xFFFF_FFFF),
+                (125, 0xFFFF_FFFF), // reg 0 = -1
+                (126, 1),
+                (127, 0), // reg 2 = 1
+            ],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
     // ==================== add_64 ====================
 
     #[test]
