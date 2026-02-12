@@ -3,6 +3,7 @@ use crate::memory_config::FpMemory;
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::online::TracingMemory;
 use openvm_circuit_primitives::AlignedBytesBorrow;
+use openvm_circuit_primitives::bitwise_op_lookup::SharedBitwiseOperationLookupChip;
 use openvm_instructions::{
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
@@ -198,5 +199,22 @@ unsafe fn execute_e2_impl<
             .ctx
             .on_height_change(pre_compute.chip_idx as usize, 1);
         execute_e12_impl::<F, CTX, NUM_LIMBS, LIMB_BITS>(&pre_compute.data, exec_state);
+    }
+}
+
+#[derive(derive_new::new)]
+pub struct Const32Filler<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
+    pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<LIMB_BITS>,
+}
+
+impl<F, const NUM_LIMBS: usize, const LIMB_BITS: usize> TraceFiller<F>
+    for Const32Filler<NUM_LIMBS, LIMB_BITS>
+{
+    fn fill_trace_row(
+        &self,
+        _mem_helper: &openvm_circuit::system::memory::MemoryAuxColsFactory<F>,
+        _row_slice: &mut [F],
+    ) {
+        unimplemented!()
     }
 }

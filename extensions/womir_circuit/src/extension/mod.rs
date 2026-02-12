@@ -177,6 +177,14 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         );
         inventory.add_air(load_sign_extend);
 
+        let const32 = Const32Air::new(
+            bitwise_lu,
+            ConstOpcodes::CLASS_OFFSET,
+            exec_bridge,
+            memory_bridge,
+        );
+        inventory.add_air(const32);
+
         Ok(())
     }
 }
@@ -248,6 +256,10 @@ where
         );
         inventory.add_executor_chip(load_sign_extend);
 
+        inventory.next_air::<Const32Air>()?;
+        let const32 = Const32Chip::new(Const32Filler::new(bitwise_lu.clone()), mem_helper);
+
+        inventory.add_executor_chip(const32);
         Ok(())
     }
 }

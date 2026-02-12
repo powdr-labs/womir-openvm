@@ -11,9 +11,11 @@ use openvm_instructions::riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS};
 use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
 
 mod alu;
+mod const32;
 mod loadstore;
 
 pub use alu::*;
+pub use const32::*;
 pub use loadstore::*;
 pub use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
 
