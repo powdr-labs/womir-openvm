@@ -1,0 +1,41 @@
+# VariableRangeCheckerAir
+Width: 1
+Preprocessed Width: 2
+Constraints: 0
+Interactions: 1
+
+# Poseidon2PeripheryAir<BabyBearParameters>, 1>
+Width: 300
+Preprocessed Width: 0
+Constraints: 282
+Interactions: 1
+
+# PhantomAir
+Width: 6
+Preprocessed Width: 0
+Constraints: 0
+Interactions: 3
+
+# BitwiseOperationLookupAir<8>
+Width: 2
+Preprocessed Width: 3
+Constraints: 0
+Interactions: 2
+
+# VmAirWrapper<Rv32BaseAluAdapterAir, BaseAluCoreAir<4, 8>
+Width: 40
+Preprocessed Width: 0
+Constraints: 23
+Interactions: 24
+
+# VmAirWrapper<Rv32LoadStoreAdapterAir, LoadStoreCoreAir<4>
+Width: 45
+Preprocessed Width: 0
+Constraints: 26
+Interactions: 21
+
+# VmAirWrapper<Rv32LoadStoreAdapterAir, LoadSignExtendCoreAir<4, 8>
+Width: 40
+Preprocessed Width: 0
+Constraints: 19
+Interactions: 22
