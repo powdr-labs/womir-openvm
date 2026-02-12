@@ -26,7 +26,7 @@ use openvm_rv32im_circuit::LessThanExecutor as LessThanExecutorInner;
 use openvm_rv32im_transpiler::LessThanOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
+use crate::adapters::imm_to_bytes;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]
@@ -109,11 +109,7 @@ impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> LessThanExecutor<A, NUM_
         let is_imm = e_u32 == RV32_IMM_AS;
         let c_u32 = c.as_canonical_u32();
         *data = LessThanPreCompute {
-            c: if is_imm {
-                u32::from_le_bytes(imm_to_bytes::<{ RV32_REGISTER_NUM_LIMBS }>(c_u32))
-            } else {
-                c_u32
-            },
+            c: c_u32,
             a: a.as_canonical_u32() as u8,
             b: b.as_canonical_u32() as u8,
         };
@@ -188,46 +184,6 @@ where
     }
 }
 
-/// Sign-extend a u32 value to `[u8; N]`.
-/// For N=4, this is equivalent to `c.to_le_bytes()`.
-/// For N>4, the upper bytes are sign-extended from bit 31.
-#[inline(always)]
-fn sign_extend_u32<const N: usize>(c: u32) -> [u8; N] {
-    let sign_byte = if c & 0x8000_0000 != 0 { 0xFF } else { 0x00 };
-    let le = c.to_le_bytes();
-    std::array::from_fn(|i| if i < 4 { le[i] } else { sign_byte })
-}
-
-/// Compare two little-endian byte arrays as unsigned integers.
-#[inline(always)]
-fn compare_unsigned<const N: usize>(a: &[u8; N], b: &[u8; N]) -> bool {
-    for i in (0..N).rev() {
-        if a[i] != b[i] {
-            return a[i] < b[i];
-        }
-    }
-    false
-}
-
-/// Compare two little-endian byte arrays as signed integers.
-/// The most significant byte is treated as signed (two's complement).
-#[inline(always)]
-fn compare_signed<const N: usize>(a: &[u8; N], b: &[u8; N]) -> bool {
-    // Most significant byte: signed comparison
-    let a_msb = a[N - 1] as i8;
-    let b_msb = b[N - 1] as i8;
-    if a_msb != b_msb {
-        return a_msb < b_msb;
-    }
-    // Remaining bytes: unsigned comparison from MSB to LSB
-    for i in (0..N - 1).rev() {
-        if a[i] != b[i] {
-            return a[i] < b[i];
-        }
-    }
-    false
-}
-
 #[inline(always)]
 unsafe fn execute_e12_impl<
     F: PrimeField32,
@@ -239,17 +195,30 @@ unsafe fn execute_e12_impl<
     pre_compute: &LessThanPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
+    const { assert!(NUM_LIMBS == 4 || NUM_LIMBS == 8) };
+
     let fp = exec_state.memory.fp::<F>();
     let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
-    let rs2 = if E_IS_IMM {
-        sign_extend_u32::<NUM_LIMBS>(pre_compute.c)
+    let a = u64::from_le_bytes(std::array::from_fn(
+        |i| if i < NUM_LIMBS { rs1[i] } else { 0 },
+    ));
+    let b = if E_IS_IMM {
+        let imm_bytes: [u8; NUM_LIMBS] = imm_to_bytes(pre_compute.c);
+        u64::from_le_bytes(std::array::from_fn(|i| {
+            if i < NUM_LIMBS { imm_bytes[i] } else { 0 }
+        }))
     } else {
-        exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c)
+        let rs2 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c);
+        u64::from_le_bytes(std::array::from_fn(
+            |i| if i < NUM_LIMBS { rs2[i] } else { 0 },
+        ))
     };
     let cmp_result = if IS_U32 {
-        compare_unsigned(&rs1, &rs2)
+        a < b
+    } else if NUM_LIMBS == 4 {
+        (a as i32) < (b as i32)
     } else {
-        compare_signed(&rs1, &rs2)
+        (a as i64) < (b as i64)
     };
     let mut rd = [0u8; NUM_LIMBS];
     rd[0] = cmp_result as u8;

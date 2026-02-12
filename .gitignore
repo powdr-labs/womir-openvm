@@ -29,3 +29,4 @@ wast_target/
 /target
 
 **/__pycache__
+sample-programs/**/Cargo.lock
