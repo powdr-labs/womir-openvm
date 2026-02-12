@@ -76,7 +76,7 @@ fn read_ram(memory: &GuestMemory, addr: u32) -> u32 {
 
 /// Read FP from memory.
 fn read_fp(memory: &GuestMemory) -> u32 {
-    memory.fp()
+    memory.fp::<F>()
 }
 
 /// Build a VmExe from a test specification (program and PC only).
@@ -120,7 +120,7 @@ fn build_initial_state(spec: &TestSpec, exe: &VmExe<F>, vm_config: &WomirConfig)
     // Again, the raw value stored in the state is the FP multiplied by RV32_REGISTER_NUM_LIMBS.
     state
         .memory
-        .set_fp(spec.start_fp * RV32_REGISTER_NUM_LIMBS as u32);
+        .set_fp::<F>(spec.start_fp * RV32_REGISTER_NUM_LIMBS as u32);
 
     state
 }

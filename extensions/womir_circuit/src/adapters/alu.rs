@@ -227,8 +227,11 @@ pub struct Rv32BaseAluAdapterRecord {
 }
 
 impl<const LIMB_BITS: usize> Rv32BaseAluAdapterExecutor<LIMB_BITS> {
-    fn fetch_fp(memory: &mut TracingMemory, record: &mut &mut Rv32BaseAluAdapterRecord) {
-        record.fp = tracing_read_fp(memory, &mut record.fp_read_aux.prev_timestamp);
+    fn fetch_fp<F: PrimeField32>(
+        memory: &mut TracingMemory,
+        record: &mut &mut Rv32BaseAluAdapterRecord,
+    ) {
+        record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
     }
 }
 
@@ -262,7 +265,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
         );
 
         if !*self.has_fetched_fp.borrow() {
-            Self::fetch_fp(memory, record);
+            Self::fetch_fp::<F>(memory, record);
             *self.has_fetched_fp.borrow_mut() = true;
         }
 

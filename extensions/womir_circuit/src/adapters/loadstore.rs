@@ -349,7 +349,7 @@ where
     #[inline(always)]
     fn start(pc: u32, memory: &TracingMemory, record: &mut Self::RecordMut<'_>) {
         record.from_pc = pc;
-        record.fp = memory.data().fp();
+        record.fp = memory.data().fp::<F>();
         record.from_timestamp = memory.timestamp;
     }
 
@@ -378,7 +378,7 @@ where
         );
 
         // Tracing read of fp from FP address space (for memory constraint proof).
-        let fp = tracing_read_fp(memory, &mut record.fp_read_aux.prev_timestamp);
+        let fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
         debug_assert_eq!(fp, record.fp);
 
         record.rs1_ptr = b.as_canonical_u32();

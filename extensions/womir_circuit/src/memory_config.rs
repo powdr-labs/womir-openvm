@@ -5,6 +5,7 @@ use openvm_circuit::{
     },
 };
 use openvm_instructions::riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS};
+use openvm_stark_backend::p3_field::PrimeField32;
 
 /// This address space is only used for execution, to store the frame pointer at address 0.
 pub const FP_AS: u32 = 5;
@@ -25,19 +26,23 @@ pub fn memory_config_with_fp() -> MemoryConfig {
 }
 
 /// Utility trait to read the frame pointer from memory, used in preflight and execution.
+/// Methods are generic over `F` because FP_AS uses `native32` cell type, which stores
+/// field elements (not raw u32). The type must match the ZK backend's base field.
 pub trait FpMemory {
-    fn fp(&self) -> u32;
+    fn fp<F: PrimeField32>(&self) -> u32;
 
     #[allow(dead_code)]
-    fn set_fp(&mut self, value: u32);
+    fn set_fp<F: PrimeField32>(&mut self, value: u32);
 }
 
 impl FpMemory for GuestMemory {
-    fn fp(&self) -> u32 {
-        unsafe { self.read::<u32, 1>(FP_AS, 0)[0] }
+    fn fp<F: PrimeField32>(&self) -> u32 {
+        // SAFETY: FP_AS uses native32 cell type (F), so T=F is the correct type.
+        unsafe { self.read::<F, 1>(FP_AS, 0)[0].as_canonical_u32() }
     }
 
-    fn set_fp(&mut self, value: u32) {
-        unsafe { self.write::<u32, 1>(FP_AS, 0, [value]) }
+    fn set_fp<F: PrimeField32>(&mut self, value: u32) {
+        // SAFETY: FP_AS uses native32 cell type (F), so T=F is the correct type.
+        unsafe { self.write::<F, 1>(FP_AS, 0, [F::from_canonical_u32(value)]) }
     }
 }
