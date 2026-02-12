@@ -41,7 +41,7 @@ use openvm_circuit::arch::ExecutionBridge;
 use crate::{execution::ExecutionState, memory_config::FP_AS};
 
 use super::{
-    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp, tracing_read_imm_n,
+    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp, tracing_read_imm,
     tracing_write,
 };
 
@@ -354,8 +354,7 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LI
             record.rs2_as = RV32_IMM_AS as u8;
 
             // Immediate uses 1 timestamp, pad with extra increments for remaining NUM_REG_OPS-1
-            let rs2 =
-                tracing_read_imm_n::<NUM_LIMBS>(memory, c.as_canonical_u32(), &mut record.rs2);
+            let rs2 = tracing_read_imm::<NUM_LIMBS>(memory, c.as_canonical_u32(), &mut record.rs2);
             for _ in 1..NUM_REG_OPS {
                 memory.increment_timestamp();
             }

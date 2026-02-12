@@ -26,8 +26,7 @@ use openvm_rv32im_circuit::BaseAluExecutor as BaseAluExecutorInner;
 use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-#[allow(unused_imports)]
-use crate::adapters::imm_to_bytes;
+use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]
@@ -101,7 +100,7 @@ impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAluExecutor<A, NUM_L
         let c_u32 = c.as_canonical_u32();
         *data = BaseAluPreCompute {
             c: if is_imm {
-                u32::from_le_bytes(imm_to_bytes(c_u32))
+                u32::from_le_bytes(imm_to_bytes::<{ RV32_REGISTER_NUM_LIMBS }>(c_u32))
             } else {
                 c_u32
             },
@@ -111,8 +110,6 @@ impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAluExecutor<A, NUM_L
         Ok(is_imm)
     }
 }
-
-// ==================== dispatch ====================
 
 macro_rules! dispatch {
     ($execute_impl:ident, $is_imm:ident, $opcode:expr, $offset:expr, $num_limbs:expr) => {
@@ -204,8 +201,6 @@ where
         )
     }
 }
-
-// ==================== execute ====================
 
 /// Sign-extend a u32 value to `[u8; N]`.
 /// For N=4, this is equivalent to `c.to_le_bytes()`.
