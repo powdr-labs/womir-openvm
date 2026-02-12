@@ -25,10 +25,12 @@ pub mod adapters;
 mod base_alu;
 mod load_sign_extend;
 mod loadstore;
+mod mul;
 
 pub use base_alu::*;
 pub use load_sign_extend::*;
 pub use loadstore::*;
+pub use mul::*;
 
 mod extension;
 pub use extension::*;

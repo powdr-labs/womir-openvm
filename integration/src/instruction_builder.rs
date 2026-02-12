@@ -93,6 +93,18 @@ pub fn mul_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instructi
 }
 
 #[cfg(test)]
+pub fn mul_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    use openvm_womir_transpiler::Mul64Opcode;
+    instr_r(Mul64Opcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+#[cfg(test)]
+pub fn mul_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
+    use openvm_womir_transpiler::Mul64Opcode;
+    instr_i(Mul64Opcode::MUL.global_opcode().as_usize(), rd, rs1, imm)
+}
+
+#[cfg(test)]
 pub fn div<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::DivRemOpcode;
     instr_r(DivRemOpcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
