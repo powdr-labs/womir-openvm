@@ -228,6 +228,9 @@ unsafe fn execute_e12_impl<
     pre_compute: &BaseAluPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
+    // NUM_LIMBS must be a multiple of 4 since we process data in 4-byte (u32) chunks
+    const { assert!(NUM_LIMBS % 4 == 0, "NUM_LIMBS must be a multiple of 4") };
+    
     let fp = exec_state.memory.fp();
     let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
     let rs2 = if IS_IMM {
