@@ -105,8 +105,10 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
                 .map(|x| x.global_opcode()),
         )?;
 
-        let load_sign_extend =
-            LoadSignExtendExecutor::new(Rv32LoadStoreAdapterExecutor::new(pointer_max_bits, RefCell::new(false)));
+        let load_sign_extend = LoadSignExtendExecutor::new(Rv32LoadStoreAdapterExecutor::new(
+            pointer_max_bits,
+            RefCell::new(false),
+        ));
         inventory.add_executor(
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
