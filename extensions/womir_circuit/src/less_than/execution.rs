@@ -185,6 +185,11 @@ where
 }
 
 #[inline(always)]
+fn to_u64<const N: usize>(bytes: [u8; N]) -> u64 {
+    u64::from_le_bytes(std::array::from_fn(|i| if i < N { bytes[i] } else { 0 }))
+}
+
+#[inline(always)]
 unsafe fn execute_e12_impl<
     F: PrimeField32,
     CTX: ExecutionCtxTrait,
@@ -199,19 +204,12 @@ unsafe fn execute_e12_impl<
 
     let fp = exec_state.memory.fp::<F>();
     let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
-    let a = u64::from_le_bytes(std::array::from_fn(
-        |i| if i < NUM_LIMBS { rs1[i] } else { 0 },
-    ));
+    let a = to_u64(rs1);
     let b = if E_IS_IMM {
-        let imm_bytes: [u8; NUM_LIMBS] = imm_to_bytes(pre_compute.c);
-        u64::from_le_bytes(std::array::from_fn(|i| {
-            if i < NUM_LIMBS { imm_bytes[i] } else { 0 }
-        }))
+        to_u64(imm_to_bytes::<NUM_LIMBS>(pre_compute.c))
     } else {
         let rs2 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c);
-        u64::from_le_bytes(std::array::from_fn(
-            |i| if i < NUM_LIMBS { rs2[i] } else { 0 },
-        ))
+        to_u64(rs2)
     };
     let cmp_result = if IS_U32 {
         a < b
