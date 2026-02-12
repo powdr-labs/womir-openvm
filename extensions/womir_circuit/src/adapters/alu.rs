@@ -1,4 +1,7 @@
-use std::borrow::{Borrow, BorrowMut};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    cell::RefCell,
+};
 
 use openvm_circuit::{
     arch::{
@@ -35,10 +38,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use openvm_circuit::arch::ExecutionBridge;
 
-use crate::{
-    execution::ExecutionState,
-    memory_config::{FP_AS, FpMemory},
-};
+use crate::{execution::ExecutionState, memory_config::FP_AS};
 
 use super::{
     RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp, tracing_read_imm,
@@ -197,7 +197,9 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
 }
 
 #[derive(Clone, derive_new::new)]
-pub struct Rv32BaseAluAdapterExecutor<const LIMB_BITS: usize>;
+pub struct Rv32BaseAluAdapterExecutor<const LIMB_BITS: usize> {
+    has_fetched_fp: RefCell<bool>,
+}
 
 #[derive(derive_new::new)]
 pub struct Rv32BaseAluAdapterFiller<const LIMB_BITS: usize> {
@@ -224,6 +226,12 @@ pub struct Rv32BaseAluAdapterRecord {
     pub writes_aux: MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>,
 }
 
+impl<const LIMB_BITS: usize> Rv32BaseAluAdapterExecutor<LIMB_BITS> {
+    fn fetch_fp(memory: &mut TracingMemory, record: &mut &mut Rv32BaseAluAdapterRecord) {
+        record.fp = tracing_read_fp(memory, &mut record.fp_read_aux.prev_timestamp);
+    }
+}
+
 impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
     for Rv32BaseAluAdapterExecutor<LIMB_BITS>
 {
@@ -235,7 +243,6 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
     #[inline(always)]
     fn start(pc: u32, memory: &TracingMemory, record: &mut &mut Rv32BaseAluAdapterRecord) {
         record.from_pc = pc;
-        record.fp = memory.data().fp();
         record.from_timestamp = memory.timestamp;
     }
 
@@ -254,11 +261,10 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
             e.as_canonical_u32() == RV32_REGISTER_AS || e.as_canonical_u32() == RV32_IMM_AS
         );
 
-        // This cannot go to `start` above because inside `tracing_read_fp` there is a
-        // `memory.read` which requires `memory` to be `&mut`.
-        // Tracing read of fp from FP address space (for memory constraint proof).
-        let fp = tracing_read_fp(memory, &mut record.fp_read_aux.prev_timestamp);
-        debug_assert_eq!(fp, record.fp);
+        if !*self.has_fetched_fp.borrow() {
+            Self::fetch_fp(memory, record);
+            *self.has_fetched_fp.borrow_mut() = true;
+        }
 
         record.rs1_ptr = b.as_canonical_u32();
         let rs1 = tracing_read(
@@ -308,6 +314,8 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
             &mut record.writes_aux.prev_timestamp,
             &mut record.writes_aux.prev_data,
         );
+
+        *self.has_fetched_fp.borrow_mut() = false;
     }
 }
 
