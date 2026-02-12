@@ -80,7 +80,7 @@ pub(super) struct LessThanPreCompute {
     b: u8,
 }
 
-impl<A, const LIMB_BITS: usize> LessThanExecutor<A, { RV32_REGISTER_NUM_LIMBS }, LIMB_BITS> {
+impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> LessThanExecutor<A, NUM_LIMBS, LIMB_BITS> {
     /// Return `(is_imm, is_sltu)`.
     #[inline(always)]
     pub(super) fn pre_compute_impl<F: PrimeField32>(
@@ -104,6 +104,7 @@ impl<A, const LIMB_BITS: usize> LessThanExecutor<A, { RV32_REGISTER_NUM_LIMBS },
         {
             return Err(StaticProgramError::InvalidInstruction(pc));
         }
+        // LessThan64Opcode has the same variant order as LessThanOpcode
         let local_opcode = LessThanOpcode::from_usize(opcode.local_opcode_idx(self.0.offset));
         let is_imm = e_u32 == RV32_IMM_AS;
         let c_u32 = c.as_canonical_u32();
@@ -121,18 +122,18 @@ impl<A, const LIMB_BITS: usize> LessThanExecutor<A, { RV32_REGISTER_NUM_LIMBS },
 }
 
 macro_rules! dispatch {
-    ($execute_impl:ident, $is_imm:ident, $is_sltu:ident) => {
+    ($execute_impl:ident, $is_imm:ident, $is_sltu:ident, $num_limbs:expr) => {
         match ($is_imm, $is_sltu) {
-            (true, true) => Ok($execute_impl::<_, _, true, true>),
-            (true, false) => Ok($execute_impl::<_, _, true, false>),
-            (false, true) => Ok($execute_impl::<_, _, false, true>),
-            (false, false) => Ok($execute_impl::<_, _, false, false>),
+            (true, true) => Ok($execute_impl::<_, _, true, true, $num_limbs>),
+            (true, false) => Ok($execute_impl::<_, _, true, false, $num_limbs>),
+            (false, true) => Ok($execute_impl::<_, _, false, true, $num_limbs>),
+            (false, false) => Ok($execute_impl::<_, _, false, false, $num_limbs>),
         }
     };
 }
 
-impl<F, A, const LIMB_BITS: usize> InterpreterExecutor<F>
-    for LessThanExecutor<A, { RV32_REGISTER_NUM_LIMBS }, LIMB_BITS>
+impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F>
+    for LessThanExecutor<A, NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -154,12 +155,12 @@ where
         let data: &mut LessThanPreCompute = data.borrow_mut();
         let (is_imm, is_sltu) = self.pre_compute_impl(pc, inst, data)?;
 
-        dispatch!(execute_e1_handler, is_imm, is_sltu)
+        dispatch!(execute_e1_handler, is_imm, is_sltu, NUM_LIMBS)
     }
 }
 
-impl<F, A, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
-    for LessThanExecutor<A, { RV32_REGISTER_NUM_LIMBS }, LIMB_BITS>
+impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
+    for LessThanExecutor<A, NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -183,8 +184,48 @@ where
         data.chip_idx = chip_idx as u32;
         let (is_imm, is_sltu) = self.pre_compute_impl(pc, inst, &mut data.data)?;
 
-        dispatch!(execute_e2_handler, is_imm, is_sltu)
+        dispatch!(execute_e2_handler, is_imm, is_sltu, NUM_LIMBS)
     }
+}
+
+/// Sign-extend a u32 value to `[u8; N]`.
+/// For N=4, this is equivalent to `c.to_le_bytes()`.
+/// For N>4, the upper bytes are sign-extended from bit 31.
+#[inline(always)]
+fn sign_extend_u32<const N: usize>(c: u32) -> [u8; N] {
+    let sign_byte = if c & 0x8000_0000 != 0 { 0xFF } else { 0x00 };
+    let le = c.to_le_bytes();
+    std::array::from_fn(|i| if i < 4 { le[i] } else { sign_byte })
+}
+
+/// Compare two little-endian byte arrays as unsigned integers.
+#[inline(always)]
+fn compare_unsigned<const N: usize>(a: &[u8; N], b: &[u8; N]) -> bool {
+    for i in (0..N).rev() {
+        if a[i] != b[i] {
+            return a[i] < b[i];
+        }
+    }
+    false
+}
+
+/// Compare two little-endian byte arrays as signed integers.
+/// The most significant byte is treated as signed (two's complement).
+#[inline(always)]
+fn compare_signed<const N: usize>(a: &[u8; N], b: &[u8; N]) -> bool {
+    // Most significant byte: signed comparison
+    let a_msb = a[N - 1] as i8;
+    let b_msb = b[N - 1] as i8;
+    if a_msb != b_msb {
+        return a_msb < b_msb;
+    }
+    // Remaining bytes: unsigned comparison from MSB to LSB
+    for i in (0..N - 1).rev() {
+        if a[i] != b[i] {
+            return a[i] < b[i];
+        }
+    }
+    false
 }
 
 #[inline(always)]
@@ -193,23 +234,24 @@ unsafe fn execute_e12_impl<
     CTX: ExecutionCtxTrait,
     const E_IS_IMM: bool,
     const IS_U32: bool,
+    const NUM_LIMBS: usize,
 >(
     pre_compute: &LessThanPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     let fp = exec_state.memory.fp::<F>();
-    let rs1 = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
+    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
     let rs2 = if E_IS_IMM {
-        pre_compute.c.to_le_bytes()
+        sign_extend_u32::<NUM_LIMBS>(pre_compute.c)
     } else {
-        exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, fp + pre_compute.c)
+        exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c)
     };
     let cmp_result = if IS_U32 {
-        u32::from_le_bytes(rs1) < u32::from_le_bytes(rs2)
+        compare_unsigned(&rs1, &rs2)
     } else {
-        i32::from_le_bytes(rs1) < i32::from_le_bytes(rs2)
+        compare_signed(&rs1, &rs2)
     };
-    let mut rd = [0u8; RV32_REGISTER_NUM_LIMBS];
+    let mut rd = [0u8; NUM_LIMBS];
     rd[0] = cmp_result as u8;
     exec_state.vm_write(RV32_REGISTER_AS, fp + (pre_compute.a as u32), &rd);
     let pc = exec_state.pc();
@@ -223,6 +265,7 @@ unsafe fn execute_e1_impl<
     CTX: ExecutionCtxTrait,
     const E_IS_IMM: bool,
     const IS_U32: bool,
+    const NUM_LIMBS: usize,
 >(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
@@ -230,7 +273,7 @@ unsafe fn execute_e1_impl<
     unsafe {
         let pre_compute: &LessThanPreCompute =
             std::slice::from_raw_parts(pre_compute, size_of::<LessThanPreCompute>()).borrow();
-        execute_e12_impl::<F, CTX, E_IS_IMM, IS_U32>(pre_compute, exec_state);
+        execute_e12_impl::<F, CTX, E_IS_IMM, IS_U32, NUM_LIMBS>(pre_compute, exec_state);
     }
 }
 
@@ -241,6 +284,7 @@ unsafe fn execute_e2_impl<
     CTX: MeteredExecutionCtxTrait,
     const E_IS_IMM: bool,
     const IS_U32: bool,
+    const NUM_LIMBS: usize,
 >(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
@@ -252,6 +296,6 @@ unsafe fn execute_e2_impl<
         exec_state
             .ctx
             .on_height_change(pre_compute.chip_idx as usize, 1);
-        execute_e12_impl::<F, CTX, E_IS_IMM, IS_U32>(&pre_compute.data, exec_state);
+        execute_e12_impl::<F, CTX, E_IS_IMM, IS_U32, NUM_LIMBS>(&pre_compute.data, exec_state);
     }
 }
