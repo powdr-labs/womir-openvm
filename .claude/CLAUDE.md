@@ -47,6 +47,12 @@ When asked to push your changes:
 - Check what the current branch is and remember it.
 - Create a new branch, like `feature-name`
 - Commit your changes. If possible, make many small commits that make it easy to follow the history.
+- Never force push, unless explicitly asked.
 - Open a draft PR, using the previous branch as the base.
+- Keep your description minimal, but include:
+  - A link to the relevant issue (if it exists)
+  - A brief motivation (unless obvious)
+  - A brief description of the changes you made
+  - If the PR contains anything unexpected, explain it.
 
 You might also be asked to check CI results. Make sure it passes.
