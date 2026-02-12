@@ -280,10 +280,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
                     local_cols.needs_write.into(),
                     local_cols.imm_sign.into(),
                 ],
-                OvmExecutionState {
-                    pc: local_cols.from_state.pc,
-                    timestamp: local_cols.from_state.timestamp,
-                },
+                local_cols.from_state.into(),
                 OvmExecutionState {
                     pc: to_pc,
                     timestamp: timestamp + AB::F::from_canonical_usize(timestamp_delta),

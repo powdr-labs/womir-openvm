@@ -33,7 +33,7 @@ use openvm_stark_backend::{
 };
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use openvm_circuit::arch::{ExecutionBridge, ExecutionState as OvmExecutionState};
+use openvm_circuit::arch::ExecutionBridge;
 
 use crate::{
     execution::ExecutionState,
@@ -183,7 +183,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
                     AB::Expr::from_canonical_u32(RV32_REGISTER_AS),
                     local.rs2_as.into(),
                 ],
-                OvmExecutionState::new(local.from_state.pc, local.from_state.timestamp),
+                local.from_state.into(),
                 AB::F::from_canonical_usize(timestamp_delta),
                 (DEFAULT_PC_STEP, ctx.to_pc),
             )
@@ -254,6 +254,8 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
             e.as_canonical_u32() == RV32_REGISTER_AS || e.as_canonical_u32() == RV32_IMM_AS
         );
 
+        // This cannot go to `start` above because inside `tracing_read_fp` there is a
+        // `memory.read` which requires `memory` to be `&mut`.
         // Tracing read of fp from FP address space (for memory constraint proof).
         let fp = tracing_read_fp(memory, &mut record.fp_read_aux.prev_timestamp);
         debug_assert_eq!(fp, record.fp);
