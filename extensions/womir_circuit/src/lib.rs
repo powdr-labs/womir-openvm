@@ -23,10 +23,12 @@ pub mod execution;
 
 pub mod adapters;
 mod base_alu;
+mod divrem;
 mod load_sign_extend;
 mod loadstore;
 
 pub use base_alu::*;
+pub use divrem::*;
 pub use load_sign_extend::*;
 pub use loadstore::*;
 
