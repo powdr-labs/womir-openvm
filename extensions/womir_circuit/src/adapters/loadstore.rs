@@ -326,25 +326,41 @@ pub struct Rv32LoadStoreAdapterRecord {
 /// This chip reads rs1 and gets a intermediate memory pointer address with rs1 + imm.
 /// In case of Loads, reads from the shifted intermediate pointer and writes to rd.
 /// In case of Stores, reads from rs2 and writes to the shifted intermediate pointer.
-#[derive(Clone, derive_new::new)]
+#[derive(Clone)]
 pub struct Rv32LoadStoreAdapterExecutor {
     pointer_max_bits: usize,
     has_fetched_fp: RefCell<bool>,
+}
+
+impl Rv32LoadStoreAdapterExecutor {
+    pub fn new(pointer_max_bits: usize) -> Self {
+        Self {
+            pointer_max_bits,
+            has_fetched_fp: RefCell::new(false),
+        }
+    }
+
+    /// Hack: Fetch the frame pointer exactly once per instruction execution, BEFORE the first read.
+    fn maybe_fetch_fp<F: PrimeField32>(
+        &self,
+        memory: &mut TracingMemory,
+        record: &mut Rv32LoadStoreAdapterRecord,
+    ) {
+        if !*self.has_fetched_fp.borrow() {
+            record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
+            *self.has_fetched_fp.borrow_mut() = true;
+        }
+    }
+
+    fn finalize_instruction(&self) {
+        *self.has_fetched_fp.borrow_mut() = false;
+    }
 }
 
 #[derive(derive_new::new)]
 pub struct Rv32LoadStoreAdapterFiller {
     pointer_max_bits: usize,
     pub range_checker_chip: SharedVariableRangeCheckerChip,
-}
-
-impl Rv32LoadStoreAdapterExecutor {
-    fn fetch_fp<F: PrimeField32>(
-        memory: &mut TracingMemory,
-        record: &mut &mut Rv32LoadStoreAdapterRecord,
-    ) {
-        record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
-    }
 }
 
 impl<F> AdapterTraceExecutor<F> for Rv32LoadStoreAdapterExecutor
@@ -392,11 +408,7 @@ where
             opcode.local_opcode_idx(Rv32LoadStoreOpcode::CLASS_OFFSET),
         );
 
-        // Tracing read of fp from FP address space (for memory constraint proof).
-        if !*self.has_fetched_fp.borrow() {
-            Self::fetch_fp::<F>(memory, record);
-            *self.has_fetched_fp.borrow_mut() = true;
-        }
+        self.maybe_fetch_fp::<F>(memory, record);
 
         record.rs1_ptr = b.as_canonical_u32();
         record.rs1_val = u32::from_le_bytes(tracing_read(
@@ -518,7 +530,7 @@ where
             memory.increment_timestamp();
         };
 
-        *self.has_fetched_fp.borrow_mut() = false;
+        self.finalize_instruction();
     }
 }
 
