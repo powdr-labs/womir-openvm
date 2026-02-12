@@ -16,8 +16,8 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
 };
 use openvm_instructions::LocalOpcode;
 use openvm_rv32im_circuit::{
-    BaseAluCoreAir, BaseAluFiller, LoadSignExtendCoreAir, LoadSignExtendFiller, LoadStoreCoreAir,
-    LoadStoreFiller,
+    BaseAluCoreAir, BaseAluFiller, LessThanCoreAir, LessThanFiller, LoadSignExtendCoreAir,
+    LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller,
 };
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
@@ -25,7 +25,9 @@ use openvm_stark_backend::{
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
-use openvm_womir_transpiler::{BaseAlu64Opcode, BaseAluOpcode, LoadStoreOpcode};
+use openvm_womir_transpiler::{
+    BaseAlu64Opcode, BaseAluOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
+};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
@@ -74,6 +76,8 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 pub enum WomirExecutor {
     BaseAlu(Rv32BaseAluExecutor),
     BaseAlu64(BaseAlu64Executor),
+    LessThan(Rv32LessThanExecutor),
+    LessThan64(LessThan64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
 }
@@ -102,6 +106,21 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(
             base_alu_64,
             BaseAlu64Opcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        let less_than = Rv32LessThanExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            LessThanOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(less_than, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let less_than_64 = LessThan64Executor::new(
+            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            LessThan64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(
+            less_than_64,
+            LessThan64Opcode::iter().map(|x| x.global_opcode()),
         )?;
 
         let load_store = LoadStoreExecutor::new(
@@ -162,6 +181,18 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu_64);
+
+        let less_than = Rv32LessThanAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            LessThanCoreAir::new(bitwise_lu, LessThanOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(less_than);
+
+        let less_than_64 = LessThan64Air::new(
+            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            LessThanCoreAir::new(bitwise_lu, LessThan64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(less_than_64);
 
         let load_store = Rv32LoadStoreAir::new(
             Rv32LoadStoreAdapterAir::new(
@@ -246,6 +277,28 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(base_alu_64);
+
+        inventory.next_air::<Rv32LessThanAir>()?;
+        let less_than = Rv32LessThanChip::new(
+            LessThanFiller::new(
+                Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                LessThanOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(less_than);
+
+        inventory.next_air::<LessThan64Air>()?;
+        let less_than_64 = LessThan64Chip::new(
+            LessThanFiller::new(
+                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                LessThan64Opcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(less_than_64);
 
         inventory.next_air::<Rv32LoadStoreAir>()?;
         let load_store_chip = Rv32LoadStoreChip::new(
