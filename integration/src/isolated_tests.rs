@@ -1044,6 +1044,184 @@ mod tests {
         test_spec(spec)
     }
 
+    // ==================== Equal Tests ====================
+
+    #[test]
+    fn test_eq_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 == 42 → 1
+        let spec = TestSpec {
+            program: vec![wom::eq::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 42)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_eq_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 == 43 → 0
+        let spec = TestSpec {
+            program: vec![wom::eq::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 43)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_neq_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 != 43 → 1
+        let spec = TestSpec {
+            program: vec![wom::neq::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 43)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_neq_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 != 42 → 0
+        let spec = TestSpec {
+            program: vec![wom::neq::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 42)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_eq_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+0] == 42 → 1
+        let spec = TestSpec {
+            program: vec![wom::eq_imm::<F>(1, 0, 42_i16.into())],
+            start_fp: 10,
+            start_registers: vec![(10, 42)],
+            expected_registers: vec![(11, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_neq_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+0] != 0 → 1
+        let spec = TestSpec {
+            program: vec![wom::neq_imm::<F>(1, 0, 0_i16.into())],
+            start_fp: 10,
+            start_registers: vec![(10, 42)],
+            expected_registers: vec![(11, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_eq_64_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0042 == 0x0000_0001_0000_0042 → 1
+        let spec = TestSpec {
+            program: vec![wom::eq_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0x42),
+                (125, 1), // reg 0
+                (126, 0x42),
+                (127, 1), // reg 2
+            ],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_eq_64_false_high_limb() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0042 != 0x0000_0002_0000_0042 → 0
+        // Same low limb, different high limb
+        let spec = TestSpec {
+            program: vec![wom::eq_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0x42),
+                (125, 1), // reg 0
+                (126, 0x42),
+                (127, 2), // reg 2
+            ],
+            expected_registers: vec![(128, 0), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_neq_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0042 != 0x0000_0002_0000_0042 → 1
+        let spec = TestSpec {
+            program: vec![wom::neq_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0x42),
+                (125, 1), // reg 0
+                (126, 0x42),
+                (127, 2), // reg 2
+            ],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_eq_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0000_0000_002A == 42 → 1
+        let spec = TestSpec {
+            program: vec![wom::eq_imm_64::<F>(2, 0, 42_i16.into())],
+            start_fp: 124,
+            start_registers: vec![(124, 42), (125, 0)],
+            expected_registers: vec![(126, 1), (127, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
     // ==================== Cross-width tests ====================
 
     #[test]

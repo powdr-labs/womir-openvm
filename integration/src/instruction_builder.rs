@@ -228,8 +228,29 @@ pub fn eq_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruc
     instr_i(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+#[cfg(test)]
+pub fn neq<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(EqOpcode::NEQ.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
 pub fn neq_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     instr_i(EqOpcode::NEQ.global_opcode().as_usize(), rd, rs1, imm)
+}
+
+#[cfg(test)]
+pub fn eq_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+#[cfg(test)]
+pub fn neq_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(Eq64Opcode::NEQ.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+pub fn neq_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
+    instr_i(Eq64Opcode::NEQ.global_opcode().as_usize(), rd, rs1, imm)
 }
 
 pub fn const_32_imm<F: PrimeField32>(
