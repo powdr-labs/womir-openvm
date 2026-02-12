@@ -33,13 +33,16 @@ use openvm_stark_backend::{
 };
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
+use openvm_circuit::arch::ExecutionBridge;
+
 use crate::{
-    execution::{ExecutionBridge, ExecutionState, FpKeepOrSet},
-    memory_config::FpMemory,
+    execution::ExecutionState,
+    memory_config::{FP_AS, FpMemory},
 };
 
 use super::{
-    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_imm, tracing_write,
+    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp, tracing_read_imm,
+    tracing_write,
 };
 
 #[repr(C)]
@@ -52,6 +55,7 @@ pub struct Rv32BaseAluAdapterCols<T> {
     pub rs2: T,
     /// 1 if rs2 was a read, 0 if an immediate
     pub rs2_as: T,
+    pub fp_read_aux: MemoryReadAuxCols<T>,
     pub reads_aux: [MemoryReadAuxCols<T>; 2],
     pub writes_aux: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
 }
@@ -101,6 +105,16 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
             timestamp_delta += 1;
             timestamp + AB::F::from_canonical_usize(timestamp_delta - 1)
         };
+
+        // Read fp from FP address space (address space FP_AS, address 0).
+        self.memory_bridge
+            .read(
+                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                [local.from_state.fp],
+                timestamp_pp(),
+                &local.fp_read_aux,
+            )
+            .eval(builder, ctx.instruction.is_valid.clone());
 
         // If rs2 is an immediate value, constrain that:
         // 1. It's a 16-bit two's complement integer (stored in rs2_limbs[0] and rs2_limbs[1])
@@ -169,10 +183,9 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
                     AB::Expr::from_canonical_u32(RV32_REGISTER_AS),
                     local.rs2_as.into(),
                 ],
-                local.from_state,
+                local.from_state.into(),
                 AB::F::from_canonical_usize(timestamp_delta),
                 (DEFAULT_PC_STEP, ctx.to_pc),
-                FpKeepOrSet::<AB::Expr>::Keep,
             )
             .eval(builder, ctx.instruction.is_valid);
     }
@@ -206,6 +219,7 @@ pub struct Rv32BaseAluAdapterRecord {
     /// 1 if rs2 was a read, 0 if an immediate
     pub rs2_as: u8,
 
+    pub fp_read_aux: MemoryReadAuxRecord,
     pub reads_aux: [MemoryReadAuxRecord; 2],
     pub writes_aux: MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>,
 }
@@ -239,6 +253,12 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
         debug_assert!(
             e.as_canonical_u32() == RV32_REGISTER_AS || e.as_canonical_u32() == RV32_IMM_AS
         );
+
+        // This cannot go to `start` above because inside `tracing_read_fp` there is a
+        // `memory.read` which requires `memory` to be `&mut`.
+        // Tracing read of fp from FP address space (for memory constraint proof).
+        let fp = tracing_read_fp(memory, &mut record.fp_read_aux.prev_timestamp);
+        debug_assert_eq!(fp, record.fp);
 
         record.rs1_ptr = b.as_canonical_u32();
         let rs1 = tracing_read(
@@ -311,7 +331,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceFiller<F>
         let adapter_row: &mut Rv32BaseAluAdapterCols<F> = adapter_row.borrow_mut();
 
         // We must assign in reverse
-        const TIMESTAMP_DELTA: u32 = 2;
+        const TIMESTAMP_DELTA: u32 = 3;
         let mut timestamp = record.from_timestamp + TIMESTAMP_DELTA;
 
         adapter_row
@@ -343,6 +363,13 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceFiller<F>
             record.reads_aux[0].prev_timestamp,
             timestamp,
             adapter_row.reads_aux[0].as_mut(),
+        );
+        timestamp -= 1;
+
+        mem_helper.fill(
+            record.fp_read_aux.prev_timestamp,
+            timestamp,
+            adapter_row.fp_read_aux.as_mut(),
         );
 
         adapter_row.rs2_as = F::from_canonical_u8(record.rs2_as);
