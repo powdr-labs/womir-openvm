@@ -22,6 +22,8 @@ use openvm_rv32im_circuit::LoadStoreExecutor as LoadStoreExecutorInner;
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::p3_field::PrimeField32;
 
+use crate::memory_config::FpMemory;
+
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]
 pub struct LoadStoreExecutor<A, const NUM_LIMBS: usize>(pub LoadStoreExecutorInner<A, NUM_LIMBS>);
@@ -208,8 +210,9 @@ unsafe fn execute_e12_impl<
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) -> Result<(), ExecutionError> {
     let pc = exec_state.pc();
+    let fp = exec_state.memory.fp();
     let rs1_bytes: [u8; RV32_REGISTER_NUM_LIMBS] =
-        exec_state.vm_read(RV32_REGISTER_AS, pre_compute.b as u32);
+        exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.b as u32);
     let rs1_val = u32::from_le_bytes(rs1_bytes);
     let ptr_val = rs1_val.wrapping_add(pre_compute.imm_extended);
     // sign_extend([r32{c,g}(b):2]_e)`
@@ -228,7 +231,7 @@ unsafe fn execute_e12_impl<
     let read_data: [u8; RV32_REGISTER_NUM_LIMBS] = if OP::IS_LOAD {
         exec_state.vm_read(pre_compute.e as u32, ptr_val)
     } else {
-        exec_state.vm_read(RV32_REGISTER_AS, pre_compute.a as u32)
+        exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.a as u32)
     };
 
     // We need to write 4 u32s for STORE.
@@ -248,7 +251,7 @@ unsafe fn execute_e12_impl<
 
     if ENABLED {
         if OP::IS_LOAD {
-            exec_state.vm_write(RV32_REGISTER_AS, pre_compute.a as u32, &write_data);
+            exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a as u32, &write_data);
         } else {
             exec_state.vm_write(pre_compute.e as u32, ptr_val, &write_data);
         }
