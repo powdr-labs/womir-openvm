@@ -1,6 +1,7 @@
-use crate::adapters::decompose;
+use crate::adapters::{decompose, tracing_write};
 use crate::memory_config::FpMemory;
 use openvm_circuit::arch::*;
+use openvm_circuit::system::memory::offline_checker::MemoryWriteBytesAuxRecord;
 use openvm_circuit::system::memory::online::TracingMemory;
 use openvm_circuit_primitives::AlignedBytesBorrow;
 use openvm_circuit_primitives::bitwise_op_lookup::SharedBitwiseOperationLookupChip;
@@ -45,6 +46,7 @@ impl<F, RA, const LIMB_BITS: usize> PreflightExecutor<F, RA>
     for Const32Executor<RV32_REGISTER_NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
+    for<'buf> RA: RecordArena<'buf, EmptyMultiRowLayout, &'buf mut Const32Record>,
 {
     fn get_opcode_name(&self, _opcode: usize) -> String {
         "CONST32".to_string()
@@ -56,6 +58,9 @@ where
         instruction: &Instruction<F>,
     ) -> Result<(), ExecutionError> {
         let Instruction { a, b, c, .. } = instruction;
+        let record = state
+            .ctx
+            .alloc(EmptyMultiRowLayout::new(EmptyMultiRowMetadata::new()));
 
         // Extract immediates (16-bit values in b and c)
         let imm_lo = b.as_canonical_u32() & 0xFFFF;
@@ -67,16 +72,20 @@ where
         // Decompose into limbs
         let value: [F; RV32_REGISTER_NUM_LIMBS] = decompose(imm);
         let value_bytes = value.map(|x| x.as_canonical_u32() as u8);
+        record.from_pc = *state.pc;
+        record.fp = state.memory.data().fp();
+        record.from_timestamp = state.memory.timestamp;
+        record.rd_ptr = a.as_canonical_u32() + record.fp;
+        record.imm = imm;
 
-        // Write to register at (fp + target_reg)
-        let target_addr = a.as_canonical_u32() + state.memory.data().fp();
-        unsafe {
-            state.memory.write::<u8, 4, RV32_REGISTER_NUM_LIMBS>(
-                RV32_REGISTER_AS,
-                target_addr,
-                value_bytes,
-            );
-        }
+        tracing_write(
+            state.memory,
+            RV32_REGISTER_AS,
+            record.rd_ptr + record.fp,
+            value_bytes,
+            &mut record.writes_aux.prev_timestamp,
+            &mut record.writes_aux.prev_data,
+        );
 
         *state.pc = state.pc.wrapping_add(DEFAULT_PC_STEP);
         Ok(())
@@ -200,6 +209,18 @@ unsafe fn execute_e2_impl<
             .on_height_change(pre_compute.chip_idx as usize, 1);
         execute_e12_impl::<F, CTX, NUM_LIMBS, LIMB_BITS>(&pre_compute.data, exec_state);
     }
+}
+
+#[repr(C)]
+#[derive(AlignedBytesBorrow)]
+pub struct Const32Record {
+    pub from_pc: u32,
+    pub fp: u32,
+    pub from_timestamp: u32,
+
+    pub rd_ptr: u32,
+    pub imm: u32,
+    pub writes_aux: MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>,
 }
 
 #[derive(derive_new::new)]
