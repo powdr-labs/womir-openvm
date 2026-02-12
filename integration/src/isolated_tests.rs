@@ -326,10 +326,9 @@ mod tests {
     use crate::setup_tracing_with_log_level;
     use tracing::Level;
 
-    // TODO: Fix LogUp bus balancing issue - reads from uninitialized registers
-    // don't have matching entries in the memory chip trace.
+    // ==================== BaseAlu Tests ====================
+
     #[test]
-    #[should_panic]
     fn test_add_imm() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -337,6 +336,394 @@ mod tests {
             program: vec![wom::add_imm::<F>(1, 0, 100_i16.into())],
             start_fp: 124,
             expected_registers: vec![(125, 100)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_add() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] + reg[fp+1]
+        // 30 + 12 = 42
+        let spec = TestSpec {
+            program: vec![wom::add::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 30), (11, 12)],
+            expected_registers: vec![(12, 42)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_add_byte_carry() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] + reg[fp+1]
+        // 0xFF + 1 = 0x100 (carry into second byte)
+        let spec = TestSpec {
+            program: vec![wom::add::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0xFF), (11, 1)],
+            expected_registers: vec![(12, 0x100)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_add_u32_overflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] + reg[fp+1]
+        // 0xFFFFFFFF + 1 = 0 (wrapping overflow)
+        let spec = TestSpec {
+            program: vec![wom::add::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0xFFFFFFFF), (11, 1)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_sub() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] - reg[fp+1]
+        // 100 - 42 = 58
+        let spec = TestSpec {
+            program: vec![wom::sub::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 100), (11, 42)],
+            expected_registers: vec![(12, 58)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_sub_negative_result() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] - reg[fp+1]
+        // 10 - 20 = -10 (wraps to 0xFFFFFFF6)
+        let spec = TestSpec {
+            program: vec![wom::sub::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 10), (11, 20)],
+            expected_registers: vec![(12, 0xFFFFFFF6)], // -10 as u32
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_sub_underflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] - reg[fp+1]
+        // 0 - 1 = 0xFFFFFFFF (wrapping underflow)
+        let spec = TestSpec {
+            program: vec![wom::sub::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0), (11, 1)],
+            expected_registers: vec![(12, 0xFFFFFFFF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_xor() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] ^ reg[fp+1]
+        // 0b1010 ^ 0b1100 = 0b0110
+        let spec = TestSpec {
+            program: vec![wom::xor::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0b1010), (11, 0b1100)],
+            expected_registers: vec![(12, 0b0110)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_or() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] | reg[fp+1]
+        // 0b1010 | 0b1100 = 0b1110
+        let spec = TestSpec {
+            program: vec![wom::or::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0b1010), (11, 0b1100)],
+            expected_registers: vec![(12, 0b1110)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_and() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] & reg[fp+1]
+        // 0b1010 & 0b1100 = 0b1000
+        let spec = TestSpec {
+            program: vec![wom::and::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0b1010), (11, 0b1100)],
+            expected_registers: vec![(12, 0b1000)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_and_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = reg[fp+0] & 0xFF
+        // 0x1234 & 0xFF = 0x34
+        let spec = TestSpec {
+            program: vec![wom::and_imm::<F>(1, 0, 0xFF_i16.into())],
+            start_fp: 10,
+            start_registers: vec![(10, 0x1234)],
+            expected_registers: vec![(11, 0x34)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== LoadStore Tests ====================
+
+    #[test]
+    fn test_loadw() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = MEM[reg[fp+0] + 0]
+        // Load 0xDEADBEEF from address 100
+        let spec = TestSpec {
+            program: vec![wom::loadw::<F>(1, 0, 0)],
+            start_fp: 10,
+            start_registers: vec![(10, 100)], // base address = 100
+            start_ram: vec![(100, 0xDEADBEEF)],
+            expected_registers: vec![(11, 0xDEADBEEF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_loadw_with_offset() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = MEM[reg[fp+0] + 8]
+        // Load from address 100 + 8 = 108
+        let spec = TestSpec {
+            program: vec![wom::loadw::<F>(1, 0, 8)],
+            start_fp: 10,
+            start_registers: vec![(10, 100)],
+            start_ram: vec![(108, 0x12345678)],
+            expected_registers: vec![(11, 0x12345678)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_storew() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // MEM[reg[fp+1] + 0] = reg[fp+0]
+        // Store 0xCAFEBABE at address 200
+        let spec = TestSpec {
+            program: vec![wom::storew::<F>(0, 1, 0)],
+            start_fp: 10,
+            start_registers: vec![(10, 0xCAFEBABE), (11, 200)],
+            expected_ram: vec![(200, 0xCAFEBABE)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_storew_with_offset() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // MEM[reg[fp+1] + 4] = reg[fp+0]
+        // Store at address 200 + 4 = 204
+        let spec = TestSpec {
+            program: vec![wom::storew::<F>(0, 1, 4)],
+            start_fp: 10,
+            start_registers: vec![(10, 0x11223344), (11, 200)],
+            expected_ram: vec![(204, 0x11223344)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_loadbu() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = MEM[reg[fp+0] + 0] (zero-extended byte)
+        // Load byte 0xAB, should remain 0x000000AB
+        let spec = TestSpec {
+            program: vec![wom::loadbu::<F>(1, 0, 0)],
+            start_fp: 10,
+            start_registers: vec![(10, 100)],
+            start_ram: vec![(100, 0xFFFFFFAB)], // Only lowest byte matters
+            expected_registers: vec![(11, 0xAB)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_loadhu() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = MEM[reg[fp+0] + 0] (zero-extended halfword)
+        // Load halfword 0xABCD, should remain 0x0000ABCD
+        let spec = TestSpec {
+            program: vec![wom::loadhu::<F>(1, 0, 0)],
+            start_fp: 10,
+            start_registers: vec![(10, 100)],
+            start_ram: vec![(100, 0xFFFFABCD)], // Only lowest 2 bytes matter
+            expected_registers: vec![(11, 0xABCD)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_storeb() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // MEM[reg[fp+1] + 0] = reg[fp+0] (lowest byte only)
+        // Store byte 0x42 at address 200
+        let spec = TestSpec {
+            program: vec![wom::storeb::<F>(0, 1, 0)],
+            start_fp: 10,
+            start_registers: vec![(10, 0x12345642), (11, 200)],
+            start_ram: vec![(200, 0xFFFFFFFF)], // Prefill with ones
+            expected_ram: vec![(200, 0xFFFFFF42)], // Only lowest byte changed
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_storeh() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // MEM[reg[fp+1] + 0] = reg[fp+0] (lowest halfword only)
+        // Store halfword 0xBEEF at address 200
+        let spec = TestSpec {
+            program: vec![wom::storeh::<F>(0, 1, 0)],
+            start_fp: 10,
+            start_registers: vec![(10, 0x1234BEEF), (11, 200)],
+            start_ram: vec![(200, 0xFFFFFFFF)], // Prefill with ones
+            expected_ram: vec![(200, 0xFFFFBEEF)], // Only lowest 2 bytes changed
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== LoadSignExtend Tests ====================
+
+    #[test]
+    fn test_loadb_positive() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = MEM[reg[fp+0] + 0] (sign-extended byte)
+        // Load byte 0x7F (positive), should remain 0x0000007F
+        let spec = TestSpec {
+            program: vec![wom::loadb::<F>(1, 0, 0)],
+            start_fp: 10,
+            start_registers: vec![(10, 100)],
+            start_ram: vec![(100, 0x0000007F)],
+            expected_registers: vec![(11, 0x0000007F)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_loadb_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = MEM[reg[fp+0] + 0] (sign-extended byte)
+        // Load byte 0x80 (negative), should become 0xFFFFFF80
+        let spec = TestSpec {
+            program: vec![wom::loadb::<F>(1, 0, 0)],
+            start_fp: 10,
+            start_registers: vec![(10, 100)],
+            start_ram: vec![(100, 0x00000080)],
+            expected_registers: vec![(11, 0xFFFFFF80)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_loadh_positive() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = MEM[reg[fp+0] + 0] (sign-extended halfword)
+        // Load halfword 0x7FFF (positive), should remain 0x00007FFF
+        let spec = TestSpec {
+            program: vec![wom::loadh::<F>(1, 0, 0)],
+            start_fp: 10,
+            start_registers: vec![(10, 100)],
+            start_ram: vec![(100, 0x00007FFF)],
+            expected_registers: vec![(11, 0x00007FFF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_loadh_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = MEM[reg[fp+0] + 0] (sign-extended halfword)
+        // Load halfword 0x8000 (negative), should become 0xFFFF8000
+        let spec = TestSpec {
+            program: vec![wom::loadh::<F>(1, 0, 0)],
+            start_fp: 10,
+            start_registers: vec![(10, 100)],
+            start_ram: vec![(100, 0x00008000)],
+            expected_registers: vec![(11, 0xFFFF8000)],
             ..Default::default()
         };
 

@@ -29,12 +29,11 @@ use openvm_womir_transpiler::{BaseAluOpcode, LoadStoreOpcode};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
+use openvm_circuit::arch::ExecutionBridge;
+
 use crate::{
-    adapters::*,
-    execution::{ExecutionBridge, FpBus},
-    load_sign_extend::execution::LoadSignExtendExecutor,
-    loadstore::execution::LoadStoreExecutor,
-    *,
+    adapters::*, load_sign_extend::execution::LoadSignExtendExecutor,
+    loadstore::execution::LoadStoreExecutor, *,
 };
 
 pub use self::WomirCpuProverExt as WomirProverExt;
@@ -123,10 +122,7 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             memory_bridge,
         } = inventory.system().port();
 
-        // TODO: Need to extend VmConnectorChip to also initialize & finalize the fp bus.
-        // (https://github.com/powdr-labs/womir-openvm/issues/124)
-        let fp_bus = FpBus::new(inventory.new_bus_idx());
-        let exec_bridge = ExecutionBridge::new(execution_bus, fp_bus, program_bus);
+        let exec_bridge = ExecutionBridge::new(execution_bus, program_bus);
         let range_checker = inventory.range_checker().bus;
         let pointer_max_bits = inventory.pointer_max_bits();
 
