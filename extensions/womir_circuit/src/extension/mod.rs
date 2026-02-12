@@ -95,7 +95,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
 
         let load_store = LoadStoreExecutor::new(
-            Rv32LoadStoreAdapterExecutor::new(pointer_max_bits),
+            Rv32LoadStoreAdapterExecutor::new(pointer_max_bits, RefCell::new(false)),
             LoadStoreOpcode::CLASS_OFFSET,
         );
         inventory.add_executor(
@@ -106,7 +106,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         )?;
 
         let load_sign_extend =
-            LoadSignExtendExecutor::new(Rv32LoadStoreAdapterExecutor::new(pointer_max_bits));
+            LoadSignExtendExecutor::new(Rv32LoadStoreAdapterExecutor::new(pointer_max_bits, RefCell::new(false)));
         inventory.add_executor(
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),

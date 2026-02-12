@@ -1,6 +1,6 @@
-use crate::memory_config::FpMemory;
 use std::{
     borrow::{Borrow, BorrowMut},
+    cell::RefCell,
     marker::PhantomData,
 };
 
@@ -320,15 +320,25 @@ pub struct Rv32LoadStoreAdapterRecord {
 /// This chip reads rs1 and gets a intermediate memory pointer address with rs1 + imm.
 /// In case of Loads, reads from the shifted intermediate pointer and writes to rd.
 /// In case of Stores, reads from rs2 and writes to the shifted intermediate pointer.
-#[derive(Clone, Copy, derive_new::new)]
+#[derive(Clone, derive_new::new)]
 pub struct Rv32LoadStoreAdapterExecutor {
     pointer_max_bits: usize,
+    has_fetched_fp: RefCell<bool>,
 }
 
 #[derive(derive_new::new)]
 pub struct Rv32LoadStoreAdapterFiller {
     pointer_max_bits: usize,
     pub range_checker_chip: SharedVariableRangeCheckerChip,
+}
+
+impl Rv32LoadStoreAdapterExecutor {
+    fn fetch_fp<F: PrimeField32>(
+        memory: &mut TracingMemory,
+        record: &mut &mut Rv32LoadStoreAdapterRecord,
+    ) {
+        record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
+    }
 }
 
 impl<F> AdapterTraceExecutor<F> for Rv32LoadStoreAdapterExecutor
@@ -349,7 +359,6 @@ where
     #[inline(always)]
     fn start(pc: u32, memory: &TracingMemory, record: &mut Self::RecordMut<'_>) {
         record.from_pc = pc;
-        record.fp = memory.data().fp::<F>();
         record.from_timestamp = memory.timestamp;
     }
 
@@ -378,8 +387,10 @@ where
         );
 
         // Tracing read of fp from FP address space (for memory constraint proof).
-        let fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
-        debug_assert_eq!(fp, record.fp);
+        if !*self.has_fetched_fp.borrow() {
+            Self::fetch_fp::<F>(memory, record);
+            *self.has_fetched_fp.borrow_mut() = true;
+        }
 
         record.rs1_ptr = b.as_canonical_u32();
         record.rs1_val = u32::from_le_bytes(tracing_read(
@@ -500,6 +511,8 @@ where
             record.rd_rs2_ptr = u32::MAX;
             memory.increment_timestamp();
         };
+
+        *self.has_fetched_fp.borrow_mut() = false;
     }
 }
 
