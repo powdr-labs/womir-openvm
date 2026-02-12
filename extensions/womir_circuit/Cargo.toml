@@ -34,7 +34,11 @@ struct-reflection.workspace = true
 openvm-stark-sdk = { workspace = true }
 openvm-circuit = { workspace = true, features = ["test-utils"] }
 test-case.workspace = true
-itertools = "0.14"
+itertools.workspace = true
+powdr-openvm = { workspace = true }
+powdr-autoprecompiles = { workspace = true }
+powdr-number = { workspace = true }
+pretty_assertions = "1"
 
 [build-dependencies]
 openvm-cuda-builder = { workspace = true, optional = true }
