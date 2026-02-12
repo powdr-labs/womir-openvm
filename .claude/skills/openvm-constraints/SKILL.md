@@ -224,7 +224,7 @@ fn eval(&self, builder: &mut AB, local: &[AB::Var], _from_pc: AB::Var) -> Adapte
 | VmAirWrapper | `<openvm>/crates/vm/src/arch/integration_api.rs` | 268-278 |
 | BaseAluCoreAir | `<openvm>/extensions/rv32im/circuit/src/base_alu/core.rs` | 68-161 |
 
-See root CLAUDE.md for how to resolve `<dep>` paths to local paths.
+Use the `resolve-dep-paths` skill to resolve these to local paths.
 
 ## Instantiation
 

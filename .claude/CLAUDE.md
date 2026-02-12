@@ -40,27 +40,7 @@ Before any task, read `Cargo.toml` to understand the key dependencies.
 
 ### Reading Dependency Source Code
 
-Files in `.claude/` reference dependency source files using `<dep>/<path>` notation (e.g. `<openvm>/crates/vm/src/arch/integration_api.rs`). To resolve these to local paths, run:
-
-```bash
-cargo metadata --format-version 1 | python3 -c "
-import json, sys
-meta = json.load(sys.stdin)
-seen = {}
-for pkg in meta['packages']:
-    p = pkg['manifest_path']
-    if '/.cargo/git/checkouts/' in p:
-        parts = p.split('/.cargo/git/checkouts/')[1]
-        repo_checkout = '/'.join(parts.split('/')[:2])
-        repo_name = parts.split('-')[0]
-        if repo_name not in seen:
-            import os; seen[repo_name] = os.path.expanduser('~') + '/.cargo/git/checkouts/' + repo_checkout
-for n, r in sorted(seen.items()):
-    print(f'{n}: {r}')
-"
-```
-
-This prints the local checkout root for each git dependency. For example, `<openvm>/crates/vm/src/arch/integration_api.rs` maps to `{openvm_root}/crates/vm/src/arch/integration_api.rs`.
+Documentation files reference dependency source using `<dep>/<path>` notation (e.g. `<openvm>/crates/vm/src/arch/integration_api.rs`). Use the `resolve-dep-paths` skill to resolve these to local filesystem paths.
 
 ## GitHub workflow
 

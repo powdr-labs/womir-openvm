@@ -39,7 +39,7 @@ Look for related chips too (e.g., for comparison logic, check both `less_than/` 
 <openvm>/extensions/rv32im/circuit/src/{chip_name}/{mod,core,execution}.rs
 <openvm>/extensions/rv32im/circuit/src/adapters/{alu,branch,jalr,loadstore,...}.rs
 ```
-(See root CLAUDE.md for how to resolve `<dep>` paths to local paths.)
+(Use the `resolve-dep-paths` skill to resolve these to local paths.)
 
 **4. Study existing WOMIR chips** as examples. The `base_alu/` directory shows the pattern:
 - `core.rs` - Often reused directly from OpenVM (Base ALU does this)
