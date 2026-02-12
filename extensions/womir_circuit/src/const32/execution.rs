@@ -1,4 +1,4 @@
-use crate::adapters::{decompose, tracing_write};
+use crate::adapters::{Const32AdapterAirCol, decompose, tracing_write};
 use crate::memory_config::FpMemory;
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::offline_checker::MemoryWriteBytesAuxRecord;
@@ -228,14 +228,52 @@ pub struct Const32Filler<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
     pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<LIMB_BITS>,
 }
 
-impl<F, const NUM_LIMBS: usize, const LIMB_BITS: usize> TraceFiller<F>
+impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> TraceFiller<F>
     for Const32Filler<NUM_LIMBS, LIMB_BITS>
 {
     fn fill_trace_row(
         &self,
-        _mem_helper: &openvm_circuit::system::memory::MemoryAuxColsFactory<F>,
-        _row_slice: &mut [F],
+        mem_helper: &openvm_circuit::system::memory::MemoryAuxColsFactory<F>,
+        mut row_slice: &mut [F],
     ) {
-        unimplemented!()
+        let record: &Const32Record = unsafe { get_record_from_slice(&mut row_slice, ()) };
+        let cols: &mut Const32AdapterAirCol<F, NUM_LIMBS, LIMB_BITS> = row_slice.borrow_mut();
+
+        // Fill in reverse order of struct fields to prevent overwriting record data
+
+        // write_aux: set prev_data and fill timestamp proof
+        cols.write_aux
+            .set_prev_data(record.writes_aux.prev_data.map(F::from_canonical_u8));
+        mem_helper.fill(
+            record.writes_aux.prev_timestamp,
+            record.from_timestamp,
+            cols.write_aux.as_mut(),
+        );
+
+        // imm_limbs: decompose the immediate into limbs and range-check
+        let imm = record.imm;
+        let mask = (1u32 << LIMB_BITS) - 1;
+        cols.imm_limbs =
+            std::array::from_fn(|i| F::from_canonical_u32((imm >> (LIMB_BITS * i)) & mask));
+        for i in (0..NUM_LIMBS).step_by(2) {
+            let lo = (imm >> (LIMB_BITS * i)) & mask;
+            let hi = if i + 1 < NUM_LIMBS {
+                (imm >> (LIMB_BITS * (i + 1))) & mask
+            } else {
+                0
+            };
+            self.bitwise_lookup_chip.request_range(lo, hi);
+        }
+
+        // rd_ptr
+        cols.rd_ptr = F::from_canonical_u32(record.rd_ptr);
+
+        // from_state
+        cols.from_state.timestamp = F::from_canonical_u32(record.from_timestamp);
+        cols.from_state.fp = F::from_canonical_u32(record.fp);
+        cols.from_state.pc = F::from_canonical_u32(record.from_pc);
+
+        // is_valid
+        cols.is_valid = F::ONE;
     }
 }
