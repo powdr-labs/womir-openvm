@@ -127,5 +127,6 @@ where
 }
 
 pub fn system_config() -> SystemConfig {
+    // FP_AS now uses U8 cells (same as registers), which works with persistent memory.
     SystemConfig::default_from_memory(memory_config_with_fp())
 }
