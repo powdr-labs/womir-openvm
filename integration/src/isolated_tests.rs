@@ -1044,6 +1044,246 @@ mod tests {
         test_spec(spec)
     }
 
+    // ==================== DivRem Tests ====================
+
+    #[test]
+    fn test_div() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 / 7 = 6
+        let spec = TestSpec {
+            program: vec![wom::div::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 7)],
+            expected_registers: vec![(12, 6)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_div_signed() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // -42 / 7 = -6
+        let spec = TestSpec {
+            program: vec![wom::div::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, (-42_i32) as u32), (11, 7)],
+            expected_registers: vec![(12, (-6_i32) as u32)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_div_by_zero() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 / 0 = 0xFFFFFFFF (RISC-V spec)
+        let spec = TestSpec {
+            program: vec![wom::div::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 0)],
+            expected_registers: vec![(12, 0xFFFFFFFF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_divu() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 100 / 7 = 14
+        let spec = TestSpec {
+            program: vec![wom::divu::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 100), (11, 7)],
+            expected_registers: vec![(12, 14)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_rem_s() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 % 7 = 0
+        // 43 % 7 = 1
+        let spec = TestSpec {
+            program: vec![wom::rem_s::<F>(2, 0, 1), wom::rem_s::<F>(5, 3, 4)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 7), (13, 43), (14, 7)],
+            expected_registers: vec![(12, 0), (15, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_rem_s_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // -43 % 7 = -1 (remainder has sign of dividend)
+        let spec = TestSpec {
+            program: vec![wom::rem_s::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, (-43_i32) as u32), (11, 7)],
+            expected_registers: vec![(12, (-1_i32) as u32)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_remu() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 100 % 7 = 2
+        let spec = TestSpec {
+            program: vec![wom::remu::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 100), (11, 7)],
+            expected_registers: vec![(12, 2)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_remu_by_zero() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 % 0 = 42 (RISC-V spec: returns dividend)
+        let spec = TestSpec {
+            program: vec![wom::remu::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 0)],
+            expected_registers: vec![(12, 42)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== DivRem 64-bit Tests ====================
+
+    #[test]
+    fn test_div_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0000_0000_002A / 0x0000_0000_0000_0007 = 0x0000_0000_0000_0006
+        let spec = TestSpec {
+            program: vec![wom::div_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 42),
+                (125, 0), // reg 0 = 42
+                (126, 7),
+                (127, 0), // reg 2 = 7
+            ],
+            expected_registers: vec![(128, 6), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_div_64_large() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0000 / 0x0000_0000_0000_0002 = 0x0000_0000_8000_0000
+        let spec = TestSpec {
+            program: vec![wom::div_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x1_0000_0000
+                (126, 2),
+                (127, 0), // reg 2 = 2
+            ],
+            expected_registers: vec![(128, 0x8000_0000), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_divu_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0xFFFF_FFFF_FFFF_FFFF / 0x0000_0000_0000_0002 = 0x7FFF_FFFF_FFFF_FFFF
+        let spec = TestSpec {
+            program: vec![wom::divu_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0xFFFF_FFFF),
+                (125, 0xFFFF_FFFF), // reg 0 = u64::MAX
+                (126, 2),
+                (127, 0), // reg 2 = 2
+            ],
+            expected_registers: vec![(128, 0xFFFF_FFFF), (129, 0x7FFF_FFFF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_remu_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 4294967297 % 3 = 2
+        let spec = TestSpec {
+            program: vec![wom::remu_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 1),
+                (125, 1), // reg 0 = 0x1_0000_0001 = 4294967297
+                (126, 3),
+                (127, 0), // reg 2 = 3
+            ],
+            expected_registers: vec![(128, 2), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_rem_s_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // -43 % 7 = -1 (64-bit signed)
+        // -43 as i64 = 0xFFFF_FFFF_FFFF_FFD5
+        // -1 as i64 = 0xFFFF_FFFF_FFFF_FFFF
+        let spec = TestSpec {
+            program: vec![wom::rem_s_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0xFFFF_FFD5),
+                (125, 0xFFFF_FFFF), // reg 0 = -43 as i64
+                (126, 7),
+                (127, 0), // reg 2 = 7
+            ],
+            expected_registers: vec![(128, 0xFFFF_FFFF), (129, 0xFFFF_FFFF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
     // ==================== Cross-width tests ====================
 
     #[test]
