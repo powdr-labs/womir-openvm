@@ -165,7 +165,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             .read(
                 MemoryAddress::new(
                     AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.rs1_ptr,
+                    local_cols.rs1_ptr + local_cols.from_state.fp,
                 ),
                 local_cols.rs1_data,
                 timestamp_pp(),
@@ -231,8 +231,11 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
         // clause       since the resulting read_ptr/write_ptr's degree will be 3 which is
         // too high.       Instead, the solution without using additional columns is to get
         // two different shift amounts from core chip
-        let read_ptr = select::<AB::Expr>(is_load.clone(), mem_ptr.clone(), local_cols.rd_rs2_ptr)
-            - load_shift_amount;
+        let read_ptr = select::<AB::Expr>(
+            is_load.clone(),
+            mem_ptr.clone(),
+            local_cols.rd_rs2_ptr + local_cols.from_state.fp,
+        ) - load_shift_amount;
 
         self.memory_bridge
             .read(
@@ -253,8 +256,11 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
         );
 
         // write_ptr is rd_rs2_ptr for loads and mem_ptr for stores
-        let write_ptr = select::<AB::Expr>(is_load.clone(), local_cols.rd_rs2_ptr, mem_ptr.clone())
-            - store_shift_amount;
+        let write_ptr = select::<AB::Expr>(
+            is_load.clone(),
+            local_cols.rd_rs2_ptr + local_cols.from_state.fp,
+            mem_ptr.clone(),
+        ) - store_shift_amount;
 
         self.memory_bridge
             .write(
