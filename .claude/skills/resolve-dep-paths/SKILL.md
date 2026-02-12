@@ -16,4 +16,4 @@ When you encounter a `<dep>/<path>` reference (e.g. `<openvm>/crates/vm/src/arch
 .claude/skills/resolve-dep-paths/resolve.sh openvm
 ```
 
-Then use the Read tool with the resolved path. For example, if the script prints `/Users/.../.cargo/git/checkouts/openvm-HASH/REV`, read `<openvm>/crates/vm/src/arch/integration_api.rs` as `/Users/.../.cargo/git/checkouts/openvm-HASH/REV/crates/vm/src/arch/integration_api.rs`.
+Then use the Read tool with the resolved path. For example, if the script prints `/some/absolute/path/.cargo/git/checkouts/openvm-HASH/REV`, read `<openvm>/crates/vm/src/arch/integration_api.rs` as `/some/absolute/path/.cargo/git/checkouts/openvm-HASH/REV/crates/vm/src/arch/integration_api.rs`.
