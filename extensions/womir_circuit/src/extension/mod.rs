@@ -27,6 +27,7 @@ use openvm_stark_backend::{
 };
 use openvm_womir_transpiler::{BaseAluOpcode, LoadStoreOpcode};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use strum::IntoEnumIterator;
 
 use openvm_circuit::arch::ExecutionBridge;
@@ -88,12 +89,14 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
     ) -> Result<(), ExecutorInventoryError> {
         let pointer_max_bits = inventory.pointer_max_bits();
 
-        let base_alu =
-            Rv32BaseAluExecutor::new(Rv32BaseAluAdapterExecutor, BaseAluOpcode::CLASS_OFFSET);
+        let base_alu = Rv32BaseAluExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            BaseAluOpcode::CLASS_OFFSET,
+        );
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
 
         let load_store = LoadStoreExecutor::new(
-            Rv32LoadStoreAdapterExecutor::new(pointer_max_bits),
+            Rv32LoadStoreAdapterExecutor::new(pointer_max_bits, RefCell::new(false)),
             LoadStoreOpcode::CLASS_OFFSET,
         );
         inventory.add_executor(
@@ -103,8 +106,10 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
                 .map(|x| x.global_opcode()),
         )?;
 
-        let load_sign_extend =
-            LoadSignExtendExecutor::new(Rv32LoadStoreAdapterExecutor::new(pointer_max_bits));
+        let load_sign_extend = LoadSignExtendExecutor::new(Rv32LoadStoreAdapterExecutor::new(
+            pointer_max_bits,
+            RefCell::new(false),
+        ));
         inventory.add_executor(
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),

@@ -200,7 +200,7 @@ unsafe fn execute_e12_impl<
     pre_compute: &BaseAluPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
-    let fp = exec_state.memory.fp();
+    let fp = exec_state.memory.fp::<F>();
     let rs1 = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
     let rs2 = if IS_IMM {
         pre_compute.c.to_le_bytes()
