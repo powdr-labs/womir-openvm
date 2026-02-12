@@ -1043,4 +1043,40 @@ mod tests {
 
         test_spec(spec)
     }
+
+    // ==================== Cross-width tests ====================
+
+    #[test]
+    fn test_cross_width_32_to_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 32-bit writes 0x42 to reg fp+0, then 64-bit reads reg pair fp+0:fp+1
+        let spec = TestSpec {
+            program: vec![
+                wom::add_imm::<F>(0, 0, 0x42_i16.into()),
+                wom::add_imm_64::<F>(2, 0, 0_i16.into()),
+            ],
+            start_fp: 10,
+            expected_registers: vec![(10, 0x42), (12, 0x42), (13, 0)],
+            ..Default::default()
+        };
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_cross_width_64_to_32() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 64-bit writes 0x42 to reg pair fp+0:fp+1, then 32-bit reads reg fp+0
+        let spec = TestSpec {
+            program: vec![
+                wom::add_imm_64::<F>(0, 0, 0x42_i16.into()),
+                wom::add_imm::<F>(2, 0, 0_i16.into()),
+            ],
+            start_fp: 10,
+            expected_registers: vec![(10, 0x42), (11, 0), (12, 0x42)],
+            ..Default::default()
+        };
+        test_spec(spec)
+    }
 }

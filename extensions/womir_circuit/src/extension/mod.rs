@@ -96,7 +96,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
 
         let base_alu_64 = BaseAlu64Executor::new(
-            BaseAluAdapterExecutor::<8, RV32_CELL_BITS>::default(),
+            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
             BaseAlu64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(
@@ -158,7 +158,7 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(base_alu);
 
         let base_alu_64 = BaseAlu64Air::new(
-            BaseAluAdapterAir::<8>::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
             BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu_64);
@@ -239,7 +239,7 @@ where
         inventory.next_air::<BaseAlu64Air>()?;
         let base_alu_64 = BaseAlu64Chip::new(
             BaseAluFiller::new(
-                BaseAluAdapterFiller::<8, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
                 BaseAlu64Opcode::CLASS_OFFSET,
             ),
