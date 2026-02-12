@@ -353,6 +353,40 @@ mod tests {
     }
 
     #[test]
+    fn test_add_byte_carry() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] + reg[fp+1]
+        // 0xFF + 1 = 0x100 (carry into second byte)
+        let spec = TestSpec {
+            program: vec![wom::add::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0xFF), (11, 1)],
+            expected_registers: vec![(12, 0x100)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_add_u32_overflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] + reg[fp+1]
+        // 0xFFFFFFFF + 1 = 0 (wrapping overflow)
+        let spec = TestSpec {
+            program: vec![wom::add::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0xFFFFFFFF), (11, 1)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
     fn test_sub() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -363,6 +397,40 @@ mod tests {
             start_fp: 10,
             start_registers: vec![(10, 100), (11, 42)],
             expected_registers: vec![(12, 58)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_sub_negative_result() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] - reg[fp+1]
+        // 10 - 20 = -10 (wraps to 0xFFFFFFF6)
+        let spec = TestSpec {
+            program: vec![wom::sub::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 10), (11, 20)],
+            expected_registers: vec![(12, 0xFFFFFFF6)], // -10 as u32
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_sub_underflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] - reg[fp+1]
+        // 0 - 1 = 0xFFFFFFFF (wrapping underflow)
+        let spec = TestSpec {
+            program: vec![wom::sub::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0), (11, 1)],
+            expected_registers: vec![(12, 0xFFFFFFFF)],
             ..Default::default()
         };
 
@@ -555,7 +623,7 @@ mod tests {
             program: vec![wom::storeb::<F>(0, 1, 0)],
             start_fp: 10,
             start_registers: vec![(10, 0x12345642), (11, 200)],
-            start_ram: vec![(200, 0xFFFFFFFF)], // Pre-fill with ones
+            start_ram: vec![(200, 0xFFFFFFFF)], // Prefill with ones
             expected_ram: vec![(200, 0xFFFFFF42)], // Only lowest byte changed
             ..Default::default()
         };
@@ -573,7 +641,7 @@ mod tests {
             program: vec![wom::storeh::<F>(0, 1, 0)],
             start_fp: 10,
             start_registers: vec![(10, 0x1234BEEF), (11, 200)],
-            start_ram: vec![(200, 0xFFFFFFFF)], // Pre-fill with ones
+            start_ram: vec![(200, 0xFFFFFFFF)], // Prefill with ones
             expected_ram: vec![(200, 0xFFFFBEEF)], // Only lowest 2 bytes changed
             ..Default::default()
         };
