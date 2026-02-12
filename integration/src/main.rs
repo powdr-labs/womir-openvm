@@ -1448,7 +1448,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_const32_simple() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1461,7 +1460,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_const32_zero() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1474,7 +1472,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_const32_max_value() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1487,7 +1484,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_const32_multiple_registers() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1502,7 +1498,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_const32_with_arithmetic() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1837,7 +1832,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadw_basic() {
         // Test basic LOADW instruction
         let instructions = vec![
@@ -1854,7 +1848,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_storew_with_offset() {
         // Test STOREW with positive offset
         let instructions = vec![
@@ -1876,7 +1869,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadbu_basic() {
         // Test LOADBU instruction (load byte unsigned)
         let instructions = vec![
@@ -1892,7 +1884,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadhu_basic() {
         // Test LOADHU instruction (load halfword unsigned)
         let instructions = vec![
@@ -1908,7 +1899,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_storeb_with_offset() {
         // Test STOREB with offset and masking
         let instructions = vec![
@@ -1927,7 +1917,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_storeh_with_offset() {
         // Test STOREH with offset
         let instructions = vec![

@@ -1,20 +1,24 @@
-use crate::execution::{ExecutionBridge, ExecutionState};
-use openvm_circuit::arch::{BasicAdapterInterface, MinimalInstruction, VmAdapterAir};
-use openvm_circuit::system::memory::offline_checker::MemoryBridge;
-use openvm_circuit_primitives::AlignedBorrow;
-use openvm_circuit_primitives::bitwise_op_lookup::BitwiseOperationLookupBus;
-use openvm_stark_backend::interaction::InteractionBuilder;
-use openvm_stark_backend::p3_air::AirBuilder;
-use openvm_stark_backend::p3_air::{Air, BaseAir};
-use openvm_stark_backend::rap::{BaseAirWithPublicValues, ColumnsAir, PartitionedBaseAir};
 use std::borrow::Borrow;
+
+use super::RV32_REGISTER_NUM_LIMBS;
+use crate::execution::{ExecutionBridge, ExecutionState};
+use openvm_circuit::system::memory::offline_checker::{MemoryBridge, MemoryWriteAuxCols};
+use openvm_circuit_primitives::{AlignedBorrow, bitwise_op_lookup::BitwiseOperationLookupBus};
+use openvm_stark_backend::{
+    p3_air::{Air, AirBuilder, BaseAir},
+    p3_matrix::Matrix,
+    rap::{BaseAirWithPublicValues, ColumnsAir, PartitionedBaseAir},
+};
+
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 #[derive(AlignedBorrow, StructReflection)]
 pub struct Const32AdapterAirCol<T, const NUM_LIMBS: usize, const CELL_BITS: usize> {
+    pub is_valid: T,
     pub from_state: ExecutionState<T>,
     pub rd_ptr: T,
-    pub imm: T,
+    pub imm_limbs: [T; NUM_LIMBS],
+    pub write_aux: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
 }
 
 #[derive(derive_new::new)]
@@ -37,7 +41,7 @@ impl<F, const NUM_LIMBS: usize, const CELL_BITS: usize> BaseAirWithPublicValues<
     for Const32AdapterAir<NUM_LIMBS, CELL_BITS>
 {
     fn num_public_values(&self) -> usize {
-        unimplemented!()
+        0
     }
 }
 
@@ -54,34 +58,15 @@ impl<F, const NUM_LIMBS: usize, const CELL_BITS: usize> ColumnsAir<F>
     }
 }
 
-impl<AB: InteractionBuilder, const NUM_LIMBS: usize, const CELL_BITS: usize> VmAdapterAir<AB>
-    for Const32AdapterAir<NUM_LIMBS, CELL_BITS>
-{
-    type Interface =
-        BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 2, 1, NUM_LIMBS, CELL_BITS>;
-    fn eval(
-        &self,
-        _builder: &mut AB,
-        _local: &[<AB as AirBuilder>::Var],
-        _interface: openvm_circuit::arch::AdapterAirContext<
-            <AB as AirBuilder>::Expr,
-            Self::Interface,
-        >,
-    ) {
-        unimplemented!()
-    }
-    fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &Const32AdapterAirCol<_, NUM_LIMBS, CELL_BITS> = local.borrow();
-        cols.from_state.pc
-    }
-}
-
 impl<AB, const NUM_LIMBS: usize, const CELL_BITS: usize> Air<AB>
     for Const32AdapterAir<NUM_LIMBS, CELL_BITS>
 where
     AB: AirBuilder,
 {
-    fn eval(&self, _builder: &mut AB) {
-        unimplemented!()
+    fn eval(&self, builder: &mut AB) {
+        let main = builder.main();
+        let local = main.row_slice(0);
+        let cols: &Const32AdapterAirCol<AB::Var, NUM_LIMBS, CELL_BITS> = (*local).borrow();
+        builder.assert_bool(cols.is_valid);
     }
 }
