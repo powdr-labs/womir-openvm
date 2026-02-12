@@ -1,32 +1,36 @@
 use std::borrow::Borrow;
 
-use super::RV32_REGISTER_NUM_LIMBS;
-use crate::execution::{ExecutionBridge, ExecutionState};
+use crate::execution::{ExecutionBridge, ExecutionState, FpKeepOrSet};
+use openvm_circuit::system::memory::MemoryAddress;
 use openvm_circuit::system::memory::offline_checker::{MemoryBridge, MemoryWriteAuxCols};
 use openvm_circuit_primitives::{AlignedBorrow, bitwise_op_lookup::BitwiseOperationLookupBus};
+use openvm_instructions::program::DEFAULT_PC_STEP;
+use openvm_instructions::riscv::RV32_REGISTER_AS;
+use openvm_stark_backend::interaction::InteractionBuilder;
+use openvm_stark_backend::p3_field::FieldAlgebra;
 use openvm_stark_backend::{
-    p3_air::{Air, AirBuilder, BaseAir},
+    p3_air::{Air, BaseAir},
     p3_matrix::Matrix,
     rap::{BaseAirWithPublicValues, ColumnsAir, PartitionedBaseAir},
 };
-
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
+#[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
 pub struct Const32AdapterAirCol<T, const NUM_LIMBS: usize, const CELL_BITS: usize> {
     pub is_valid: T,
     pub from_state: ExecutionState<T>,
     pub rd_ptr: T,
     pub imm_limbs: [T; NUM_LIMBS],
-    pub write_aux: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
+    pub write_aux: MemoryWriteAuxCols<T, NUM_LIMBS>,
 }
 
 #[derive(derive_new::new)]
 pub struct Const32AdapterAir<const NUM_LIMBS: usize, const CELL_BITS: usize> {
     pub bus: BitwiseOperationLookupBus,
     pub offset: usize,
-    pub(super) _execution_bridge: ExecutionBridge,
-    pub(super) _memory_bridge: MemoryBridge,
+    pub(super) execution_bridge: ExecutionBridge,
+    pub(super) memory_bridge: MemoryBridge,
 }
 
 impl<F, const NUM_LIMBS: usize, const CELL_BITS: usize> BaseAir<F>
@@ -61,12 +65,66 @@ impl<F, const NUM_LIMBS: usize, const CELL_BITS: usize> ColumnsAir<F>
 impl<AB, const NUM_LIMBS: usize, const CELL_BITS: usize> Air<AB>
     for Const32AdapterAir<NUM_LIMBS, CELL_BITS>
 where
-    AB: AirBuilder,
+    AB: InteractionBuilder,
 {
     fn eval(&self, builder: &mut AB) {
         let main = builder.main();
         let local = main.row_slice(0);
         let cols: &Const32AdapterAirCol<AB::Var, NUM_LIMBS, CELL_BITS> = (*local).borrow();
+
+        let timestamp = cols.from_state.timestamp;
+        let mut timestamp_delta: usize = 0;
+        let mut timestamp_pp = || {
+            timestamp_delta += 1;
+            timestamp + AB::F::from_canonical_usize(timestamp_delta - 1)
+        };
+
+        // Write imm_limbs to register at rd_ptr + fp
+        self.memory_bridge
+            .write(
+                MemoryAddress::new(
+                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
+                    cols.rd_ptr + cols.from_state.fp,
+                ),
+                cols.imm_limbs,
+                timestamp_pp(),
+                &cols.write_aux,
+            )
+            .eval(builder, cols.is_valid);
+
+        // Range-check imm_limbs via bitwise lookup bus
+        self.bus
+            .send_range(cols.imm_limbs[0], cols.imm_limbs[1])
+            .eval(builder, cols.is_valid);
+        self.bus
+            .send_range(cols.imm_limbs[2], cols.imm_limbs[3])
+            .eval(builder, cols.is_valid);
+
+        // Reconstruct instruction operands b (imm_lo) and c (imm_hi) from limbs
+        let cell_factor = AB::F::from_canonical_u32(1 << CELL_BITS);
+        let imm_lo: AB::Expr = cols.imm_limbs[0] + cols.imm_limbs[1] * cell_factor;
+        let imm_hi: AB::Expr = cols.imm_limbs[2] + cols.imm_limbs[3] * cell_factor;
+
+        // Execution bridge: verify instruction and advance PC
+        self.execution_bridge
+            .execute_and_increment_or_set_pc(
+                AB::F::from_canonical_usize(self.offset),
+                [
+                    cols.rd_ptr.into(), // a: target register
+                    imm_lo,             // b: low 16 bits of immediate
+                    imm_hi,             // c: high 16 bits of immediate
+                    AB::Expr::ZERO,     // d
+                    AB::Expr::ZERO,     // e
+                    AB::Expr::ONE,      // f: enabled
+                    AB::Expr::ZERO,     // g
+                ],
+                cols.from_state,
+                AB::F::from_canonical_usize(timestamp_delta),
+                (DEFAULT_PC_STEP, None::<AB::Expr>),
+                FpKeepOrSet::<AB::Expr>::Keep,
+            )
+            .eval(builder, cols.is_valid);
+
         builder.assert_bool(cols.is_valid);
     }
 }

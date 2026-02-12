@@ -239,11 +239,10 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> TraceFille
         let record: &Const32Record = unsafe { get_record_from_slice(&mut row_slice, ()) };
         let cols: &mut Const32AdapterAirCol<F, NUM_LIMBS, LIMB_BITS> = row_slice.borrow_mut();
 
-        // Fill in reverse order of struct fields to prevent overwriting record data
-
         // write_aux: set prev_data and fill timestamp proof
-        cols.write_aux
-            .set_prev_data(record.writes_aux.prev_data.map(F::from_canonical_u8));
+        cols.write_aux.set_prev_data(std::array::from_fn(|i| {
+            F::from_canonical_u8(record.writes_aux.prev_data[i])
+        }));
         mem_helper.fill(
             record.writes_aux.prev_timestamp,
             record.from_timestamp,
