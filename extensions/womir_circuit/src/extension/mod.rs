@@ -27,7 +27,6 @@ use openvm_stark_backend::{
 };
 use openvm_womir_transpiler::{BaseAluOpcode, LoadStoreOpcode};
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
 use strum::IntoEnumIterator;
 
 use openvm_circuit::arch::ExecutionBridge;
@@ -96,7 +95,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
 
         let load_store = LoadStoreExecutor::new(
-            Rv32LoadStoreAdapterExecutor::new(pointer_max_bits, RefCell::new(false)),
+            Rv32LoadStoreAdapterExecutor::new(pointer_max_bits),
             LoadStoreOpcode::CLASS_OFFSET,
         );
         inventory.add_executor(
@@ -106,10 +105,8 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
                 .map(|x| x.global_opcode()),
         )?;
 
-        let load_sign_extend = LoadSignExtendExecutor::new(Rv32LoadStoreAdapterExecutor::new(
-            pointer_max_bits,
-            RefCell::new(false),
-        ));
+        let load_sign_extend =
+            LoadSignExtendExecutor::new(Rv32LoadStoreAdapterExecutor::new(pointer_max_bits));
         inventory.add_executor(
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
