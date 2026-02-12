@@ -1786,10 +1786,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_input_hint() {
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
+            // wom::const_32_imm(0, 0, 0),
             wom::prepare_read::<F>(),
             wom::read_u32::<F>(10),
             wom::reveal(10, 0),

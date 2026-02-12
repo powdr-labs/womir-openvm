@@ -14,7 +14,7 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
     BitwiseOperationLookupAir, BitwiseOperationLookupBus, BitwiseOperationLookupChip,
     SharedBitwiseOperationLookupChip,
 };
-use openvm_instructions::LocalOpcode;
+use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_rv32im_circuit::{
     BaseAluCoreAir, BaseAluFiller, LessThanCoreAir, LessThanFiller, LoadSignExtendCoreAir,
     LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller,
@@ -26,7 +26,8 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, HintStoreOpcode, LessThan64Opcode, LessThanOpcode,
+    LoadStoreOpcode, Phantom,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -80,6 +81,7 @@ pub enum WomirExecutor {
     LessThan64(LessThan64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
+    HintStore(Rv32HintStoreExecutor),
 }
 
 // ============ VmExtension Implementations ============
@@ -139,6 +141,18 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
+        )?;
+
+        let hint_store =
+            Rv32HintStoreExecutor::new(pointer_max_bits, HintStoreOpcode::CLASS_OFFSET);
+        inventory.add_executor(
+            hint_store,
+            HintStoreOpcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        inventory.add_phantom_sub_executor(
+            phantom::HintInputSubEx,
+            PhantomDiscriminant(Phantom::HintInput as u16),
         )?;
 
         Ok(())
@@ -215,6 +229,15 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             LoadSignExtendCoreAir::new(range_checker),
         );
         inventory.add_air(load_sign_extend);
+
+        let hint_store = Rv32HintStoreAir::new(
+            exec_bridge,
+            memory_bridge,
+            bitwise_lu,
+            HintStoreOpcode::CLASS_OFFSET,
+            pointer_max_bits,
+        );
+        inventory.add_air(hint_store);
 
         Ok(())
     }
@@ -320,6 +343,49 @@ where
         );
         inventory.add_executor_chip(load_sign_extend);
 
+        inventory.next_air::<Rv32HintStoreAir>()?;
+        let hint_store = Rv32HintStoreChip::new(
+            Rv32HintStoreFiller::new(pointer_max_bits, bitwise_lu.clone()),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(hint_store);
+
         Ok(())
+    }
+}
+
+mod phantom {
+    use eyre::bail;
+    use openvm_circuit::arch::{PhantomSubExecutor, Streams};
+    use openvm_circuit::system::memory::online::GuestMemory;
+    use openvm_instructions::PhantomDiscriminant;
+    use openvm_stark_backend::p3_field::Field;
+    use rand::rngs::StdRng;
+
+    pub struct HintInputSubEx;
+
+    impl<F: Field> PhantomSubExecutor<F> for HintInputSubEx {
+        fn phantom_execute(
+            &self,
+            _: &GuestMemory,
+            streams: &mut Streams<F>,
+            _: &mut StdRng,
+            _: PhantomDiscriminant,
+            _: u32,
+            _: u32,
+            _: u16,
+        ) -> eyre::Result<()> {
+            let mut hint = match streams.input_stream.pop_front() {
+                Some(hint) => hint,
+                None => {
+                    bail!("EndOfInputStream");
+                }
+            };
+            streams.hint_stream.clear();
+            let capacity = hint.len().div_ceil(4) * 4;
+            hint.resize(capacity, F::ZERO);
+            streams.hint_stream.extend(hint);
+            Ok(())
+        }
     }
 }
