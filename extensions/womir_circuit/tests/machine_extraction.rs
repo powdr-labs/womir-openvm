@@ -26,7 +26,6 @@ use powdr_openvm::{
         UnsupportedOpenVmReferenceError, openvm_bus_interaction_to_powdr, symbolic_to_algebraic,
     },
 };
-use pretty_assertions::assert_eq;
 use womir_circuit::{WomirConfig, WomirCpuBuilder};
 
 type BabyBearSC = <BabyBearPoseidon2Engine as openvm_stark_backend::engine::StarkEngine>::SC;
@@ -128,7 +127,10 @@ fn assert_snapshot(rendered: &str, snapshot_name: &str) {
 
     match fs::read_to_string(&path) {
         Ok(expected) => {
-            assert_eq!(rendered, expected)
+            assert!(
+                rendered == expected,
+                "Snapshots differ. If you want to updated the snapshot, delete the file at {path:?} and rerun the tests."
+            );
         }
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
             if let Some(parent) = path.parent() {
