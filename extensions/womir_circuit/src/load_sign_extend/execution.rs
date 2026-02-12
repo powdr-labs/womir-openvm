@@ -194,7 +194,7 @@ unsafe fn execute_e12_impl<
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) -> Result<(), ExecutionError> {
     let pc = exec_state.pc();
-    let fp = exec_state.memory.fp();
+    let fp = exec_state.memory.fp::<F>();
     let rs1_bytes: [u8; RV32_REGISTER_NUM_LIMBS] =
         exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.b as u32);
     let rs1_val = u32::from_le_bytes(rs1_bytes);

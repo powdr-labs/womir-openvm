@@ -1,4 +1,7 @@
-use std::borrow::{Borrow, BorrowMut};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    cell::RefCell,
+};
 
 use openvm_circuit::{
     arch::{
@@ -35,10 +38,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use openvm_circuit::arch::ExecutionBridge;
 
-use crate::{
-    execution::ExecutionState,
-    memory_config::{FP_AS, FpMemory},
-};
+use crate::{execution::ExecutionState, memory_config::FP_AS};
 
 use super::{
     RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp, tracing_read_imm,
@@ -196,8 +196,20 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
     }
 }
 
-#[derive(Clone, derive_new::new)]
-pub struct Rv32BaseAluAdapterExecutor<const LIMB_BITS: usize>;
+#[derive(Clone)]
+pub struct Rv32BaseAluAdapterExecutor<const LIMB_BITS: usize> {
+    /// Hack: This flag is used so that we fetch the frame pointer exactly once per instruction execution,
+    ///       BEFORE the first read.
+    has_fetched_fp: RefCell<bool>,
+}
+
+impl<const LIMB_BITS: usize> Default for Rv32BaseAluAdapterExecutor<LIMB_BITS> {
+    fn default() -> Self {
+        Self {
+            has_fetched_fp: RefCell::new(false),
+        }
+    }
+}
 
 #[derive(derive_new::new)]
 pub struct Rv32BaseAluAdapterFiller<const LIMB_BITS: usize> {
@@ -224,6 +236,23 @@ pub struct Rv32BaseAluAdapterRecord {
     pub writes_aux: MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>,
 }
 
+impl<const LIMB_BITS: usize> Rv32BaseAluAdapterExecutor<LIMB_BITS> {
+    fn maybe_fetch_fp<F: PrimeField32>(
+        &self,
+        memory: &mut TracingMemory,
+        record: &mut Rv32BaseAluAdapterRecord,
+    ) {
+        if !*self.has_fetched_fp.borrow() {
+            record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
+            *self.has_fetched_fp.borrow_mut() = true;
+        }
+    }
+
+    fn finalize_instruction(&self) {
+        *self.has_fetched_fp.borrow_mut() = false;
+    }
+}
+
 impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
     for Rv32BaseAluAdapterExecutor<LIMB_BITS>
 {
@@ -235,7 +264,6 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
     #[inline(always)]
     fn start(pc: u32, memory: &TracingMemory, record: &mut &mut Rv32BaseAluAdapterRecord) {
         record.from_pc = pc;
-        record.fp = memory.data().fp();
         record.from_timestamp = memory.timestamp;
     }
 
@@ -254,11 +282,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
             e.as_canonical_u32() == RV32_REGISTER_AS || e.as_canonical_u32() == RV32_IMM_AS
         );
 
-        // This cannot go to `start` above because inside `tracing_read_fp` there is a
-        // `memory.read` which requires `memory` to be `&mut`.
-        // Tracing read of fp from FP address space (for memory constraint proof).
-        let fp = tracing_read_fp(memory, &mut record.fp_read_aux.prev_timestamp);
-        debug_assert_eq!(fp, record.fp);
+        self.maybe_fetch_fp::<F>(memory, record);
 
         record.rs1_ptr = b.as_canonical_u32();
         let rs1 = tracing_read(
@@ -308,6 +332,8 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
             &mut record.writes_aux.prev_timestamp,
             &mut record.writes_aux.prev_data,
         );
+
+        self.finalize_instruction();
     }
 }
 
