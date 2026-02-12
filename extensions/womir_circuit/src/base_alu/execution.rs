@@ -223,13 +223,7 @@ unsafe fn execute_e12_impl<
     pre_compute: &BaseAluPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
-    // NUM_LIMBS must be a multiple of 4 since we process data in 4-byte (u32) chunks
-    const {
-        assert!(
-            NUM_LIMBS.is_multiple_of(4),
-            "NUM_LIMBS must be a multiple of 4"
-        )
-    };
+    const { assert!(NUM_LIMBS == 4 || NUM_LIMBS == 8) };
 
     let fp = exec_state.memory.fp::<F>();
     let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
@@ -238,16 +232,14 @@ unsafe fn execute_e12_impl<
     } else {
         exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c)
     };
-    let mut rd = [0u8; NUM_LIMBS];
-    let mut carry = 0u32;
-    for w in 0..NUM_LIMBS / 4 {
-        let i = w * 4;
-        let a = u32::from_le_bytes(rs1[i..i + 4].try_into().unwrap());
-        let b = u32::from_le_bytes(rs2[i..i + 4].try_into().unwrap());
-        let (result, new_carry) = OP::compute(a, b, carry);
-        carry = new_carry;
-        rd[i..i + 4].copy_from_slice(&result.to_le_bytes());
-    }
+    let a = u64::from_le_bytes(std::array::from_fn(
+        |i| if i < NUM_LIMBS { rs1[i] } else { 0 },
+    ));
+    let b = u64::from_le_bytes(std::array::from_fn(
+        |i| if i < NUM_LIMBS { rs2[i] } else { 0 },
+    ));
+    let result = OP::compute(a, b).to_le_bytes();
+    let rd: [u8; NUM_LIMBS] = std::array::from_fn(|i| result[i]);
     exec_state.vm_write::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.a as u32), &rd);
     let pc = exec_state.pc();
     exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
@@ -298,9 +290,7 @@ unsafe fn execute_e2_impl<
 // ==================== ALU operation trait ====================
 
 trait AluOp {
-    /// Compute the operation on a single u32 word with carry/borrow propagation.
-    /// Returns (result, carry_out).
-    fn compute(a: u32, b: u32, carry: u32) -> (u32, u32);
+    fn compute(a: u64, b: u64) -> u64;
 }
 
 struct AddOp;
@@ -311,33 +301,31 @@ struct AndOp;
 
 impl AluOp for AddOp {
     #[inline(always)]
-    fn compute(a: u32, b: u32, carry: u32) -> (u32, u32) {
-        let sum = a as u64 + b as u64 + carry as u64;
-        (sum as u32, (sum >> 32) as u32)
+    fn compute(a: u64, b: u64) -> u64 {
+        a.wrapping_add(b)
     }
 }
 impl AluOp for SubOp {
     #[inline(always)]
-    fn compute(a: u32, b: u32, borrow: u32) -> (u32, u32) {
-        let diff = a as u64 as i64 - b as u64 as i64 - borrow as i64;
-        (diff as u32, if diff < 0 { 1 } else { 0 })
+    fn compute(a: u64, b: u64) -> u64 {
+        a.wrapping_sub(b)
     }
 }
 impl AluOp for XorOp {
     #[inline(always)]
-    fn compute(a: u32, b: u32, _: u32) -> (u32, u32) {
-        (a ^ b, 0)
+    fn compute(a: u64, b: u64) -> u64 {
+        a ^ b
     }
 }
 impl AluOp for OrOp {
     #[inline(always)]
-    fn compute(a: u32, b: u32, _: u32) -> (u32, u32) {
-        (a | b, 0)
+    fn compute(a: u64, b: u64) -> u64 {
+        a | b
     }
 }
 impl AluOp for AndOp {
     #[inline(always)]
-    fn compute(a: u32, b: u32, _: u32) -> (u32, u32) {
-        (a & b, 0)
+    fn compute(a: u64, b: u64) -> u64 {
+        a & b
     }
 }
