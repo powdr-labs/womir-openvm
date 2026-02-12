@@ -27,6 +27,7 @@ use openvm_stark_backend::{
 };
 use openvm_womir_transpiler::{BaseAluOpcode, LoadStoreOpcode};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use strum::IntoEnumIterator;
 
 use openvm_circuit::arch::ExecutionBridge;
