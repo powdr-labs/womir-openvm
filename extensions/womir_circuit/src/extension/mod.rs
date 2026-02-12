@@ -1,4 +1,4 @@
-use std::{cell::RefCell, sync::Arc};
+use std::sync::Arc;
 
 use derive_more::derive::From;
 use openvm_circuit::{
@@ -89,7 +89,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         let pointer_max_bits = inventory.pointer_max_bits();
 
         let base_alu = Rv32BaseAluExecutor::new(
-            Rv32BaseAluAdapterExecutor::new(RefCell::new(false)),
+            Rv32BaseAluAdapterExecutor::default(),
             BaseAluOpcode::CLASS_OFFSET,
         );
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;

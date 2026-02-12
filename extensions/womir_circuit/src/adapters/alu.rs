@@ -196,9 +196,19 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
     }
 }
 
-#[derive(Clone, derive_new::new)]
+#[derive(Clone)]
 pub struct Rv32BaseAluAdapterExecutor<const LIMB_BITS: usize> {
+    /// Hack: This flag is used so that we fetch the frame pointer exactly once per instruction execution,
+    ///       BEFORE the first read.
     has_fetched_fp: RefCell<bool>,
+}
+
+impl<const LIMB_BITS: usize> Default for Rv32BaseAluAdapterExecutor<LIMB_BITS> {
+    fn default() -> Self {
+        Self {
+            has_fetched_fp: RefCell::new(false),
+        }
+    }
 }
 
 #[derive(derive_new::new)]
@@ -227,11 +237,19 @@ pub struct Rv32BaseAluAdapterRecord {
 }
 
 impl<const LIMB_BITS: usize> Rv32BaseAluAdapterExecutor<LIMB_BITS> {
-    fn fetch_fp<F: PrimeField32>(
+    fn maybe_fetch_fp<F: PrimeField32>(
+        &self,
         memory: &mut TracingMemory,
-        record: &mut &mut Rv32BaseAluAdapterRecord,
+        record: &mut Rv32BaseAluAdapterRecord,
     ) {
-        record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
+        if !*self.has_fetched_fp.borrow() {
+            record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
+            *self.has_fetched_fp.borrow_mut() = true;
+        }
+    }
+
+    fn finalize_instruction(&self) {
+        *self.has_fetched_fp.borrow_mut() = false;
     }
 }
 
@@ -264,10 +282,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
             e.as_canonical_u32() == RV32_REGISTER_AS || e.as_canonical_u32() == RV32_IMM_AS
         );
 
-        if !*self.has_fetched_fp.borrow() {
-            Self::fetch_fp::<F>(memory, record);
-            *self.has_fetched_fp.borrow_mut() = true;
-        }
+        self.maybe_fetch_fp::<F>(memory, record);
 
         record.rs1_ptr = b.as_canonical_u32();
         let rs1 = tracing_read(
@@ -318,7 +333,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
             &mut record.writes_aux.prev_data,
         );
 
-        *self.has_fetched_fp.borrow_mut() = false;
+        self.finalize_instruction();
     }
 }
 
