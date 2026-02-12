@@ -729,4 +729,91 @@ mod tests {
 
         test_spec(spec)
     }
+
+    // ==================== LessThan Tests ====================
+
+    #[test]
+    fn test_lt_u_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] < reg[fp+1]) unsigned
+        // 10 < 20 = 1
+        let spec = TestSpec {
+            program: vec![wom::lt_u::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 10), (11, 20)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_u_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] < reg[fp+1]) unsigned
+        // 20 < 10 = 0
+        let spec = TestSpec {
+            program: vec![wom::lt_u::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 20), (11, 10)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_u_equal() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] < reg[fp+1]) unsigned
+        // 42 < 42 = 0
+        let spec = TestSpec {
+            program: vec![wom::lt_u::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 42)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_s_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] < reg[fp+1]) signed
+        // -1 (0xFFFFFFFF) < 1 = 1 (signed)
+        let spec = TestSpec {
+            program: vec![wom::lt_s::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0xFFFFFFFF), (11, 1)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_u_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = (reg[fp+0] < 100) unsigned
+        // 50 < 100 = 1
+        let spec = TestSpec {
+            program: vec![wom::lt_u_imm::<F>(1, 0, 100_i16.into())],
+            start_fp: 10,
+            start_registers: vec![(10, 50)],
+            expected_registers: vec![(11, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
 }
