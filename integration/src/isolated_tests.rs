@@ -723,6 +723,8 @@ mod tests {
         test_spec(spec)
     }
 
+    // ==================== add_64 ====================
+
     #[test]
     fn test_add_imm_64() {
         setup_tracing_with_log_level(Level::WARN);
