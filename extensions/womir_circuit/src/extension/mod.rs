@@ -25,7 +25,9 @@ use openvm_stark_backend::{
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
-use openvm_womir_transpiler::{BaseAlu64Opcode, BaseAluOpcode, LoadStoreOpcode};
+use openvm_womir_transpiler::{
+    BaseAlu64Opcode, BaseAluOpcode, Eq64Opcode, EqOpcode, LoadStoreOpcode,
+};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
@@ -74,6 +76,8 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 pub enum WomirExecutor {
     BaseAlu(Rv32BaseAluExecutor),
     BaseAlu64(BaseAlu64Executor),
+    Equal(Rv32EqualExecutor),
+    Equal64(Equal64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
 }
@@ -103,6 +107,18 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             base_alu_64,
             BaseAlu64Opcode::iter().map(|x| x.global_opcode()),
         )?;
+
+        let equal = Rv32EqualExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            EqOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(equal, EqOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let equal_64 = Equal64Executor::new(
+            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            Eq64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(equal_64, Eq64Opcode::iter().map(|x| x.global_opcode()))?;
 
         let load_store = LoadStoreExecutor::new(
             Rv32LoadStoreAdapterExecutor::new(pointer_max_bits),
@@ -162,6 +178,18 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu_64);
+
+        let equal = Rv32EqualAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            EqualCoreAir::new(EqOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(equal);
+
+        let equal_64 = Equal64Air::new(
+            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            EqualCoreAir::new(Eq64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(equal_64);
 
         let load_store = Rv32LoadStoreAir::new(
             Rv32LoadStoreAdapterAir::new(
@@ -246,6 +274,26 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(base_alu_64);
+
+        inventory.next_air::<Rv32EqualAir>()?;
+        let equal = Rv32EqualChip::new(
+            EqualFiller::new(
+                Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                EqOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(equal);
+
+        inventory.next_air::<Equal64Air>()?;
+        let equal_64 = Equal64Chip::new(
+            EqualFiller::new(
+                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                Eq64Opcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(equal_64);
 
         inventory.next_air::<Rv32LoadStoreAir>()?;
         let load_store_chip = Rv32LoadStoreChip::new(
