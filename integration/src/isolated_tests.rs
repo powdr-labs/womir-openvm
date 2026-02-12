@@ -816,4 +816,354 @@ mod tests {
 
         test_spec(spec)
     }
+
+    // ==================== add_64 ====================
+
+    #[test]
+    fn test_add_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_ffff_0000_0001 + 0x80 = 0x0000_ffff_0000_0081
+        let spec = TestSpec {
+            program: vec![wom::add_imm_64::<F>(2, 0, 0x80_i16.into())],
+            start_fp: 124,
+            start_registers: vec![(124, 1), (125, 0xffff)],
+            expected_registers: vec![(126, 0x81), (127, 0xffff)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_add_imm_64_low_overflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_FFFF_FF00 + 0x0100 = 0x0000_0002_0000_0000
+        // Low limb overflows, carry propagates to high limb
+        let spec = TestSpec {
+            program: vec![wom::add_imm_64::<F>(2, 0, 0x0100_i16.into())],
+            start_fp: 124,
+            start_registers: vec![(124, 0xFFFF_FF00), (125, 0x0000_0001)],
+            expected_registers: vec![(126, 0x0000_0000), (127, 0x0000_0002)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_add_imm_64_full_overflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0xFFFF_FFFF_FFFF_FFFF + 1 = 0 (wraps around)
+        let spec = TestSpec {
+            program: vec![wom::add_imm_64::<F>(2, 0, 1_i16.into())],
+            start_fp: 124,
+            start_registers: vec![(124, 0xFFFF_FFFF), (125, 0xFFFF_FFFF)],
+            expected_registers: vec![(126, 0), (127, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_add_64_reg() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0003 + 0x0000_0002_0000_0004 = 0x0000_0003_0000_0007
+        let spec = TestSpec {
+            program: vec![wom::add_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 3),
+                (125, 1), // reg 0 = 0x0000_0001_0000_0003
+                (126, 4),
+                (127, 2), // reg 2 = 0x0000_0002_0000_0004
+            ],
+            expected_registers: vec![(128, 7), (129, 3)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_add_64_reg_low_overflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_8000_0000 + 0x0000_0001_8000_0000 = 0x0000_0003_0000_0000
+        let spec = TestSpec {
+            program: vec![wom::add_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0x8000_0000),
+                (125, 1), // reg 0
+                (126, 0x8000_0000),
+                (127, 1), // reg 2
+            ],
+            expected_registers: vec![(128, 0x0000_0000), (129, 3)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_add_64_reg_full_overflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0xFFFF_FFFF_FFFF_FFFE + 0x0000_0000_0000_0003 = 0x0000_0000_0000_0001
+        let spec = TestSpec {
+            program: vec![wom::add_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0xFFFF_FFFE),
+                (125, 0xFFFF_FFFF), // reg 0
+                (126, 3),
+                (127, 0), // reg 2
+            ],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== sub_64 ====================
+
+    #[test]
+    fn test_sub_64_reg() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0003_0000_0007 - 0x0000_0001_0000_0003 = 0x0000_0002_0000_0004
+        let spec = TestSpec {
+            program: vec![wom::sub_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 7),
+                (125, 3), // reg 0
+                (126, 3),
+                (127, 1), // reg 2
+            ],
+            expected_registers: vec![(128, 4), (129, 2)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_sub_64_reg_low_borrow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0003_0000_0000 - 0x0000_0001_0000_0001 = 0x0000_0001_FFFF_FFFF
+        // Low limb borrows from high limb
+        let spec = TestSpec {
+            program: vec![wom::sub_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0x0000_0000),
+                (125, 3), // reg 0
+                (126, 1),
+                (127, 1), // reg 2
+            ],
+            expected_registers: vec![(128, 0xFFFF_FFFF), (129, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_sub_64_reg_full_underflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0000_0000_0001 - 0x0000_0000_0000_0003 = 0xFFFF_FFFF_FFFF_FFFE (wraps)
+        let spec = TestSpec {
+            program: vec![wom::sub_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 1),
+                (125, 0), // reg 0
+                (126, 3),
+                (127, 0), // reg 2
+            ],
+            expected_registers: vec![(128, 0xFFFF_FFFE), (129, 0xFFFF_FFFF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_sub_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0002_0000_0000 - 1 = 0x0000_0001_FFFF_FFFF
+        // Low borrow propagates to high limb
+        let spec = TestSpec {
+            program: vec![wom::sub_imm_64::<F>(2, 0, 1_i16.into())],
+            start_fp: 124,
+            start_registers: vec![(124, 0x0000_0000), (125, 2)],
+            expected_registers: vec![(126, 0xFFFF_FFFF), (127, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== xor_64 ====================
+
+    #[test]
+    fn test_xor_64_reg() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0xDEAD_BEEF_CAFE_BABE ^ 0xFFFF_FFFF_0000_0000 = 0x2152_4110_CAFE_BABE
+        let spec = TestSpec {
+            program: vec![wom::xor_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0xCAFE_BABE),
+                (125, 0xDEAD_BEEF), // reg 0
+                (126, 0x0000_0000),
+                (127, 0xFFFF_FFFF), // reg 2
+            ],
+            expected_registers: vec![(128, 0xCAFE_BABE), (129, 0x2152_4110)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_xor_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_00FF ^ 0xFF (sign-extended to 0x0000_0000_0000_00FF) = 0x0000_0001_0000_0000
+        let spec = TestSpec {
+            program: vec![wom::xor_imm_64::<F>(2, 0, 0xFF_i16.into())],
+            start_fp: 124,
+            start_registers: vec![(124, 0x0000_00FF), (125, 1)],
+            expected_registers: vec![(126, 0x0000_0000), (127, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== or_64 ====================
+
+    #[test]
+    fn test_or_64_reg() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x00FF_00FF_00FF_00FF | 0xFF00_FF00_FF00_FF00 = 0xFFFF_FFFF_FFFF_FFFF
+        let spec = TestSpec {
+            program: vec![wom::or_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0x00FF_00FF),
+                (125, 0x00FF_00FF), // reg 0
+                (126, 0xFF00_FF00),
+                (127, 0xFF00_FF00), // reg 2
+            ],
+            expected_registers: vec![(128, 0xFFFF_FFFF), (129, 0xFFFF_FFFF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_or_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0000 | 0x0F (sign-extended to 0x0000_0000_0000_000F) = 0x0000_0001_0000_000F
+        let spec = TestSpec {
+            program: vec![wom::or_imm_64::<F>(2, 0, 0x0F_i16.into())],
+            start_fp: 124,
+            start_registers: vec![(124, 0x0000_0000), (125, 1)],
+            expected_registers: vec![(126, 0x0000_000F), (127, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== and_64 ====================
+
+    #[test]
+    fn test_and_64_reg() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0xFFFF_0000_FFFF_0000 & 0x0F0F_0F0F_0F0F_0F0F = 0x0F0F_0000_0F0F_0000
+        let spec = TestSpec {
+            program: vec![wom::and_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0xFFFF_0000),
+                (125, 0xFFFF_0000), // reg 0
+                (126, 0x0F0F_0F0F),
+                (127, 0x0F0F_0F0F), // reg 2
+            ],
+            expected_registers: vec![(128, 0x0F0F_0000), (129, 0x0F0F_0000)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_and_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0xDEAD_BEEF_CAFE_BABE & 0xFF (sign-extended to 0x0000_0000_0000_00FF) = 0x0000_0000_0000_00BE
+        let spec = TestSpec {
+            program: vec![wom::and_imm_64::<F>(2, 0, 0xFF_i16.into())],
+            start_fp: 124,
+            start_registers: vec![(124, 0xCAFE_BABE), (125, 0xDEAD_BEEF)],
+            expected_registers: vec![(126, 0x0000_00BE), (127, 0x0000_0000)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== Cross-width tests ====================
+
+    #[test]
+    fn test_cross_width_32_to_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 32-bit writes 0x42 to reg fp+0, then 64-bit reads reg pair fp+0:fp+1
+        let spec = TestSpec {
+            program: vec![
+                wom::add_imm::<F>(0, 0, 0x42_i16.into()),
+                wom::add_imm_64::<F>(2, 0, 0_i16.into()),
+            ],
+            start_fp: 10,
+            expected_registers: vec![(10, 0x42), (12, 0x42), (13, 0)],
+            ..Default::default()
+        };
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_cross_width_64_to_32() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 64-bit writes 0x42 to reg pair fp+0:fp+1, then 32-bit reads reg fp+0
+        let spec = TestSpec {
+            program: vec![
+                wom::add_imm_64::<F>(0, 0, 0x42_i16.into()),
+                wom::add_imm::<F>(2, 0, 0_i16.into()),
+            ],
+            start_fp: 10,
+            expected_registers: vec![(10, 0x42), (11, 0), (12, 0x42)],
+            ..Default::default()
+        };
+        test_spec(spec)
+    }
 }

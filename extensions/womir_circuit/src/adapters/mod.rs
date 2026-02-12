@@ -47,12 +47,16 @@ pub fn decompose<F: PrimeField32>(value: u32) -> [F; RV32_REGISTER_NUM_LIMBS] {
     })
 }
 
+/// Convert a 24-bit encoded immediate to `[u8; N]` with sign extension.
+/// The immediate is stored as 3 bytes: low, mid, sign. Byte 2 (the sign byte)
+/// is replicated to all higher positions. Works correctly for negative numbers:
+/// e.g., -5 is encoded as 0x00FFFB → [0xFB, 0xFF, 0xFF, 0xFF] for N=4.
 #[inline(always)]
-pub fn imm_to_bytes(imm: u32) -> [u8; RV32_REGISTER_NUM_LIMBS] {
+pub fn imm_to_bytes<const N: usize>(imm: u32) -> [u8; N] {
     debug_assert_eq!(imm >> 24, 0);
-    let mut imm_le = imm.to_le_bytes();
-    imm_le[3] = imm_le[2];
-    imm_le
+    let imm_le = imm.to_le_bytes();
+    let sign_byte = imm_le[2];
+    std::array::from_fn(|i| if i < 3 { imm_le[i] } else { sign_byte })
 }
 
 #[inline(always)]
@@ -160,22 +164,20 @@ pub fn tracing_read<const N: usize>(
     data
 }
 
+/// Reads an immediate value, increments the timestamp, and returns sign-extended bytes.
+/// Records the immediate value in the mutable record buffer.
 #[inline(always)]
-pub fn tracing_read_imm(
+pub fn tracing_read_imm<const N: usize>(
     memory: &mut TracingMemory,
     imm: u32,
     imm_mut: &mut u32,
-) -> [u8; RV32_REGISTER_NUM_LIMBS] {
+) -> [u8; N] {
     *imm_mut = imm;
-    debug_assert_eq!(imm >> 24, 0); // highest byte should be zero to prevent overflow
+    debug_assert_eq!(imm >> 24, 0);
 
     memory.increment_timestamp();
 
-    let mut imm_le = imm.to_le_bytes();
-    // Important: we set the highest byte equal to the second highest byte, using the assumption
-    // that imm is at most 24 bits
-    imm_le[3] = imm_le[2];
-    imm_le
+    imm_to_bytes(imm)
 }
 
 /// Writes `reg_ptr, reg_val` into memory and records the memory access in mutable buffer.

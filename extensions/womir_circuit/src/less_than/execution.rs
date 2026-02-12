@@ -20,14 +20,13 @@ use openvm_instructions::{
     LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
-    riscv::{RV32_IMM_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
+    riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
 };
 use openvm_rv32im_circuit::LessThanExecutor as LessThanExecutorInner;
 use openvm_rv32im_transpiler::LessThanOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-#[allow(unused_imports)]
-use crate::adapters::imm_to_bytes;
+use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]
@@ -110,7 +109,7 @@ impl<A, const LIMB_BITS: usize> LessThanExecutor<A, { RV32_REGISTER_NUM_LIMBS },
         let c_u32 = c.as_canonical_u32();
         *data = LessThanPreCompute {
             c: if is_imm {
-                u32::from_le_bytes(imm_to_bytes(c_u32))
+                u32::from_le_bytes(imm_to_bytes::<{ RV32_REGISTER_NUM_LIMBS }>(c_u32))
             } else {
                 c_u32
             },
