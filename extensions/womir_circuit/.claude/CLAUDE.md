@@ -26,27 +26,27 @@ Understand the opcode → chip mapping:
 extensions/transpiler/src/instructions.rs
 
 Check WOMIR instruction semantics:
-https://raw.githubusercontent.com/powdr-labs/womir/refs/heads/main/src/wom_interpreter/mod.rs
+`<womir>/src/interpreter.rs`
 
-**2. Find relevant RISC-V chips** in OpenVM to reuse or learn from. Fetch the opcode reference:
-https://raw.githubusercontent.com/powdr-labs/openvm/refs/tags/v1.4.2-powdr-rc.1/extensions/rv32im/transpiler/src/instructions.rs
+**2. Find relevant RISC-V chips** in OpenVM to reuse or learn from. Read the opcode reference:
+`<openvm>/extensions/rv32im/transpiler/src/instructions.rs`
 
 Opcode enums map to chip directories: `BaseAluOpcode` → `base_alu/`, `LessThanOpcode` → `less_than/`, etc.
 Look for related chips too (e.g., for comparison logic, check both `less_than/` and `branch_lt/`).
 
-**3. Fetch chip files** to study:
+**3. Read chip files** to study:
 ```
-.../extensions/rv32im/circuit/src/{chip_name}/{mod,core,execution}.rs
-.../extensions/rv32im/circuit/src/adapters/{alu,branch,jalr,loadstore,...}.rs
+<openvm>/extensions/rv32im/circuit/src/{chip_name}/{mod,core,execution}.rs
+<openvm>/extensions/rv32im/circuit/src/adapters/{alu,branch,jalr,loadstore,...}.rs
 ```
-(Base URL: `https://raw.githubusercontent.com/powdr-labs/openvm/refs/tags/v1.4.2-powdr-rc.1`)
+(See root CLAUDE.md for how to resolve `<dep>` paths to local paths.)
 
 **4. Study existing WOMIR chips** as examples. The `base_alu/` directory shows the pattern:
 - `core.rs` - Often reused directly from OpenVM (Base ALU does this)
 - `execution.rs` - Interpreter logic; main difference is frame pointer handling. Remove AOT/TCO code.
 - `mod.rs` - Type aliases and re-exports
 
-Compare adapters: [OpenVM alu.rs](https://raw.githubusercontent.com/powdr-labs/openvm/refs/tags/v1.4.2-powdr-rc.1/extensions/rv32im/circuit/src/adapters/alu.rs) vs `src/adapters/alu.rs`
+Compare adapters: `<openvm>/extensions/rv32im/circuit/src/adapters/alu.rs` vs `src/adapters/alu.rs`
 
 **5. Make sure your changes are tested**:
 There should be an single instruction test in `integration/src/isolated_tests.rs` that covers the new instruction(s). Add more if needed. It might also exist but marked as should_panic if the instruction was not previously implemented; remove the should_panic.
