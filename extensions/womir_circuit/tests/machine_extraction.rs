@@ -7,14 +7,16 @@
 use std::{fs, io, path::Path, sync::Arc};
 
 use itertools::Itertools;
-use openvm_circuit::arch::VmCircuitConfig;
+use openvm_circuit::arch::{VmBuilder, VmCircuitConfig};
+use openvm_circuit::system::memory::interface::MemoryInterfaceAirs;
+use openvm_circuit_primitives::bitwise_op_lookup::SharedBitwiseOperationLookupChip;
 use openvm_stark_backend::rap::AnyRap;
+use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Engine;
 use openvm_stark_sdk::p3_baby_bear::BabyBear;
-use powdr_autoprecompiles::bus_map::BusMap;
+use powdr_autoprecompiles::bus_map::{BusMap, BusType};
 use powdr_autoprecompiles::expression::try_convert;
 use powdr_autoprecompiles::symbolic_machine::SymbolicMachine;
 use powdr_openvm::{
-    BabyBearSC,
     bus_map::OpenVmBusType,
     extraction_utils::{get_columns, get_constraints},
     utils::{
@@ -22,7 +24,9 @@ use powdr_openvm::{
     },
 };
 use pretty_assertions::assert_eq;
-use womir_circuit::WomirConfig;
+use womir_circuit::{WomirConfig, WomirCpuBuilder};
+
+type BabyBearSC = <BabyBearPoseidon2Engine as openvm_stark_backend::engine::StarkEngine>::SC;
 
 /// Convert an OpenVM AIR to a powdr SymbolicMachine.
 fn air_to_symbolic_machine(
@@ -50,33 +54,64 @@ fn air_to_symbolic_machine(
     })
 }
 
-/// Create a bus map for WOMIR.
-/// This maps bus indices to human-readable bus type names.
-fn womir_bus_map() -> BusMap<OpenVmBusType> {
-    use powdr_autoprecompiles::bus_map::BusType;
-
-    // These bus indices are based on the OpenVM system configuration.
-    // The exact values depend on how the system is configured.
-    BusMap::from_id_type_pairs([
-        (0, BusType::ExecutionBridge),
-        (1, BusType::Memory),
-        (2, BusType::PcLookup),
-        (3, BusType::Other(OpenVmBusType::VariableRangeChecker)),
-        (6, BusType::Other(OpenVmBusType::BitwiseLookup)),
-    ])
-}
-
 #[test]
 fn extract_machine() {
     let config = WomirConfig::default();
-    let air_inventory = config
-        .create_airs()
+    let air_inventory = VmCircuitConfig::<BabyBearSC>::create_airs(&config)
         .expect("Failed to create AIR inventory");
 
-    let bus_map = womir_bus_map();
+    // Create chip complex to extract bus map dynamically
+    let chip_complex =
+        <WomirCpuBuilder as VmBuilder<BabyBearPoseidon2Engine>>::create_chip_complex(
+            &WomirCpuBuilder,
+            &config,
+            air_inventory,
+        )
+        .expect("Failed to create chip complex");
+    let inventory = &chip_complex.inventory;
 
-    // Get all extension AIRs (these are the WOMIR-specific ones)
-    let ext_airs = air_inventory.ext_airs();
+    // Extract bus map dynamically from chip complex (like OriginalVmConfig::bus_map())
+    let shared_bitwise_lookup = inventory
+        .find_chip::<SharedBitwiseOperationLookupChip<8>>()
+        .next();
+
+    let system_air_inventory = inventory.airs().system();
+    let connector_air = system_air_inventory.connector;
+    let memory_air = &system_air_inventory.memory;
+
+    let bus_map: BusMap<OpenVmBusType> = BusMap::from_id_type_pairs(
+        [
+            (
+                connector_air.execution_bus.index(),
+                BusType::ExecutionBridge,
+            ),
+            (
+                match &memory_air.interface {
+                    MemoryInterfaceAirs::Volatile { boundary } => boundary.memory_bus.inner.index,
+                    MemoryInterfaceAirs::Persistent { boundary, .. } => {
+                        boundary.memory_bus.inner.index
+                    }
+                },
+                BusType::Memory,
+            ),
+            (connector_air.program_bus.index(), BusType::PcLookup),
+            (
+                connector_air.range_bus.index(),
+                BusType::Other(OpenVmBusType::VariableRangeChecker),
+            ),
+        ]
+        .into_iter()
+        .chain(shared_bitwise_lookup.into_iter().map(|chip| {
+            (
+                chip.bus().inner.index,
+                BusType::Other(OpenVmBusType::BitwiseLookup),
+            )
+        }))
+        .map(|(id, bus_type)| (id as u64, bus_type)),
+    );
+
+    // Get all extension AIRs from the chip complex
+    let ext_airs = inventory.airs().ext_airs();
 
     // Debug: print AIR info
     for air in ext_airs.iter() {
