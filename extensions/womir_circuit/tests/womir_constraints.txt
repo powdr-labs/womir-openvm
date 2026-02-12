@@ -260,6 +260,278 @@ rs2_as * (from_state__timestamp + 4 - rs2_reads_aux__1__base__prev_timestamp - 1
 (0 + opcode_add_flag + opcode_sub_flag + opcode_xor_flag + opcode_or_flag + opcode_and_flag) * (from_state__timestamp + 6 - writes_aux__1__base__prev_timestamp - 1 - (0 + writes_aux__1__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__1__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 
 
+# VmAirWrapper<BaseAluAdapterAir<4, 1>, LessThanCoreAir<4, 8>
+Symbolic machine using 41 unique main columns:
+  from_state__pc
+  from_state__fp
+  from_state__timestamp
+  rd_ptr
+  rs1_ptr
+  rs2
+  rs2_as
+  fp_read_aux__base__prev_timestamp
+  fp_read_aux__base__timestamp_lt_aux__lower_decomp__0
+  fp_read_aux__base__timestamp_lt_aux__lower_decomp__1
+  rs1_reads_aux__0__base__prev_timestamp
+  rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0
+  rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1
+  rs2_reads_aux__0__base__prev_timestamp
+  rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0
+  rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1
+  writes_aux__0__base__prev_timestamp
+  writes_aux__0__base__timestamp_lt_aux__lower_decomp__0
+  writes_aux__0__base__timestamp_lt_aux__lower_decomp__1
+  writes_aux__0__prev_data__0
+  writes_aux__0__prev_data__1
+  writes_aux__0__prev_data__2
+  writes_aux__0__prev_data__3
+  b__0
+  b__1
+  b__2
+  b__3
+  c__0
+  c__1
+  c__2
+  c__3
+  cmp_result
+  opcode_slt_flag
+  opcode_sltu_flag
+  b_msb_f
+  c_msb_f
+  diff_marker__0
+  diff_marker__1
+  diff_marker__2
+  diff_marker__3
+  diff_val
+
+// Bus 0 (EXECUTION_BRIDGE):
+mult=-(0 + opcode_slt_flag + opcode_sltu_flag), args=[from_state__pc, from_state__timestamp]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[from_state__pc + 4, from_state__timestamp + 4]
+
+// Bus 1 (MEMORY):
+mult=2013265920 * (0 + opcode_slt_flag + opcode_sltu_flag), args=[5, 0, from_state__fp, fp_read_aux__base__prev_timestamp]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[5, 0, from_state__fp, from_state__timestamp + 0]
+mult=2013265920 * (0 + opcode_slt_flag + opcode_sltu_flag), args=[1, rs1_ptr + from_state__fp + 0, b__0, b__1, b__2, b__3, rs1_reads_aux__0__base__prev_timestamp]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[1, rs1_ptr + from_state__fp + 0, b__0, b__1, b__2, b__3, from_state__timestamp + 1]
+mult=2013265920 * rs2_as, args=[rs2_as, rs2 + from_state__fp + 0, c__0, c__1, c__2, c__3, rs2_reads_aux__0__base__prev_timestamp]
+mult=rs2_as, args=[rs2_as, rs2 + from_state__fp + 0, c__0, c__1, c__2, c__3, from_state__timestamp + 2]
+mult=2013265920 * (0 + opcode_slt_flag + opcode_sltu_flag), args=[1, rd_ptr + from_state__fp + 0, writes_aux__0__prev_data__0, writes_aux__0__prev_data__1, writes_aux__0__prev_data__2, writes_aux__0__prev_data__3, writes_aux__0__base__prev_timestamp]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[1, rd_ptr + from_state__fp + 0, cmp_result, 0, 0, 0, from_state__timestamp + 3]
+
+// Bus 2 (PC_LOOKUP):
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[from_state__pc, 0 + opcode_slt_flag * 0 + opcode_sltu_flag * 1 + 520, rd_ptr, rs1_ptr, rs2, 1, rs2_as, 0, 0]
+
+// Bus 3 (VARIABLE_RANGE_CHECKER):
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[fp_read_aux__base__timestamp_lt_aux__lower_decomp__0, 17]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[fp_read_aux__base__timestamp_lt_aux__lower_decomp__1, 12]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0, 17]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1, 12]
+mult=rs2_as, args=[rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0, 17]
+mult=rs2_as, args=[rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1, 12]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[writes_aux__0__base__timestamp_lt_aux__lower_decomp__0, 17]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[writes_aux__0__base__timestamp_lt_aux__lower_decomp__1, 12]
+
+// Bus 6 (BITWISE_LOOKUP):
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[b_msb_f + 128 * opcode_slt_flag, c_msb_f + 128 * opcode_slt_flag, 0, 0]
+mult=0 + diff_marker__3 + diff_marker__2 + diff_marker__1 + diff_marker__0, args=[diff_val - 1, 0, 0, 0]
+mult=0 + opcode_slt_flag + opcode_sltu_flag - rs2_as, args=[c__0, c__1, 0, 0]
+
+// Algebraic constraints:
+opcode_slt_flag * (opcode_slt_flag - 1) = 0
+opcode_sltu_flag * (opcode_sltu_flag - 1) = 0
+(0 + opcode_slt_flag + opcode_sltu_flag) * (0 + opcode_slt_flag + opcode_sltu_flag - 1) = 0
+cmp_result * (cmp_result - 1) = 0
+(b__3 - b_msb_f) * (256 - (b__3 - b_msb_f)) = 0
+(c__3 - c_msb_f) * (256 - (c__3 - c_msb_f)) = 0
+diff_marker__3 * (diff_marker__3 - 1) = 0
+(1 - (0 + diff_marker__3)) * ((c_msb_f - b_msb_f) * (2 * cmp_result - 1)) = 0
+diff_marker__3 * (diff_val - (c_msb_f - b_msb_f) * (2 * cmp_result - 1)) = 0
+diff_marker__2 * (diff_marker__2 - 1) = 0
+(1 - (0 + diff_marker__3 + diff_marker__2)) * ((c__2 - b__2) * (2 * cmp_result - 1)) = 0
+diff_marker__2 * (diff_val - (c__2 - b__2) * (2 * cmp_result - 1)) = 0
+diff_marker__1 * (diff_marker__1 - 1) = 0
+(1 - (0 + diff_marker__3 + diff_marker__2 + diff_marker__1)) * ((c__1 - b__1) * (2 * cmp_result - 1)) = 0
+diff_marker__1 * (diff_val - (c__1 - b__1) * (2 * cmp_result - 1)) = 0
+diff_marker__0 * (diff_marker__0 - 1) = 0
+(1 - (0 + diff_marker__3 + diff_marker__2 + diff_marker__1 + diff_marker__0)) * ((c__0 - b__0) * (2 * cmp_result - 1)) = 0
+diff_marker__0 * (diff_val - (c__0 - b__0) * (2 * cmp_result - 1)) = 0
+(0 + diff_marker__3 + diff_marker__2 + diff_marker__1 + diff_marker__0) * (0 + diff_marker__3 + diff_marker__2 + diff_marker__1 + diff_marker__0 - 1) = 0
+(1 - (0 + diff_marker__3 + diff_marker__2 + diff_marker__1 + diff_marker__0)) * cmp_result = 0
+(0 + opcode_slt_flag + opcode_sltu_flag) * (from_state__timestamp + 0 - fp_read_aux__base__prev_timestamp - 1 - (0 + fp_read_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + fp_read_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
+rs2_as * (rs2_as - 1) = 0
+(1 - rs2_as) * (rs2 - (c__0 + c__1 * 256 + c__2 * 65536)) = 0
+(1 - rs2_as) * (c__2 - c__3) = 0
+(1 - rs2_as) * (c__2 * (255 - c__2)) = 0
+(0 + opcode_slt_flag + opcode_sltu_flag) * (from_state__timestamp + 1 - rs1_reads_aux__0__base__prev_timestamp - 1 - (0 + rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
+rs2_as * (0 + opcode_slt_flag + opcode_sltu_flag - 1) = 0
+rs2_as * (from_state__timestamp + 2 - rs2_reads_aux__0__base__prev_timestamp - 1 - (0 + rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
+(0 + opcode_slt_flag + opcode_sltu_flag) * (from_state__timestamp + 3 - writes_aux__0__base__prev_timestamp - 1 - (0 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
+
+
+# VmAirWrapper<BaseAluAdapterAir<8, 2>, LessThanCoreAir<8, 8>
+Symbolic machine using 66 unique main columns:
+  from_state__pc
+  from_state__fp
+  from_state__timestamp
+  rd_ptr
+  rs1_ptr
+  rs2
+  rs2_as
+  fp_read_aux__base__prev_timestamp
+  fp_read_aux__base__timestamp_lt_aux__lower_decomp__0
+  fp_read_aux__base__timestamp_lt_aux__lower_decomp__1
+  rs1_reads_aux__0__base__prev_timestamp
+  rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0
+  rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1
+  rs1_reads_aux__1__base__prev_timestamp
+  rs1_reads_aux__1__base__timestamp_lt_aux__lower_decomp__0
+  rs1_reads_aux__1__base__timestamp_lt_aux__lower_decomp__1
+  rs2_reads_aux__0__base__prev_timestamp
+  rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0
+  rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1
+  rs2_reads_aux__1__base__prev_timestamp
+  rs2_reads_aux__1__base__timestamp_lt_aux__lower_decomp__0
+  rs2_reads_aux__1__base__timestamp_lt_aux__lower_decomp__1
+  writes_aux__0__base__prev_timestamp
+  writes_aux__0__base__timestamp_lt_aux__lower_decomp__0
+  writes_aux__0__base__timestamp_lt_aux__lower_decomp__1
+  writes_aux__0__prev_data__0
+  writes_aux__0__prev_data__1
+  writes_aux__0__prev_data__2
+  writes_aux__0__prev_data__3
+  writes_aux__1__base__prev_timestamp
+  writes_aux__1__base__timestamp_lt_aux__lower_decomp__0
+  writes_aux__1__base__timestamp_lt_aux__lower_decomp__1
+  writes_aux__1__prev_data__0
+  writes_aux__1__prev_data__1
+  writes_aux__1__prev_data__2
+  writes_aux__1__prev_data__3
+  b__0
+  b__1
+  b__2
+  b__3
+  b__4
+  b__5
+  b__6
+  b__7
+  c__0
+  c__1
+  c__2
+  c__3
+  c__4
+  c__5
+  c__6
+  c__7
+  cmp_result
+  opcode_slt_flag
+  opcode_sltu_flag
+  b_msb_f
+  c_msb_f
+  diff_marker__0
+  diff_marker__1
+  diff_marker__2
+  diff_marker__3
+  diff_marker__4
+  diff_marker__5
+  diff_marker__6
+  diff_marker__7
+  diff_val
+
+// Bus 0 (EXECUTION_BRIDGE):
+mult=-(0 + opcode_slt_flag + opcode_sltu_flag), args=[from_state__pc, from_state__timestamp]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[from_state__pc + 4, from_state__timestamp + 7]
+
+// Bus 1 (MEMORY):
+mult=2013265920 * (0 + opcode_slt_flag + opcode_sltu_flag), args=[5, 0, from_state__fp, fp_read_aux__base__prev_timestamp]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[5, 0, from_state__fp, from_state__timestamp + 0]
+mult=2013265920 * (0 + opcode_slt_flag + opcode_sltu_flag), args=[1, rs1_ptr + from_state__fp + 0, b__0, b__1, b__2, b__3, rs1_reads_aux__0__base__prev_timestamp]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[1, rs1_ptr + from_state__fp + 0, b__0, b__1, b__2, b__3, from_state__timestamp + 1]
+mult=2013265920 * (0 + opcode_slt_flag + opcode_sltu_flag), args=[1, rs1_ptr + from_state__fp + 4, b__4, b__5, b__6, b__7, rs1_reads_aux__1__base__prev_timestamp]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[1, rs1_ptr + from_state__fp + 4, b__4, b__5, b__6, b__7, from_state__timestamp + 2]
+mult=2013265920 * rs2_as, args=[rs2_as, rs2 + from_state__fp + 0, c__0, c__1, c__2, c__3, rs2_reads_aux__0__base__prev_timestamp]
+mult=rs2_as, args=[rs2_as, rs2 + from_state__fp + 0, c__0, c__1, c__2, c__3, from_state__timestamp + 3]
+mult=2013265920 * rs2_as, args=[rs2_as, rs2 + from_state__fp + 4, c__4, c__5, c__6, c__7, rs2_reads_aux__1__base__prev_timestamp]
+mult=rs2_as, args=[rs2_as, rs2 + from_state__fp + 4, c__4, c__5, c__6, c__7, from_state__timestamp + 4]
+mult=2013265920 * (0 + opcode_slt_flag + opcode_sltu_flag), args=[1, rd_ptr + from_state__fp + 0, writes_aux__0__prev_data__0, writes_aux__0__prev_data__1, writes_aux__0__prev_data__2, writes_aux__0__prev_data__3, writes_aux__0__base__prev_timestamp]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[1, rd_ptr + from_state__fp + 0, cmp_result, 0, 0, 0, from_state__timestamp + 5]
+mult=2013265920 * (0 + opcode_slt_flag + opcode_sltu_flag), args=[1, rd_ptr + from_state__fp + 4, writes_aux__1__prev_data__0, writes_aux__1__prev_data__1, writes_aux__1__prev_data__2, writes_aux__1__prev_data__3, writes_aux__1__base__prev_timestamp]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[1, rd_ptr + from_state__fp + 4, 0, 0, 0, 0, from_state__timestamp + 6]
+
+// Bus 2 (PC_LOOKUP):
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[from_state__pc, 0 + opcode_slt_flag * 0 + opcode_sltu_flag * 1 + 8712, rd_ptr, rs1_ptr, rs2, 1, rs2_as, 0, 0]
+
+// Bus 3 (VARIABLE_RANGE_CHECKER):
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[fp_read_aux__base__timestamp_lt_aux__lower_decomp__0, 17]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[fp_read_aux__base__timestamp_lt_aux__lower_decomp__1, 12]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0, 17]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1, 12]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[rs1_reads_aux__1__base__timestamp_lt_aux__lower_decomp__0, 17]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[rs1_reads_aux__1__base__timestamp_lt_aux__lower_decomp__1, 12]
+mult=rs2_as, args=[rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0, 17]
+mult=rs2_as, args=[rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1, 12]
+mult=rs2_as, args=[rs2_reads_aux__1__base__timestamp_lt_aux__lower_decomp__0, 17]
+mult=rs2_as, args=[rs2_reads_aux__1__base__timestamp_lt_aux__lower_decomp__1, 12]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[writes_aux__0__base__timestamp_lt_aux__lower_decomp__0, 17]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[writes_aux__0__base__timestamp_lt_aux__lower_decomp__1, 12]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[writes_aux__1__base__timestamp_lt_aux__lower_decomp__0, 17]
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[writes_aux__1__base__timestamp_lt_aux__lower_decomp__1, 12]
+
+// Bus 6 (BITWISE_LOOKUP):
+mult=0 + opcode_slt_flag + opcode_sltu_flag, args=[b_msb_f + 128 * opcode_slt_flag, c_msb_f + 128 * opcode_slt_flag, 0, 0]
+mult=0 + diff_marker__7 + diff_marker__6 + diff_marker__5 + diff_marker__4 + diff_marker__3 + diff_marker__2 + diff_marker__1 + diff_marker__0, args=[diff_val - 1, 0, 0, 0]
+mult=0 + opcode_slt_flag + opcode_sltu_flag - rs2_as, args=[c__0, c__1, 0, 0]
+
+// Algebraic constraints:
+opcode_slt_flag * (opcode_slt_flag - 1) = 0
+opcode_sltu_flag * (opcode_sltu_flag - 1) = 0
+(0 + opcode_slt_flag + opcode_sltu_flag) * (0 + opcode_slt_flag + opcode_sltu_flag - 1) = 0
+cmp_result * (cmp_result - 1) = 0
+(b__7 - b_msb_f) * (256 - (b__7 - b_msb_f)) = 0
+(c__7 - c_msb_f) * (256 - (c__7 - c_msb_f)) = 0
+diff_marker__7 * (diff_marker__7 - 1) = 0
+(1 - (0 + diff_marker__7)) * ((c_msb_f - b_msb_f) * (2 * cmp_result - 1)) = 0
+diff_marker__7 * (diff_val - (c_msb_f - b_msb_f) * (2 * cmp_result - 1)) = 0
+diff_marker__6 * (diff_marker__6 - 1) = 0
+(1 - (0 + diff_marker__7 + diff_marker__6)) * ((c__6 - b__6) * (2 * cmp_result - 1)) = 0
+diff_marker__6 * (diff_val - (c__6 - b__6) * (2 * cmp_result - 1)) = 0
+diff_marker__5 * (diff_marker__5 - 1) = 0
+(1 - (0 + diff_marker__7 + diff_marker__6 + diff_marker__5)) * ((c__5 - b__5) * (2 * cmp_result - 1)) = 0
+diff_marker__5 * (diff_val - (c__5 - b__5) * (2 * cmp_result - 1)) = 0
+diff_marker__4 * (diff_marker__4 - 1) = 0
+(1 - (0 + diff_marker__7 + diff_marker__6 + diff_marker__5 + diff_marker__4)) * ((c__4 - b__4) * (2 * cmp_result - 1)) = 0
+diff_marker__4 * (diff_val - (c__4 - b__4) * (2 * cmp_result - 1)) = 0
+diff_marker__3 * (diff_marker__3 - 1) = 0
+(1 - (0 + diff_marker__7 + diff_marker__6 + diff_marker__5 + diff_marker__4 + diff_marker__3)) * ((c__3 - b__3) * (2 * cmp_result - 1)) = 0
+diff_marker__3 * (diff_val - (c__3 - b__3) * (2 * cmp_result - 1)) = 0
+diff_marker__2 * (diff_marker__2 - 1) = 0
+(1 - (0 + diff_marker__7 + diff_marker__6 + diff_marker__5 + diff_marker__4 + diff_marker__3 + diff_marker__2)) * ((c__2 - b__2) * (2 * cmp_result - 1)) = 0
+diff_marker__2 * (diff_val - (c__2 - b__2) * (2 * cmp_result - 1)) = 0
+diff_marker__1 * (diff_marker__1 - 1) = 0
+(1 - (0 + diff_marker__7 + diff_marker__6 + diff_marker__5 + diff_marker__4 + diff_marker__3 + diff_marker__2 + diff_marker__1)) * ((c__1 - b__1) * (2 * cmp_result - 1)) = 0
+diff_marker__1 * (diff_val - (c__1 - b__1) * (2 * cmp_result - 1)) = 0
+diff_marker__0 * (diff_marker__0 - 1) = 0
+(1 - (0 + diff_marker__7 + diff_marker__6 + diff_marker__5 + diff_marker__4 + diff_marker__3 + diff_marker__2 + diff_marker__1 + diff_marker__0)) * ((c__0 - b__0) * (2 * cmp_result - 1)) = 0
+diff_marker__0 * (diff_val - (c__0 - b__0) * (2 * cmp_result - 1)) = 0
+(0 + diff_marker__7 + diff_marker__6 + diff_marker__5 + diff_marker__4 + diff_marker__3 + diff_marker__2 + diff_marker__1 + diff_marker__0) * (0 + diff_marker__7 + diff_marker__6 + diff_marker__5 + diff_marker__4 + diff_marker__3 + diff_marker__2 + diff_marker__1 + diff_marker__0 - 1) = 0
+(1 - (0 + diff_marker__7 + diff_marker__6 + diff_marker__5 + diff_marker__4 + diff_marker__3 + diff_marker__2 + diff_marker__1 + diff_marker__0)) * cmp_result = 0
+(0 + opcode_slt_flag + opcode_sltu_flag) * (from_state__timestamp + 0 - fp_read_aux__base__prev_timestamp - 1 - (0 + fp_read_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + fp_read_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
+rs2_as * (rs2_as - 1) = 0
+(1 - rs2_as) * (rs2 - (c__0 + c__1 * 256 + c__2 * 65536)) = 0
+(1 - rs2_as) * (c__2 - c__3) = 0
+(1 - rs2_as) * (c__2 - c__4) = 0
+(1 - rs2_as) * (c__2 - c__5) = 0
+(1 - rs2_as) * (c__2 - c__6) = 0
+(1 - rs2_as) * (c__2 - c__7) = 0
+(1 - rs2_as) * (c__2 * (255 - c__2)) = 0
+(0 + opcode_slt_flag + opcode_sltu_flag) * (from_state__timestamp + 1 - rs1_reads_aux__0__base__prev_timestamp - 1 - (0 + rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + rs1_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
+(0 + opcode_slt_flag + opcode_sltu_flag) * (from_state__timestamp + 2 - rs1_reads_aux__1__base__prev_timestamp - 1 - (0 + rs1_reads_aux__1__base__timestamp_lt_aux__lower_decomp__0 * 1 + rs1_reads_aux__1__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
+rs2_as * (0 + opcode_slt_flag + opcode_sltu_flag - 1) = 0
+rs2_as * (from_state__timestamp + 3 - rs2_reads_aux__0__base__prev_timestamp - 1 - (0 + rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + rs2_reads_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
+rs2_as * (from_state__timestamp + 4 - rs2_reads_aux__1__base__prev_timestamp - 1 - (0 + rs2_reads_aux__1__base__timestamp_lt_aux__lower_decomp__0 * 1 + rs2_reads_aux__1__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
+(0 + opcode_slt_flag + opcode_sltu_flag) * (from_state__timestamp + 5 - writes_aux__0__base__prev_timestamp - 1 - (0 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
+(0 + opcode_slt_flag + opcode_sltu_flag) * (from_state__timestamp + 6 - writes_aux__1__base__prev_timestamp - 1 - (0 + writes_aux__1__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__1__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
+
+
 # VmAirWrapper<Rv32LoadStoreAdapterAir, LoadStoreCoreAir<4>
 Symbolic machine using 45 unique main columns:
   from_state__pc
