@@ -26,7 +26,7 @@ use openvm_rv32im_circuit::LessThanExecutor as LessThanExecutorInner;
 use openvm_rv32im_transpiler::LessThanOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::imm_to_bytes;
+use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]
@@ -109,7 +109,11 @@ impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> LessThanExecutor<A, NUM_
         let is_imm = e_u32 == RV32_IMM_AS;
         let c_u32 = c.as_canonical_u32();
         *data = LessThanPreCompute {
-            c: c_u32,
+            c: if is_imm {
+                u32::from_le_bytes(imm_to_bytes::<{ RV32_REGISTER_NUM_LIMBS }>(c_u32))
+            } else {
+                c_u32
+            },
             a: a.as_canonical_u32() as u8,
             b: b.as_canonical_u32() as u8,
         };
@@ -206,7 +210,12 @@ unsafe fn execute_e12_impl<
     let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
     let a = to_u64(rs1);
     let b = if E_IS_IMM {
-        to_u64(imm_to_bytes::<NUM_LIMBS>(pre_compute.c))
+        // pre_compute.c is already sign-extended to 32 bits by pre_compute_impl
+        if NUM_LIMBS == 4 {
+            pre_compute.c as u64
+        } else {
+            pre_compute.c as i32 as i64 as u64
+        }
     } else {
         let rs2 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c);
         to_u64(rs2)
