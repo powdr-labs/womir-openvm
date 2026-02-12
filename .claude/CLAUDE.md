@@ -38,6 +38,10 @@ cargo fmt --all -- --check
 
 Before any task, read `Cargo.toml` to understand the key dependencies.
 
+### Reading Dependency Source Code
+
+Documentation files reference dependency source using `<dep>/<path>` notation (e.g. `<openvm>/crates/vm/src/arch/integration_api.rs`). Use the `resolve-dep-paths` skill to resolve these to local filesystem paths.
+
 ## GitHub workflow
 
 Use the `gh` CLI tool to interact with GitHub when needed. For example, to access issues, pull requests, comments, files, etc.
@@ -47,6 +51,12 @@ When asked to push your changes:
 - Check what the current branch is and remember it.
 - Create a new branch, like `feature-name`
 - Commit your changes. If possible, make many small commits that make it easy to follow the history.
+- Never force push, unless explicitly asked.
 - Open a draft PR, using the previous branch as the base.
+- Keep your description minimal, but include:
+  - A link to the relevant issue (if it exists)
+  - A brief motivation (unless obvious)
+  - A brief description of the changes you made
+  - If the PR contains anything unexpected, explain it.
 
 You might also be asked to check CI results. Make sure it passes.

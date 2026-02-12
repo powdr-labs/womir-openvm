@@ -16,8 +16,8 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
 };
 use openvm_instructions::LocalOpcode;
 use openvm_rv32im_circuit::{
-    BaseAluCoreAir, BaseAluFiller, LoadSignExtendCoreAir, LoadSignExtendFiller, LoadStoreCoreAir,
-    LoadStoreFiller,
+    BaseAluCoreAir, BaseAluFiller, LessThanCoreAir, LessThanFiller, LoadSignExtendCoreAir,
+    LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller,
 };
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
@@ -25,17 +25,17 @@ use openvm_stark_backend::{
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
-use openvm_womir_transpiler::{BaseAluOpcode, ConstOpcodes, LoadStoreOpcode};
+use openvm_womir_transpiler::{
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
+};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
+use openvm_circuit::arch::ExecutionBridge;
+
 use crate::{
-    adapters::*,
-    const32::Const32Executor32,
-    execution::{ExecutionBridge, FpBus},
-    load_sign_extend::execution::LoadSignExtendExecutor,
-    loadstore::execution::LoadStoreExecutor,
-    *,
+    adapters::*, const32::Const32Executor32, load_sign_extend::execution::LoadSignExtendExecutor,
+    loadstore::execution::LoadStoreExecutor, *,
 };
 
 pub use self::WomirCpuProverExt as WomirProverExt;
@@ -75,6 +75,9 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 )]
 pub enum WomirExecutor {
     BaseAlu(Rv32BaseAluExecutor),
+    BaseAlu64(BaseAlu64Executor),
+    LessThan(Rv32LessThanExecutor),
+    LessThan64(LessThan64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     Const32(Const32Executor32),
@@ -91,9 +94,35 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
     ) -> Result<(), ExecutorInventoryError> {
         let pointer_max_bits = inventory.pointer_max_bits();
 
-        let base_alu =
-            Rv32BaseAluExecutor::new(Rv32BaseAluAdapterExecutor, BaseAluOpcode::CLASS_OFFSET);
+        let base_alu = Rv32BaseAluExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            BaseAluOpcode::CLASS_OFFSET,
+        );
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let base_alu_64 = BaseAlu64Executor::new(
+            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            BaseAlu64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(
+            base_alu_64,
+            BaseAlu64Opcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        let less_than = Rv32LessThanExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            LessThanOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(less_than, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let less_than_64 = LessThan64Executor::new(
+            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            LessThan64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(
+            less_than_64,
+            LessThan64Opcode::iter().map(|x| x.global_opcode()),
+        )?;
 
         let load_store = LoadStoreExecutor::new(
             Rv32LoadStoreAdapterExecutor::new(pointer_max_bits),
@@ -129,10 +158,7 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             memory_bridge,
         } = inventory.system().port();
 
-        // TODO: Need to extend VmConnectorChip to also initialize & finalize the fp bus.
-        // (https://github.com/powdr-labs/womir-openvm/issues/124)
-        let fp_bus = FpBus::new(inventory.new_bus_idx());
-        let exec_bridge = ExecutionBridge::new(execution_bus, fp_bus, program_bus);
+        let exec_bridge = ExecutionBridge::new(execution_bus, program_bus);
         let range_checker = inventory.range_checker().bus;
         let pointer_max_bits = inventory.pointer_max_bits();
 
@@ -154,6 +180,24 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             BaseAluCoreAir::new(bitwise_lu, BaseAluOpcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu);
+
+        let base_alu_64 = BaseAlu64Air::new(
+            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(base_alu_64);
+
+        let less_than = Rv32LessThanAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            LessThanCoreAir::new(bitwise_lu, LessThanOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(less_than);
+
+        let less_than_64 = LessThan64Air::new(
+            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            LessThanCoreAir::new(bitwise_lu, LessThan64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(less_than_64);
 
         let load_store = Rv32LoadStoreAir::new(
             Rv32LoadStoreAdapterAir::new(
@@ -235,6 +279,39 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(base_alu);
+
+        inventory.next_air::<BaseAlu64Air>()?;
+        let base_alu_64 = BaseAlu64Chip::new(
+            BaseAluFiller::new(
+                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                BaseAlu64Opcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(base_alu_64);
+
+        inventory.next_air::<Rv32LessThanAir>()?;
+        let less_than = Rv32LessThanChip::new(
+            LessThanFiller::new(
+                Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                LessThanOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(less_than);
+
+        inventory.next_air::<LessThan64Air>()?;
+        let less_than_64 = LessThan64Chip::new(
+            LessThanFiller::new(
+                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                LessThan64Opcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(less_than_64);
 
         inventory.next_air::<Rv32LoadStoreAir>()?;
         let load_store_chip = Rv32LoadStoreChip::new(

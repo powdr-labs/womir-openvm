@@ -1,4 +1,7 @@
-use std::borrow::{Borrow, BorrowMut};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    cell::RefCell,
+};
 
 use openvm_circuit::{
     arch::{
@@ -33,18 +36,18 @@ use openvm_stark_backend::{
 };
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{
-    execution::{ExecutionBridge, ExecutionState, FpKeepOrSet},
-    memory_config::FpMemory,
-};
+use openvm_circuit::arch::ExecutionBridge;
+
+use crate::{execution::ExecutionState, memory_config::FP_AS};
 
 use super::{
-    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_imm, tracing_write,
+    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp, tracing_read_imm,
+    tracing_write,
 };
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct Rv32BaseAluAdapterCols<T> {
+pub struct BaseAluAdapterCols<T, const NUM_REG_OPS: usize> {
     pub from_state: ExecutionState<T>,
     pub rd_ptr: T,
     pub rs1_ptr: T,
@@ -52,41 +55,43 @@ pub struct Rv32BaseAluAdapterCols<T> {
     pub rs2: T,
     /// 1 if rs2 was a read, 0 if an immediate
     pub rs2_as: T,
-    pub reads_aux: [MemoryReadAuxCols<T>; 2],
-    pub writes_aux: MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>,
+    pub fp_read_aux: MemoryReadAuxCols<T>,
+    pub rs1_reads_aux: [MemoryReadAuxCols<T>; NUM_REG_OPS],
+    pub rs2_reads_aux: [MemoryReadAuxCols<T>; NUM_REG_OPS],
+    pub writes_aux: [MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>; NUM_REG_OPS],
 }
 
-/// Reads instructions of the form OP a, b, c, d, e where \[a:4\]_d = \[b:4\]_d op \[c:4\]_e.
+/// Reads instructions of the form OP a, b, c, d, e where \[a:N\]_d = \[b:N\]_d op \[c:N\]_e.
 /// Operand d can only be 1, and e can be either 1 (for register reads) or 0 (when c
 /// is an immediate).
 #[derive(Clone, Copy, Debug, derive_new::new)]
-pub struct Rv32BaseAluAdapterAir {
+pub struct BaseAluAdapterAir<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> {
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) memory_bridge: MemoryBridge,
     bitwise_lookup_bus: BitwiseOperationLookupBus,
 }
 
-impl<F: Field> BaseAir<F> for Rv32BaseAluAdapterAir {
+impl<F: Field, const NUM_LIMBS: usize, const NUM_REG_OPS: usize> BaseAir<F>
+    for BaseAluAdapterAir<NUM_LIMBS, NUM_REG_OPS>
+{
     fn width(&self) -> usize {
-        Rv32BaseAluAdapterCols::<F>::width()
+        BaseAluAdapterCols::<F, NUM_REG_OPS>::width()
     }
 }
 
-impl<F: Field> ColumnsAir<F> for Rv32BaseAluAdapterAir {
+impl<F: Field, const NUM_LIMBS: usize, const NUM_REG_OPS: usize> ColumnsAir<F>
+    for BaseAluAdapterAir<NUM_LIMBS, NUM_REG_OPS>
+{
     fn columns(&self) -> Option<Vec<String>> {
-        Rv32BaseAluAdapterCols::<F>::struct_reflection()
+        BaseAluAdapterCols::<F, NUM_REG_OPS>::struct_reflection()
     }
 }
 
-impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
-    type Interface = BasicAdapterInterface<
-        AB::Expr,
-        MinimalInstruction<AB::Expr>,
-        2,
-        1,
-        RV32_REGISTER_NUM_LIMBS,
-        RV32_REGISTER_NUM_LIMBS,
-    >;
+impl<AB: InteractionBuilder, const NUM_LIMBS: usize, const NUM_REG_OPS: usize> VmAdapterAir<AB>
+    for BaseAluAdapterAir<NUM_LIMBS, NUM_REG_OPS>
+{
+    type Interface =
+        BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 2, 1, NUM_LIMBS, NUM_LIMBS>;
 
     fn eval(
         &self,
@@ -94,7 +99,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
         local: &[AB::Var],
         ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local: &Rv32BaseAluAdapterCols<_> = local.borrow();
+        let local: &BaseAluAdapterCols<_, NUM_REG_OPS> = local.borrow();
         let timestamp = local.from_state.timestamp;
         let mut timestamp_delta: usize = 0;
         let mut timestamp_pp = || {
@@ -102,9 +107,19 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
             timestamp + AB::F::from_canonical_usize(timestamp_delta - 1)
         };
 
+        // Read fp from FP address space (address space FP_AS, address 0).
+        self.memory_bridge
+            .read(
+                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                [local.from_state.fp],
+                timestamp_pp(),
+                &local.fp_read_aux,
+            )
+            .eval(builder, ctx.instruction.is_valid.clone());
+
         // If rs2 is an immediate value, constrain that:
         // 1. It's a 16-bit two's complement integer (stored in rs2_limbs[0] and rs2_limbs[1])
-        // 2. It's properly sign-extended to 32-bits (the upper limbs must match the sign bit)
+        // 2. It's properly sign-extended to NUM_LIMBS bytes (the upper limbs must match the sign bit)
         let rs2_limbs = ctx.reads[1].clone();
         let rs2_sign = rs2_limbs[2].clone();
         let rs2_imm = rs2_limbs[0].clone()
@@ -113,7 +128,9 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
         builder.assert_bool(local.rs2_as);
         let mut rs2_imm_when = builder.when(not(local.rs2_as));
         rs2_imm_when.assert_eq(local.rs2, rs2_imm);
-        rs2_imm_when.assert_eq(rs2_sign.clone(), rs2_limbs[3].clone());
+        for limb in rs2_limbs.iter().skip(3) {
+            rs2_imm_when.assert_eq(rs2_sign.clone(), limb.clone());
+        }
         rs2_imm_when.assert_zero(
             rs2_sign.clone()
                 * (AB::Expr::from_canonical_usize((1 << RV32_CELL_BITS) - 1) - rs2_sign),
@@ -122,42 +139,64 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
             .send_range(rs2_limbs[0].clone(), rs2_limbs[1].clone())
             .eval(builder, ctx.instruction.is_valid.clone() - local.rs2_as);
 
-        self.memory_bridge
-            .read(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local.rs1_ptr + local.from_state.fp,
-                ),
-                ctx.reads[0].clone(),
-                timestamp_pp(),
-                &local.reads_aux[0],
-            )
-            .eval(builder, ctx.instruction.is_valid.clone());
+        // rs1 reads: loop over register-sized chunks
+        for r in 0..NUM_REG_OPS {
+            let offset = r * RV32_REGISTER_NUM_LIMBS;
+            let chunk: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
+                std::array::from_fn(|i| ctx.reads[0][offset + i].clone());
+            self.memory_bridge
+                .read(
+                    MemoryAddress::new(
+                        AB::F::from_canonical_u32(RV32_REGISTER_AS),
+                        local.rs1_ptr + local.from_state.fp + AB::F::from_canonical_usize(offset),
+                    ),
+                    chunk,
+                    timestamp_pp(),
+                    &local.rs1_reads_aux[r],
+                )
+                .eval(builder, ctx.instruction.is_valid.clone());
+        }
 
-        // This constraint ensures that the following memory read only occurs when `is_valid == 1`.
+        // This constraint ensures that the following memory reads only occur when `is_valid == 1`.
         builder
             .when(local.rs2_as)
             .assert_one(ctx.instruction.is_valid.clone());
-        self.memory_bridge
-            .read(
-                MemoryAddress::new(local.rs2_as, local.rs2 + local.from_state.fp),
-                ctx.reads[1].clone(),
-                timestamp_pp(),
-                &local.reads_aux[1],
-            )
-            .eval(builder, local.rs2_as);
 
-        self.memory_bridge
-            .write(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local.rd_ptr + local.from_state.fp,
-                ),
-                ctx.writes[0].clone(),
-                timestamp_pp(),
-                &local.writes_aux,
-            )
-            .eval(builder, ctx.instruction.is_valid.clone());
+        // rs2 reads: loop over register-sized chunks, enabled only when rs2_as=1
+        for r in 0..NUM_REG_OPS {
+            let offset = r * RV32_REGISTER_NUM_LIMBS;
+            let chunk: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
+                std::array::from_fn(|i| ctx.reads[1][offset + i].clone());
+            self.memory_bridge
+                .read(
+                    MemoryAddress::new(
+                        local.rs2_as,
+                        local.rs2 + local.from_state.fp + AB::F::from_canonical_usize(offset),
+                    ),
+                    chunk,
+                    timestamp_pp(),
+                    &local.rs2_reads_aux[r],
+                )
+                .eval(builder, local.rs2_as);
+        }
+
+        // rd writes: loop over register-sized chunks
+        for w in 0..NUM_REG_OPS {
+            let offset = w * RV32_REGISTER_NUM_LIMBS;
+            let chunk: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
+                std::array::from_fn(|i| ctx.writes[0][offset + i].clone());
+            self.memory_bridge
+                .write(
+                    MemoryAddress::new(
+                        AB::F::from_canonical_u32(RV32_REGISTER_AS),
+                        local.rd_ptr + local.from_state.fp + AB::F::from_canonical_usize(offset),
+                    ),
+                    chunk,
+                    timestamp_pp(),
+                    &local.writes_aux[w],
+                )
+                .eval(builder, ctx.instruction.is_valid.clone());
+        }
 
         self.execution_bridge
             .execute_and_increment_or_set_pc(
@@ -169,32 +208,49 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32BaseAluAdapterAir {
                     AB::Expr::from_canonical_u32(RV32_REGISTER_AS),
                     local.rs2_as.into(),
                 ],
-                local.from_state,
+                local.from_state.into(),
                 AB::F::from_canonical_usize(timestamp_delta),
                 (DEFAULT_PC_STEP, ctx.to_pc),
-                FpKeepOrSet::<AB::Expr>::Keep,
             )
             .eval(builder, ctx.instruction.is_valid);
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &Rv32BaseAluAdapterCols<_> = local.borrow();
+        let cols: &BaseAluAdapterCols<_, NUM_REG_OPS> = local.borrow();
         cols.from_state.pc
     }
 }
 
-#[derive(Clone, derive_new::new)]
-pub struct Rv32BaseAluAdapterExecutor<const LIMB_BITS: usize>;
+#[derive(Clone)]
+pub struct BaseAluAdapterExecutor<
+    const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
+    const LIMB_BITS: usize,
+> {
+    /// Hack: This flag is used so that we fetch the frame pointer exactly once per instruction execution,
+    ///       BEFORE the first read.
+    has_fetched_fp: RefCell<bool>,
+}
+
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize> Default
+    for BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+{
+    fn default() -> Self {
+        Self {
+            has_fetched_fp: RefCell::new(false),
+        }
+    }
+}
 
 #[derive(derive_new::new)]
-pub struct Rv32BaseAluAdapterFiller<const LIMB_BITS: usize> {
+pub struct BaseAluAdapterFiller<const NUM_REG_OPS: usize, const LIMB_BITS: usize> {
     bitwise_lookup_chip: SharedBitwiseOperationLookupChip<LIMB_BITS>,
 }
 
 // Intermediate type that should not be copied or cloned and should be directly written to
 #[repr(C)]
 #[derive(AlignedBytesBorrow, Debug)]
-pub struct Rv32BaseAluAdapterRecord {
+pub struct BaseAluAdapterRecord<const NUM_REG_OPS: usize> {
     pub from_pc: u32,
     pub fp: u32,
     pub from_timestamp: u32,
@@ -206,22 +262,42 @@ pub struct Rv32BaseAluAdapterRecord {
     /// 1 if rs2 was a read, 0 if an immediate
     pub rs2_as: u8,
 
-    pub reads_aux: [MemoryReadAuxRecord; 2],
-    pub writes_aux: MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>,
+    pub fp_read_aux: MemoryReadAuxRecord,
+    pub rs1_reads_aux: [MemoryReadAuxRecord; NUM_REG_OPS],
+    pub rs2_reads_aux: [MemoryReadAuxRecord; NUM_REG_OPS],
+    pub writes_aux: [MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>; NUM_REG_OPS],
 }
 
-impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
-    for Rv32BaseAluAdapterExecutor<LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
-    const WIDTH: usize = size_of::<Rv32BaseAluAdapterCols<u8>>();
-    type ReadData = [[u8; RV32_REGISTER_NUM_LIMBS]; 2];
-    type WriteData = [[u8; RV32_REGISTER_NUM_LIMBS]; 1];
-    type RecordMut<'a> = &'a mut Rv32BaseAluAdapterRecord;
+    fn maybe_fetch_fp<F: PrimeField32>(
+        &self,
+        memory: &mut TracingMemory,
+        record: &mut BaseAluAdapterRecord<NUM_REG_OPS>,
+    ) {
+        if !*self.has_fetched_fp.borrow() {
+            record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
+            *self.has_fetched_fp.borrow_mut() = true;
+        }
+    }
+
+    fn finalize_instruction(&self) {
+        *self.has_fetched_fp.borrow_mut() = false;
+    }
+}
+
+impl<F: PrimeField32, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    AdapterTraceExecutor<F> for BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+{
+    const WIDTH: usize = size_of::<BaseAluAdapterCols<u8, NUM_REG_OPS>>();
+    type ReadData = [[u8; NUM_LIMBS]; 2];
+    type WriteData = [[u8; NUM_LIMBS]; 1];
+    type RecordMut<'a> = &'a mut BaseAluAdapterRecord<NUM_REG_OPS>;
 
     #[inline(always)]
-    fn start(pc: u32, memory: &TracingMemory, record: &mut &mut Rv32BaseAluAdapterRecord) {
+    fn start(pc: u32, memory: &TracingMemory, record: &mut &mut BaseAluAdapterRecord<NUM_REG_OPS>) {
         record.from_pc = pc;
-        record.fp = memory.data().fp();
         record.from_timestamp = memory.timestamp;
     }
 
@@ -231,7 +307,7 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
         &self,
         memory: &mut TracingMemory,
         instruction: &Instruction<F>,
-        record: &mut &mut Rv32BaseAluAdapterRecord,
+        record: &mut &mut BaseAluAdapterRecord<NUM_REG_OPS>,
     ) -> Self::ReadData {
         let &Instruction { b, c, d, e, .. } = instruction;
 
@@ -240,28 +316,49 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
             e.as_canonical_u32() == RV32_REGISTER_AS || e.as_canonical_u32() == RV32_IMM_AS
         );
 
+        self.maybe_fetch_fp::<F>(memory, record);
+
         record.rs1_ptr = b.as_canonical_u32();
-        let rs1 = tracing_read(
-            memory,
-            RV32_REGISTER_AS,
-            record.rs1_ptr + record.fp,
-            &mut record.reads_aux[0].prev_timestamp,
-        );
+
+        // Read rs1 in register-sized chunks
+        let mut rs1 = [0u8; NUM_LIMBS];
+        for r in 0..NUM_REG_OPS {
+            let offset = r * RV32_REGISTER_NUM_LIMBS;
+            let chunk: [u8; RV32_REGISTER_NUM_LIMBS] = tracing_read(
+                memory,
+                RV32_REGISTER_AS,
+                record.rs1_ptr + record.fp + offset as u32,
+                &mut record.rs1_reads_aux[r].prev_timestamp,
+            );
+            rs1[offset..offset + RV32_REGISTER_NUM_LIMBS].copy_from_slice(&chunk);
+        }
 
         let rs2 = if e.as_canonical_u32() == RV32_REGISTER_AS {
             record.rs2_as = RV32_REGISTER_AS as u8;
             record.rs2 = c.as_canonical_u32();
 
-            tracing_read(
-                memory,
-                RV32_REGISTER_AS,
-                record.rs2 + record.fp,
-                &mut record.reads_aux[1].prev_timestamp,
-            )
+            // Read rs2 in register-sized chunks
+            let mut rs2 = [0u8; NUM_LIMBS];
+            for r in 0..NUM_REG_OPS {
+                let offset = r * RV32_REGISTER_NUM_LIMBS;
+                let chunk: [u8; RV32_REGISTER_NUM_LIMBS] = tracing_read(
+                    memory,
+                    RV32_REGISTER_AS,
+                    record.rs2 + record.fp + offset as u32,
+                    &mut record.rs2_reads_aux[r].prev_timestamp,
+                );
+                rs2[offset..offset + RV32_REGISTER_NUM_LIMBS].copy_from_slice(&chunk);
+            }
+            rs2
         } else {
             record.rs2_as = RV32_IMM_AS as u8;
 
-            tracing_read_imm(memory, c.as_canonical_u32(), &mut record.rs2)
+            // Immediate uses 1 timestamp, pad with extra increments for remaining NUM_REG_OPS-1
+            let rs2 = tracing_read_imm::<NUM_LIMBS>(memory, c.as_canonical_u32(), &mut record.rs2);
+            for _ in 1..NUM_REG_OPS {
+                memory.increment_timestamp();
+            }
+            rs2
         };
 
         [rs1, rs2]
@@ -273,28 +370,36 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceExecutor<F>
         memory: &mut TracingMemory,
         instruction: &Instruction<F>,
         data: Self::WriteData,
-        record: &mut &mut Rv32BaseAluAdapterRecord,
+        record: &mut &mut BaseAluAdapterRecord<NUM_REG_OPS>,
     ) {
         let &Instruction { a, d, .. } = instruction;
 
         debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
 
         record.rd_ptr = a.as_canonical_u32();
-        tracing_write(
-            memory,
-            RV32_REGISTER_AS,
-            record.rd_ptr + record.fp,
-            data[0],
-            &mut record.writes_aux.prev_timestamp,
-            &mut record.writes_aux.prev_data,
-        );
+
+        // Write rd in register-sized chunks
+        for w in 0..NUM_REG_OPS {
+            let offset = w * RV32_REGISTER_NUM_LIMBS;
+            let chunk: [u8; RV32_REGISTER_NUM_LIMBS] = std::array::from_fn(|i| data[0][offset + i]);
+            tracing_write(
+                memory,
+                RV32_REGISTER_AS,
+                record.rd_ptr + record.fp + offset as u32,
+                chunk,
+                &mut record.writes_aux[w].prev_timestamp,
+                &mut record.writes_aux[w].prev_data,
+            );
+        }
+
+        self.finalize_instruction();
     }
 }
 
-impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceFiller<F>
-    for Rv32BaseAluAdapterFiller<LIMB_BITS>
+impl<F: PrimeField32, const NUM_REG_OPS: usize, const LIMB_BITS: usize> AdapterTraceFiller<F>
+    for BaseAluAdapterFiller<NUM_REG_OPS, LIMB_BITS>
 {
-    const WIDTH: usize = size_of::<Rv32BaseAluAdapterCols<u8>>();
+    const WIDTH: usize = size_of::<BaseAluAdapterCols<u8, NUM_REG_OPS>>();
 
     fn fill_trace_row(&self, mem_helper: &MemoryAuxColsFactory<F>, mut adapter_row: &mut [F]) {
         // SAFETY: the following is highly unsafe. We are going to cast `adapter_row` to a record
@@ -304,45 +409,66 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceFiller<F>
         // - Do not overwrite any reference in `record` before it has already been used or moved
         // - alignment of `F` must be >= alignment of Record (AlignedBytesBorrow will panic
         //   otherwise)
-        // - adapter_row contains a valid Rv32BaseAluAdapterRecord representation
-        // - get_record_from_slice correctly interprets the bytes as Rv32BaseAluAdapterRecord
-        let record: &Rv32BaseAluAdapterRecord =
+        // - adapter_row contains a valid BaseAluAdapterRecord representation
+        // - get_record_from_slice correctly interprets the bytes as BaseAluAdapterRecord
+        let record: &BaseAluAdapterRecord<NUM_REG_OPS> =
             unsafe { get_record_from_slice(&mut adapter_row, ()) };
-        let adapter_row: &mut Rv32BaseAluAdapterCols<F> = adapter_row.borrow_mut();
+        let adapter_row: &mut BaseAluAdapterCols<F, NUM_REG_OPS> = adapter_row.borrow_mut();
 
         // We must assign in reverse
-        const TIMESTAMP_DELTA: u32 = 2;
-        let mut timestamp = record.from_timestamp + TIMESTAMP_DELTA;
+        // The last memory operation (last write chunk) is at from_timestamp + 3*NUM_REG_OPS.
+        // The eval's timestamp_delta is 1 + 3*NUM_REG_OPS (total operation count).
+        let timestamp_delta: u32 = 3 * NUM_REG_OPS as u32;
+        let mut timestamp = record.from_timestamp + timestamp_delta;
 
-        adapter_row
-            .writes_aux
-            .set_prev_data(record.writes_aux.prev_data.map(F::from_canonical_u8));
-        mem_helper.fill(
-            record.writes_aux.prev_timestamp,
-            timestamp,
-            adapter_row.writes_aux.as_mut(),
-        );
-        timestamp -= 1;
-
-        if record.rs2_as != 0 {
+        // Writes (reverse order)
+        for w in (0..NUM_REG_OPS).rev() {
+            adapter_row.writes_aux[w]
+                .set_prev_data(record.writes_aux[w].prev_data.map(F::from_canonical_u8));
             mem_helper.fill(
-                record.reads_aux[1].prev_timestamp,
+                record.writes_aux[w].prev_timestamp,
                 timestamp,
-                adapter_row.reads_aux[1].as_mut(),
+                adapter_row.writes_aux[w].as_mut(),
             );
+            timestamp -= 1;
+        }
+
+        // rs2 reads (reverse order)
+        if record.rs2_as != 0 {
+            for r in (0..NUM_REG_OPS).rev() {
+                mem_helper.fill(
+                    record.rs2_reads_aux[r].prev_timestamp,
+                    timestamp,
+                    adapter_row.rs2_reads_aux[r].as_mut(),
+                );
+                timestamp -= 1;
+            }
         } else {
-            mem_helper.fill_zero(adapter_row.reads_aux[1].as_mut());
+            for r in (0..NUM_REG_OPS).rev() {
+                mem_helper.fill_zero(adapter_row.rs2_reads_aux[r].as_mut());
+                timestamp -= 1;
+            }
             let rs2_imm = record.rs2;
             let mask = (1 << RV32_CELL_BITS) - 1;
             self.bitwise_lookup_chip
                 .request_range(rs2_imm & mask, (rs2_imm >> 8) & mask);
         }
-        timestamp -= 1;
 
+        // rs1 reads (reverse order)
+        for r in (0..NUM_REG_OPS).rev() {
+            mem_helper.fill(
+                record.rs1_reads_aux[r].prev_timestamp,
+                timestamp,
+                adapter_row.rs1_reads_aux[r].as_mut(),
+            );
+            timestamp -= 1;
+        }
+
+        // fp read
         mem_helper.fill(
-            record.reads_aux[0].prev_timestamp,
+            record.fp_read_aux.prev_timestamp,
             timestamp,
-            adapter_row.reads_aux[0].as_mut(),
+            adapter_row.fp_read_aux.as_mut(),
         );
 
         adapter_row.rs2_as = F::from_canonical_u8(record.rs2_as);
@@ -354,3 +480,11 @@ impl<F: PrimeField32, const LIMB_BITS: usize> AdapterTraceFiller<F>
         adapter_row.from_state.pc = F::from_canonical_u32(record.from_pc);
     }
 }
+
+// Backward-compatible type aliases for 32-bit (NUM_REG_OPS=1)
+pub type Rv32BaseAluAdapterCols<T> = BaseAluAdapterCols<T, 1>;
+pub type Rv32BaseAluAdapterAir = BaseAluAdapterAir<RV32_REGISTER_NUM_LIMBS, 1>;
+pub type Rv32BaseAluAdapterRecord = BaseAluAdapterRecord<1>;
+pub type Rv32BaseAluAdapterExecutor<const LIMB_BITS: usize> =
+    BaseAluAdapterExecutor<RV32_REGISTER_NUM_LIMBS, 1, LIMB_BITS>;
+pub type Rv32BaseAluAdapterFiller<const LIMB_BITS: usize> = BaseAluAdapterFiller<1, LIMB_BITS>;

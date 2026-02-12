@@ -10,6 +10,8 @@ use openvm_circuit::{
 use openvm_instructions::riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS};
 use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
 
+use crate::memory_config::FP_AS;
+
 mod alu;
 mod const32;
 mod loadstore;
@@ -47,12 +49,16 @@ pub fn decompose<F: PrimeField32>(value: u32) -> [F; RV32_REGISTER_NUM_LIMBS] {
     })
 }
 
+/// Convert a 24-bit encoded immediate to `[u8; N]` with sign extension.
+/// The immediate is stored as 3 bytes: low, mid, sign. Byte 2 (the sign byte)
+/// is replicated to all higher positions. Works correctly for negative numbers:
+/// e.g., -5 is encoded as 0x00FFFB → [0xFB, 0xFF, 0xFF, 0xFF] for N=4.
 #[inline(always)]
-pub fn imm_to_bytes(imm: u32) -> [u8; RV32_REGISTER_NUM_LIMBS] {
+pub fn imm_to_bytes<const N: usize>(imm: u32) -> [u8; N] {
     debug_assert_eq!(imm >> 24, 0);
-    let mut imm_le = imm.to_le_bytes();
-    imm_le[3] = imm_le[2];
-    imm_le
+    let imm_le = imm.to_le_bytes();
+    let sign_byte = imm_le[2];
+    std::array::from_fn(|i| if i < 3 { imm_le[i] } else { sign_byte })
 }
 
 #[inline(always)]
@@ -160,22 +166,20 @@ pub fn tracing_read<const N: usize>(
     data
 }
 
+/// Reads an immediate value, increments the timestamp, and returns sign-extended bytes.
+/// Records the immediate value in the mutable record buffer.
 #[inline(always)]
-pub fn tracing_read_imm(
+pub fn tracing_read_imm<const N: usize>(
     memory: &mut TracingMemory,
     imm: u32,
     imm_mut: &mut u32,
-) -> [u8; RV32_REGISTER_NUM_LIMBS] {
+) -> [u8; N] {
     *imm_mut = imm;
-    debug_assert_eq!(imm >> 24, 0); // highest byte should be zero to prevent overflow
+    debug_assert_eq!(imm >> 24, 0);
 
     memory.increment_timestamp();
 
-    let mut imm_le = imm.to_le_bytes();
-    // Important: we set the highest byte equal to the second highest byte, using the assumption
-    // that imm is at most 24 bits
-    imm_le[3] = imm_le[2];
-    imm_le
+    imm_to_bytes(imm)
 }
 
 /// Writes `reg_ptr, reg_val` into memory and records the memory access in mutable buffer.
@@ -246,6 +250,19 @@ pub fn abstract_compose<T: FieldAlgebra, V: Mul<T, Output = T>>(
         .fold(T::ZERO, |acc, (i, limb)| {
             acc + limb * T::from_canonical_u32(1 << (i * RV32_CELL_BITS))
         })
+}
+
+/// Tracing read of the frame pointer from FP_AS address 0.
+/// Returns the fp value and records the previous timestamp for trace generation.
+#[inline(always)]
+pub fn tracing_read_fp<F: PrimeField32>(
+    memory: &mut TracingMemory,
+    prev_timestamp: &mut u32,
+) -> u32 {
+    // SAFETY: FP_AS uses native32 cell type (F), block size 1, align 1.
+    let (t_prev, data) = unsafe { memory.read::<F, 1, 1>(FP_AS, 0) };
+    *prev_timestamp = t_prev;
+    data[0].as_canonical_u32()
 }
 
 // TEMP[jpw]
