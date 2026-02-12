@@ -29,6 +29,7 @@ use openvm_womir_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
 };
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use strum::IntoEnumIterator;
 
 use openvm_circuit::arch::ExecutionBridge;
@@ -142,7 +143,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
         )?;
 
-        let const32 = Const32Executor32::new(ConstOpcodes::CLASS_OFFSET);
+        let const32 = Const32Executor32::new(ConstOpcodes::CLASS_OFFSET, RefCell::new(false));
 
         inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 

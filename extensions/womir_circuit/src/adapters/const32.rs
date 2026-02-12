@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 
-use crate::execution::{ExecutionBridge, ExecutionState, FpKeepOrSet};
+use crate::execution::ExecutionState;
+use openvm_circuit::arch::{ExecutionBridge, ExecutionState as OvmExecutionState};
 use openvm_circuit::system::memory::MemoryAddress;
 use openvm_circuit::system::memory::offline_checker::{MemoryBridge, MemoryWriteAuxCols};
 use openvm_circuit_primitives::{AlignedBorrow, bitwise_op_lookup::BitwiseOperationLookupBus};
@@ -107,7 +108,7 @@ where
 
         // Execution bridge: verify instruction and advance PC
         self.execution_bridge
-            .execute_and_increment_or_set_pc(
+            .execute(
                 AB::F::from_canonical_usize(self.offset),
                 [
                     cols.rd_ptr.into(), // a: target register
@@ -118,10 +119,11 @@ where
                     AB::Expr::ONE,      // f: enabled
                     AB::Expr::ZERO,     // g
                 ],
-                cols.from_state,
-                AB::F::from_canonical_usize(timestamp_delta),
-                (DEFAULT_PC_STEP, None::<AB::Expr>),
-                FpKeepOrSet::<AB::Expr>::Keep,
+                cols.from_state.into(),
+                OvmExecutionState {
+                    pc: cols.from_state.pc + AB::F::from_canonical_u32(DEFAULT_PC_STEP),
+                    timestamp: timestamp + AB::F::from_canonical_usize(timestamp_delta),
+                },
             )
             .eval(builder, cols.is_valid);
 

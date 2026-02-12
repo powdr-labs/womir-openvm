@@ -1,6 +1,8 @@
+use crate::adapters::tracing_read_fp;
 use crate::adapters::{Const32AdapterAirCol, decompose, tracing_write};
 use crate::memory_config::FpMemory;
 use openvm_circuit::arch::*;
+use openvm_circuit::system::memory::offline_checker::MemoryReadAuxRecord;
 use openvm_circuit::system::memory::offline_checker::MemoryWriteBytesAuxRecord;
 use openvm_circuit::system::memory::online::TracingMemory;
 use openvm_circuit_primitives::AlignedBytesBorrow;
@@ -12,10 +14,12 @@ use openvm_instructions::{
 };
 use openvm_stark_backend::p3_field::PrimeField32;
 use std::borrow::{Borrow, BorrowMut};
+use std::cell::RefCell;
 // Minimal executor for CONST32 - no computation needed, just write immediate to register
-#[derive(Clone, Copy, derive_new::new)]
+#[derive(Clone, derive_new::new)]
 pub struct Const32Executor<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
     pub offset: usize,
+    has_fetched_fp: RefCell<bool>,
 }
 
 // PreCompute struct for CONST32
@@ -39,6 +43,18 @@ impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> Const32Executor<NUM_LIMBS, 
             target_reg: a.as_canonical_u32(),
             imm,
         };
+    }
+
+    /// Hack: Fetch the frame pointer exactly once per instruction execution, BEFORE the first read.
+    fn maybe_fetch_fp<F: PrimeField32>(
+        &self,
+        memory: &mut TracingMemory,
+        record: &mut Const32Record,
+    ) {
+        if !*self.has_fetched_fp.borrow() {
+            record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
+            *self.has_fetched_fp.borrow_mut() = true;
+        }
     }
 }
 
@@ -73,7 +89,7 @@ where
         let value: [F; RV32_REGISTER_NUM_LIMBS] = decompose(imm);
         let value_bytes = value.map(|x| x.as_canonical_u32() as u8);
         record.from_pc = *state.pc;
-        record.fp = state.memory.data().fp();
+        self.maybe_fetch_fp::<F>(state.memory, record);
         record.from_timestamp = state.memory.timestamp;
         record.rd_ptr = a.as_canonical_u32() + record.fp;
         record.imm = imm;
@@ -158,7 +174,7 @@ unsafe fn execute_e12_impl<
     pre_compute: &Const32PreCompute,
     exec_state: &mut VmExecState<F, openvm_circuit::system::memory::online::GuestMemory, Ctx>,
 ) {
-    let fp = exec_state.memory.fp();
+    let fp = exec_state.memory.fp::<F>();
 
     exec_state.vm_write::<u8, 4>(
         RV32_REGISTER_AS,
@@ -220,6 +236,7 @@ pub struct Const32Record {
 
     pub rd_ptr: u32,
     pub imm: u32,
+    pub fp_read_aux: MemoryReadAuxRecord,
     pub writes_aux: MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>,
 }
 
