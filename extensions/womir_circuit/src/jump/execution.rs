@@ -240,24 +240,26 @@ unsafe fn execute_e12_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const OPCODE
         exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.rs_ptr as u32);
     let reg_value = u32::from_le_bytes(rs);
 
-    let new_pc = if OPCODE == JumpOpcode::JUMP as u8 {
-        pre_compute.imm
-    } else if OPCODE == JumpOpcode::SKIP as u8 {
-        pc.wrapping_add(reg_value.wrapping_mul(DEFAULT_PC_STEP))
-    } else if OPCODE == JumpOpcode::JUMP_IF as u8 {
-        if reg_value != 0 {
-            pre_compute.imm
-        } else {
-            pc.wrapping_add(DEFAULT_PC_STEP)
+    let new_pc = match OPCODE {
+        x if x == JumpOpcode::JUMP as u8 => pre_compute.imm,
+        x if x == JumpOpcode::SKIP as u8 => {
+            pc.wrapping_add(reg_value.wrapping_mul(DEFAULT_PC_STEP))
         }
-    } else if OPCODE == JumpOpcode::JUMP_IF_ZERO as u8 {
-        if reg_value == 0 {
-            pre_compute.imm
-        } else {
-            pc.wrapping_add(DEFAULT_PC_STEP)
+        x if x == JumpOpcode::JUMP_IF as u8 => {
+            if reg_value != 0 {
+                pre_compute.imm
+            } else {
+                pc.wrapping_add(DEFAULT_PC_STEP)
+            }
         }
-    } else {
-        unreachable!()
+        x if x == JumpOpcode::JUMP_IF_ZERO as u8 => {
+            if reg_value == 0 {
+                pre_compute.imm
+            } else {
+                pc.wrapping_add(DEFAULT_PC_STEP)
+            }
+        }
+        _ => unreachable!(),
     };
 
     exec_state.set_pc(new_pc);
