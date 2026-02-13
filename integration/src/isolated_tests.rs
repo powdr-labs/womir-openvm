@@ -1196,6 +1196,69 @@ mod tests {
         test_spec(spec)
     }
 
+    // ==================== Const32 Tests ====================
+
+    #[test]
+    fn test_const32_small() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+0] = 42
+        let spec = TestSpec {
+            program: vec![wom::const_32_imm::<F>(0, 42, 0)],
+            start_fp: 10,
+            expected_registers: vec![(10, 42)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_const32_large() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+0] = 0xDEADBEEF
+        // imm_lo = 0xBEEF, imm_hi = 0xDEAD
+        let spec = TestSpec {
+            program: vec![wom::const_32_imm::<F>(0, 0xBEEF, 0xDEAD)],
+            start_fp: 10,
+            expected_registers: vec![(10, 0xDEADBEEF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_const32_zero() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+0] = 0
+        let spec = TestSpec {
+            program: vec![wom::const_32_imm::<F>(0, 0, 0)],
+            start_fp: 10,
+            expected_registers: vec![(10, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_const32_max() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+0] = 0xFFFFFFFF
+        let spec = TestSpec {
+            program: vec![wom::const_32_imm::<F>(0, 0xFFFF, 0xFFFF)],
+            start_fp: 10,
+            expected_registers: vec![(10, 0xFFFFFFFF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
     // ==================== Cross-width tests ====================
 
     #[test]

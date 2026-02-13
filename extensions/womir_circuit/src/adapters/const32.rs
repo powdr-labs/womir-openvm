@@ -1,9 +1,12 @@
 use std::borrow::Borrow;
 
 use crate::execution::ExecutionState;
+use crate::memory_config::FP_AS;
 use openvm_circuit::arch::{ExecutionBridge, ExecutionState as OvmExecutionState};
 use openvm_circuit::system::memory::MemoryAddress;
-use openvm_circuit::system::memory::offline_checker::{MemoryBridge, MemoryWriteAuxCols};
+use openvm_circuit::system::memory::offline_checker::{
+    MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols,
+};
 use openvm_circuit_primitives::{AlignedBorrow, bitwise_op_lookup::BitwiseOperationLookupBus};
 use openvm_instructions::program::DEFAULT_PC_STEP;
 use openvm_instructions::riscv::RV32_REGISTER_AS;
@@ -23,6 +26,7 @@ pub struct Const32AdapterAirCol<T, const NUM_LIMBS: usize, const CELL_BITS: usiz
     pub from_state: ExecutionState<T>,
     pub rd_ptr: T,
     pub imm_limbs: [T; NUM_LIMBS],
+    pub fp_read_aux: MemoryReadAuxCols<T>,
     pub write_aux: MemoryWriteAuxCols<T, NUM_LIMBS>,
 }
 
@@ -79,6 +83,16 @@ where
             timestamp_delta += 1;
             timestamp + AB::F::from_canonical_usize(timestamp_delta - 1)
         };
+
+        // Read fp from FP address space (address space FP_AS, address 0)
+        self.memory_bridge
+            .read(
+                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                [cols.from_state.fp],
+                timestamp_pp(),
+                &cols.fp_read_aux,
+            )
+            .eval(builder, cols.is_valid);
 
         // Write imm_limbs to register at rd_ptr + fp
         self.memory_bridge

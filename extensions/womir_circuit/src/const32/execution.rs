@@ -89,9 +89,9 @@ where
         let value: [F; RV32_REGISTER_NUM_LIMBS] = decompose(imm);
         let value_bytes = value.map(|x| x.as_canonical_u32() as u8);
         record.from_pc = *state.pc;
-        self.maybe_fetch_fp::<F>(state.memory, record);
         record.from_timestamp = state.memory.timestamp;
-        record.rd_ptr = a.as_canonical_u32() + record.fp;
+        self.maybe_fetch_fp::<F>(state.memory, record);
+        record.rd_ptr = a.as_canonical_u32();
         record.imm = imm;
 
         tracing_write(
@@ -254,13 +254,21 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> TraceFille
         let cols: &mut Const32AdapterAirCol<F, NUM_LIMBS, LIMB_BITS> = row_slice.borrow_mut();
 
         // write_aux: set prev_data and fill timestamp proof
+        // Write happens at from_timestamp + 1 (after FP read at from_timestamp + 0)
         cols.write_aux.set_prev_data(std::array::from_fn(|i| {
             F::from_canonical_u8(record.writes_aux.prev_data[i])
         }));
         mem_helper.fill(
             record.writes_aux.prev_timestamp,
-            record.from_timestamp,
+            record.from_timestamp + 1,
             cols.write_aux.as_mut(),
+        );
+
+        // fp_read_aux: fill timestamp proof for FP read at from_timestamp + 0
+        mem_helper.fill(
+            record.fp_read_aux.prev_timestamp,
+            record.from_timestamp,
+            cols.fp_read_aux.as_mut(),
         );
 
         // imm_limbs: decompose the immediate into limbs and range-check
