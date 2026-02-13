@@ -39,16 +39,18 @@ pub struct JumpCoreCols<T> {
     /// Used for JUMP_IF and JUMP_IF_ZERO.
     pub cond_is_zero: T,
 
-    /// Whether the branch is taken to the immediate target.
-    /// - JUMP: branch_taken = 1 (always taken)
-    /// - SKIP: branch_taken = 0 (uses relative offset instead)
-    /// - JUMP_IF: branch_taken = NOT cond_is_zero
-    /// - JUMP_IF_ZERO: branch_taken = cond_is_zero
-    pub branch_taken: T,
+    /// Whether a jump to the immediate target is performed.
+    /// - JUMP: do_absolute_jump = 1 (always taken)
+    /// - SKIP: do_absolute_jump = 0 (uses relative offset instead)
+    /// - JUMP_IF: do_absolute_jump = NOT cond_is_zero
+    /// - JUMP_IF_ZERO: do_absolute_jump = cond_is_zero
+    pub do_absolute_jump: T,
 
     /// Inverse of the first non-zero limb (if condition is non-zero).
     /// Used to prove non-zeroness: if cond_is_zero=0, then there exists i such that
     /// rs_val[i] * nonzero_inv_marker[i] = 1.
+    // TODO: We could be more efficient here and just check whether the sum of limbs
+    // is zero.
     pub nonzero_inv_marker: [T; RV32_REGISTER_NUM_LIMBS],
 }
 
@@ -93,7 +95,7 @@ where
             cols.opcode_jump_if_zero_flag,
         ];
 
-        // Exactly one flag must be set.
+        // If is_valid=1, exactly one flag must be set.
         let is_valid = flags.iter().fold(AB::Expr::ZERO, |acc, &flag| {
             builder.assert_bool(flag);
             acc + flag.into()
@@ -134,28 +136,30 @@ where
             })
             + AB::Expr::from_canonical_usize(self.offset);
 
-        // Constrain branch_taken is boolean.
-        builder.assert_bool(cols.branch_taken);
+        builder.assert_bool(cols.do_absolute_jump);
 
-        // Constrain branch_taken per opcode:
-        // JUMP: branch_taken = 1 (always taken)
+        // Constrain do_absolute_jump per opcode:
+        // JUMP: do_absolute_jump = 1 (always taken)
         builder
             .when(cols.opcode_jump_flag)
-            .assert_one(cols.branch_taken);
-        // SKIP: branch_taken = 0 (uses relative offset formula)
+            .assert_one(cols.do_absolute_jump);
+        // SKIP: do_absolute_jump = 0 (uses relative offset formula)
         builder
             .when(cols.opcode_skip_flag)
-            .assert_zero(cols.branch_taken);
-        // JUMP_IF: branch_taken = NOT cond_is_zero
-        builder
-            .when(cols.opcode_jump_if_flag)
-            .assert_eq(cols.branch_taken, not::<AB::Expr>(cols.cond_is_zero.into()));
-        // JUMP_IF_ZERO: branch_taken = cond_is_zero
+            .assert_zero(cols.do_absolute_jump);
+        // JUMP_IF: do_absolute_jump = NOT cond_is_zero
+        builder.when(cols.opcode_jump_if_flag).assert_eq(
+            cols.do_absolute_jump,
+            not::<AB::Expr>(cols.cond_is_zero.into()),
+        );
+        // JUMP_IF_ZERO: do_absolute_jump = cond_is_zero
         builder
             .when(cols.opcode_jump_if_zero_flag)
-            .assert_eq(cols.branch_taken, cols.cond_is_zero);
+            .assert_eq(cols.do_absolute_jump, cols.cond_is_zero);
 
-        // Compose the register value into a u32 for SKIP.
+        // Compose the register value into a field element for SKIP.
+        // NOTE: We're not checking for overflow here, because the compiler guarantees that the read value
+        // is a small negative integer.
         let rs_composed = cols
             .rs_val
             .iter()
@@ -166,17 +170,18 @@ where
             });
 
         // Compute to_pc (all terms are degree 2):
-        //   Base:       branch_taken * imm + (1 - branch_taken) * (from_pc + pc_step)
+        //   Base:       do_absolute_jump * imm + (1 - do_absolute_jump) * (from_pc + pc_step)
         //   SKIP corr:  opcode_skip_flag * (rs_composed - 1) * pc_step
         //
         // Non-SKIP: base gives correct result; SKIP correction is zero.
-        // SKIP (branch_taken=0): base gives from_pc + pc_step;
+        // SKIP (do_absolute_jump=0): base gives from_pc + pc_step;
         //   correction adds (rs_composed - 1) * pc_step → from_pc + rs_composed * pc_step.
-        let pc_step = AB::Expr::from_canonical_u32(DEFAULT_PC_STEP);
+        let default_pc_step = AB::Expr::from_canonical_u32(DEFAULT_PC_STEP);
 
-        let to_pc = cols.branch_taken * cols.imm
-            + not::<AB::Expr>(cols.branch_taken.into()) * (from_pc + pc_step.clone())
-            + cols.opcode_skip_flag * (rs_composed - AB::Expr::ONE) * pc_step;
+        let to_pc = cols.do_absolute_jump * cols.imm
+            + not::<AB::Expr>(cols.do_absolute_jump.into()) * (from_pc + default_pc_step.clone())
+            // If opcode_skip_flag=1, apply the SKIP correction: + (rs_composed - 1) * pc_step.
+            + cols.opcode_skip_flag * (rs_composed - AB::Expr::ONE) * default_pc_step;
 
         AdapterAirContext {
             to_pc: Some(to_pc),
@@ -230,8 +235,8 @@ impl JumpCoreFiller {
             }
         }
 
-        // Compute branch_taken.
-        let branch_taken = match local_opcode {
+        // Compute do_absolute_jump.
+        let do_absolute_jump = match local_opcode {
             JumpOpcode::JUMP => true,
             JumpOpcode::SKIP => false,
             JumpOpcode::JUMP_IF => !cond_is_zero,
@@ -240,7 +245,7 @@ impl JumpCoreFiller {
 
         // Assign in reverse order (since record overlaps with row).
         core_row.nonzero_inv_marker = nonzero_inv_marker;
-        core_row.branch_taken = F::from_bool(branch_taken);
+        core_row.do_absolute_jump = F::from_bool(do_absolute_jump);
         core_row.cond_is_zero = F::from_bool(cond_is_zero);
 
         core_row.opcode_jump_if_zero_flag = F::from_bool(local_opcode == JumpOpcode::JUMP_IF_ZERO);
