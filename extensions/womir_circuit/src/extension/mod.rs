@@ -35,7 +35,7 @@ use strum::IntoEnumIterator;
 use openvm_circuit::arch::ExecutionBridge;
 
 use crate::{
-    adapters::*, const32::Const32Executor32, load_sign_extend::execution::LoadSignExtendExecutor,
+    adapters::*, const32::Const32Executor, load_sign_extend::execution::LoadSignExtendExecutor,
     loadstore::execution::LoadStoreExecutor, *,
 };
 
@@ -81,7 +81,7 @@ pub enum WomirExecutor {
     LessThan64(LessThan64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
-    Const32(Const32Executor32),
+    Const32(Const32Executor),
 }
 
 // ============ VmExtension Implementations ============
@@ -143,7 +143,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
         )?;
 
-        let const32 = Const32Executor32::new(ConstOpcodes::CLASS_OFFSET, RefCell::new(false));
+        let const32 = Const32Executor::new(ConstOpcodes::CLASS_OFFSET, RefCell::new(false));
 
         inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 
