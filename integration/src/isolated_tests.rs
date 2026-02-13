@@ -1412,7 +1412,6 @@ mod tests {
         test_spec(spec)
     }
 
-
     // ==================== Cross-width tests ====================
 
     #[test]

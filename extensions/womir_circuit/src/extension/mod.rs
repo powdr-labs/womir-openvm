@@ -26,7 +26,8 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, JumpOpcode, LessThan64Opcode, LessThanOpcode,
+    LoadStoreOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -149,7 +150,6 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         let const32 = Const32Executor::new(ConstOpcodes::CLASS_OFFSET);
         inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 
-
         Ok(())
     }
 }
@@ -238,7 +238,6 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             memory_bridge,
         );
         inventory.add_air(const32);
-
 
         Ok(())
     }
