@@ -26,7 +26,7 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -80,6 +80,7 @@ pub enum WomirExecutor {
     LessThan64(LessThan64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
+    Jump(JumpExecutor),
 }
 
 // ============ VmExtension Implementations ============
@@ -140,6 +141,9 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
         )?;
+
+        let jump = JumpExecutor::new(JumpAdapterExecutor::default(), JumpOpcode::CLASS_OFFSET);
+        inventory.add_executor(jump, JumpOpcode::iter().map(|x| x.global_opcode()))?;
 
         Ok(())
     }
@@ -215,6 +219,12 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             LoadSignExtendCoreAir::new(range_checker),
         );
         inventory.add_air(load_sign_extend);
+
+        let jump = JumpAir::new(
+            JumpAdapterAir::new(exec_bridge, memory_bridge),
+            crate::jump::core::JumpCoreAir::new(JumpOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(jump);
 
         Ok(())
     }
@@ -319,6 +329,16 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(load_sign_extend);
+
+        inventory.next_air::<JumpAir>()?;
+        let jump = JumpChip::new(
+            JumpFiller::new(
+                JumpAdapterFiller::new(),
+                crate::jump::core::JumpCoreFiller::new(JumpOpcode::CLASS_OFFSET),
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(jump);
 
         Ok(())
     }
