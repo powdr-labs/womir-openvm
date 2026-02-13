@@ -111,13 +111,13 @@ where
             .execute(
                 AB::F::from_canonical_usize(self.offset),
                 [
-                    cols.rd_ptr.into(), // a: target register
-                    imm_lo,             // b: low 16 bits of immediate
-                    imm_hi,             // c: high 16 bits of immediate
-                    AB::Expr::ZERO,     // d
-                    AB::Expr::ZERO,     // e
-                    AB::Expr::ONE,      // f: enabled
-                    AB::Expr::ZERO,     // g
+                    cols.rd_ptr.into(),
+                    imm_lo,
+                    imm_hi,
+                    AB::Expr::ZERO,
+                    AB::Expr::ZERO,
+                    AB::Expr::ONE,
+                    AB::Expr::ZERO,
                 ],
                 cols.from_state.into(),
                 OvmExecutionState {

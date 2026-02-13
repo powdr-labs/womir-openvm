@@ -176,11 +176,8 @@ unsafe fn execute_e12_impl<
 ) {
     let fp = exec_state.memory.fp::<F>();
 
-    exec_state.vm_write::<u8, 4>(
-        RV32_REGISTER_AS,
-        fp + pre_compute.target_reg,
-        &pre_compute.imm.to_le_bytes(),
-    );
+    let imm_bytes: [u8; NUM_LIMBS] = std::array::from_fn(|i| (pre_compute.imm >> (8 * i)) as u8);
+    exec_state.vm_write::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.target_reg, &imm_bytes);
 
     // Increment PC
     let next_pc = exec_state.pc().wrapping_add(DEFAULT_PC_STEP);
