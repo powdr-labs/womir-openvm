@@ -23,11 +23,13 @@ pub mod execution;
 
 pub mod adapters;
 mod base_alu;
+mod const32;
 mod less_than;
 mod load_sign_extend;
 mod loadstore;
 
 pub use base_alu::*;
+pub use const32::*;
 pub use less_than::*;
 pub use load_sign_extend::*;
 pub use loadstore::*;

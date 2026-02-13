@@ -26,7 +26,7 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -34,7 +34,7 @@ use strum::IntoEnumIterator;
 use openvm_circuit::arch::ExecutionBridge;
 
 use crate::{
-    adapters::*, load_sign_extend::execution::LoadSignExtendExecutor,
+    adapters::*, const32::Const32Executor, load_sign_extend::execution::LoadSignExtendExecutor,
     loadstore::execution::LoadStoreExecutor, *,
 };
 
@@ -80,6 +80,7 @@ pub enum WomirExecutor {
     LessThan64(LessThan64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
+    Const32(Const32Executor),
 }
 
 // ============ VmExtension Implementations ============
@@ -140,6 +141,10 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
         )?;
+
+        let const32 = Const32Executor::new(ConstOpcodes::CLASS_OFFSET);
+
+        inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 
         Ok(())
     }
@@ -215,6 +220,14 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             LoadSignExtendCoreAir::new(range_checker),
         );
         inventory.add_air(load_sign_extend);
+
+        let const32 = Const32Air::new(
+            bitwise_lu,
+            ConstOpcodes::CLASS_OFFSET,
+            exec_bridge,
+            memory_bridge,
+        );
+        inventory.add_air(const32);
 
         Ok(())
     }
@@ -320,6 +333,10 @@ where
         );
         inventory.add_executor_chip(load_sign_extend);
 
+        inventory.next_air::<Const32Air>()?;
+        let const32 = Const32Chip::new(Const32Filler::new(bitwise_lu.clone()), mem_helper);
+
+        inventory.add_executor_chip(const32);
         Ok(())
     }
 }
