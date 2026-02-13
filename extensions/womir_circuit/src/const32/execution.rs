@@ -1,5 +1,6 @@
 use crate::adapters::tracing_read_fp;
-use crate::adapters::{Const32AdapterAirCol, decompose, tracing_write};
+use crate::adapters::{decompose, tracing_write};
+use crate::air::Const32AdapterAirCol;
 use crate::memory_config::FpMemory;
 use itertools::Itertools;
 use openvm_circuit::arch::*;

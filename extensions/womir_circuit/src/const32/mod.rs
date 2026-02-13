@@ -1,4 +1,7 @@
-use super::adapters::{Const32AdapterAir, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+use crate::air::Const32AdapterAir;
+
+use super::adapters::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};
+pub mod air;
 mod execution;
 pub use execution::{Const32Filler, Const32Record};
 use openvm_circuit::arch::VmChipWrapper;
