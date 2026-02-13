@@ -38,6 +38,10 @@ cargo fmt --all -- --check
 
 Before any task, read `Cargo.toml` to understand the key dependencies.
 
+### Reading Dependency Source Code
+
+Documentation files reference dependency source using `<dep>/<path>` notation (e.g. `<openvm>/crates/vm/src/arch/integration_api.rs`). Use the `resolve-dep-paths` skill to resolve these to local filesystem paths.
+
 ## GitHub workflow
 
 Use the `gh` CLI tool to interact with GitHub when needed. For example, to access issues, pull requests, comments, files, etc.

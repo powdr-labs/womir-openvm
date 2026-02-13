@@ -26,8 +26,8 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, HintStoreOpcode, LessThan64Opcode, LessThanOpcode,
-    LoadStoreOpcode, Phantom,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, HintStoreOpcode, JumpOpcode, LessThan64Opcode,
+    LessThanOpcode, LoadStoreOpcode, Phantom,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -35,7 +35,7 @@ use strum::IntoEnumIterator;
 use openvm_circuit::arch::ExecutionBridge;
 
 use crate::{
-    adapters::*, load_sign_extend::execution::LoadSignExtendExecutor,
+    adapters::*, const32::Const32Executor, load_sign_extend::execution::LoadSignExtendExecutor,
     loadstore::execution::LoadStoreExecutor, *,
 };
 
@@ -82,6 +82,8 @@ pub enum WomirExecutor {
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     HintStore(Rv32HintStoreExecutor),
+    Jump(JumpExecutor),
+    Const32(Const32Executor),
 }
 
 // ============ VmExtension Implementations ============
@@ -154,6 +156,12 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             phantom::HintInputSubEx,
             PhantomDiscriminant(Phantom::HintInput as u16),
         )?;
+
+        let jump = JumpExecutor::new(JumpAdapterExecutor::default(), JumpOpcode::CLASS_OFFSET);
+        inventory.add_executor(jump, JumpOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let const32 = Const32Executor::new(ConstOpcodes::CLASS_OFFSET);
+        inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 
         Ok(())
     }
@@ -238,6 +246,20 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             pointer_max_bits,
         );
         inventory.add_air(hint_store);
+
+        let jump = JumpAir::new(
+            JumpAdapterAir::new(exec_bridge, memory_bridge),
+            crate::jump::core::JumpCoreAir::new(JumpOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(jump);
+
+        let const32 = Const32Air::new(
+            bitwise_lu,
+            ConstOpcodes::CLASS_OFFSET,
+            exec_bridge,
+            memory_bridge,
+        );
+        inventory.add_air(const32);
 
         Ok(())
     }
@@ -350,6 +372,19 @@ where
         );
         inventory.add_executor_chip(hint_store);
 
+        inventory.next_air::<JumpAir>()?;
+        let jump = JumpChip::new(
+            JumpFiller::new(
+                JumpAdapterFiller::new(),
+                crate::jump::core::JumpCoreFiller::new(JumpOpcode::CLASS_OFFSET),
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(jump);
+
+        inventory.next_air::<Const32Air>()?;
+        let const32 = Const32Chip::new(Const32Filler::new(bitwise_lu.clone()), mem_helper);
+        inventory.add_executor_chip(const32);
         Ok(())
     }
 }

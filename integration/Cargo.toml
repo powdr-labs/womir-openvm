@@ -30,7 +30,7 @@ wasmparser = { workspace = true }
 womir = { workspace = true }
 serde_json = { workspace = true }
 clap = { version = "4.5.43", features = ["derive"] }
-itertools = "0.14"
+itertools = { workspace = true }
 arrayvec = "0.7"
 num_cpus = "1.17.0"
 
