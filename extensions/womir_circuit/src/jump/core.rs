@@ -103,17 +103,26 @@ where
         // Constrain cond_is_zero is boolean.
         builder.assert_bool(cols.cond_is_zero);
 
-        // Constrain cond_is_zero using BranchEqual-style combined sum (max degree 2):
+        // Constrain cond_is_zero using a combined-sum pattern adapted from BranchEqual
+        // (<openvm>/extensions/rv32im/circuit/src/branch_eq/core.rs).
+        //
+        // The trick: fold cond_is_zero into the witness sum so that a single
+        // `when(is_valid).assert_one(sum)` covers both the zero and non-zero cases.
+        // Using two nested `.when()` guards (is_valid, not(cond_is_zero)) would produce
+        // a degree-4 constraint, exceeding DEFAULT_POSEIDON2_MAX_CONSTRAINT_DEGREE (3).
+        //
         //   sum = cond_is_zero + sum_i(rs_val[i] * nonzero_inv_marker[i])
-        // When cond_is_zero=1: all limbs forced to zero → sum = 1 + 0 = 1.
-        // When cond_is_zero=0: sum = 0 + witness_sum, must equal 1 iff value is non-zero.
+        //
+        // When cond_is_zero=1: all limbs are forced to zero, so sum = 1 + 0 = 1.
+        // When cond_is_zero=0: sum = 0 + witness_sum, which equals 1 iff some limb is
+        //   non-zero (prover sets nonzero_inv_marker[i] = rs_val[i]^{-1} for the first
+        //   non-zero limb).
         let mut sum: AB::Expr = cols.cond_is_zero.into();
         for i in 0..RV32_REGISTER_NUM_LIMBS {
-            // When cond_is_zero=1, all limbs must be zero.
             builder.when(cols.cond_is_zero).assert_zero(cols.rs_val[i]);
             sum += cols.rs_val[i].into() * cols.nonzero_inv_marker[i].into();
         }
-        // Combined: when(is_valid) * (sum - 1) = 0, degree 1 + 2 = 3.
+        // Degree: is_valid (1) * (sum (2) - 1) = 3.
         builder.when(is_valid.clone()).assert_one(sum);
 
         // Compute the expected opcode.
