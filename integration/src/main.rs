@@ -676,7 +676,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_basic_addi_64() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1516,7 +1515,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_u_true() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1531,7 +1529,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_u_false() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1546,7 +1543,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_u_equal() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1561,7 +1557,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_s_positive() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1576,7 +1571,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_s_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1591,7 +1585,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_s_both_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1606,7 +1599,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_comparison_chain() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1624,7 +1616,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_u_true() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1639,7 +1630,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_u_false() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1654,7 +1644,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_u_equal() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1669,7 +1658,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_s_positive() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1684,7 +1672,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_s_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1699,7 +1686,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_s_both_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1714,7 +1700,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_edge_cases() {
         let instructions = vec![
             // Test max unsigned value
@@ -1736,7 +1721,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_comparison_equivalence() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1755,7 +1739,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mixed_comparisons() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
