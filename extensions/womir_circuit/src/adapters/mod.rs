@@ -13,10 +13,12 @@ use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
 use crate::memory_config::FP_AS;
 
 mod alu;
+pub mod jaaf;
 mod jump;
 mod loadstore;
 
 pub use alu::*;
+pub use jaaf::*;
 pub use jump::*;
 pub use loadstore::*;
 pub use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS};

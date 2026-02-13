@@ -1436,4 +1436,209 @@ mod tests {
         };
         test_spec_for_all_register_bases(spec)
     }
+
+    // ==================== JAAF Tests ====================
+    //
+    // JAAF instructions change the frame pointer (FP) and jump to a new PC.
+    // Register accesses are FP-relative: register N at FP=F is at absolute
+    // address (N * 4 + F * 4), which is absolute register index (N + F).
+    //
+    // Memory layout for these tests:
+    //   start_fp: 0 (raw FP = 0)
+    //   Register 9 holds the new FP raw value (e.g., 200)
+    //   After JAAF, FP changes and register addressing shifts accordingly.
+
+    #[test]
+    fn test_jaaf() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // JAAF: Jump to target PC and set FP from register.
+        // Program: at PC=0, jump to PC=8 with new FP from reg 9.
+        //
+        // start_fp = 0, reg[9] = 200 (new raw FP).
+        // JAAF jumps to PC=8 and sets FP to 200.
+        // At PC=8 (halt), we verify FP changed.
+        //
+        // The program needs a padding instruction at PC=4 (skipped by jump)
+        // and halt at PC=8.
+        let spec = TestSpec {
+            program: vec![
+                wom::jaaf::<F>(8, 9), // PC=0: jump to PC=8, FP = reg[9]
+                wom::halt(),          // PC=4: skipped
+                                      // PC=8: halt (appended by test_spec)
+            ],
+            start_fp: 0,
+            start_registers: vec![(9, 200)],
+            expected_pc: Some(8),
+            expected_fp: Some(50), // 200 / 4
+            ..Default::default()
+        };
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_jaaf_save() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // JAAF_SAVE: Jump, set FP, and save old FP to register in new frame.
+        //
+        // start_fp = 0, reg[9] = 200 (new raw FP).
+        // jaaf_save(save_fp=11, to_pc=8, to_fp_reg=9)
+        // Saves old FP (=0) to register 11 in the NEW frame (address 11*4 + 200 = 244 = abs index 61).
+        // Jumps to PC=8, sets FP=200.
+        let spec = TestSpec {
+            program: vec![
+                wom::jaaf_save::<F>(11, 8, 9), // PC=0: jump to PC=8, FP=reg[9], save old FP to new_frame[11]
+                wom::halt(),                   // PC=4: skipped
+                                               // PC=8: halt (appended by test_spec)
+            ],
+            start_fp: 0,
+            start_registers: vec![(9, 200)],
+            expected_pc: Some(8),
+            expected_fp: Some(50), // 200 / 4
+            expected_registers: vec![
+                (61, 0), // abs index 61 = (11*4 + 200)/4 = old FP saved in new frame
+            ],
+            ..Default::default()
+        };
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_ret() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // RET: Restore PC and FP from registers.
+        //
+        // start_fp = 50 (raw FP = 200).
+        // reg[10] at abs index (50+10)=60 holds target PC = 8.
+        // reg[11] at abs index (50+11)=61 holds target FP = 0 (raw).
+        // RET reads both, jumps to PC=8, sets FP=0.
+        let spec = TestSpec {
+            program: vec![
+                wom::ret::<F>(10, 11), // PC=0: return to PC=reg[10], FP=reg[11]
+                wom::halt(),           // PC=4: skipped
+                                       // PC=8: halt (appended by test_spec)
+            ],
+            start_fp: 50,
+            start_registers: vec![
+                (60, 8), // reg[10] at fp=50: target PC
+                (61, 0), // reg[11] at fp=50: target FP (raw)
+            ],
+            expected_pc: Some(8),
+            expected_fp: Some(0), // 0 / 4 = 0
+            ..Default::default()
+        };
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_call() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // CALL: Save PC and FP, then jump to immediate PC with new FP.
+        //
+        // start_fp = 0, reg[9] = 200 (new raw FP).
+        // call(save_pc=10, save_fp=11, to_pc=8, to_fp_reg=9)
+        //
+        // Saves:
+        //   return PC (= 0 + 4 = 4) to new_frame[10] at address (10*4 + 200 = 240) = abs index 60
+        //   old FP (= 0) to new_frame[11] at address (11*4 + 200 = 244) = abs index 61
+        // Jumps to PC=8, sets FP=200.
+        let spec = TestSpec {
+            program: vec![
+                wom::call::<F>(10, 11, 8, 9), // PC=0: call to PC=8, FP=reg[9], save PC to new[10], FP to new[11]
+                wom::halt(),                  // PC=4: skipped
+                                              // PC=8: halt (appended by test_spec)
+            ],
+            start_fp: 0,
+            start_registers: vec![(9, 200)],
+            expected_pc: Some(8),
+            expected_fp: Some(50), // 200 / 4
+            expected_registers: vec![
+                (60, 4), // abs index 60 = (10*4 + 200)/4 = return PC saved
+                (61, 0), // abs index 61 = (11*4 + 200)/4 = old FP saved
+            ],
+            ..Default::default()
+        };
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_call_indirect() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // CALL_INDIRECT: Save PC and FP, jump to register PC with new FP.
+        //
+        // start_fp = 0, reg[9] = 200 (new raw FP), reg[12] = 8 (target PC).
+        // call_indirect(save_pc=10, save_fp=11, to_pc_reg=12, to_fp_reg=9)
+        //
+        // Saves:
+        //   return PC (= 0 + 4 = 4) to new_frame[10] at abs index 60
+        //   old FP (= 0) to new_frame[11] at abs index 61
+        // Jumps to PC=reg[12]=8, sets FP=200.
+        let spec = TestSpec {
+            program: vec![
+                wom::call_indirect::<F>(10, 11, 12, 9), // PC=0: call indirect
+                wom::halt(),                            // PC=4: skipped
+                                                        // PC=8: halt (appended by test_spec)
+            ],
+            start_fp: 0,
+            start_registers: vec![
+                (9, 200), // new FP (raw)
+                (12, 8),  // target PC
+            ],
+            expected_pc: Some(8),
+            expected_fp: Some(50),
+            expected_registers: vec![
+                (60, 4), // return PC saved at new_frame[10]
+                (61, 0), // old FP saved at new_frame[11]
+            ],
+            ..Default::default()
+        };
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_call_and_return() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Complete call + return sequence using only JAAF instructions.
+        //
+        // Frame layout:
+        //   start_fp = 0, reg[9] = 200 (new raw FP for callee frame).
+        //
+        // PC=0: CALL(save_pc=10, save_fp=11, to_pc=12, to_fp_reg=9)
+        //   - saves return PC=4 to new_frame[10] (abs 60)
+        //   - saves old FP=0 to new_frame[11] (abs 61)
+        //   - jumps to PC=12, FP=200
+        //
+        // PC=4: (skipped on forward, executed on return)
+        //   add_imm reg[0] = reg[0] + 0 (nop to land on)
+        //   then halt at PC=8
+        //
+        // PC=12: (callee) RET(to_pc_reg=10, to_fp_reg=11)
+        //   - reads new_frame[10] (abs 60) = 4 (return PC)
+        //   - reads new_frame[11] (abs 61) = 0 (caller FP raw)
+        //   - jumps to PC=4, FP=0
+        //
+        // PC=4: add_imm nop
+        // PC=8: halt
+        //
+        // After return: FP=0, PC=8
+        let spec = TestSpec {
+            program: vec![
+                wom::call::<F>(10, 11, 12, 9),         // PC=0: call to PC=12
+                wom::add_imm::<F>(0, 0, 0_i16.into()), // PC=4: nop (return lands here)
+                wom::halt(),                           // PC=8: halt after return
+                wom::ret::<F>(10, 11),                 // PC=12: return to caller
+            ],
+            start_fp: 0,
+            start_registers: vec![(9, 200)],
+            expected_pc: Some(8),
+            expected_fp: Some(0), // returned to original FP
+            ..Default::default()
+        };
+        test_spec(spec)
+    }
 }
