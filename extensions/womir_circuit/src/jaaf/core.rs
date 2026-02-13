@@ -144,6 +144,12 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, JaafAdapterInterface<AB>> for JaafCor
         );
         let expected_opcode = expected_opcode + AB::Expr::from_canonical_usize(self.offset);
 
+        // Derive conditional flags from opcode indicator variables
+        let has_pc_read: AB::Expr = cols.is_ret.into() + cols.is_call_indirect.into();
+        let has_save_fp: AB::Expr =
+            cols.is_jaaf_save.into() + cols.is_call.into() + cols.is_call_indirect.into();
+        let has_save_pc: AB::Expr = cols.is_call.into() + cols.is_call_indirect.into();
+
         AdapterAirContext {
             to_pc: None, // PC is handled by the adapter
             reads: [
@@ -160,6 +166,9 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, JaafAdapterInterface<AB>> for JaafCor
             instruction: JaafInstruction {
                 is_valid: is_valid.clone(),
                 opcode: expected_opcode,
+                has_pc_read,
+                has_save_fp,
+                has_save_pc,
             },
         }
     }

@@ -58,13 +58,6 @@ pub struct JaafAdapterCols<T> {
     /// Operand d: immediate PC target (for JAAF, JAAF_SAVE, CALL)
     pub to_pc_imm: T,
 
-    /// 1 if we read a register for PC (RET, CALL_INDIRECT), 0 otherwise
-    pub has_pc_read: T,
-    /// 1 if we save FP (JAAF_SAVE, CALL, CALL_INDIRECT), 0 otherwise
-    pub has_save_fp: T,
-    /// 1 if we save PC (CALL, CALL_INDIRECT), 0 otherwise
-    pub has_save_pc: T,
-
     /// Auxiliary columns for memory operations
     pub fp_read_aux: MemoryReadAuxCols<T>,
     pub to_fp_read_aux: MemoryReadAuxCols<T>,
@@ -81,6 +74,12 @@ pub struct JaafAdapterInterface<AB: InteractionBuilder>(std::marker::PhantomData
 pub struct JaafInstruction<T> {
     pub is_valid: T,
     pub opcode: T,
+    /// 1 if we read a register for PC (RET, CALL_INDIRECT), 0 otherwise
+    pub has_pc_read: T,
+    /// 1 if we save FP (JAAF_SAVE, CALL, CALL_INDIRECT), 0 otherwise
+    pub has_save_fp: T,
+    /// 1 if we save PC (CALL, CALL_INDIRECT), 0 otherwise
+    pub has_save_pc: T,
 }
 
 impl<AB: InteractionBuilder> VmAdapterInterface<AB::Expr> for JaafAdapterInterface<AB> {
@@ -131,16 +130,9 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAir {
         };
 
         let is_valid = ctx.instruction.is_valid.clone();
-
-        // Constrain boolean flags
-        builder.assert_bool(local.has_pc_read);
-        builder.assert_bool(local.has_save_fp);
-        builder.assert_bool(local.has_save_pc);
-
-        // has_save_pc implies has_save_fp (CALL and CALL_INDIRECT save both)
-        builder
-            .when(local.has_save_pc)
-            .assert_one(local.has_save_fp);
+        let has_pc_read = ctx.instruction.has_pc_read.clone();
+        let has_save_fp = ctx.instruction.has_save_fp.clone();
+        let has_save_pc = ctx.instruction.has_save_pc.clone();
 
         // 0. Read current FP from FP_AS
         self.memory_bridge
@@ -167,26 +159,20 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAir {
             )
             .eval(builder, is_valid.clone());
 
-        // Constrain: when has_pc_read=1, is_valid must be 1 (for memory safety)
-        builder.when(local.has_pc_read).assert_one(is_valid.clone());
-
         // 2. Read to_pc_reg (conditional on has_pc_read)
         let to_pc_data: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
             std::array::from_fn(|i| ctx.reads[1][i].clone());
         self.memory_bridge
             .read(
                 MemoryAddress::new(
-                    local.has_pc_read.into(),
+                    has_pc_read.clone(),
                     local.to_pc_reg_ptr + local.from_state.fp,
                 ),
                 to_pc_data,
                 timestamp_pp(),
                 &local.to_pc_read_aux,
             )
-            .eval(builder, local.has_pc_read);
-
-        // Constrain: when has_save_fp=1, is_valid must be 1 (for memory safety)
-        builder.when(local.has_save_fp).assert_one(is_valid.clone());
+            .eval(builder, has_pc_read.clone());
 
         // Compute new_fp_composed for use in save addresses (saves are relative to new frame)
         let new_fp_composed = ctx.reads[0]
@@ -214,14 +200,14 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAir {
         self.memory_bridge
             .write(
                 MemoryAddress::new(
-                    local.has_save_fp.into(),
+                    has_save_fp.clone(),
                     local.save_fp_ptr + new_fp_composed.clone(),
                 ),
                 save_fp_data,
                 timestamp_pp(),
                 &local.save_fp_write_aux,
             )
-            .eval(builder, local.has_save_fp);
+            .eval(builder, has_save_fp);
 
         // 4. Write save_pc (conditional on has_save_pc)
         let save_pc_data: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
@@ -229,14 +215,14 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAir {
         self.memory_bridge
             .write(
                 MemoryAddress::new(
-                    local.has_save_pc.into(),
+                    has_save_pc.clone(),
                     local.save_pc_ptr + new_fp_composed.clone(),
                 ),
                 save_pc_data,
                 timestamp_pp(),
                 &local.save_pc_write_aux,
             )
-            .eval(builder, local.has_save_pc);
+            .eval(builder, has_save_pc);
 
         // 5. Write new FP to FP_AS
         let new_fp_write: [AB::Expr; 1] = std::array::from_fn(|i| ctx.writes.1[i].clone());
@@ -256,8 +242,8 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAir {
             .fold(AB::Expr::ZERO, |acc, (i, limb)| {
                 acc + limb.clone() * AB::Expr::from_canonical_u32(1u32 << (i * 8))
             });
-        let to_pc = local.to_pc_imm * (AB::Expr::ONE - local.has_pc_read.into())
-            + to_pc_from_reg * local.has_pc_read.into();
+        let to_pc =
+            local.to_pc_imm * (AB::Expr::ONE - has_pc_read.clone()) + to_pc_from_reg * has_pc_read;
 
         self.execution_bridge
             .execute_and_increment_or_set_pc(
@@ -268,8 +254,6 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAir {
                     local.to_pc_reg_ptr.into(),
                     local.to_pc_imm.into(),
                     local.to_fp_reg_ptr.into(),
-                    local.has_pc_read.into(),
-                    local.has_save_fp.into(),
                 ],
                 local.from_state.into(),
                 AB::F::from_canonical_usize(timestamp_delta),
@@ -532,9 +516,6 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for JaafAdapterFiller {
         );
 
         // Scalar fields
-        adapter_row.has_save_pc = F::from_canonical_u8(record.has_save_pc);
-        adapter_row.has_save_fp = F::from_canonical_u8(record.has_save_fp);
-        adapter_row.has_pc_read = F::from_canonical_u8(record.has_pc_read);
         adapter_row.to_pc_imm = F::from_canonical_u32(record.to_pc_imm);
         adapter_row.to_pc_reg_ptr = F::from_canonical_u32(record.to_pc_reg_ptr);
         adapter_row.save_pc_ptr = F::from_canonical_u32(record.save_pc_ptr);

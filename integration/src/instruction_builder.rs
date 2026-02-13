@@ -348,8 +348,8 @@ pub fn jaaf<F: PrimeField32>(to_pc_imm: usize, to_fp_reg: usize) -> Instruction<
         F::ZERO,                                                             // c: (not used)
         F::from_canonical_usize(to_pc_imm),                                  // d: to_pc_imm
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: to_fp_reg
-        F::ZERO, // f: has_pc_read (0 for JAAF)
-        F::ZERO, // g: has_save_fp (0 for JAAF)
+        F::ZERO,                                                             // f: (unused)
+        F::ZERO,                                                             // g: (unused)
     )
 }
 
@@ -367,8 +367,8 @@ pub fn jaaf_save<F: PrimeField32>(
         F::ZERO,                                                             // c: (not used)
         F::from_canonical_usize(to_pc_imm),                                  // d: to_pc_imm
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: to_fp_reg
-        F::ZERO, // f: has_pc_read (0 for JAAF_SAVE)
-        F::ONE,  // g: has_save_fp (1 for JAAF_SAVE)
+        F::ZERO,                                                             // f: (unused)
+        F::ZERO,                                                             // g: (unused)
     )
 }
 
@@ -382,8 +382,8 @@ pub fn ret<F: PrimeField32>(to_pc_reg: usize, to_fp_reg: usize) -> Instruction<F
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg), // c: to_pc_reg
         F::ZERO,                                                             // d: (not used)
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: to_fp_reg
-        F::ONE,  // f: has_pc_read (1 for RET)
-        F::ZERO, // g: has_save_fp (0 for RET)
+        F::ZERO,                                                             // f: (unused)
+        F::ZERO,                                                             // g: (unused)
     )
 }
 
@@ -402,8 +402,8 @@ pub fn call<F: PrimeField32>(
         F::ZERO,                                                           // c: rs1 (not used)
         F::from_canonical_usize(to_pc_imm), // d: immediate for PC target
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: rs2 (new FP)
-        F::ZERO,                            // f: has_pc_read (0 for CALL)
-        F::ONE,                             // g: has_save_fp (1 for CALL)
+        F::ZERO,                            // f: (unused)
+        F::ZERO,                            // g: (unused)
     )
 }
 
@@ -423,8 +423,8 @@ pub fn call_indirect<F: PrimeField32>(
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg),
         F::ZERO, // d: immediate (not used)
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg),
-        F::ONE, // f: has_pc_read (1 for CALL_INDIRECT)
-        F::ONE, // g: has_save_fp (1 for CALL_INDIRECT)
+        F::ZERO, // f: (unused)
+        F::ZERO, // g: (unused)
     )
 }
 
