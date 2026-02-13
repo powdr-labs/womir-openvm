@@ -137,18 +137,17 @@ struct JumpPreCompute {
     imm: u32,
     /// Register pointer for condition/offset register.
     rs_ptr: u8,
-    /// Local opcode index.
-    local_opcode: u8,
 }
 
 impl JumpExecutor {
+    /// Fills the precomputed data and returns the local opcode.
     #[inline(always)]
     fn pre_compute_impl<F: PrimeField32>(
         &self,
         pc: u32,
         inst: &Instruction<F>,
         data: &mut JumpPreCompute,
-    ) -> Result<(), StaticProgramError> {
+    ) -> Result<JumpOpcode, StaticProgramError> {
         let Instruction { opcode, a, b, .. } = inst;
 
         let local_opcode_idx = opcode.local_opcode_idx(self.offset);
@@ -159,9 +158,8 @@ impl JumpExecutor {
         *data = JumpPreCompute {
             imm: a.as_canonical_u32(),
             rs_ptr: b.as_canonical_u32() as u8,
-            local_opcode: local_opcode_idx as u8,
         };
-        Ok(())
+        Ok(JumpOpcode::from_usize(local_opcode_idx))
     }
 }
 
@@ -195,8 +193,7 @@ impl<F: PrimeField32> InterpreterExecutor<F> for JumpExecutor {
         Ctx: ExecutionCtxTrait,
     {
         let data: &mut JumpPreCompute = data.borrow_mut();
-        self.pre_compute_impl(pc, inst, data)?;
-        let local_opcode = JumpOpcode::from_usize(data.local_opcode as usize);
+        let local_opcode = self.pre_compute_impl(pc, inst, data)?;
         dispatch!(execute_e1_handler, local_opcode)
     }
 }
@@ -220,8 +217,7 @@ impl<F: PrimeField32> InterpreterMeteredExecutor<F> for JumpExecutor {
     {
         let data: &mut E2PreCompute<JumpPreCompute> = data.borrow_mut();
         data.chip_idx = chip_idx as u32;
-        self.pre_compute_impl(pc, inst, &mut data.data)?;
-        let local_opcode = JumpOpcode::from_usize(data.data.local_opcode as usize);
+        let local_opcode = self.pre_compute_impl(pc, inst, &mut data.data)?;
         dispatch!(execute_e2_handler, local_opcode)
     }
 }
