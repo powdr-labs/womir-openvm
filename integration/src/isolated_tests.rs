@@ -1202,18 +1202,12 @@ mod tests {
     fn test_jump() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // Unconditional jump: skip one instruction, land on add_imm at PC=12.
-        // Program: [jump(12), add_imm (skipped), add_imm (target), halt]
         let spec = TestSpec {
             program: vec![
-                wom::jump::<F>(12),                      // PC=0: Jump to PC=12
-                wom::add_imm::<F>(0, 0, 999_i16.into()), // PC=4: Skipped
-                wom::add_imm::<F>(0, 0, 111_i16.into()), // PC=8: Skipped
-                wom::add_imm::<F>(0, 0, 42_i16.into()),  // PC=12: Target
+                wom::jump::<F>(8),
+                wom::halt(), // Should be skipped!
             ],
-            start_fp: 10,
-            expected_registers: vec![(10, 42)],
-            expected_pc: Some(16),
+            expected_pc: Some(8),
             ..Default::default()
         };
 
@@ -1224,18 +1218,14 @@ mod tests {
     fn test_jump_if_true() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // JUMP_IF with non-zero condition: should jump.
-        // reg[fp+0] = 5 (non-zero), jump to PC=12.
         let spec = TestSpec {
             program: vec![
-                wom::add_imm::<F>(0, 0, 5_i16.into()),   // PC=0: reg[fp+0] = 5
-                wom::jump_if::<F>(0, 12),                // PC=4: Jump to PC=12 if reg[fp+0] != 0
-                wom::add_imm::<F>(1, 1, 999_i16.into()), // PC=8: Skipped
-                wom::add_imm::<F>(1, 1, 77_i16.into()),  // PC=12: Target
+                wom::jump_if::<F>(2, 8),
+                wom::halt(), // Should be skipped!
             ],
             start_fp: 10,
-            expected_registers: vec![(10, 5), (11, 77)],
-            expected_pc: Some(16),
+            start_registers: vec![(12, 5)], // Should jump
+            expected_pc: Some(8),
             ..Default::default()
         };
 
@@ -1246,15 +1236,11 @@ mod tests {
     fn test_jump_if_false() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // JUMP_IF with zero condition: should NOT jump, falls through.
         let spec = TestSpec {
-            program: vec![
-                wom::jump_if::<F>(0, 12), // PC=0: Jump if reg[fp+0] != 0 (reg is 0)
-                wom::add_imm::<F>(1, 0, 33_i16.into()), // PC=4: Executes (fallthrough)
-            ],
+            program: vec![wom::jump_if::<F>(2, 8)],
             start_fp: 10,
-            expected_registers: vec![(11, 33)],
-            expected_pc: Some(8),
+            start_registers: vec![(12, 0)], // Should not jump
+            expected_pc: Some(4),
             ..Default::default()
         };
 
@@ -1265,16 +1251,14 @@ mod tests {
     fn test_jump_if_zero_true() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // JUMP_IF_ZERO with zero condition: should jump.
         let spec = TestSpec {
             program: vec![
-                wom::jump_if_zero::<F>(0, 8), // PC=0: Jump to PC=8 if reg[fp+0] == 0
-                wom::add_imm::<F>(1, 0, 999_i16.into()), // PC=4: Skipped
-                wom::add_imm::<F>(1, 0, 55_i16.into()), // PC=8: Target
+                wom::jump_if_zero::<F>(2, 2),
+                wom::halt(), // Should be skipped!
             ],
             start_fp: 10,
-            expected_registers: vec![(11, 55)],
-            expected_pc: Some(12),
+            start_registers: vec![(12, 0)], // Should jump
+            expected_pc: Some(2),
             ..Default::default()
         };
 
@@ -1285,16 +1269,11 @@ mod tests {
     fn test_jump_if_zero_false() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // JUMP_IF_ZERO with non-zero condition: should NOT jump.
         let spec = TestSpec {
-            program: vec![
-                wom::add_imm::<F>(0, 0, 7_i16.into()),  // PC=0: reg[fp+0] = 7
-                wom::jump_if_zero::<F>(0, 12), // PC=4: Jump if reg[fp+0] == 0 (it's 7, so no)
-                wom::add_imm::<F>(1, 1, 88_i16.into()), // PC=8: Executes (fallthrough)
-            ],
+            program: vec![wom::jump_if_zero::<F>(2, 2)],
             start_fp: 10,
-            expected_registers: vec![(10, 7), (11, 88)],
-            expected_pc: Some(12),
+            start_registers: vec![(12, 5)], // Should not jump
+            expected_pc: Some(4),
             ..Default::default()
         };
 
@@ -1305,18 +1284,14 @@ mod tests {
     fn test_skip() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // SKIP: jump forward by offset stored in register.
-        // reg[fp+0] = 2, skip(0) -> PC += 2 * DEFAULT_PC_STEP = PC + 8
         let spec = TestSpec {
             program: vec![
-                wom::add_imm::<F>(0, 0, 2_i16.into()),   // PC=0: reg[fp+0] = 2
-                wom::skip::<F>(0),                       // PC=4: PC += 2*4 = PC+8, so next PC=12
-                wom::add_imm::<F>(1, 1, 999_i16.into()), // PC=8: Skipped
-                wom::add_imm::<F>(1, 1, 66_i16.into()),  // PC=12: Target
+                wom::skip::<F>(2),
+                wom::halt(), // Should be skipped!
             ],
             start_fp: 10,
-            expected_registers: vec![(10, 2), (11, 66)],
-            expected_pc: Some(16),
+            start_registers: vec![(12, 2)],
+            expected_pc: Some(8),
             ..Default::default()
         };
 
