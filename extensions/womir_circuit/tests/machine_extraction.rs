@@ -159,11 +159,11 @@ fn extract_machine() {
     let chip_complex = create_chip_complex(&config);
     let bus_map = extract_bus_map(&chip_complex);
 
-    // Get instruction AIRs (VmAirWrapper), skip peripherals like Poseidon2
     let ext_airs = chip_complex.inventory.airs().ext_airs();
     let instruction_airs: Vec<_> = ext_airs
         .iter()
-        .filter(|air| air.preprocessed_trace().is_none() && air.name().starts_with("VmAirWrapper"))
+        // Skip large AIRs (e.g. large precompiles) and lookup tables
+        .filter(|air| air.preprocessed_trace().is_none() && air.width() < 200)
         .collect();
 
     let rendered = instruction_airs

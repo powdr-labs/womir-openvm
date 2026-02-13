@@ -1,3 +1,20 @@
+# PhantomAir
+Symbolic machine using 6 unique main columns:
+  pc
+  operands__0
+  operands__1
+  operands__2
+  timestamp
+  is_valid
+
+// Bus 0 (EXECUTION_BRIDGE):
+mult=-is_valid, args=[pc, timestamp]
+mult=is_valid, args=[pc + 4, timestamp + 1]
+
+// Bus 2 (PC_LOOKUP):
+mult=is_valid, args=[pc, 1, operands__0, operands__1, operands__2, 0, 0, 0, 0]
+
+
 # VmAirWrapper<BaseAluAdapterAir<4, 1>, BaseAluCoreAir<4, 8>
 Symbolic machine using 40 unique main columns:
   from_state__pc
