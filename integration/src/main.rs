@@ -1261,7 +1261,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_jump_instruction() {
         // Test unconditional JUMP
         let instructions = vec![
@@ -1280,7 +1279,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_jump_if_instruction() {
         // Test conditional JUMP_IF (condition != 0)
         let instructions = vec![
@@ -1306,7 +1304,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_jump_if_false_condition() {
         // Test conditional JUMP_IF with false condition (should not jump)
         let instructions = vec![
@@ -1332,7 +1329,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_jump_if_zero_instruction() {
         // Test conditional JUMP_IF_ZERO (condition == 0)
         let instructions = vec![
@@ -1358,7 +1354,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_jump_if_zero_false_condition() {
         // Test conditional JUMP_IF_ZERO with false condition (should not jump)
         let instructions = vec![
