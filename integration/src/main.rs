@@ -621,7 +621,7 @@ mod tests {
     fn test_basic_add() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             // TODO uncomment when const32 is implemented
-            // wom::const_32_imm(0, 0, 0),
+            wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 666_i16.into()),
             wom::add_imm::<F>(9, 0, 1_i16.into()),
             wom::add::<F>(10, 8, 9),
@@ -636,7 +636,7 @@ mod tests {
     fn test_basic_add_proof() -> Result<(), Box<dyn std::error::Error>> {
         let instructions = vec![
             // TODO uncomment when const32 is implemented
-            // wom::const_32_imm(0, 0, 0),
+            //wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 666_i16.into()),
             wom::add_imm::<F>(9, 0, 1_i16.into()),
             wom::add::<F>(10, 8, 9),
@@ -676,7 +676,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_basic_addi_64() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1450,7 +1449,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_const32_simple() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1463,7 +1461,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_const32_zero() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1476,7 +1473,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_const32_max_value() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1489,7 +1485,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_const32_multiple_registers() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1504,7 +1499,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_const32_with_arithmetic() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1521,7 +1515,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_u_true() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1536,7 +1529,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_u_false() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1551,7 +1543,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_u_equal() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1566,7 +1557,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_s_positive() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1581,7 +1571,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_s_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1596,7 +1585,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_s_both_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1611,7 +1599,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_lt_comparison_chain() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1629,7 +1616,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_u_true() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1644,7 +1630,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_u_false() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1659,7 +1644,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_u_equal() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1674,7 +1658,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_s_positive() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1689,7 +1672,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_s_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1704,7 +1686,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_s_both_negative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1719,7 +1700,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gt_edge_cases() {
         let instructions = vec![
             // Test max unsigned value
@@ -1741,7 +1721,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_comparison_equivalence() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1760,7 +1739,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mixed_comparisons() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1839,7 +1817,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadw_basic() {
         // Test basic LOADW instruction
         let instructions = vec![
@@ -1856,7 +1833,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_storew_with_offset() {
         // Test STOREW with positive offset
         let instructions = vec![
@@ -1878,7 +1854,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadbu_basic() {
         // Test LOADBU instruction (load byte unsigned)
         let instructions = vec![
@@ -1894,7 +1869,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loadhu_basic() {
         // Test LOADHU instruction (load halfword unsigned)
         let instructions = vec![
@@ -1910,7 +1884,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_storeb_with_offset() {
         // Test STOREB with offset and masking
         let instructions = vec![
@@ -1929,7 +1902,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_storeh_with_offset() {
         // Test STOREH with offset
         let instructions = vec![

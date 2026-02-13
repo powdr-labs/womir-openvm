@@ -19,8 +19,8 @@ use openvm_circuit_primitives::range_tuple::{
 };
 use openvm_instructions::LocalOpcode;
 use openvm_rv32im_circuit::{
-    BaseAluCoreAir, BaseAluFiller, DivRemCoreAir, DivRemFiller, LoadSignExtendCoreAir,
-    LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller,
+    BaseAluCoreAir, BaseAluFiller, DivRemCoreAir, DivRemFiller, LessThanCoreAir, LessThanFiller,
+    LoadSignExtendCoreAir, LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller,
 };
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
@@ -29,7 +29,8 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, DivRem64Opcode, DivRemOpcode, LoadStoreOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode, LessThan64Opcode,
+    LessThanOpcode, LoadStoreOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -37,7 +38,7 @@ use strum::IntoEnumIterator;
 use openvm_circuit::arch::ExecutionBridge;
 
 use crate::{
-    adapters::*, load_sign_extend::execution::LoadSignExtendExecutor,
+    adapters::*, const32::Const32Executor, load_sign_extend::execution::LoadSignExtendExecutor,
     loadstore::execution::LoadStoreExecutor, *,
 };
 
@@ -80,10 +81,13 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 pub enum WomirExecutor {
     BaseAlu(Rv32BaseAluExecutor),
     BaseAlu64(BaseAlu64Executor),
+    LessThan(Rv32LessThanExecutor),
+    LessThan64(LessThan64Executor),
     DivRem(Rv32DivRemExecutor),
     DivRem64(DivRem64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
+    Const32(Const32Executor),
 }
 
 // ============ VmExtension Implementations ============
@@ -110,6 +114,21 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(
             base_alu_64,
             BaseAlu64Opcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        let less_than = Rv32LessThanExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            LessThanOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(less_than, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let less_than_64 = LessThan64Executor::new(
+            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            LessThan64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(
+            less_than_64,
+            LessThan64Opcode::iter().map(|x| x.global_opcode()),
         )?;
 
         let divrem = Rv32DivRemExecutor::new(
@@ -141,6 +160,10 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
         )?;
+
+        let const32 = Const32Executor::new(ConstOpcodes::CLASS_OFFSET);
+
+        inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 
         Ok(())
     }
@@ -182,6 +205,18 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu_64);
+
+        let less_than = Rv32LessThanAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            LessThanCoreAir::new(bitwise_lu, LessThanOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(less_than);
+
+        let less_than_64 = LessThan64Air::new(
+            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            LessThanCoreAir::new(bitwise_lu, LessThan64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(less_than_64);
 
         let range_tuple_bus = {
             let existing_air = inventory.find_air::<RangeTupleCheckerAir<2>>().next();
@@ -231,6 +266,14 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             LoadSignExtendCoreAir::new(range_checker),
         );
         inventory.add_air(load_sign_extend);
+
+        let const32 = Const32Air::new(
+            bitwise_lu,
+            ConstOpcodes::CLASS_OFFSET,
+            exec_bridge,
+            memory_bridge,
+        );
+        inventory.add_air(const32);
 
         Ok(())
     }
@@ -294,6 +337,28 @@ where
         );
         inventory.add_executor_chip(base_alu_64);
 
+        inventory.next_air::<Rv32LessThanAir>()?;
+        let less_than = Rv32LessThanChip::new(
+            LessThanFiller::new(
+                Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                LessThanOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(less_than);
+
+        inventory.next_air::<LessThan64Air>()?;
+        let less_than_64 = LessThan64Chip::new(
+            LessThanFiller::new(
+                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                LessThan64Opcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(less_than_64);
+
         let range_tuple_chip = {
             let existing_chip = inventory
                 .find_chip::<SharedRangeTupleCheckerChip<2>>()
@@ -352,6 +417,10 @@ where
         );
         inventory.add_executor_chip(load_sign_extend);
 
+        inventory.next_air::<Const32Air>()?;
+        let const32 = Const32Chip::new(Const32Filler::new(bitwise_lu.clone()), mem_helper);
+
+        inventory.add_executor_chip(const32);
         Ok(())
     }
 }
