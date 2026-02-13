@@ -66,6 +66,7 @@ struct-reflection = { git = "https://github.com/gzanitti/struct-reflection-rs.gi
 rustc-hash = "2.0.0"
 cfg-if = "1.0.0"
 test-case = "3.3.1"
+itertools = "0.14"
 
 rrs-lib = "0.1.0"
 tracing = "0.1.40"
