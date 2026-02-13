@@ -48,6 +48,8 @@ pub struct TestSpec {
     pub start_registers: Vec<(usize, u32)>,
     /// Initial RAM values: (address, value).
     pub start_ram: Vec<(u32, u32)>,
+    /// Standard input for hint streams.
+    pub stdin: StdIn,
 
     /// Expected PC after execution (if None, start_pc + num_instructions * DEFAULT_PC_STEP).
     pub expected_pc: Option<u32>,
@@ -92,7 +94,7 @@ fn build_initial_state(spec: &TestSpec, exe: &VmExe<F>, vm_config: &WomirConfig)
         &vm_config.system,
         &exe.init_memory,
         exe.pc_start,
-        StdIn::default(),
+        spec.stdin.clone(),
     );
 
     // Set initial registers
@@ -724,6 +726,28 @@ mod tests {
             start_registers: vec![(10, 100)],
             start_ram: vec![(100, 0x00008000)],
             expected_registers: vec![(11, 0xFFFF8000)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== HintStore Tests ====================
+
+    #[test]
+    fn test_hint_storew() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // prepare_read loads stdin into hint_stream
+        // read_u32(1) pops one word from hint_stream into reg[fp+1]
+        let mut stdin = StdIn::default();
+        stdin.write(&42u32);
+
+        let spec = TestSpec {
+            program: vec![wom::prepare_read::<F>(), wom::read_u32::<F>(1)],
+            start_fp: 10,
+            stdin,
+            expected_registers: vec![(11, 42)],
             ..Default::default()
         };
 
