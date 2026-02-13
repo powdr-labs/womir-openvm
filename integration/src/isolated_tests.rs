@@ -1202,11 +1202,11 @@ mod tests {
     fn test_const32_small() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // reg[fp+0] = 42
+        // reg[fp+1] = 42
         let spec = TestSpec {
-            program: vec![wom::const_32_imm::<F>(0, 42, 0)],
+            program: vec![wom::const_32_imm::<F>(1, 42, 0)],
             start_fp: 10,
-            expected_registers: vec![(10, 42)],
+            expected_registers: vec![(11, 42)],
             ..Default::default()
         };
 
@@ -1217,12 +1217,12 @@ mod tests {
     fn test_const32_large() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // reg[fp+0] = 0xDEADBEEF
+        // reg[fp+1] = 0xDEADBEEF
         // imm_lo = 0xBEEF, imm_hi = 0xDEAD
         let spec = TestSpec {
-            program: vec![wom::const_32_imm::<F>(0, 0xBEEF, 0xDEAD)],
+            program: vec![wom::const_32_imm::<F>(1, 0xBEEF, 0xDEAD)],
             start_fp: 10,
-            expected_registers: vec![(10, 0xDEADBEEF)],
+            expected_registers: vec![(11, 0xDEADBEEF)],
             ..Default::default()
         };
 
@@ -1233,11 +1233,12 @@ mod tests {
     fn test_const32_zero() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // reg[fp+0] = 0
+        // reg[fp+1] = 0
         let spec = TestSpec {
-            program: vec![wom::const_32_imm::<F>(0, 0, 0)],
+            program: vec![wom::const_32_imm::<F>(1, 0, 0)],
             start_fp: 10,
-            expected_registers: vec![(10, 0)],
+            start_registers: vec![(11, 0x12345678)], // Should be overwritten
+            expected_registers: vec![(11, 0)],
             ..Default::default()
         };
 
@@ -1248,11 +1249,11 @@ mod tests {
     fn test_const32_max() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // reg[fp+0] = 0xFFFFFFFF
+        // reg[fp+1] = 0xFFFFFFFF
         let spec = TestSpec {
-            program: vec![wom::const_32_imm::<F>(0, 0xFFFF, 0xFFFF)],
+            program: vec![wom::const_32_imm::<F>(1, 0xFFFF, 0xFFFF)],
             start_fp: 10,
-            expected_registers: vec![(10, 0xFFFFFFFF)],
+            expected_registers: vec![(11, 0xFFFFFFFF)],
             ..Default::default()
         };
 

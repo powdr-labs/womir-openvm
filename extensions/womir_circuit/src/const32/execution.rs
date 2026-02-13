@@ -1,6 +1,7 @@
 use crate::adapters::tracing_read_fp;
 use crate::adapters::{Const32AdapterAirCol, decompose, tracing_write};
 use crate::memory_config::FpMemory;
+use itertools::Itertools;
 use openvm_circuit::arch::*;
 use openvm_circuit::system::memory::offline_checker::MemoryReadAuxRecord;
 use openvm_circuit::system::memory::offline_checker::MemoryWriteBytesAuxRecord;
@@ -14,12 +15,10 @@ use openvm_instructions::{
 };
 use openvm_stark_backend::p3_field::PrimeField32;
 use std::borrow::{Borrow, BorrowMut};
-use std::cell::RefCell;
 // Minimal executor for CONST32 - no computation needed, just write immediate to register
 #[derive(Clone, derive_new::new)]
 pub struct Const32Executor<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
     pub offset: usize,
-    has_fetched_fp: RefCell<bool>,
 }
 
 // PreCompute struct for CONST32
@@ -43,18 +42,6 @@ impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> Const32Executor<NUM_LIMBS, 
             target_reg: a.as_canonical_u32(),
             imm,
         };
-    }
-
-    /// Hack: Fetch the frame pointer exactly once per instruction execution, BEFORE the first read.
-    fn maybe_fetch_fp<F: PrimeField32>(
-        &self,
-        memory: &mut TracingMemory,
-        record: &mut Const32Record,
-    ) {
-        if !*self.has_fetched_fp.borrow() {
-            record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
-            *self.has_fetched_fp.borrow_mut() = true;
-        }
     }
 }
 
@@ -90,10 +77,10 @@ where
         let value_bytes = value.map(|x| x.as_canonical_u32() as u8);
         record.from_pc = *state.pc;
         record.from_timestamp = state.memory.timestamp;
-        self.maybe_fetch_fp::<F>(state.memory, record);
         record.rd_ptr = a.as_canonical_u32();
         record.imm = imm;
 
+        record.fp = tracing_read_fp::<F>(state.memory, &mut record.fp_read_aux.prev_timestamp);
         tracing_write(
             state.memory,
             RV32_REGISTER_AS,
@@ -253,6 +240,13 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> TraceFille
         let record: &Const32Record = unsafe { get_record_from_slice(&mut row_slice, ()) };
         let cols: &mut Const32AdapterAirCol<F, NUM_LIMBS, LIMB_BITS> = row_slice.borrow_mut();
 
+        // fp_read_aux: fill timestamp proof for FP read at from_timestamp + 0
+        mem_helper.fill(
+            record.fp_read_aux.prev_timestamp,
+            record.from_timestamp,
+            cols.fp_read_aux.as_mut(),
+        );
+
         // write_aux: set prev_data and fill timestamp proof
         // Write happens at from_timestamp + 1 (after FP read at from_timestamp + 0)
         cols.write_aux.set_prev_data(std::array::from_fn(|i| {
@@ -264,25 +258,13 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> TraceFille
             cols.write_aux.as_mut(),
         );
 
-        // fp_read_aux: fill timestamp proof for FP read at from_timestamp + 0
-        mem_helper.fill(
-            record.fp_read_aux.prev_timestamp,
-            record.from_timestamp,
-            cols.fp_read_aux.as_mut(),
-        );
-
         // imm_limbs: decompose the immediate into limbs and range-check
+        assert_eq!(LIMB_BITS, 8);
         let imm = record.imm;
         let mask = (1u32 << LIMB_BITS) - 1;
-        cols.imm_limbs =
-            std::array::from_fn(|i| F::from_canonical_u32((imm >> (LIMB_BITS * i)) & mask));
-        for i in (0..NUM_LIMBS).step_by(2) {
-            let lo = (imm >> (LIMB_BITS * i)) & mask;
-            let hi = if i + 1 < NUM_LIMBS {
-                (imm >> (LIMB_BITS * (i + 1))) & mask
-            } else {
-                0
-            };
+        let imm_limbs_u32 = std::array::from_fn(|i| (imm >> (LIMB_BITS * i)) & mask);
+        cols.imm_limbs = imm_limbs_u32.map(F::from_canonical_u32);
+        for (lo, hi) in imm_limbs_u32.iter().copied().tuples() {
             self.bitwise_lookup_chip.request_range(lo, hi);
         }
 
