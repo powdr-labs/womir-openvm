@@ -962,7 +962,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_basic_div() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -976,7 +975,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_div_by_one() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -990,7 +988,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_div_equal_numbers() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1004,7 +1001,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_div_with_remainder() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1018,7 +1014,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_div_zero_dividend() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1032,7 +1027,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_div_large_numbers() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1046,7 +1040,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_div_powers_of_two() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1060,7 +1053,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_div_chain() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -1076,7 +1068,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_div_negative_signed() {
         // Testing signed division with negative numbers
         let instructions = vec![
@@ -1098,7 +1089,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_div_both_negative() {
         // Testing signed division with both numbers negative
         let instructions = vec![

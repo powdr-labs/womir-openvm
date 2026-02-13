@@ -14,10 +14,13 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
     BitwiseOperationLookupAir, BitwiseOperationLookupBus, BitwiseOperationLookupChip,
     SharedBitwiseOperationLookupChip,
 };
+use openvm_circuit_primitives::range_tuple::{
+    RangeTupleCheckerAir, RangeTupleCheckerBus, RangeTupleCheckerChip, SharedRangeTupleCheckerChip,
+};
 use openvm_instructions::LocalOpcode;
 use openvm_rv32im_circuit::{
-    BaseAluCoreAir, BaseAluFiller, LessThanCoreAir, LessThanFiller, LoadSignExtendCoreAir,
-    LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller,
+    BaseAluCoreAir, BaseAluFiller, DivRemCoreAir, DivRemFiller, LessThanCoreAir, LessThanFiller,
+    LoadSignExtendCoreAir, LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller,
 };
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
@@ -26,7 +29,8 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode, LessThan64Opcode,
+    LessThanOpcode, LoadStoreOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -58,7 +62,8 @@ impl Default for Womir {
 }
 
 fn default_range_tuple_checker_sizes() -> [u32; 2] {
-    [1 << 8, 8 * (1 << 8)]
+    // 64-bit DivRem needs sizes[1] >= 256 * 2 * 8 = 4096 = 16 * (1 << 8)
+    [1 << 8, 16 * (1 << 8)]
 }
 
 // ============ Executor and Periphery Enums for Extension ============
@@ -78,6 +83,8 @@ pub enum WomirExecutor {
     BaseAlu64(BaseAlu64Executor),
     LessThan(Rv32LessThanExecutor),
     LessThan64(LessThan64Executor),
+    DivRem(Rv32DivRemExecutor),
+    DivRem64(DivRem64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     Const32(Const32Executor),
@@ -123,6 +130,18 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             less_than_64,
             LessThan64Opcode::iter().map(|x| x.global_opcode()),
         )?;
+
+        let divrem = Rv32DivRemExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            DivRemOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(divrem, DivRemOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let divrem_64 = DivRem64Executor::new(
+            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            DivRem64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(divrem_64, DivRem64Opcode::iter().map(|x| x.global_opcode()))?;
 
         let load_store = LoadStoreExecutor::new(
             Rv32LoadStoreAdapterExecutor::new(pointer_max_bits),
@@ -198,6 +217,33 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             LessThanCoreAir::new(bitwise_lu, LessThan64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(less_than_64);
+
+        let range_tuple_bus = {
+            let existing_air = inventory.find_air::<RangeTupleCheckerAir<2>>().next();
+            if let Some(air) = existing_air {
+                air.bus
+            } else {
+                let bus = RangeTupleCheckerBus::new(
+                    inventory.new_bus_idx(),
+                    self.range_tuple_checker_sizes,
+                );
+                let air = RangeTupleCheckerAir { bus };
+                inventory.add_air(air);
+                bus
+            }
+        };
+
+        let divrem = Rv32DivRemAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            DivRemCoreAir::new(bitwise_lu, range_tuple_bus, DivRemOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(divrem);
+
+        let divrem_64 = DivRem64Air::new(
+            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            DivRemCoreAir::new(bitwise_lu, range_tuple_bus, DivRem64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(divrem_64);
 
         let load_store = Rv32LoadStoreAir::new(
             Rv32LoadStoreAdapterAir::new(
@@ -312,6 +358,44 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(less_than_64);
+
+        let range_tuple_chip = {
+            let existing_chip = inventory
+                .find_chip::<SharedRangeTupleCheckerChip<2>>()
+                .next();
+            if let Some(chip) = existing_chip {
+                chip.clone()
+            } else {
+                let air: &RangeTupleCheckerAir<2> = inventory.next_air()?;
+                let chip = Arc::new(RangeTupleCheckerChip::new(air.bus));
+                inventory.add_periphery_chip(chip.clone());
+                chip
+            }
+        };
+
+        inventory.next_air::<Rv32DivRemAir>()?;
+        let divrem = Rv32DivRemChip::new(
+            DivRemFiller::new(
+                Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                range_tuple_chip.clone(),
+                DivRemOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(divrem);
+
+        inventory.next_air::<DivRem64Air>()?;
+        let divrem_64 = DivRem64Chip::new(
+            DivRemFiller::new(
+                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                range_tuple_chip.clone(),
+                DivRem64Opcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(divrem_64);
 
         inventory.next_air::<Rv32LoadStoreAir>()?;
         let load_store_chip = Rv32LoadStoreChip::new(
