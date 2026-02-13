@@ -11,6 +11,7 @@ use openvm_circuit::arch::{MatrixRecordArena, VmBuilder, VmChipComplex, VmCircui
 use openvm_circuit::system::SystemChipInventory;
 use openvm_circuit::system::memory::interface::MemoryInterfaceAirs;
 use openvm_circuit_primitives::bitwise_op_lookup::SharedBitwiseOperationLookupChip;
+use openvm_circuit_primitives::range_tuple::SharedRangeTupleCheckerChip;
 use openvm_stark_backend::config::Val;
 use openvm_stark_backend::prover::cpu::CpuBackend;
 use openvm_stark_backend::rap::AnyRap;
@@ -82,6 +83,9 @@ fn extract_bus_map(chip_complex: &WomirChipComplex) -> BusMap<OpenVmBusType> {
     let shared_bitwise_lookup = inventory
         .find_chip::<SharedBitwiseOperationLookupChip<8>>()
         .next();
+    let shared_range_tuple_checker = inventory
+        .find_chip::<SharedRangeTupleCheckerChip<2>>()
+        .next();
 
     let system_air_inventory = inventory.airs().system();
     let connector_air = system_air_inventory.connector;
@@ -113,6 +117,12 @@ fn extract_bus_map(chip_complex: &WomirChipComplex) -> BusMap<OpenVmBusType> {
             (
                 chip.bus().inner.index,
                 BusType::Other(OpenVmBusType::BitwiseLookup),
+            )
+        }))
+        .chain(shared_range_tuple_checker.into_iter().map(|chip| {
+            (
+                chip.bus().inner.index,
+                BusType::Other(OpenVmBusType::TupleRangeChecker),
             )
         }))
         .map(|(id, bus_type)| (id as u64, bus_type)),
