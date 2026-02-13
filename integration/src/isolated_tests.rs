@@ -1441,36 +1441,46 @@ mod tests {
     //
     // JAAF instructions change the frame pointer (FP) and jump to a new PC.
     // Register accesses are FP-relative: register N at FP=F is at absolute
-    // address (N * 4 + F * 4), which is absolute register index (N + F).
+    // register index (F + N), raw address ((F + N) * 4).
     //
-    // Memory layout for these tests:
-    //   start_fp: 0 (raw FP = 0)
-    //   Register 9 holds the new FP raw value (e.g., 200)
-    //   After JAAF, FP changes and register addressing shifts accordingly.
+    // Notation:
+    //   fp(L)  = logical FP L, raw FP = L * 4
+    //   reg[N] = FP-relative register N, absolute index = logical_fp + N
+    //
+    // Common setup: caller at fp(20) (raw 80), callee at fp(50) (raw 200).
 
     #[test]
     fn test_jaaf() {
         setup_tracing_with_log_level(Level::WARN);
 
         // JAAF: Jump to target PC and set FP from register.
-        // Program: at PC=0, jump to PC=8 with new FP from reg 9.
         //
-        // start_fp = 0, reg[9] = 200 (new raw FP).
-        // JAAF jumps to PC=8 and sets FP to 200.
-        // At PC=8 (halt), we verify FP changed.
+        // Start at fp(0). reg[9] = 200 (new raw FP → fp(50)).
+        // Pre-populate new_frame[3] (abs 53) = 33.
         //
-        // The program needs a padding instruction at PC=4 (skipped by jump)
-        // and halt at PC=8.
+        // PC=0: JAAF to PC=8, FP=reg[9] → fp(50)
+        // PC=4: skipped
+        // PC=8: add_imm new_frame[0] = new_frame[3] + 10 = 33+10 = 43
+        //
+        // Verifies: FP changed, and the post-jump instruction operates in the new frame.
         let spec = TestSpec {
             program: vec![
-                wom::jaaf::<F>(8, 9), // PC=0: jump to PC=8, FP = reg[9]
+                wom::jaaf::<F>(8, 9), // PC=0: jump to PC=8, FP=reg[9]
                 wom::halt(),          // PC=4: skipped
-                                      // PC=8: halt (appended by test_spec)
+                wom::add_imm::<F>(0, 3, 10_i16.into()), // PC=8: new_frame[0] = new_frame[3] + 10
+                                      // PC=12: halt (appended by test_spec)
             ],
             start_fp: 0,
-            start_registers: vec![(9, 200)],
-            expected_pc: Some(8),
-            expected_fp: Some(50), // 200 / 4
+            start_registers: vec![
+                (9, 200), // reg[9] at fp(0): new raw FP
+                (53, 33), // new_frame[3] at abs 50+3=53: pre-populated
+            ],
+            expected_pc: Some(12),
+            expected_fp: Some(50),
+            expected_registers: vec![
+                (50, 43), // new_frame[0] at abs 50: 33 + 10
+                (53, 33), // new_frame[3] unchanged
+            ],
             ..Default::default()
         };
         test_spec(spec)
@@ -1482,22 +1492,24 @@ mod tests {
 
         // JAAF_SAVE: Jump, set FP, and save old FP to register in new frame.
         //
-        // start_fp = 0, reg[9] = 200 (new raw FP).
-        // jaaf_save(save_fp=11, to_pc=8, to_fp_reg=9)
-        // Saves old FP (=0) to register 11 in the NEW frame (address 11*4 + 200 = 244 = abs index 61).
-        // Jumps to PC=8, sets FP=200.
+        // Start at fp(20) (raw 80). reg[9] at abs 29 = 200 (new raw FP → fp(50)).
+        // jaaf_save(save_fp=11, to_pc=4, to_fp_reg=9)
+        // Saves old raw FP (80) to new_frame[11] at abs 50+11=61.
+        //
+        // Verifies: saved FP is 80 (nonzero, recognizable old FP).
         let spec = TestSpec {
             program: vec![
-                wom::jaaf_save::<F>(11, 8, 9), // PC=0: jump to PC=8, FP=reg[9], save old FP to new_frame[11]
-                wom::halt(),                   // PC=4: skipped
-                                               // PC=8: halt (appended by test_spec)
+                wom::jaaf_save::<F>(11, 4, 9), // PC=0: jump to PC=4, save old FP to new_frame[11]
+                                               // PC=4: halt (appended by test_spec)
             ],
-            start_fp: 0,
-            start_registers: vec![(9, 200)],
-            expected_pc: Some(8),
-            expected_fp: Some(50), // 200 / 4
+            start_fp: 20,
+            start_registers: vec![
+                (29, 200), // reg[9] at fp(20): new raw FP
+            ],
+            expected_pc: Some(4),
+            expected_fp: Some(50),
             expected_registers: vec![
-                (61, 0), // abs index 61 = (11*4 + 200)/4 = old FP saved in new frame
+                (61, 80), // new_frame[11] at abs 61: old raw FP = 80
             ],
             ..Default::default()
         };
@@ -1508,25 +1520,36 @@ mod tests {
     fn test_ret() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // RET: Restore PC and FP from registers.
+        // RET: Restore PC and FP from registers, then operate in the restored frame.
         //
-        // start_fp = 50 (raw FP = 200).
-        // reg[10] at abs index (50+10)=60 holds target PC = 8.
-        // reg[11] at abs index (50+11)=61 holds target FP = 0 (raw).
-        // RET reads both, jumps to PC=8, sets FP=0.
+        // Start at fp(50) (raw 200, callee frame).
+        // reg[10] at abs 60 = 8 (return PC), reg[11] at abs 61 = 80 (caller raw FP → fp(20)).
+        // Pre-populate caller_frame[5] at abs 25 = 99.
+        //
+        // PC=0: RET → PC=8, FP=80 → fp(20)
+        // PC=4: skipped
+        // PC=8: add_imm caller_frame[0] = caller_frame[5] + 1 = 99 + 1 = 100
+        //
+        // Verifies: FP restored, post-return instruction operates in the caller frame.
         let spec = TestSpec {
             program: vec![
-                wom::ret::<F>(10, 11), // PC=0: return to PC=reg[10], FP=reg[11]
+                wom::ret::<F>(10, 11), // PC=0: return to PC=8, FP=reg[11]
                 wom::halt(),           // PC=4: skipped
-                                       // PC=8: halt (appended by test_spec)
+                wom::add_imm::<F>(0, 5, 1_i16.into()), // PC=8: caller[0] = caller[5] + 1
+                                       // PC=12: halt (appended by test_spec)
             ],
             start_fp: 50,
             start_registers: vec![
-                (60, 8), // reg[10] at fp=50: target PC
-                (61, 0), // reg[11] at fp=50: target FP (raw)
+                (60, 8),  // reg[10] at fp(50): return PC
+                (61, 80), // reg[11] at fp(50): caller raw FP
+                (25, 99), // caller_frame[5] at abs 20+5=25
             ],
-            expected_pc: Some(8),
-            expected_fp: Some(0), // 0 / 4 = 0
+            expected_pc: Some(12),
+            expected_fp: Some(20),
+            expected_registers: vec![
+                (20, 100), // caller_frame[0] at abs 20: 99 + 1
+                (25, 99),  // caller_frame[5] unchanged
+            ],
             ..Default::default()
         };
         test_spec(spec)
@@ -1536,28 +1559,35 @@ mod tests {
     fn test_call() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // CALL: Save PC and FP, then jump to immediate PC with new FP.
+        // CALL: Save PC and FP, jump to immediate PC with new FP, then compute in new frame.
         //
-        // start_fp = 0, reg[9] = 200 (new raw FP).
-        // call(save_pc=10, save_fp=11, to_pc=8, to_fp_reg=9)
+        // Start at fp(20) (raw 80). reg[9] at abs 29 = 200 (new raw FP → fp(50)).
+        // Pre-populate new_frame[3] at abs 53 = 55.
+        // call(save_pc=10, save_fp=11, to_pc=12, to_fp_reg=9)
         //
-        // Saves:
-        //   return PC (= 0 + 4 = 4) to new_frame[10] at address (10*4 + 200 = 240) = abs index 60
-        //   old FP (= 0) to new_frame[11] at address (11*4 + 200 = 244) = abs index 61
-        // Jumps to PC=8, sets FP=200.
+        // Saves: return PC=4 → new_frame[10] (abs 60), old FP=80 → new_frame[11] (abs 61).
+        // PC=12: add_imm new_frame[0] = new_frame[3] + 7 = 55 + 7 = 62
+        //
+        // Verifies: saved PC/FP and post-call computation in the new frame.
         let spec = TestSpec {
             program: vec![
-                wom::call::<F>(10, 11, 8, 9), // PC=0: call to PC=8, FP=reg[9], save PC to new[10], FP to new[11]
-                wom::halt(),                  // PC=4: skipped
-                                              // PC=8: halt (appended by test_spec)
+                wom::call::<F>(10, 11, 12, 9), // PC=0: call to PC=12
+                wom::halt(),                   // PC=4: skipped (return would land here)
+                wom::halt(),                   // PC=8: skipped
+                wom::add_imm::<F>(0, 3, 7_i16.into()), // PC=12: new_frame[0] = new_frame[3]+7
+                                               // PC=16: halt (appended by test_spec)
             ],
-            start_fp: 0,
-            start_registers: vec![(9, 200)],
-            expected_pc: Some(8),
-            expected_fp: Some(50), // 200 / 4
+            start_fp: 20,
+            start_registers: vec![
+                (29, 200), // reg[9] at fp(20): new raw FP
+                (53, 55),  // new_frame[3] at abs 53: pre-populated
+            ],
+            expected_pc: Some(16),
+            expected_fp: Some(50),
             expected_registers: vec![
-                (60, 4), // abs index 60 = (10*4 + 200)/4 = return PC saved
-                (61, 0), // abs index 61 = (11*4 + 200)/4 = old FP saved
+                (50, 62), // new_frame[0] at abs 50: 55 + 7
+                (60, 4),  // new_frame[10] at abs 60: saved return PC
+                (61, 80), // new_frame[11] at abs 61: saved old raw FP
             ],
             ..Default::default()
         };
@@ -1568,31 +1598,36 @@ mod tests {
     fn test_call_indirect() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // CALL_INDIRECT: Save PC and FP, jump to register PC with new FP.
+        // CALL_INDIRECT: Save PC and FP, jump to register PC with new FP, then compute.
         //
-        // start_fp = 0, reg[9] = 200 (new raw FP), reg[12] = 8 (target PC).
+        // Start at fp(20) (raw 80). reg[9] at abs 29 = 200, reg[12] at abs 32 = 12.
+        // Pre-populate new_frame[3] at abs 53 = 55.
         // call_indirect(save_pc=10, save_fp=11, to_pc_reg=12, to_fp_reg=9)
         //
-        // Saves:
-        //   return PC (= 0 + 4 = 4) to new_frame[10] at abs index 60
-        //   old FP (= 0) to new_frame[11] at abs index 61
-        // Jumps to PC=reg[12]=8, sets FP=200.
+        // Saves: return PC=4 → abs 60, old FP=80 → abs 61.
+        // PC=12: add_imm new_frame[0] = new_frame[3] + 7 = 55 + 7 = 62
+        //
+        // Verifies: saved PC/FP and post-call computation, with PC from register.
         let spec = TestSpec {
             program: vec![
                 wom::call_indirect::<F>(10, 11, 12, 9), // PC=0: call indirect
                 wom::halt(),                            // PC=4: skipped
-                                                        // PC=8: halt (appended by test_spec)
+                wom::halt(),                            // PC=8: skipped
+                wom::add_imm::<F>(0, 3, 7_i16.into()),  // PC=12: new_frame[0] = new_frame[3]+7
+                                                        // PC=16: halt (appended by test_spec)
             ],
-            start_fp: 0,
+            start_fp: 20,
             start_registers: vec![
-                (9, 200), // new FP (raw)
-                (12, 8),  // target PC
+                (29, 200), // reg[9] at fp(20): new raw FP
+                (32, 12),  // reg[12] at fp(20): target PC
+                (53, 55),  // new_frame[3] at abs 53: pre-populated
             ],
-            expected_pc: Some(8),
+            expected_pc: Some(16),
             expected_fp: Some(50),
             expected_registers: vec![
-                (60, 4), // return PC saved at new_frame[10]
-                (61, 0), // old FP saved at new_frame[11]
+                (50, 62), // new_frame[0] at abs 50: 55 + 7
+                (60, 4),  // new_frame[10] at abs 60: saved return PC
+                (61, 80), // new_frame[11] at abs 61: saved old raw FP
             ],
             ..Default::default()
         };
@@ -1603,40 +1638,43 @@ mod tests {
     fn test_call_and_return() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // Complete call + return sequence using only JAAF instructions.
+        // Complete call + return sequence with computation in both frames.
         //
-        // Frame layout:
-        //   start_fp = 0, reg[9] = 200 (new raw FP for callee frame).
+        // Start at fp(20) (raw 80). caller_frame[5] (abs 25) = 100.
+        // reg[9] at abs 29 = 200 (new raw FP → fp(50)).
         //
-        // PC=0: CALL(save_pc=10, save_fp=11, to_pc=12, to_fp_reg=9)
-        //   - saves return PC=4 to new_frame[10] (abs 60)
-        //   - saves old FP=0 to new_frame[11] (abs 61)
-        //   - jumps to PC=12, FP=200
+        // PC=0:  CALL(save_pc=10, save_fp=11, to_pc=16, to_fp_reg=9)
+        //        saves return PC=4 → abs 60, old FP=80 → abs 61
+        //        jumps to PC=16, FP=200
+        // PC=4:  (return lands here) add_imm caller[0] = caller[5] + 1 = 101
+        // PC=8:  halt (after return, verifies caller frame computation)
+        // PC=12: skipped padding
+        // PC=16: add_imm callee[3] = callee[3] + 42 = 0+42 = 42
+        // PC=20: RET(10, 11) → PC=4, FP=80
         //
-        // PC=4: (skipped on forward, executed on return)
-        //   add_imm reg[0] = reg[0] + 0 (nop to land on)
-        //   then halt at PC=8
-        //
-        // PC=12: (callee) RET(to_pc_reg=10, to_fp_reg=11)
-        //   - reads new_frame[10] (abs 60) = 4 (return PC)
-        //   - reads new_frame[11] (abs 61) = 0 (caller FP raw)
-        //   - jumps to PC=4, FP=0
-        //
-        // PC=4: add_imm nop
-        // PC=8: halt
-        //
-        // After return: FP=0, PC=8
+        // After return: caller does add_imm, then halts.
+        // Verifies: round-trip call/return, computation in both frames persists.
         let spec = TestSpec {
             program: vec![
-                wom::call::<F>(10, 11, 12, 9),         // PC=0: call to PC=12
-                wom::add_imm::<F>(0, 0, 0_i16.into()), // PC=4: nop (return lands here)
+                wom::call::<F>(10, 11, 16, 9),          // PC=0: call to PC=16
+                wom::add_imm::<F>(0, 5, 1_i16.into()), // PC=4: caller[0] = caller[5]+1 (after return)
                 wom::halt(),                           // PC=8: halt after return
-                wom::ret::<F>(10, 11),                 // PC=12: return to caller
+                wom::halt(),                           // PC=12: padding
+                wom::add_imm::<F>(3, 3, 42_i16.into()), // PC=16: callee[3] = 0 + 42
+                wom::ret::<F>(10, 11),                 // PC=20: return to caller
             ],
-            start_fp: 0,
-            start_registers: vec![(9, 200)],
+            start_fp: 20,
+            start_registers: vec![
+                (29, 200), // reg[9] at fp(20): new raw FP
+                (25, 100), // caller_frame[5] at abs 25
+            ],
             expected_pc: Some(8),
-            expected_fp: Some(0), // returned to original FP
+            expected_fp: Some(20), // returned to caller
+            expected_registers: vec![
+                (20, 101), // caller_frame[0] at abs 20: 100 + 1
+                (25, 100), // caller_frame[5] unchanged
+                (53, 42),  // callee_frame[3] at abs 53: written by callee, persists
+            ],
             ..Default::default()
         };
         test_spec(spec)
