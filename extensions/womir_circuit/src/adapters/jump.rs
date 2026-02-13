@@ -148,35 +148,8 @@ pub struct JumpAdapterRecord {
 }
 
 /// Executor for the JUMP adapter (preflight).
-#[derive(Clone)]
-pub struct JumpAdapterExecutor {
-    has_fetched_fp: std::cell::RefCell<bool>,
-}
-
-impl Default for JumpAdapterExecutor {
-    fn default() -> Self {
-        Self {
-            has_fetched_fp: std::cell::RefCell::new(false),
-        }
-    }
-}
-
-impl JumpAdapterExecutor {
-    fn maybe_fetch_fp<F: PrimeField32>(
-        &self,
-        memory: &mut TracingMemory,
-        record: &mut JumpAdapterRecord,
-    ) {
-        if !*self.has_fetched_fp.borrow() {
-            record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
-            *self.has_fetched_fp.borrow_mut() = true;
-        }
-    }
-
-    fn finalize_instruction(&self) {
-        *self.has_fetched_fp.borrow_mut() = false;
-    }
-}
+#[derive(Clone, Default)]
+pub struct JumpAdapterExecutor {}
 
 impl<F: PrimeField32> AdapterTraceExecutor<F> for JumpAdapterExecutor {
     const WIDTH: usize = size_of::<JumpAdapterCols<u8>>();
@@ -199,7 +172,9 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for JumpAdapterExecutor {
     ) -> Self::ReadData {
         let &Instruction { b, .. } = instruction;
 
-        self.maybe_fetch_fp::<F>(memory, record);
+        // HACK: The frame pointer fetch must happen exactly once before the first register access.
+        // We can do it here unconditionally because Self::ReadData has length 1.
+        record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
 
         let b_val = b.as_canonical_u32();
         record.rs_ptr = b_val;
@@ -211,8 +186,6 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for JumpAdapterExecutor {
             b_val + record.fp,
             &mut record.rs_read_aux.prev_timestamp,
         );
-
-        self.finalize_instruction();
 
         [rs]
     }
