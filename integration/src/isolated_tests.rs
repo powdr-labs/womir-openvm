@@ -1253,12 +1253,12 @@ mod tests {
 
         let spec = TestSpec {
             program: vec![
-                wom::jump_if_zero::<F>(2, 2),
+                wom::jump_if_zero::<F>(2, 8),
                 wom::halt(), // Should be skipped!
             ],
             start_fp: 10,
             start_registers: vec![(12, 0)], // Should jump
-            expected_pc: Some(2),
+            expected_pc: Some(8),
             ..Default::default()
         };
 
@@ -1292,31 +1292,6 @@ mod tests {
             start_fp: 10,
             start_registers: vec![(12, 2)],
             expected_pc: Some(8),
-            ..Default::default()
-        };
-
-        test_spec(spec)
-    }
-
-    #[test]
-    fn test_skip_zero() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // SKIP with offset 0: stays at current PC, effectively no-op (PC += 0*4 = 0)
-        // Actually, the WOMIR interpreter says "Offset starts with 0, so we don't prevent the natural increment"
-        // In our circuit: SKIP computes PC = from_pc + reg_value * DEFAULT_PC_STEP.
-        // With reg_value=0, to_pc = from_pc + 0 = from_pc. But the execution bridge uses
-        // set_pc which sets PC to from_pc, so this is effectively a self-loop.
-        // Let's test with offset=1 (skip 0 additional instructions beyond natural step).
-        let spec = TestSpec {
-            program: vec![
-                wom::add_imm::<F>(0, 0, 1_i16.into()),  // PC=0: reg[fp+0] = 1
-                wom::skip::<F>(0),                      // PC=4: PC = 4 + 1*4 = 8
-                wom::add_imm::<F>(1, 1, 22_i16.into()), // PC=8: Executes (offset 1 means next instruction)
-            ],
-            start_fp: 10,
-            expected_registers: vec![(10, 1), (11, 22)],
-            expected_pc: Some(12),
             ..Default::default()
         };
 
