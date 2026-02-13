@@ -26,7 +26,7 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, JaafOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -80,6 +80,7 @@ pub enum WomirExecutor {
     LessThan64(LessThan64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
+    Jaaf(Rv32JaafExecutor),
 }
 
 // ============ VmExtension Implementations ============
@@ -140,6 +141,9 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
         )?;
+
+        let jaaf = Rv32JaafExecutor::new(JaafAdapterExecutor, JaafOpcode::CLASS_OFFSET);
+        inventory.add_executor(jaaf, JaafOpcode::iter().map(|x| x.global_opcode()))?;
 
         Ok(())
     }
@@ -215,6 +219,12 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             LoadSignExtendCoreAir::new(range_checker),
         );
         inventory.add_air(load_sign_extend);
+
+        let jaaf = JaafAir::new(
+            JaafAdapterAir::new(exec_bridge, memory_bridge),
+            JaafCoreAir::new(JaafOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(jaaf);
 
         Ok(())
     }
@@ -319,6 +329,13 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(load_sign_extend);
+
+        inventory.next_air::<JaafAir>()?;
+        let jaaf = JaafChip::new(
+            JaafFiller::new(JaafAdapterFiller::new(), JaafOpcode::CLASS_OFFSET),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(jaaf);
 
         Ok(())
     }
