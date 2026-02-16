@@ -78,9 +78,9 @@ pub(super) struct MulPreCompute {
     /// Second operand value (if immediate) or register index (if register)
     c: u32,
     /// Result register index
-    a: u8,
+    a: u32,
     /// First operand register index
-    b: u8,
+    b: u32,
     /// Whether the second operand is an immediate
     is_imm: bool,
 }
@@ -122,8 +122,8 @@ impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>
             } else {
                 c_u32
             },
-            a: a.as_canonical_u32() as u8,
-            b: b.as_canonical_u32() as u8,
+            a: a.as_canonical_u32(),
+            b: b.as_canonical_u32(),
             is_imm,
         };
         Ok(())
