@@ -190,12 +190,12 @@ struct RemuOp;
 impl DivRemOp<4> for DivOp {
     #[inline(always)]
     fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
-        let rs1 = i32::from_le_bytes(rs1);
-        let rs2 = i32::from_le_bytes(rs2);
-        match (rs1, rs2) {
+        let rs1_i32 = i32::from_le_bytes(rs1);
+        let rs2_i32 = i32::from_le_bytes(rs2);
+        match (rs1_i32, rs2_i32) {
             (_, 0) => [u8::MAX; 4],
-            (i32::MIN, -1) => i32::MIN.to_le_bytes(),
-            _ => (rs1 / rs2).to_le_bytes(),
+            (i32::MIN, -1) => rs1,
+            _ => (rs1_i32 / rs2_i32).to_le_bytes(),
         }
     }
 }
@@ -203,12 +203,12 @@ impl DivRemOp<4> for DivOp {
 impl DivRemOp<8> for DivOp {
     #[inline(always)]
     fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
-        let rs1 = i64::from_le_bytes(rs1);
-        let rs2 = i64::from_le_bytes(rs2);
-        match (rs1, rs2) {
+        let rs1_i64 = i64::from_le_bytes(rs1);
+        let rs2_i64 = i64::from_le_bytes(rs2);
+        match (rs1_i64, rs2_i64) {
             (_, 0) => [u8::MAX; 8],
-            (i64::MIN, -1) => i64::MIN.to_le_bytes(),
-            _ => (rs1 / rs2).to_le_bytes(),
+            (i64::MIN, -1) => rs1,
+            _ => (rs1_i64 / rs2_i64).to_le_bytes(),
         }
     }
 }
@@ -216,11 +216,12 @@ impl DivRemOp<8> for DivOp {
 impl DivRemOp<4> for DivuOp {
     #[inline(always)]
     fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
-        let rs1 = u32::from_le_bytes(rs1);
-        let rs2 = u32::from_le_bytes(rs2);
-        match rs2 {
-            0 => [u8::MAX; 4],
-            _ => (rs1 / rs2).to_le_bytes(),
+        if rs2 == [0; 4] {
+            [u8::MAX; 4]
+        } else {
+            let rs1 = u32::from_le_bytes(rs1);
+            let rs2 = u32::from_le_bytes(rs2);
+            (rs1 / rs2).to_le_bytes()
         }
     }
 }
@@ -228,11 +229,12 @@ impl DivRemOp<4> for DivuOp {
 impl DivRemOp<8> for DivuOp {
     #[inline(always)]
     fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
-        let rs1 = u64::from_le_bytes(rs1);
-        let rs2 = u64::from_le_bytes(rs2);
-        match rs2 {
-            0 => [u8::MAX; 8],
-            _ => (rs1 / rs2).to_le_bytes(),
+        if rs2 == [0; 8] {
+            [u8::MAX; 8]
+        } else {
+            let rs1 = u64::from_le_bytes(rs1);
+            let rs2 = u64::from_le_bytes(rs2);
+            (rs1 / rs2).to_le_bytes()
         }
     }
 }
@@ -240,12 +242,12 @@ impl DivRemOp<8> for DivuOp {
 impl DivRemOp<4> for RemOp {
     #[inline(always)]
     fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
-        let rs1 = i32::from_le_bytes(rs1);
-        let rs2 = i32::from_le_bytes(rs2);
-        match (rs1, rs2) {
-            (_, 0) => rs1.to_le_bytes(),
-            (i32::MIN, -1) => 0i32.to_le_bytes(),
-            _ => (rs1 % rs2).to_le_bytes(),
+        let rs1_i32 = i32::from_le_bytes(rs1);
+        let rs2_i32 = i32::from_le_bytes(rs2);
+        match (rs1_i32, rs2_i32) {
+            (_, 0) => rs1,
+            (i32::MIN, -1) => [0; 4],
+            _ => (rs1_i32 % rs2_i32).to_le_bytes(),
         }
     }
 }
@@ -253,12 +255,12 @@ impl DivRemOp<4> for RemOp {
 impl DivRemOp<8> for RemOp {
     #[inline(always)]
     fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
-        let rs1 = i64::from_le_bytes(rs1);
-        let rs2 = i64::from_le_bytes(rs2);
-        match (rs1, rs2) {
-            (_, 0) => rs1.to_le_bytes(),
-            (i64::MIN, -1) => 0i64.to_le_bytes(),
-            _ => (rs1 % rs2).to_le_bytes(),
+        let rs1_i64 = i64::from_le_bytes(rs1);
+        let rs2_i64 = i64::from_le_bytes(rs2);
+        match (rs1_i64, rs2_i64) {
+            (_, 0) => rs1,
+            (i64::MIN, -1) => [0; 8],
+            _ => (rs1_i64 % rs2_i64).to_le_bytes(),
         }
     }
 }
@@ -266,11 +268,12 @@ impl DivRemOp<8> for RemOp {
 impl DivRemOp<4> for RemuOp {
     #[inline(always)]
     fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
-        let rs1 = u32::from_le_bytes(rs1);
-        let rs2 = u32::from_le_bytes(rs2);
-        match rs2 {
-            0 => rs1.to_le_bytes(),
-            _ => (rs1 % rs2).to_le_bytes(),
+        if rs2 == [0; 4] {
+            rs1
+        } else {
+            let rs1 = u32::from_le_bytes(rs1);
+            let rs2 = u32::from_le_bytes(rs2);
+            (rs1 % rs2).to_le_bytes()
         }
     }
 }
@@ -278,11 +281,12 @@ impl DivRemOp<4> for RemuOp {
 impl DivRemOp<8> for RemuOp {
     #[inline(always)]
     fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
-        let rs1 = u64::from_le_bytes(rs1);
-        let rs2 = u64::from_le_bytes(rs2);
-        match rs2 {
-            0 => rs1.to_le_bytes(),
-            _ => (rs1 % rs2).to_le_bytes(),
+        if rs2 == [0; 8] {
+            rs1
+        } else {
+            let rs1 = u64::from_le_bytes(rs1);
+            let rs2 = u64::from_le_bytes(rs2);
+            (rs1 % rs2).to_le_bytes()
         }
     }
 }
