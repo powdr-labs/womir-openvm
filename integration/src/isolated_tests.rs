@@ -1262,7 +1262,7 @@ mod tests {
                 (126, 6),
                 (127, 0), // reg 2 = 6
             ],
-            expected_registers: vec![(128, 42), (129, 0)],
+            expected_registers: vec![(128, 0x2a), (129, 0)],
             ..Default::default()
         };
 
@@ -1290,26 +1290,28 @@ mod tests {
         test_spec(spec);
     }
 
+    #[test]
     fn test_mul_64_overflow() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // 0x0000_0001_0000_0000 * 0x0000_0001_0000_0000 = wraps to 0
+        // 0x0000_0001_0000_0001 * 0x0000_0001_0000_0001 = wraps to 0x0000_0002_0000_0001
         let spec = TestSpec {
             program: vec![wom::mul_64::<F>(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
-                (124, 0),
-                (125, 1), // reg 0 = 0x1_0000_0000
-                (126, 0),
-                (127, 1), // reg 2 = 0x1_0000_0000
+                (124, 1),
+                (125, 1), // reg 0 = 0x1_0000_0001
+                (126, 1),
+                (127, 1), // reg 2 = 0x1_0000_0001
             ],
-            expected_registers: vec![(128, 0), (129, 0)],
+            expected_registers: vec![(128, 1), (129, 2)],
             ..Default::default()
         };
 
         test_spec(spec);
     }
 
+    #[test]
     fn test_mul_imm_64() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -1317,8 +1319,8 @@ mod tests {
         let spec = TestSpec {
             program: vec![wom::mul_imm_64::<F>(2, 0, 3_i16.into())],
             start_fp: 124,
-            start_registers: vec![(124, 10), (125, 0)],
-            expected_registers: vec![(126, 30), (127, 0)],
+            start_registers: vec![(124, 0xa), (125, 0)],
+            expected_registers: vec![(126, 0x1e), (127, 0)],
             ..Default::default()
         };
 

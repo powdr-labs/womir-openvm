@@ -690,7 +690,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_basic_mul() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -705,7 +704,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_zero() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -719,7 +717,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_one() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -755,7 +752,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_powers_of_two() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -769,7 +765,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_large_numbers() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -790,7 +785,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_overflow() {
         let instructions = vec![
             // Test multiplication that would overflow 32-bit
@@ -806,7 +800,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_commutative() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -822,7 +815,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_chain() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
@@ -838,7 +830,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_max_value() {
         let instructions = vec![
             // Test with maximum 32-bit value
@@ -859,7 +850,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_negative_positive() {
         // Test multiplication of negative and positive numbers
         let instructions = vec![
@@ -881,7 +871,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_positive_negative() {
         // Test multiplication of positive and negative numbers
         let instructions = vec![
@@ -903,7 +892,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_both_negative() {
         // Test multiplication of two negative numbers
         let instructions = vec![
@@ -918,7 +906,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_negative_one() {
         // Test multiplication by -1
         let instructions = vec![
@@ -940,7 +927,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_mul_negative_overflow() {
         // Test multiplication that would overflow with signed numbers
         let instructions = vec![

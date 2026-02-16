@@ -11,7 +11,7 @@ use std::{
     mem::size_of,
 };
 
-use crate::memory_config::FpMemory;
+use crate::{memory_config::FpMemory, utils::sign_extend_u32};
 use openvm_circuit::{
     arch::*,
     system::memory::online::{GuestMemory, TracingMemory},
@@ -194,16 +194,6 @@ where
     }
 }
 
-/// Sign-extend a u32 value to `[u8; N]`.
-/// For N=4, this is equivalent to `c.to_le_bytes()`.
-/// For N>4, the upper bytes are sign-extended from bit 31.
-#[inline(always)]
-fn sign_extend_u32<const N: usize>(c: u32) -> [u8; N] {
-    let sign_byte = if c & 0x8000_0000 != 0 { 0xFF } else { 0x00 };
-    let le = c.to_le_bytes();
-    std::array::from_fn(|i| if i < 4 { le[i] } else { sign_byte })
-}
-
 /// Wrapping multiplication of two byte arrays, returning the lower NUM_LIMBS bytes.
 #[inline(always)]
 fn wrapping_mul_bytes<const NUM_LIMBS: usize>(
@@ -234,16 +224,16 @@ unsafe fn execute_e12_impl<
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     let fp = exec_state.memory.fp::<F>();
-    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
+    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.b);
     let rs2 = if E_IS_IMM {
         sign_extend_u32::<NUM_LIMBS>(pre_compute.c)
     } else {
         exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c)
     };
 
-    let rd = wrapping_mul_bytes::<NUM_LIMBS>(&rs1, &rs2);
+    let result = wrapping_mul_bytes::<NUM_LIMBS>(&rs1, &rs2);
 
-    exec_state.vm_write(RV32_REGISTER_AS, fp + (pre_compute.a as u32), &rd);
+    exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &result);
     let pc = exec_state.pc();
     exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
 }

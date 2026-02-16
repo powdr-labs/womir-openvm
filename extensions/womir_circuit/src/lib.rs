@@ -29,6 +29,7 @@ mod less_than;
 mod load_sign_extend;
 mod loadstore;
 mod mul;
+mod utils;
 
 pub use base_alu::*;
 pub use const32::*;
