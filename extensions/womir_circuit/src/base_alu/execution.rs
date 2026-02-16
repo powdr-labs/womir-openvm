@@ -26,7 +26,7 @@ use openvm_rv32im_circuit::BaseAluExecutor as BaseAluExecutorInner;
 use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
+use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes, sign_extend_u32};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]
@@ -200,16 +200,6 @@ where
             NUM_LIMBS
         )
     }
-}
-
-/// Sign-extend a u32 value to `[u8; N]`.
-/// For N=4, this is equivalent to `c.to_le_bytes()`.
-/// For N>4, the upper bytes are sign-extended from bit 31.
-#[inline(always)]
-fn sign_extend_u32<const N: usize>(c: u32) -> [u8; N] {
-    let sign_byte = if c & 0x8000_0000 != 0 { 0xFF } else { 0x00 };
-    let le = c.to_le_bytes();
-    std::array::from_fn(|i| if i < 4 { le[i] } else { sign_byte })
 }
 
 #[inline(always)]
