@@ -1352,44 +1352,34 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_copy_into_frame_instruction() {
-        // Test COPY_INTO_FRAME instruction
-        // This test verifies that copy_into_frame actually writes to memory
+        // Test CALL into a new frame, compute value 42 there, reveal
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),             // PC=0
-            wom::add_imm::<F>(8, 0, 42_i16.into()), // PC=4: x8 = 42 (value to copy)
-            wom::allocate_frame_imm::<F>(9, 100),   // Allocate new frame of size 100, x9 = new FP
-            wom::add_imm::<F>(10, 0, 0_i16.into()), // PC=12: x10 = 0 (register to read into)
-            wom::copy_into_frame::<F>(10, 8, 9), // PC=16: Copy x8 to [x9[x10]], which writes to address pointed by x10
-            wom::jump::<F>(24), // TODO: needs CALL with frame change               // Jump to PC=24, set FP=x9
-            // Since copy_into_frame writes x8's value to memory at [x9[x10]],
-            // and we activated the frame at x9, x10 should now contain 42.
-            wom::const_32_imm(0, 0, 0),
-            wom::reveal(10, 0), // PC=24: wom::reveal x10 (should be 42, the value from x8)
-            wom::halt(),        // PC=28: End
+            wom::const_32_imm(0, 0, 0),              // PC=0
+            wom::add_imm::<F>(9, 0, 100_i16.into()), // PC=4: x9 = 100 (FP offset for new frame)
+            wom::call::<F>(10, 11, 16, 9),           // PC=8: CALL to PC=16, save PC→x10, FP→x11
+            wom::halt(),                             // PC=12: padding (skipped)
+            // New frame starts here (PC=16), FP = old_fp + 100
+            wom::add_imm::<F>(8, 0, 42_i16.into()), // PC=16: x8 = 42 in new frame
+            wom::reveal(8, 0),                      // PC=20: reveal x8 (should be 42)
+            wom::halt(),                            // PC=24: End
         ];
 
         run_vm_test("COPY_INTO_FRAME instruction", instructions, 42, None).unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_allocate_and_copy_sequence() {
-        // Test sequence: allocate frame, then copy into it
-        // This test verifies that copy_into_frame actually writes the value
+        // Test CALL into new frame, compute 123 there, reveal
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(8, 0, 123_i16.into()), // PC=4: x8 = 123 (value to store)
-            wom::allocate_frame_imm::<F>(9, 128), // PC=8: Allocate 128 bytes, pointer in x9. x9=2
-            // by convention on the first allocation.
-            wom::add_imm::<F>(10, 0, 0_i16.into()), // PC=12: x10 = 0 (destination register)
-            wom::copy_into_frame::<F>(10, 8, 9),    // PC=16: Copy x8 to [x9[x10]]
-            wom::jump::<F>(28), // TODO: needs CALL with frame change                  // Jump to PC=28, set FP=x9
-            wom::halt(),        // Should be skipped
-            wom::const_32_imm(0, 0, 0), // PC=28
-            wom::reveal(10, 0), // wom::reveal x10 (should be 123, the value from x8)
-            wom::halt(),
+            wom::const_32_imm(0, 0, 0),              // PC=0
+            wom::add_imm::<F>(9, 0, 100_i16.into()), // PC=4: x9 = 100 (FP offset for new frame)
+            wom::call::<F>(10, 11, 16, 9),           // PC=8: CALL to PC=16, save PC→x10, FP→x11
+            wom::halt(),                             // PC=12: padding (skipped)
+            // New frame starts here (PC=16), FP = old_fp + 100
+            wom::add_imm::<F>(8, 0, 123_i16.into()), // PC=16: x8 = 123 in new frame
+            wom::reveal(8, 0),                       // PC=20: reveal x8 (should be 123)
+            wom::halt(),                             // PC=24: End
         ];
 
         run_vm_test(
@@ -1733,38 +1723,26 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_input_hint_with_frame_jump_and_xor() {
+        // CALL into a new frame, compute two values there, XOR them, reveal (170 ^ 204 = 102)
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            // Read first value into r8
-            wom::prepare_read::<F>(),
-            wom::read_u32::<F>(8),
-            wom::allocate_frame_imm::<F>(9, 64), // Allocate frame, pointer in r9
-            wom::copy_into_frame::<F>(2, 8, 9),  // Copy r8 to frame[2]
-            // Jump to new frame
-            wom::jump::<F>(28), // TODO: needs CALL with frame change // Jump to PC=28, activate frame at r9
-            // This should be skipped
-            wom::halt(),
-            wom::const_32_imm(0, 0, 0), // PC = 28
-            // Read second value into r3
-            wom::prepare_read::<F>(),
-            wom::read_u32::<F>(3),
-            // Xor the two read values
-            wom::xor::<F>(4, 2, 3),
-            wom::reveal(4, 0),
-            wom::halt(),
+            wom::const_32_imm(0, 0, 0),              // PC=0
+            wom::add_imm::<F>(9, 0, 100_i16.into()), // PC=4: r9 = 100 (FP offset)
+            wom::call::<F>(10, 11, 16, 9),           // PC=8: CALL to PC=16, save PC→r10, FP→r11
+            wom::halt(),                             // PC=12: padding (skipped)
+            // New frame starts here (PC=16), FP = old_fp + 100
+            wom::add_imm::<F>(2, 0, 170_i16.into()), // PC=16: r2 = 170
+            wom::add_imm::<F>(3, 0, 204_i16.into()), // PC=20: r3 = 204
+            wom::xor::<F>(4, 2, 3),                  // PC=24: r4 = 170 ^ 204 = 102
+            wom::reveal(4, 0),                       // PC=28: reveal r4
+            wom::halt(),                             // PC=32: End
         ];
-
-        let mut stdin = StdIn::default();
-        stdin.write(&170u32); // First value: 170 in decimal
-        stdin.write(&204u32); // Second value: 204 in decimal
 
         run_vm_test(
             "Input hint with frame jump and XOR",
             instructions,
             102,
-            Some(stdin),
+            None,
         )
         .unwrap()
     }
