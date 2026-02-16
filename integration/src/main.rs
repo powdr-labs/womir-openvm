@@ -1767,10 +1767,10 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm(scratch, 0, 0), // scratch_reg = 0 (points to MEM[0])
-            wom::prepare_read::<F>(),
-            wom::hint_storew::<F>(scratch),  // skip length word
-            wom::hint_storew::<F>(scratch),  // write data to MEM[0]
-            wom::loadw::<F>(10, scratch, 0), // load MEM[0] → r10
+            wom::prepare_read(),
+            wom::hint_storew(scratch),  // skip length word
+            wom::hint_storew(scratch),  // write data to MEM[0]
+            wom::loadw(10, scratch, 0), // load MEM[0] → r10
             wom::reveal(10, 0),
             wom::halt(),
         ];
@@ -1788,10 +1788,10 @@ mod tests {
             wom::const_32_imm(0, 0, 0),
             wom::const_32_imm(scratch, 0, 0),
             // Read first value into r8
-            wom::prepare_read::<F>(),
-            wom::hint_storew::<F>(scratch),      // skip length
-            wom::hint_storew::<F>(scratch),      // write data to MEM[0]
-            wom::loadw::<F>(8, scratch, 0),      // load MEM[0] → r8
+            wom::prepare_read(),
+            wom::hint_storew(scratch),           // skip length
+            wom::hint_storew(scratch),           // write data to MEM[0]
+            wom::loadw(8, scratch, 0),           // load MEM[0] → r8
             wom::allocate_frame_imm::<F>(9, 64), // Allocate frame, pointer in r9
             wom::copy_into_frame::<F>(2, 8, 9),  // Copy r8 to frame[2]
             // Jump to new frame
