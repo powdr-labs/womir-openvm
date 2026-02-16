@@ -69,11 +69,11 @@ where
 #[repr(C)]
 pub(super) struct DivRemPreCompute {
     /// Result register index
-    a: u8,
+    a: u16,
     /// First operand register index
-    b: u8,
+    b: u16,
     /// Second operand register index
-    c: u8,
+    c: u16,
 }
 
 impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> DivRemExecutor<A, NUM_LIMBS, LIMB_BITS> {
@@ -93,9 +93,9 @@ impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> DivRemExecutor<A, NUM_LI
         }
         let local_opcode = DivRemOpcode::from_usize(opcode.local_opcode_idx(self.0.offset));
         *data = DivRemPreCompute {
-            a: a.as_canonical_u32() as u8,
-            b: b.as_canonical_u32() as u8,
-            c: c.as_canonical_u32() as u8,
+            a: a.as_canonical_u32() as u16,
+            b: b.as_canonical_u32() as u16,
+            c: c.as_canonical_u32() as u16,
         };
         Ok(local_opcode)
     }
