@@ -1452,6 +1452,38 @@ mod tests {
     }
 
     #[test]
+    fn test_div_signed_overflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // i32::MIN / -1 = i32::MIN (RISC-V signed overflow returns dividend)
+        let spec = TestSpec {
+            program: vec![wom::div::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, i32::MIN as u32), (11, (-1_i32) as u32)],
+            expected_registers: vec![(12, i32::MIN as u32)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_rem_signed_overflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // i32::MIN % -1 = 0 (RISC-V signed overflow returns zero)
+        let spec = TestSpec {
+            program: vec![wom::rems::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, i32::MIN as u32), (11, (-1_i32) as u32)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
     fn test_divu() {
         setup_tracing_with_log_level(Level::WARN);
 
