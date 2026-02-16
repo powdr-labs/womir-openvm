@@ -64,9 +64,9 @@ where
 #[repr(C)]
 struct LoadStorePreCompute {
     imm_extended: u32,
-    a: u8,
-    b: u8,
-    e: u8,
+    a: u32,
+    b: u32,
+    e: u32,
 }
 
 impl<A, const NUM_CELLS: usize> LoadStoreExecutor<A, NUM_CELLS> {
@@ -115,9 +115,9 @@ impl<A, const NUM_CELLS: usize> LoadStoreExecutor<A, NUM_CELLS> {
 
         *data = LoadStorePreCompute {
             imm_extended,
-            a: a.as_canonical_u32() as u8,
-            b: b.as_canonical_u32() as u8,
-            e: e_u32 as u8,
+            a: a.as_canonical_u32(),
+            b: b.as_canonical_u32(),
+            e: e_u32,
         };
         Ok((local_opcode, enabled, is_native_store))
     }
@@ -212,7 +212,7 @@ unsafe fn execute_e12_impl<
     let pc = exec_state.pc();
     let fp = exec_state.memory.fp::<F>();
     let rs1_bytes: [u8; RV32_REGISTER_NUM_LIMBS] =
-        exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.b as u32);
+        exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.b);
     let rs1_val = u32::from_le_bytes(rs1_bytes);
     let ptr_val = rs1_val.wrapping_add(pre_compute.imm_extended);
     // sign_extend([r32{c,g}(b):2]_e)`
@@ -229,14 +229,14 @@ unsafe fn execute_e12_impl<
     let ptr_val = ptr_val - shift_amount; // aligned ptr
 
     let read_data: [u8; RV32_REGISTER_NUM_LIMBS] = if OP::IS_LOAD {
-        exec_state.vm_read(pre_compute.e as u32, ptr_val)
+        exec_state.vm_read(pre_compute.e, ptr_val)
     } else {
-        exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.a as u32)
+        exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.a)
     };
 
     // We need to write 4 u32s for STORE.
     let mut write_data: [T; RV32_REGISTER_NUM_LIMBS] = if OP::HOST_READ {
-        exec_state.host_read(pre_compute.e as u32, ptr_val)
+        exec_state.host_read(pre_compute.e, ptr_val)
     } else {
         [T::default(); RV32_REGISTER_NUM_LIMBS]
     };
@@ -251,9 +251,9 @@ unsafe fn execute_e12_impl<
 
     if ENABLED {
         if OP::IS_LOAD {
-            exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a as u32, &write_data);
+            exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &write_data);
         } else {
-            exec_state.vm_write(pre_compute.e as u32, ptr_val, &write_data);
+            exec_state.vm_write(pre_compute.e, ptr_val, &write_data);
         }
     }
 
