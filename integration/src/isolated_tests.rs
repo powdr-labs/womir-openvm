@@ -937,7 +937,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -954,7 +954,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -971,7 +971,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -988,7 +988,24 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_shr_s_imm_positive() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = reg[fp+0] >> 8 (arithmetic, positive value)
+        // 0x7FFF0000 >> 8 = 0x007FFF00 (no sign extension since MSB is 0)
+        let spec = TestSpec {
+            program: vec![wom::shr_s_imm::<F>(1, 0, 8_i16.into())],
+            start_fp: 10,
+            start_registers: vec![(10, 0x7FFF0000)],
+            expected_registers: vec![(11, 0x007FFF00)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1005,7 +1022,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Shift64 Tests ====================
@@ -1028,7 +1045,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1049,7 +1066,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1068,7 +1085,27 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_shr_s_imm_64_positive() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x7FFF_0000_0000_0000 >> 8 (arithmetic) = 0x007F_FF00_0000_0000
+        // No sign extension since MSB is 0
+        let spec = TestSpec {
+            program: vec![wom::shr_s_imm_64::<F>(2, 0, 8_i16.into())],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 0x7FFF0000), // reg 0 = 0x7FFF_0000_0000_0000
+            ],
+            expected_registers: vec![(126, 0), (127, 0x007FFF00)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== add_64 ====================
