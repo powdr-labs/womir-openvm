@@ -44,7 +44,7 @@ impl<A> std::ops::Deref for CallExecutor<A> {
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
 pub(super) struct CallPreCompute {
-    pub to_fp_reg_ptr: u32,
+    pub to_fp_operand: u32,
     pub save_fp_ptr: u32,
     pub save_pc_ptr: u32,
     pub to_pc_reg_ptr: u32,
@@ -88,23 +88,25 @@ where
         A::start(*state.pc, state.memory, &mut adapter_record);
 
         // Read through the adapter: [new_fp_bytes, to_pc_bytes]
+        // new_fp_bytes is only valid for RET (register read); zeros for CALL/CALL_INDIRECT
         let [new_fp_bytes, to_pc_bytes] =
             self.adapter
                 .read(state.memory, instruction, &mut adapter_record);
 
-        let raw_fp_reg_val = u32::from_le_bytes(new_fp_bytes);
         // Get old FP from memory (hasn't been modified yet by the write phase)
         let old_fp_val = state.memory.data.fp::<F>();
 
         // Compute actual new FP:
-        // CALL/CALL_INDIRECT: new_fp = old_fp + offset
+        // CALL/CALL_INDIRECT: new_fp = old_fp + immediate offset (e operand)
         // RET: new_fp = absolute FP from register
         let new_fp = match opcode {
-            CallOpcode::CALL | CallOpcode::CALL_INDIRECT => old_fp_val + raw_fp_reg_val,
-            CallOpcode::RET => raw_fp_reg_val,
+            CallOpcode::CALL | CallOpcode::CALL_INDIRECT => {
+                old_fp_val + instruction.e.as_canonical_u32()
+            }
+            CallOpcode::RET => u32::from_le_bytes(new_fp_bytes),
         };
 
-        // Fill core record (new_fp_data stores raw register value, not actual new FP)
+        // Fill core record
         core_record.new_fp_data = new_fp_bytes;
         core_record.to_pc_data = to_pc_bytes;
         core_record.old_fp_data = old_fp_val.to_le_bytes();
@@ -155,7 +157,7 @@ impl<F: PrimeField32, A> InterpreterExecutor<F> for CallExecutor<A> {
         let local_idx = inst.opcode.local_opcode_idx(CallOpcode::CLASS_OFFSET);
         let opcode = CallOpcode::from_usize(local_idx);
 
-        data.to_fp_reg_ptr = inst.e.as_canonical_u32();
+        data.to_fp_operand = inst.e.as_canonical_u32();
         data.save_fp_ptr = inst.b.as_canonical_u32();
         data.save_pc_ptr = inst.a.as_canonical_u32();
         data.to_pc_reg_ptr = inst.c.as_canonical_u32();
@@ -189,7 +191,7 @@ impl<F: PrimeField32, A> InterpreterMeteredExecutor<F> for CallExecutor<A> {
         let local_idx = inst.opcode.local_opcode_idx(CallOpcode::CLASS_OFFSET);
         let opcode = CallOpcode::from_usize(local_idx);
 
-        data.data.to_fp_reg_ptr = inst.e.as_canonical_u32();
+        data.data.to_fp_operand = inst.e.as_canonical_u32();
         data.data.save_fp_ptr = inst.b.as_canonical_u32();
         data.data.save_pc_ptr = inst.a.as_canonical_u32();
         data.data.to_pc_reg_ptr = inst.c.as_canonical_u32();
@@ -208,15 +210,16 @@ unsafe fn execute_call_impl<F: PrimeField32, CTX: ExecutionCtxTrait>(
     let opcode = CallOpcode::from_repr(pre.opcode as usize).unwrap();
     let fp = exec_state.memory.fp::<F>();
 
-    // Read raw FP value from register (offset for CALL/CALL_INDIRECT, absolute for RET)
-    let raw_fp_bytes: [u8; RV32_REGISTER_NUM_LIMBS] =
-        exec_state.vm_read(RV32_REGISTER_AS, fp + pre.to_fp_reg_ptr);
-    let raw_fp_val = u32::from_le_bytes(raw_fp_bytes);
-
-    // Compute actual new FP
+    // Compute new FP:
+    // CALL/CALL_INDIRECT: new_fp = old_fp + immediate offset (to_fp_operand)
+    // RET: new_fp = absolute FP from register (to_fp_operand is register pointer)
     let new_fp = match opcode {
-        CallOpcode::CALL | CallOpcode::CALL_INDIRECT => fp + raw_fp_val,
-        CallOpcode::RET => raw_fp_val,
+        CallOpcode::CALL | CallOpcode::CALL_INDIRECT => fp + pre.to_fp_operand,
+        CallOpcode::RET => {
+            let fp_bytes: [u8; RV32_REGISTER_NUM_LIMBS] =
+                exec_state.vm_read(RV32_REGISTER_AS, fp + pre.to_fp_operand);
+            u32::from_le_bytes(fp_bytes)
+        }
     };
 
     // Read target PC from register (for RET, CALL_INDIRECT)

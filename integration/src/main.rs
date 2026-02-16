@@ -1161,11 +1161,10 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::allocate_frame_imm::<F>(9, 100), // Allocate new frame of size 100, x9 = new FP
-            wom::call::<F>(10, 11, 24, 9),        // Call to PC=24, FP=x9, save PC to x10, FP to x11
+            wom::call::<F>(10, 11, 20, 100), // Call to PC=20, FP offset=100, save PC→x10, FP→x11
             wom::add_imm::<F>(8, 0, 123_i16.into()), // x8 = 123 (after return) - this should NOT execute
             wom::reveal(8, 0),                       // wom::reveal x8 - this should NOT execute
-            wom::halt(),                             // Padding
-            // PC = 24 (function start)
+            // PC = 20 (function start)
             wom::const_32_imm(0, 0, 0),
             wom::reveal(10, 0), // wom::reveal x10 (should be 12, the return address)
             wom::halt(),        // End the test here, don't return
@@ -1181,13 +1180,12 @@ mod tests {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::allocate_frame_imm::<F>(1, 100), // Allocate a frame at x1 just so we have some room to work
-            wom::add_imm::<F>(12, 0, 32_i16.into()), // x12 = 32 (target PC)
-            wom::allocate_frame_imm::<F>(9, 100), // Allocate new frame of size 100, x9 = new FP
+            wom::add_imm::<F>(12, 0, 28_i16.into()), // x12 = 28 (target PC)
             wom::add_imm::<F>(11, 0, 999_i16.into()), // x11 = 999
-            wom::call_indirect::<F>(10, 11, 12, 9), // Call to PC=x12, FP=x9, save PC to x10, FP to x11
+            wom::call_indirect::<F>(10, 11, 12, 100), // Call to PC=x12, FP offset=100, save PC→x10, FP→x11
             wom::add_imm::<F>(8, 0, 456_i16.into()), // x8 = 456 (after return) - this should NOT execute
             wom::reveal(8, 0),                       // wom::reveal x8 - this should NOT execute
-            // PC = 32 (function start, where x12 points)
+            // PC = 28 (function start, where x12 points)
             wom::const_32_imm(0, 0, 0),
             wom::reveal(11, 0), // wom::reveal x11 (should be 0, the saved FP)
             wom::halt(),        // End the test here, don't return
@@ -1197,19 +1195,16 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_call_and_return() {
         // Test a complete call and return sequence
         // Note: When FP changes, register addressing changes too
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
             wom::add_imm::<F>(8, 0, 50_i16.into()), // x8 = 50 (at FP=0)
-            wom::allocate_frame_imm::<F>(9, 100),   // Allocate new frame of size 100, x9 = new FP
-            wom::call::<F>(10, 11, 28, 9),          // Call function at PC=28, FP=0
-            wom::reveal(8, 0),                      // wom::reveal x8 after return (should be 75)
+            wom::call::<F>(10, 11, 20, 100),        // Call function at PC=20, FP offset=100
+            wom::reveal(8, 0),                      // wom::reveal x8 after return (should be 50)
             wom::halt(),
-            wom::halt(), // Padding
-            // Function at PC = 28
+            // Function at PC = 20
             wom::const_32_imm(8, 1, 0), // x8 = 1 in new frame
             wom::ret::<F>(10, 11),      // Return using saved PC and FP
             wom::halt(),
@@ -1355,14 +1350,13 @@ mod tests {
     fn test_copy_into_frame_instruction() {
         // Test CALL into a new frame, compute value 42 there, reveal
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),              // PC=0
-            wom::add_imm::<F>(9, 0, 100_i16.into()), // PC=4: x9 = 100 (FP offset for new frame)
-            wom::call::<F>(10, 11, 16, 9),           // PC=8: CALL to PC=16, save PC→x10, FP→x11
-            wom::halt(),                             // PC=12: padding (skipped)
-            // New frame starts here (PC=16), FP = old_fp + 100
-            wom::add_imm::<F>(8, 0, 42_i16.into()), // PC=16: x8 = 42 in new frame
-            wom::reveal(8, 0),                      // PC=20: reveal x8 (should be 42)
-            wom::halt(),                            // PC=24: End
+            wom::const_32_imm(0, 0, 0),      // PC=0
+            wom::call::<F>(10, 11, 12, 100), // PC=4: CALL to PC=12, FP offset=100
+            wom::halt(),                     // PC=8: padding (skipped)
+            // New frame starts here (PC=12), FP = old_fp + 100
+            wom::add_imm::<F>(8, 0, 42_i16.into()), // PC=12: x8 = 42 in new frame
+            wom::reveal(8, 0),                      // PC=16: reveal x8 (should be 42)
+            wom::halt(),                            // PC=20: End
         ];
 
         run_vm_test("COPY_INTO_FRAME instruction", instructions, 42, None).unwrap()
@@ -1372,14 +1366,13 @@ mod tests {
     fn test_allocate_and_copy_sequence() {
         // Test CALL into new frame, compute 123 there, reveal
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),              // PC=0
-            wom::add_imm::<F>(9, 0, 100_i16.into()), // PC=4: x9 = 100 (FP offset for new frame)
-            wom::call::<F>(10, 11, 16, 9),           // PC=8: CALL to PC=16, save PC→x10, FP→x11
-            wom::halt(),                             // PC=12: padding (skipped)
-            // New frame starts here (PC=16), FP = old_fp + 100
-            wom::add_imm::<F>(8, 0, 123_i16.into()), // PC=16: x8 = 123 in new frame
-            wom::reveal(8, 0),                       // PC=20: reveal x8 (should be 123)
-            wom::halt(),                             // PC=24: End
+            wom::const_32_imm(0, 0, 0),      // PC=0
+            wom::call::<F>(10, 11, 12, 100), // PC=4: CALL to PC=12, FP offset=100
+            wom::halt(),                     // PC=8: padding (skipped)
+            // New frame starts here (PC=12), FP = old_fp + 100
+            wom::add_imm::<F>(8, 0, 123_i16.into()), // PC=12: x8 = 123 in new frame
+            wom::reveal(8, 0),                       // PC=16: reveal x8 (should be 123)
+            wom::halt(),                             // PC=20: End
         ];
 
         run_vm_test(
@@ -1726,16 +1719,15 @@ mod tests {
     fn test_input_hint_with_frame_jump_and_xor() {
         // CALL into a new frame, compute two values there, XOR them, reveal (170 ^ 204 = 102)
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),              // PC=0
-            wom::add_imm::<F>(9, 0, 100_i16.into()), // PC=4: r9 = 100 (FP offset)
-            wom::call::<F>(10, 11, 16, 9),           // PC=8: CALL to PC=16, save PC→r10, FP→r11
-            wom::halt(),                             // PC=12: padding (skipped)
-            // New frame starts here (PC=16), FP = old_fp + 100
-            wom::add_imm::<F>(2, 0, 170_i16.into()), // PC=16: r2 = 170
-            wom::add_imm::<F>(3, 0, 204_i16.into()), // PC=20: r3 = 204
-            wom::xor::<F>(4, 2, 3),                  // PC=24: r4 = 170 ^ 204 = 102
-            wom::reveal(4, 0),                       // PC=28: reveal r4
-            wom::halt(),                             // PC=32: End
+            wom::const_32_imm(0, 0, 0),      // PC=0
+            wom::call::<F>(10, 11, 12, 100), // PC=4: CALL to PC=12, FP offset=100
+            wom::halt(),                     // PC=8: padding (skipped)
+            // New frame starts here (PC=12), FP = old_fp + 100
+            wom::add_imm::<F>(2, 0, 170_i16.into()), // PC=12: r2 = 170
+            wom::add_imm::<F>(3, 0, 204_i16.into()), // PC=16: r3 = 204
+            wom::xor::<F>(4, 2, 3),                  // PC=20: r4 = 170 ^ 204 = 102
+            wom::reveal(4, 0),                       // PC=24: reveal r4
+            wom::halt(),                             // PC=28: End
         ];
 
         run_vm_test(

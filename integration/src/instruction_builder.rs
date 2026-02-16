@@ -354,12 +354,12 @@ pub fn ret<F: PrimeField32>(to_pc_reg: usize, to_fp_reg: usize) -> Instruction<F
 }
 
 /// CALL instruction: Call function (save PC and FP, jump to label)
-/// Saves current PC and FP, then sets PC from immediate and FP = current_FP + offset_from_register
+/// Saves current PC and FP, then sets PC from immediate and FP = current_FP + fp_offset
 pub fn call<F: PrimeField32>(
     save_pc: usize,
     save_fp: usize,
     to_pc_imm: usize,
-    fp_offset_reg: usize,
+    fp_offset: usize,
 ) -> Instruction<F> {
     Instruction::new(
         CallOpcode::CALL.global_opcode(),
@@ -367,30 +367,30 @@ pub fn call<F: PrimeField32>(
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_fp), // b: rd2 (save FP here)
         F::ZERO,                                                           // c: (not used)
         F::from_canonical_usize(to_pc_imm), // d: immediate for PC target
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * fp_offset_reg), // e: FP offset register
-        F::ZERO,                                                                 // f: (unused)
-        F::ZERO,                                                                 // g: (unused)
+        F::from_canonical_usize(fp_offset), // e: FP offset immediate
+        F::ZERO,                            // f: (unused)
+        F::ZERO,                            // g: (unused)
     )
 }
 
 /// CALL_INDIRECT instruction: Call function indirect (save PC and FP, jump to register)
-/// Saves current PC and FP, then sets PC from register and FP = current_FP + offset_from_register
+/// Saves current PC and FP, then sets PC from register and FP = current_FP + fp_offset
 #[allow(dead_code)]
 pub fn call_indirect<F: PrimeField32>(
     save_pc: usize,
     save_fp: usize,
     to_pc_reg: usize,
-    fp_offset_reg: usize,
+    fp_offset: usize,
 ) -> Instruction<F> {
     Instruction::new(
         CallOpcode::CALL_INDIRECT.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_pc),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_fp),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg),
-        F::ZERO, // d: immediate (not used)
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * fp_offset_reg),
-        F::ZERO, // f: (unused)
-        F::ZERO, // g: (unused)
+        F::ZERO,                            // d: immediate (not used)
+        F::from_canonical_usize(fp_offset), // e: FP offset immediate
+        F::ZERO,                            // f: (unused)
+        F::ZERO,                            // g: (unused)
     )
 }
 

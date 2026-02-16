@@ -1498,9 +1498,9 @@ mod tests {
 
         // CALL: Save PC and FP, jump to immediate PC with new FP, then compute in new frame.
         //
-        // Start at fp(20) (raw 80). reg[9] at abs 29 = 120 (FP offset: 80 + 120 = 200 → fp(50)).
+        // Start at fp(20) (raw 80). FP offset = 120 (immediate): 80 + 120 = 200 → fp(50).
         // Pre-populate new_frame[3] at abs 53 = 55.
-        // call(save_pc=10, save_fp=11, to_pc=12, fp_offset_reg=9)
+        // call(save_pc=10, save_fp=11, to_pc=12, fp_offset=120)
         //
         // Saves: return PC=4 → new_frame[10] (abs 60), old FP=80 → new_frame[11] (abs 61).
         // PC=12: add_imm new_frame[0] = new_frame[3] + 7 = 55 + 7 = 62
@@ -1508,16 +1508,15 @@ mod tests {
         // Verifies: saved PC/FP and post-call computation in the new frame.
         let spec = TestSpec {
             program: vec![
-                wom::call::<F>(10, 11, 12, 9), // PC=0: call to PC=12
-                wom::halt(),                   // PC=4: skipped (return would land here)
-                wom::halt(),                   // PC=8: skipped
+                wom::call::<F>(10, 11, 12, 120), // PC=0: call to PC=12, FP offset=120
+                wom::halt(),                     // PC=4: skipped (return would land here)
+                wom::halt(),                     // PC=8: skipped
                 wom::add_imm::<F>(0, 3, 7_i16.into()), // PC=12: new_frame[0] = new_frame[3]+7
-                                               // PC=16: halt (appended by test_spec)
+                                                 // PC=16: halt (appended by test_spec)
             ],
             start_fp: 20,
             start_registers: vec![
-                (29, 120), // reg[9] at fp(20): FP offset (old_fp 80 + 120 = 200)
-                (53, 55),  // new_frame[3] at abs 53: pre-populated
+                (53, 55), // new_frame[3] at abs 53: pre-populated
             ],
             expected_pc: Some(16),
             expected_fp: Some(50),
@@ -1537,9 +1536,10 @@ mod tests {
 
         // CALL_INDIRECT: Save PC and FP, jump to register PC with new FP, then compute.
         //
-        // Start at fp(20) (raw 80). reg[9] at abs 29 = 120 (FP offset), reg[12] at abs 32 = 12.
+        // Start at fp(20) (raw 80). FP offset = 120 (immediate): 80 + 120 = 200 → fp(50).
+        // reg[12] at abs 32 = 12 (target PC).
         // Pre-populate new_frame[3] at abs 53 = 55.
-        // call_indirect(save_pc=10, save_fp=11, to_pc_reg=12, fp_offset_reg=9)
+        // call_indirect(save_pc=10, save_fp=11, to_pc_reg=12, fp_offset=120)
         //
         // Saves: return PC=4 → abs 60, old FP=80 → abs 61.
         // PC=12: add_imm new_frame[0] = new_frame[3] + 7 = 55 + 7 = 62
@@ -1547,17 +1547,16 @@ mod tests {
         // Verifies: saved PC/FP and post-call computation, with PC from register.
         let spec = TestSpec {
             program: vec![
-                wom::call_indirect::<F>(10, 11, 12, 9), // PC=0: call indirect
-                wom::halt(),                            // PC=4: skipped
-                wom::halt(),                            // PC=8: skipped
-                wom::add_imm::<F>(0, 3, 7_i16.into()),  // PC=12: new_frame[0] = new_frame[3]+7
-                                                        // PC=16: halt (appended by test_spec)
+                wom::call_indirect::<F>(10, 11, 12, 120), // PC=0: call indirect, FP offset=120
+                wom::halt(),                              // PC=4: skipped
+                wom::halt(),                              // PC=8: skipped
+                wom::add_imm::<F>(0, 3, 7_i16.into()),    // PC=12: new_frame[0] = new_frame[3]+7
+                                                          // PC=16: halt (appended by test_spec)
             ],
             start_fp: 20,
             start_registers: vec![
-                (29, 120), // reg[9] at fp(20): FP offset (old_fp 80 + 120 = 200)
-                (32, 12),  // reg[12] at fp(20): target PC
-                (53, 55),  // new_frame[3] at abs 53: pre-populated
+                (32, 12), // reg[12] at fp(20): target PC
+                (53, 55), // new_frame[3] at abs 53: pre-populated
             ],
             expected_pc: Some(16),
             expected_fp: Some(50),
@@ -1578,9 +1577,9 @@ mod tests {
         // Complete call + return sequence with computation in both frames.
         //
         // Start at fp(20) (raw 80). caller_frame[5] (abs 25) = 100.
-        // reg[9] at abs 29 = 120 (FP offset: 80 + 120 = 200 → fp(50)).
+        // FP offset = 120 (immediate): 80 + 120 = 200 → fp(50).
         //
-        // PC=0:  CALL(save_pc=10, save_fp=11, to_pc=16, fp_offset_reg=9)
+        // PC=0:  CALL(save_pc=10, save_fp=11, to_pc=16, fp_offset=120)
         //        saves return PC=4 → abs 60, old FP=80 → abs 61
         //        jumps to PC=16, FP=200
         // PC=4:  (return lands here) add_imm caller[0] = caller[5] + 1 = 101
@@ -1593,7 +1592,7 @@ mod tests {
         // Verifies: round-trip call/return, computation in both frames persists.
         let spec = TestSpec {
             program: vec![
-                wom::call::<F>(10, 11, 16, 9),          // PC=0: call to PC=16
+                wom::call::<F>(10, 11, 16, 120), // PC=0: call to PC=16, FP offset=120
                 wom::add_imm::<F>(0, 5, 1_i16.into()), // PC=4: caller[0] = caller[5]+1 (after return)
                 wom::halt(),                           // PC=8: halt after return
                 wom::halt(),                           // PC=12: padding
@@ -1602,7 +1601,6 @@ mod tests {
             ],
             start_fp: 20,
             start_registers: vec![
-                (29, 120), // reg[9] at fp(20): FP offset (old_fp 80 + 120 = 200)
                 (25, 100), // caller_frame[5] at abs 25
             ],
             expected_pc: Some(8),
