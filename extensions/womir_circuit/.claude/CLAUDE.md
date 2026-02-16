@@ -26,7 +26,7 @@ Understand the opcode → chip mapping:
 extensions/transpiler/src/instructions.rs
 
 Check WOMIR instruction semantics:
-`<womir>/src/interpreter.rs`
+`<womir>/src/interpreter/mod.rs`
 
 **2. Find relevant RISC-V chips** in OpenVM to reuse or learn from. Read the opcode reference:
 `<openvm>/extensions/rv32im/transpiler/src/instructions.rs`
@@ -49,7 +49,7 @@ Look for related chips too (e.g., for comparison logic, check both `less_than/` 
 Compare adapters: `<openvm>/extensions/rv32im/circuit/src/adapters/alu.rs` vs `src/adapters/alu.rs`
 
 **5. Make sure your changes are tested**:
-There should be an single instruction test in `integration/src/isolated_tests.rs` that covers the new instruction(s). Add more if needed. It might also exist but marked as should_panic if the instruction was not previously implemented; remove the should_panic.
+There should be a single instruction test in `integration/src/isolated_tests.rs` that covers the new instruction(s). Add more if needed. There might also be relevant tests in `integration/src/main.rs` marked as should_panic if the instruction was not previously implemented; remove the should_panic. There is also a snapshot test in `extensions/womir_circuit/tests/machine_extraction.rs`. If it fails, it'll print instructions on how to update the snapshot.
 
 **Key differences from RISC-V:** registers are frame-pointer-relative; no AOT/TCO/CUDA support needed.
 
