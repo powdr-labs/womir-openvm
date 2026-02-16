@@ -15,6 +15,7 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
     SharedBitwiseOperationLookupChip,
 };
 use openvm_instructions::LocalOpcode;
+use openvm_instructions::PhantomDiscriminant;
 use openvm_rv32im_circuit::{
     BaseAluCoreAir, BaseAluFiller, LessThanCoreAir, LessThanFiller, LoadSignExtendCoreAir,
     LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller,
@@ -26,8 +27,8 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, JumpOpcode, LessThan64Opcode, LessThanOpcode,
-    LoadStoreOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, HintStoreOpcode, JumpOpcode, LessThan64Opcode,
+    LessThanOpcode, LoadStoreOpcode, Phantom,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -38,6 +39,8 @@ use crate::{
     adapters::*, const32::Const32Executor, load_sign_extend::execution::LoadSignExtendExecutor,
     loadstore::execution::LoadStoreExecutor, *,
 };
+
+mod phantom;
 
 pub use self::WomirCpuProverExt as WomirProverExt;
 
@@ -83,6 +86,7 @@ pub enum WomirExecutor {
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     Jump(JumpExecutor),
     Const32(Const32Executor),
+    HintStore(Rv32HintStoreExecutor),
 }
 
 // ============ VmExtension Implementations ============
@@ -149,6 +153,31 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
 
         let const32 = Const32Executor::new(ConstOpcodes::CLASS_OFFSET);
         inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
+
+        let hint_store =
+            Rv32HintStoreExecutor::new(pointer_max_bits, HintStoreOpcode::CLASS_OFFSET);
+        inventory.add_executor(
+            hint_store,
+            HintStoreOpcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        // Register phantom sub-executors for hint stream operations
+        inventory.add_phantom_sub_executor(
+            phantom::HintInputSubEx,
+            PhantomDiscriminant(Phantom::HintInput as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            phantom::PrintStrSubEx,
+            PhantomDiscriminant(Phantom::PrintStr as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            phantom::HintRandomSubEx,
+            PhantomDiscriminant(Phantom::HintRandom as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            phantom::HintLoadByKeySubEx,
+            PhantomDiscriminant(Phantom::HintLoadByKey as u16),
+        )?;
 
         Ok(())
     }
@@ -238,6 +267,15 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             memory_bridge,
         );
         inventory.add_air(const32);
+
+        let hint_store = Rv32HintStoreAir::new(
+            exec_bridge,
+            memory_bridge,
+            bitwise_lu,
+            HintStoreOpcode::CLASS_OFFSET,
+            pointer_max_bits,
+        );
+        inventory.add_air(hint_store);
 
         Ok(())
     }
@@ -354,8 +392,16 @@ where
         inventory.add_executor_chip(jump);
 
         inventory.next_air::<Const32Air>()?;
-        let const32 = Const32Chip::new(Const32Filler::new(bitwise_lu.clone()), mem_helper);
+        let const32 = Const32Chip::new(Const32Filler::new(bitwise_lu.clone()), mem_helper.clone());
         inventory.add_executor_chip(const32);
+
+        inventory.next_air::<Rv32HintStoreAir>()?;
+        let hint_store = Rv32HintStoreChip::new(
+            Rv32HintStoreFiller::new(pointer_max_bits, bitwise_lu),
+            mem_helper,
+        );
+        inventory.add_executor_chip(hint_store);
+
         Ok(())
     }
 }

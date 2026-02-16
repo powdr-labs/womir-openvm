@@ -36,6 +36,9 @@ pub use less_than::*;
 pub use load_sign_extend::*;
 pub use loadstore::*;
 
+mod hintstore;
+pub use hintstore::*;
+
 mod extension;
 pub use extension::*;
 
