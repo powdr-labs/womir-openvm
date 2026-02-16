@@ -1196,6 +1196,108 @@ mod tests {
         test_spec(spec)
     }
 
+    // ==================== Jump Tests ====================
+
+    #[test]
+    fn test_jump() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![
+                wom::jump::<F>(8),
+                wom::halt(), // Should be skipped!
+            ],
+            expected_pc: Some(8),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_jump_if_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![
+                wom::jump_if::<F>(2, 8),
+                wom::halt(), // Should be skipped!
+            ],
+            start_fp: 10,
+            start_registers: vec![(12, 5)], // Should jump
+            expected_pc: Some(8),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_jump_if_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::jump_if::<F>(2, 8)],
+            start_fp: 10,
+            start_registers: vec![(12, 0)], // Should not jump
+            expected_pc: Some(4),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_jump_if_zero_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![
+                wom::jump_if_zero::<F>(2, 8),
+                wom::halt(), // Should be skipped!
+            ],
+            start_fp: 10,
+            start_registers: vec![(12, 0)], // Should jump
+            expected_pc: Some(8),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_jump_if_zero_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::jump_if_zero::<F>(2, 2)],
+            start_fp: 10,
+            start_registers: vec![(12, 5)], // Should not jump
+            expected_pc: Some(4),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_skip() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![
+                wom::skip::<F>(2),
+                wom::halt(), // Should be skipped!
+            ],
+            start_fp: 10,
+            start_registers: vec![(12, 2)],
+            expected_pc: Some(8),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
     // ==================== Const32 Tests ====================
 
     #[test]
