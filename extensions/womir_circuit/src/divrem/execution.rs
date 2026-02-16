@@ -308,7 +308,7 @@ unsafe fn execute_e12_impl<
 
 #[create_handler]
 #[inline(always)]
-unsafe fn execute_e1_impl<
+fn execute_e1_impl<
     F: PrimeField32,
     CTX: ExecutionCtxTrait,
     const OPCODE: u8,
@@ -326,7 +326,7 @@ unsafe fn execute_e1_impl<
 
 #[create_handler]
 #[inline(always)]
-unsafe fn execute_e2_impl<
+fn execute_e2_impl<
     F: PrimeField32,
     CTX: MeteredExecutionCtxTrait,
     const OPCODE: u8,
