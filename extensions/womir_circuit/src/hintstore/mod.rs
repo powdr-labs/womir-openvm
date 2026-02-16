@@ -3,12 +3,12 @@ use std::borrow::{Borrow, BorrowMut};
 use openvm_circuit::{
     arch::*,
     system::memory::{
+        MemoryAddress, MemoryAuxColsFactory,
         offline_checker::{
             MemoryBridge, MemoryReadAuxCols, MemoryReadAuxRecord, MemoryWriteAuxCols,
             MemoryWriteBytesAuxRecord,
         },
         online::TracingMemory,
-        MemoryAddress, MemoryAuxColsFactory,
     },
 };
 use openvm_circuit_primitives::{
@@ -17,36 +17,30 @@ use openvm_circuit_primitives::{
 };
 use openvm_circuit_primitives_derive::{AlignedBorrow, AlignedBytesBorrow};
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_CELL_BITS, RV32_MEMORY_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
-    LocalOpcode,
-};
-use openvm_rv32im_transpiler::{
-    Rv32HintStoreOpcode,
-    Rv32HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
 };
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{Air, AirBuilder, BaseAir},
     p3_field::{Field, FieldAlgebra, PrimeField32},
-    p3_matrix::{dense::RowMajorMatrix, Matrix},
+    p3_matrix::{Matrix, dense::RowMajorMatrix},
     p3_maybe_rayon::prelude::*,
     rap::{BaseAirWithPublicValues, ColumnsAir, PartitionedBaseAir},
 };
+use openvm_womir_transpiler::{
+    HintStoreOpcode,
+    HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
+};
 
-use crate::adapters::{read_rv32_register, tracing_read, tracing_write};
+use crate::adapters::{read_rv32_register, tracing_read, tracing_read_fp, tracing_write};
+use crate::execution::ExecutionState;
+use crate::memory_config::FP_AS;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 mod execution;
-
-#[cfg(feature = "cuda")]
-mod cuda;
-#[cfg(feature = "cuda")]
-pub use cuda::*;
-
-#[cfg(test)]
-mod tests;
 
 #[repr(C)]
 #[derive(AlignedBorrow, Debug, StructReflection)]
@@ -58,6 +52,7 @@ pub struct Rv32HintStoreCols<T> {
     pub rem_words_limbs: [T; RV32_REGISTER_NUM_LIMBS],
 
     pub from_state: ExecutionState<T>,
+    pub fp_read_aux: MemoryReadAuxCols<T>,
     pub mem_ptr_ptr: T,
     pub mem_ptr_limbs: [T; RV32_REGISTER_NUM_LIMBS],
     pub mem_ptr_aux_cols: MemoryReadAuxCols<T>,
@@ -154,12 +149,22 @@ impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
             .when_first_row()
             .assert_one(not::<AB::Expr>(local_cols.is_buffer) + local_cols.is_buffer_start);
 
+        // read fp
+        self.memory_bridge
+            .read(
+                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                [local_cols.from_state.fp],
+                timestamp_pp(),
+                &local_cols.fp_read_aux,
+            )
+            .eval(builder, is_start.clone());
+
         // read mem_ptr
         self.memory_bridge
             .read(
                 MemoryAddress::new(
                     AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.mem_ptr_ptr,
+                    local_cols.mem_ptr_ptr + local_cols.from_state.fp,
                 ),
                 local_cols.mem_ptr_limbs,
                 timestamp_pp(),
@@ -172,7 +177,7 @@ impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
             .read(
                 MemoryAddress::new(
                     AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.num_words_ptr,
+                    local_cols.num_words_ptr + local_cols.from_state.fp,
                 ),
                 local_cols.rem_words_limbs,
                 timestamp_pp(),
@@ -204,7 +209,7 @@ impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
                     AB::Expr::from_canonical_u32(RV32_REGISTER_AS),
                     AB::Expr::from_canonical_u32(RV32_MEMORY_AS),
                 ],
-                local_cols.from_state,
+                local_cols.from_state.into(),
                 rem_words.clone() * AB::F::from_canonical_usize(timestamp_delta),
             )
             .eval(builder, is_start.clone());
@@ -292,6 +297,9 @@ pub struct Rv32HintStoreRecordHeader {
 
     pub from_pc: u32,
     pub timestamp: u32,
+
+    pub fp: u32,
+    pub fp_read_aux: MemoryReadAuxRecord,
 
     pub mem_ptr_ptr: u32,
     pub mem_ptr: u32,
@@ -407,13 +415,15 @@ where
         debug_assert_eq!(d.as_canonical_u32(), RV32_REGISTER_AS);
         debug_assert_eq!(e.as_canonical_u32(), RV32_MEMORY_AS);
 
-        let local_opcode = Rv32HintStoreOpcode::from_usize(opcode.local_opcode_idx(self.offset));
+        let local_opcode = HintStoreOpcode::from_usize(opcode.local_opcode_idx(self.offset));
 
-        // We do untraced read of `num_words` in order to allocate the record first
+        // We do untraced read of FP and `num_words` in order to allocate the record first
+        use crate::memory_config::FpMemory;
+        let fp = state.memory.data().fp::<F>();
         let num_words = if local_opcode == HINT_STOREW {
             1
         } else {
-            read_rv32_register(state.memory.data(), a)
+            read_rv32_register(state.memory.data(), a + fp)
         };
 
         let record = state.ctx.alloc(MultiRowLayout::new(Rv32HintStoreMetadata {
@@ -422,12 +432,17 @@ where
 
         record.inner.from_pc = *state.pc;
         record.inner.timestamp = state.memory.timestamp;
+
+        // Traced read of FP
+        record.inner.fp =
+            tracing_read_fp::<F>(state.memory, &mut record.inner.fp_read_aux.prev_timestamp);
+
         record.inner.mem_ptr_ptr = b;
 
         record.inner.mem_ptr = u32::from_le_bytes(tracing_read(
             state.memory,
             RV32_REGISTER_AS,
-            b,
+            b + record.inner.fp,
             &mut record.inner.mem_ptr_aux_record.prev_timestamp,
         ));
 
@@ -444,7 +459,7 @@ where
             tracing_read::<RV32_REGISTER_NUM_LIMBS>(
                 state.memory,
                 RV32_REGISTER_AS,
-                record.inner.num_words_ptr,
+                record.inner.num_words_ptr + record.inner.fp,
                 &mut record.inner.num_words_read.prev_timestamp,
             );
         };
@@ -455,6 +470,7 @@ where
 
         for idx in 0..(num_words as usize) {
             if idx != 0 {
+                state.memory.increment_timestamp();
                 state.memory.increment_timestamp();
                 state.memory.increment_timestamp();
             }
@@ -538,7 +554,7 @@ impl<F: PrimeField32> TraceFiller<F> for Rv32HintStoreFiller {
                     (num_words >> msl_rshift) << msl_lshift,
                 );
 
-                let mut timestamp = record.inner.timestamp + num_words * 3;
+                let mut timestamp = record.inner.timestamp + num_words * 4;
                 let mut mem_ptr = record.inner.mem_ptr + num_words * RV32_REGISTER_NUM_LIMBS as u32;
 
                 // Assuming that `num_words` is usually small (e.g. 1 for `HINT_STOREW`)
@@ -556,11 +572,11 @@ impl<F: PrimeField32> TraceFiller<F> for Rv32HintStoreFiller {
 
                         let cols: &mut Rv32HintStoreCols<F> = row.borrow_mut();
                         let is_single = record.inner.num_words_ptr == u32::MAX;
-                        timestamp -= 3;
+                        timestamp -= 4;
                         if idx == 0 && !is_single {
                             mem_helper.fill(
                                 record.inner.num_words_read.prev_timestamp,
-                                timestamp + 1,
+                                timestamp + 2,
                                 cols.num_words_aux_cols.as_mut(),
                             );
                             cols.num_words_ptr = F::from_canonical_u32(record.inner.num_words_ptr);
@@ -581,18 +597,24 @@ impl<F: PrimeField32> TraceFiller<F> for Rv32HintStoreFiller {
                         );
                         mem_helper.fill(
                             var.data_write_aux.prev_timestamp,
-                            timestamp + 2,
+                            timestamp + 3,
                             cols.write_aux.as_mut(),
                         );
 
                         if idx == 0 {
                             mem_helper.fill(
                                 record.inner.mem_ptr_aux_record.prev_timestamp,
-                                timestamp,
+                                timestamp + 1,
                                 cols.mem_ptr_aux_cols.as_mut(),
+                            );
+                            mem_helper.fill(
+                                record.inner.fp_read_aux.prev_timestamp,
+                                timestamp,
+                                cols.fp_read_aux.as_mut(),
                             );
                         } else {
                             mem_helper.fill_zero(cols.mem_ptr_aux_cols.as_mut());
+                            mem_helper.fill_zero(cols.fp_read_aux.as_mut());
                         }
 
                         mem_ptr -= RV32_REGISTER_NUM_LIMBS as u32;
@@ -601,6 +623,7 @@ impl<F: PrimeField32> TraceFiller<F> for Rv32HintStoreFiller {
 
                         cols.from_state.timestamp = F::from_canonical_u32(timestamp);
                         cols.from_state.pc = F::from_canonical_u32(record.inner.from_pc);
+                        cols.from_state.fp = F::from_canonical_u32(record.inner.fp);
 
                         cols.rem_words_limbs = (num_words - idx as u32)
                             .to_le_bytes()
