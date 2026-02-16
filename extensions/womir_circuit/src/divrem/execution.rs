@@ -104,14 +104,10 @@ impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> DivRemExecutor<A, NUM_LI
 macro_rules! dispatch {
     ($execute_impl:ident, $local_opcode:ident, $num_limbs:expr) => {
         match $local_opcode {
-            DivRemOpcode::DIV => Ok($execute_impl::<_, _, { DivRemOpcode::DIV as u8 }, $num_limbs>),
-            DivRemOpcode::DIVU => {
-                Ok($execute_impl::<_, _, { DivRemOpcode::DIVU as u8 }, $num_limbs>)
-            }
-            DivRemOpcode::REM => Ok($execute_impl::<_, _, { DivRemOpcode::REM as u8 }, $num_limbs>),
-            DivRemOpcode::REMU => {
-                Ok($execute_impl::<_, _, { DivRemOpcode::REMU as u8 }, $num_limbs>)
-            }
+            DivRemOpcode::DIV => Ok($execute_impl::<_, _, DivOp, $num_limbs>),
+            DivRemOpcode::DIVU => Ok($execute_impl::<_, _, DivuOp, $num_limbs>),
+            DivRemOpcode::REM => Ok($execute_impl::<_, _, RemOp, $num_limbs>),
+            DivRemOpcode::REMU => Ok($execute_impl::<_, _, RemuOp, $num_limbs>),
         }
     };
 }
@@ -120,6 +116,10 @@ impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F
     for DivRemExecutor<A, NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
+    DivOp: DivRemOp<NUM_LIMBS>,
+    DivuOp: DivRemOp<NUM_LIMBS>,
+    RemOp: DivRemOp<NUM_LIMBS>,
+    RemuOp: DivRemOp<NUM_LIMBS>,
 {
     #[inline(always)]
     fn pre_compute_size(&self) -> usize {
@@ -147,6 +147,10 @@ impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterMeteredExe
     for DivRemExecutor<A, NUM_LIMBS, LIMB_BITS>
 where
     F: PrimeField32,
+    DivOp: DivRemOp<NUM_LIMBS>,
+    DivuOp: DivRemOp<NUM_LIMBS>,
+    RemOp: DivRemOp<NUM_LIMBS>,
+    RemuOp: DivRemOp<NUM_LIMBS>,
 {
     #[inline(always)]
     fn metered_pre_compute_size(&self) -> usize {
@@ -172,116 +176,114 @@ where
     }
 }
 
-/// Two's complement negate of a byte array.
-#[inline(always)]
-fn negate_bytes<const N: usize>(x: &[u8; N]) -> [u8; N] {
-    let mut carry = 1u16;
-    std::array::from_fn(|i| {
-        let val = (!x[i]) as u16 + carry;
-        carry = val >> 8;
-        (val & 0xFF) as u8
-    })
+// ==================== DivRem operation trait ====================
+
+trait DivRemOp<const NUM_LIMBS: usize> {
+    fn compute(rs1: [u8; NUM_LIMBS], rs2: [u8; NUM_LIMBS]) -> [u8; NUM_LIMBS];
 }
 
-/// Check if a two's complement byte array is negative (MSB of last byte set).
-#[inline(always)]
-fn is_negative<const N: usize>(x: &[u8; N]) -> bool {
-    x[N - 1] & 0x80 != 0
-}
+struct DivOp;
+struct DivuOp;
+struct RemOp;
+struct RemuOp;
 
-/// Check if a byte array is zero.
-#[inline(always)]
-fn is_zero<const N: usize>(x: &[u8; N]) -> bool {
-    x.iter().all(|&b| b == 0)
-}
-
-/// Check if a byte array equals the minimum signed value (0x80, 0x00, ..., 0x00).
-#[inline(always)]
-fn is_signed_min<const N: usize>(x: &[u8; N]) -> bool {
-    x[N - 1] == 0x80 && x[..N - 1].iter().all(|&b| b == 0)
-}
-
-/// Unsigned division of byte arrays using schoolbook algorithm.
-/// Returns (quotient, remainder).
-#[inline(always)]
-fn unsigned_divrem<const N: usize>(a: &[u8; N], b: &[u8; N]) -> ([u8; N], [u8; N]) {
-    // Simple implementation: convert to BigUint
-    use num_bigint::BigUint;
-
-    let a_big = BigUint::from_bytes_le(a);
-    let b_big = BigUint::from_bytes_le(b);
-
-    let q_big = &a_big / &b_big;
-    let r_big = &a_big % &b_big;
-
-    let mut q = [0u8; N];
-    let q_bytes = q_big.to_bytes_le();
-    q[..q_bytes.len().min(N)].copy_from_slice(&q_bytes[..q_bytes.len().min(N)]);
-
-    let mut r = [0u8; N];
-    let r_bytes = r_big.to_bytes_le();
-    r[..r_bytes.len().min(N)].copy_from_slice(&r_bytes[..r_bytes.len().min(N)]);
-
-    (q, r)
-}
-
-/// Compute DivRem result for a given opcode.
-/// RISC-V semantics: division by zero returns all-ones for div, dividend for rem.
-/// Signed overflow (MIN / -1) returns MIN for div, 0 for rem.
-#[inline(always)]
-fn compute_divrem<const OPCODE: u8, const NUM_LIMBS: usize>(
-    rs1: &[u8; NUM_LIMBS],
-    rs2: &[u8; NUM_LIMBS],
-) -> [u8; NUM_LIMBS] {
-    match OPCODE {
-        x if x == DivRemOpcode::DIV as u8 => {
-            // Signed division
-            if is_zero(rs2) {
-                return [0xFF; NUM_LIMBS]; // All ones
-            }
-            if is_signed_min(rs1) && rs2.iter().all(|&b| b == 0xFF) {
-                return *rs1; // MIN / -1 = MIN (overflow)
-            }
-            let a_neg = is_negative(rs1);
-            let b_neg = is_negative(rs2);
-            let a_abs = if a_neg { negate_bytes(rs1) } else { *rs1 };
-            let b_abs = if b_neg { negate_bytes(rs2) } else { *rs2 };
-            let (q, _) = unsigned_divrem(&a_abs, &b_abs);
-            if a_neg ^ b_neg { negate_bytes(&q) } else { q }
+impl DivRemOp<4> for DivOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
+        let rs1 = i32::from_le_bytes(rs1);
+        let rs2 = i32::from_le_bytes(rs2);
+        match (rs1, rs2) {
+            (_, 0) => [u8::MAX; 4],
+            (i32::MIN, -1) => i32::MIN.to_le_bytes(),
+            _ => (rs1 / rs2).to_le_bytes(),
         }
-        x if x == DivRemOpcode::DIVU as u8 => {
-            // Unsigned division
-            if is_zero(rs2) {
-                return [0xFF; NUM_LIMBS]; // All ones
-            }
-            let (q, _) = unsigned_divrem(rs1, rs2);
-            q
+    }
+}
+
+impl DivRemOp<8> for DivOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
+        let rs1 = i64::from_le_bytes(rs1);
+        let rs2 = i64::from_le_bytes(rs2);
+        match (rs1, rs2) {
+            (_, 0) => [u8::MAX; 8],
+            (i64::MIN, -1) => i64::MIN.to_le_bytes(),
+            _ => (rs1 / rs2).to_le_bytes(),
         }
-        x if x == DivRemOpcode::REM as u8 => {
-            // Signed remainder
-            if is_zero(rs2) {
-                return *rs1; // Dividend
-            }
-            if is_signed_min(rs1) && rs2.iter().all(|&b| b == 0xFF) {
-                return [0; NUM_LIMBS]; // MIN % -1 = 0
-            }
-            let a_neg = is_negative(rs1);
-            let b_neg = is_negative(rs2);
-            let a_abs = if a_neg { negate_bytes(rs1) } else { *rs1 };
-            let b_abs = if b_neg { negate_bytes(rs2) } else { *rs2 };
-            let (_, r) = unsigned_divrem(&a_abs, &b_abs);
-            // Remainder has sign of dividend
-            if a_neg { negate_bytes(&r) } else { r }
+    }
+}
+
+impl DivRemOp<4> for DivuOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
+        let rs1 = u32::from_le_bytes(rs1);
+        let rs2 = u32::from_le_bytes(rs2);
+        match rs2 {
+            0 => [u8::MAX; 4],
+            _ => (rs1 / rs2).to_le_bytes(),
         }
-        x if x == DivRemOpcode::REMU as u8 => {
-            // Unsigned remainder
-            if is_zero(rs2) {
-                return *rs1; // Dividend
-            }
-            let (_, r) = unsigned_divrem(rs1, rs2);
-            r
+    }
+}
+
+impl DivRemOp<8> for DivuOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
+        let rs1 = u64::from_le_bytes(rs1);
+        let rs2 = u64::from_le_bytes(rs2);
+        match rs2 {
+            0 => [u8::MAX; 8],
+            _ => (rs1 / rs2).to_le_bytes(),
         }
-        _ => unreachable!(),
+    }
+}
+
+impl DivRemOp<4> for RemOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
+        let rs1 = i32::from_le_bytes(rs1);
+        let rs2 = i32::from_le_bytes(rs2);
+        match (rs1, rs2) {
+            (_, 0) => rs1.to_le_bytes(),
+            (i32::MIN, -1) => 0i32.to_le_bytes(),
+            _ => (rs1 % rs2).to_le_bytes(),
+        }
+    }
+}
+
+impl DivRemOp<8> for RemOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
+        let rs1 = i64::from_le_bytes(rs1);
+        let rs2 = i64::from_le_bytes(rs2);
+        match (rs1, rs2) {
+            (_, 0) => rs1.to_le_bytes(),
+            (i64::MIN, -1) => 0i64.to_le_bytes(),
+            _ => (rs1 % rs2).to_le_bytes(),
+        }
+    }
+}
+
+impl DivRemOp<4> for RemuOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
+        let rs1 = u32::from_le_bytes(rs1);
+        let rs2 = u32::from_le_bytes(rs2);
+        match rs2 {
+            0 => rs1.to_le_bytes(),
+            _ => (rs1 % rs2).to_le_bytes(),
+        }
+    }
+}
+
+impl DivRemOp<8> for RemuOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
+        let rs1 = u64::from_le_bytes(rs1);
+        let rs2 = u64::from_le_bytes(rs2);
+        match rs2 {
+            0 => rs1.to_le_bytes(),
+            _ => (rs1 % rs2).to_le_bytes(),
+        }
     }
 }
 
@@ -289,7 +291,7 @@ fn compute_divrem<const OPCODE: u8, const NUM_LIMBS: usize>(
 unsafe fn execute_e12_impl<
     F: PrimeField32,
     CTX: ExecutionCtxTrait,
-    const OPCODE: u8,
+    OP: DivRemOp<NUM_LIMBS>,
     const NUM_LIMBS: usize,
 >(
     pre_compute: &DivRemPreCompute,
@@ -299,7 +301,7 @@ unsafe fn execute_e12_impl<
     let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
     let rs2 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.c as u32));
 
-    let rd = compute_divrem::<OPCODE, NUM_LIMBS>(&rs1, &rs2);
+    let rd = OP::compute(rs1, rs2);
 
     exec_state.vm_write(RV32_REGISTER_AS, fp + (pre_compute.a as u32), &rd);
     let pc = exec_state.pc();
@@ -311,7 +313,7 @@ unsafe fn execute_e12_impl<
 fn execute_e1_impl<
     F: PrimeField32,
     CTX: ExecutionCtxTrait,
-    const OPCODE: u8,
+    OP: DivRemOp<NUM_LIMBS>,
     const NUM_LIMBS: usize,
 >(
     pre_compute: *const u8,
@@ -320,7 +322,7 @@ fn execute_e1_impl<
     unsafe {
         let pre_compute: &DivRemPreCompute =
             std::slice::from_raw_parts(pre_compute, size_of::<DivRemPreCompute>()).borrow();
-        execute_e12_impl::<F, CTX, OPCODE, NUM_LIMBS>(pre_compute, exec_state);
+        execute_e12_impl::<F, CTX, OP, NUM_LIMBS>(pre_compute, exec_state);
     }
 }
 
@@ -329,7 +331,7 @@ fn execute_e1_impl<
 fn execute_e2_impl<
     F: PrimeField32,
     CTX: MeteredExecutionCtxTrait,
-    const OPCODE: u8,
+    OP: DivRemOp<NUM_LIMBS>,
     const NUM_LIMBS: usize,
 >(
     pre_compute: *const u8,
@@ -342,6 +344,6 @@ fn execute_e2_impl<
         exec_state
             .ctx
             .on_height_change(pre_compute.chip_idx as usize, 1);
-        execute_e12_impl::<F, CTX, OPCODE, NUM_LIMBS>(&pre_compute.data, exec_state);
+        execute_e12_impl::<F, CTX, OP, NUM_LIMBS>(&pre_compute.data, exec_state);
     }
 }
