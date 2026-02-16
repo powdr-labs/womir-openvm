@@ -1416,7 +1416,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1432,7 +1432,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1448,7 +1448,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1464,7 +1464,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1481,7 +1481,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1497,7 +1497,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1513,7 +1513,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1529,7 +1529,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== DivRem 64-bit Tests ====================
@@ -1552,7 +1552,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1573,7 +1573,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1594,7 +1594,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1615,7 +1615,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1638,7 +1638,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== DivRem High Register Index Tests (>300) ====================
@@ -1655,7 +1655,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1670,7 +1670,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1685,7 +1685,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1700,7 +1700,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1715,91 +1715,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
-    }
-
-    // ==================== DivRem 64-bit High Register Index Tests (>300) ====================
-
-    #[test]
-    fn test_div_64_high_register_indices() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 0x0000_0001_0000_0000 / 0x0000_0000_0000_0002 = 0x0000_0000_8000_0000
-        let spec = TestSpec {
-            program: vec![wom::div_64::<F>(304, 300, 302)],
-            start_registers: vec![
-                (300, 0),
-                (301, 1), // reg 300 = 0x1_0000_0000
-                (302, 2),
-                (303, 0), // reg 302 = 2
-            ],
-            expected_registers: vec![(304, 0x8000_0000), (305, 0)],
-            ..Default::default()
-        };
-
-        test_spec(spec)
-    }
-
-    #[test]
-    fn test_divu_64_high_register_indices() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 0xFFFF_FFFF_FFFF_FFFF / 2 = 0x7FFF_FFFF_FFFF_FFFF
-        let spec = TestSpec {
-            program: vec![wom::divu_64::<F>(304, 300, 302)],
-            start_registers: vec![
-                (300, 0xFFFF_FFFF),
-                (301, 0xFFFF_FFFF), // reg 300 = u64::MAX
-                (302, 2),
-                (303, 0), // reg 302 = 2
-            ],
-            expected_registers: vec![(304, 0xFFFF_FFFF), (305, 0x7FFF_FFFF)],
-            ..Default::default()
-        };
-
-        test_spec(spec)
-    }
-
-    #[test]
-    fn test_rems_64_high_register_indices() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // -43 % 7 = -1 (64-bit signed)
-        // -43 as i64 = 0xFFFF_FFFF_FFFF_FFD5
-        // -1 as i64 = 0xFFFF_FFFF_FFFF_FFFF
-        let spec = TestSpec {
-            program: vec![wom::rems_64::<F>(304, 300, 302)],
-            start_registers: vec![
-                (300, 0xFFFF_FFD5),
-                (301, 0xFFFF_FFFF), // reg 300 = -43 as i64
-                (302, 7),
-                (303, 0), // reg 302 = 7
-            ],
-            expected_registers: vec![(304, 0xFFFF_FFFF), (305, 0xFFFF_FFFF)],
-            ..Default::default()
-        };
-
-        test_spec(spec)
-    }
-
-    #[test]
-    fn test_remu_64_high_register_indices() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 4294967297 % 3 = 2
-        let spec = TestSpec {
-            program: vec![wom::remu_64::<F>(304, 300, 302)],
-            start_registers: vec![
-                (300, 1),
-                (301, 1), // reg 300 = 0x1_0000_0001 = 4294967297
-                (302, 3),
-                (303, 0), // reg 302 = 3
-            ],
-            expected_registers: vec![(304, 2), (305, 0)],
-            ..Default::default()
-        };
-
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Cross-width tests ====================
