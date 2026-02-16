@@ -730,6 +730,158 @@ mod tests {
         test_spec(spec)
     }
 
+    // ==================== LessThan Tests ====================
+
+    #[test]
+    fn test_lt_u_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] < reg[fp+1]) unsigned
+        // 10 < 20 = 1
+        let spec = TestSpec {
+            program: vec![wom::lt_u::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 10), (11, 20)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_u_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] < reg[fp+1]) unsigned
+        // 20 < 10 = 0
+        let spec = TestSpec {
+            program: vec![wom::lt_u::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 20), (11, 10)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_u_equal() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] < reg[fp+1]) unsigned
+        // 42 < 42 = 0
+        let spec = TestSpec {
+            program: vec![wom::lt_u::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 42)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_s_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] < reg[fp+1]) signed
+        // -1 (0xFFFFFFFF) < 1 = 1 (signed)
+        let spec = TestSpec {
+            program: vec![wom::lt_s::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0xFFFFFFFF), (11, 1)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_u_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = (reg[fp+0] < 100) unsigned
+        // 50 < 100 = 1
+        let spec = TestSpec {
+            program: vec![wom::lt_u_imm::<F>(1, 0, 100_i16.into())],
+            start_fp: 10,
+            start_registers: vec![(10, 50)],
+            expected_registers: vec![(11, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== LessThan64 Tests ====================
+
+    #[test]
+    fn test_lt_u_64_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0000 < 0x0000_0002_0000_0000 = 1 (unsigned)
+        let spec = TestSpec {
+            program: vec![wom::lt_u_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x0000_0001_0000_0000
+                (126, 0),
+                (127, 2), // reg 2 = 0x0000_0002_0000_0000
+            ],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_u_64_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0002_0000_0000 < 0x0000_0001_0000_0000 = 0 (unsigned)
+        let spec = TestSpec {
+            program: vec![wom::lt_u_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 2), // reg 0 = 0x0000_0002_0000_0000
+                (126, 0),
+                (127, 1), // reg 2 = 0x0000_0001_0000_0000
+            ],
+            expected_registers: vec![(128, 0), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_s_64_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // -1 (0xFFFF_FFFF_FFFF_FFFF) < 1 (0x0000_0000_0000_0001) = 1 (signed)
+        let spec = TestSpec {
+            program: vec![wom::lt_s_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0xFFFF_FFFF),
+                (125, 0xFFFF_FFFF), // reg 0 = -1
+                (126, 1),
+                (127, 0), // reg 2 = 1
+            ],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
     // ==================== add_64 ====================
 
     #[test]
@@ -1114,7 +1266,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec(spec);
     }
 
     #[test]
@@ -1135,10 +1287,9 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec(spec);
     }
 
-    #[test]
     fn test_mul_64_overflow() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -1156,10 +1307,9 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec(spec);
     }
 
-    #[test]
     fn test_mul_imm_64() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -1169,6 +1319,358 @@ mod tests {
             start_fp: 124,
             start_registers: vec![(124, 10), (125, 0)],
             expected_registers: vec![(126, 30), (127, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec);
+    }
+
+    // ==================== Jump Tests ====================
+
+    #[test]
+    fn test_jump() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![
+                wom::jump::<F>(8),
+                wom::halt(), // Should be skipped!
+            ],
+            expected_pc: Some(8),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_jump_if_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![
+                wom::jump_if::<F>(2, 8),
+                wom::halt(), // Should be skipped!
+            ],
+            start_fp: 10,
+            start_registers: vec![(12, 5)], // Should jump
+            expected_pc: Some(8),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_jump_if_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::jump_if::<F>(2, 8)],
+            start_fp: 10,
+            start_registers: vec![(12, 0)], // Should not jump
+            expected_pc: Some(4),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_jump_if_zero_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![
+                wom::jump_if_zero::<F>(2, 8),
+                wom::halt(), // Should be skipped!
+            ],
+            start_fp: 10,
+            start_registers: vec![(12, 0)], // Should jump
+            expected_pc: Some(8),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_jump_if_zero_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::jump_if_zero::<F>(2, 2)],
+            start_fp: 10,
+            start_registers: vec![(12, 5)], // Should not jump
+            expected_pc: Some(4),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_skip() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![
+                wom::skip::<F>(2),
+                wom::halt(), // Should be skipped!
+            ],
+            start_fp: 10,
+            start_registers: vec![(12, 2)],
+            expected_pc: Some(8),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== Const32 Tests ====================
+
+    #[test]
+    fn test_const32_small() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = 42
+        let spec = TestSpec {
+            program: vec![wom::const_32_imm::<F>(1, 42, 0)],
+            start_fp: 10,
+            expected_registers: vec![(11, 42)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_const32_large() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = 0xDEADBEEF
+        // imm_lo = 0xBEEF, imm_hi = 0xDEAD
+        let spec = TestSpec {
+            program: vec![wom::const_32_imm::<F>(1, 0xBEEF, 0xDEAD)],
+            start_fp: 10,
+            expected_registers: vec![(11, 0xDEADBEEF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_const32_zero() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = 0
+        let spec = TestSpec {
+            program: vec![wom::const_32_imm::<F>(1, 0, 0)],
+            start_fp: 10,
+            start_registers: vec![(11, 0x12345678)], // Should be overwritten
+            expected_registers: vec![(11, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_const32_max() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = 0xFFFFFFFF
+        let spec = TestSpec {
+            program: vec![wom::const_32_imm::<F>(1, 0xFFFF, 0xFFFF)],
+            start_fp: 10,
+            expected_registers: vec![(11, 0xFFFFFFFF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    // ==================== High Register Index Tests (>300) ====================
+
+    #[test]
+    fn test_base_alu_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::add::<F>(302, 300, 301)],
+            start_registers: vec![(300, 11), (301, 31)],
+            expected_registers: vec![(302, 42)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_load_store_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::storew::<F>(300, 301, 0), wom::loadw::<F>(302, 301, 0)],
+            start_registers: vec![(300, 0xDEADBEEF), (301, 400)],
+            expected_registers: vec![(302, 0xDEADBEEF)],
+            expected_ram: vec![(400, 0xDEADBEEF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_load_sign_extend_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::loadh::<F>(302, 300, 0)],
+            start_registers: vec![(300, 500)],
+            start_ram: vec![(500, 0x00008000)],
+            expected_registers: vec![(302, 0xFFFF8000)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_less_than_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::lt_u::<F>(302, 300, 301)],
+            start_registers: vec![(300, 7), (301, 9)],
+            expected_registers: vec![(302, 1)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_less_than_64_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::lt_u_64::<F>(304, 300, 302)],
+            start_registers: vec![(300, 0), (301, 1), (302, 0), (303, 2)],
+            expected_registers: vec![(304, 1), (305, 0)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_add_64_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::add_64::<F>(304, 300, 302)],
+            start_registers: vec![(300, 3), (301, 1), (302, 4), (303, 2)],
+            expected_registers: vec![(304, 7), (305, 3)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_sub_64_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::sub_64::<F>(304, 300, 302)],
+            start_registers: vec![(300, 7), (301, 3), (302, 3), (303, 1)],
+            expected_registers: vec![(304, 4), (305, 2)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_xor_64_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::xor_64::<F>(304, 300, 302)],
+            start_registers: vec![
+                (300, 0xCAFE_BABE),
+                (301, 0xDEAD_BEEF),
+                (302, 0x0000_0000),
+                (303, 0xFFFF_FFFF),
+            ],
+            expected_registers: vec![(304, 0xCAFE_BABE), (305, 0x2152_4110)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_or_64_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::or_64::<F>(304, 300, 302)],
+            start_registers: vec![
+                (300, 0x00FF_00FF),
+                (301, 0x00FF_00FF),
+                (302, 0xFF00_FF00),
+                (303, 0xFF00_FF00),
+            ],
+            expected_registers: vec![(304, 0xFFFF_FFFF), (305, 0xFFFF_FFFF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_and_64_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::and_64::<F>(304, 300, 302)],
+            start_registers: vec![
+                (300, 0xFFFF_0000),
+                (301, 0xFFFF_0000),
+                (302, 0x0F0F_0F0F),
+                (303, 0x0F0F_0F0F),
+            ],
+            expected_registers: vec![(304, 0x0F0F_0000), (305, 0x0F0F_0000)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_jump_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::jump_if::<F>(300, 8), wom::halt()],
+            start_registers: vec![(300, 1)],
+            expected_pc: Some(8),
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_const32_high_register_indices() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::const_32_imm::<F>(300, 0xBEEF, 0xDEAD)],
+            expected_registers: vec![(300, 0xDEADBEEF)],
             ..Default::default()
         };
 

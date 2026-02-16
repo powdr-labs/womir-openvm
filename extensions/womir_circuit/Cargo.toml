@@ -23,6 +23,7 @@ derive_more = { workspace = true, features = ["from"] }
 rand.workspace = true
 eyre.workspace = true
 cfg-if.workspace = true
+itertools.workspace = true
 
 # for div_rem:
 num-bigint.workspace = true
@@ -34,6 +35,11 @@ struct-reflection.workspace = true
 openvm-stark-sdk = { workspace = true }
 openvm-circuit = { workspace = true, features = ["test-utils"] }
 test-case.workspace = true
+itertools.workspace = true
+powdr-openvm = { workspace = true }
+powdr-autoprecompiles = { workspace = true }
+powdr-number = { workspace = true }
+pretty_assertions = "1"
 
 [build-dependencies]
 openvm-cuda-builder = { workspace = true, optional = true }
