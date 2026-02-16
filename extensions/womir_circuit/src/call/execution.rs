@@ -232,7 +232,7 @@ unsafe fn execute_call_impl<F: PrimeField32, CTX: ExecutionCtxTrait>(
     let old_pc = exec_state.pc();
     let old_fp = fp;
 
-    // Save old FP to register in new frame (for CALL, CALL_INDIRECT)
+    // Save old FP and return PC to registers in new frame (for CALL, CALL_INDIRECT)
     match opcode {
         CallOpcode::CALL | CallOpcode::CALL_INDIRECT => {
             exec_state.vm_write::<u8, RV32_REGISTER_NUM_LIMBS>(
@@ -240,13 +240,6 @@ unsafe fn execute_call_impl<F: PrimeField32, CTX: ExecutionCtxTrait>(
                 new_fp + pre.save_fp_ptr,
                 &old_fp.to_le_bytes(),
             );
-        }
-        _ => {}
-    }
-
-    // Save return PC to register in new frame (for CALL, CALL_INDIRECT)
-    match opcode {
-        CallOpcode::CALL | CallOpcode::CALL_INDIRECT => {
             let return_pc = old_pc + DEFAULT_PC_STEP;
             exec_state.vm_write::<u8, RV32_REGISTER_NUM_LIMBS>(
                 RV32_REGISTER_AS,

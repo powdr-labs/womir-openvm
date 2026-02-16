@@ -147,8 +147,7 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, CallAdapterInterface<AB>> for CallCor
         // Derive conditional flags from opcode indicator variables
         let has_pc_read: AB::Expr = cols.is_ret.into() + cols.is_call_indirect.into();
         // For CALL/CALL_INDIRECT: save both FP and PC
-        let has_save_fp: AB::Expr = cols.is_call.into() + cols.is_call_indirect.into();
-        let has_save_pc: AB::Expr = cols.is_call.into() + cols.is_call_indirect.into();
+        let has_save: AB::Expr = cols.is_call.into() + cols.is_call_indirect.into();
         // For CALL/CALL_INDIRECT: new FP = old FP + offset; for RET: new FP = register value
         let is_fp_offset: AB::Expr = cols.is_call.into() + cols.is_call_indirect.into();
 
@@ -174,8 +173,7 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, CallAdapterInterface<AB>> for CallCor
                 is_valid: is_valid.clone(),
                 opcode: expected_opcode,
                 has_pc_read,
-                has_save_fp,
-                has_save_pc,
+                has_save,
             },
         }
     }

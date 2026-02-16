@@ -39,8 +39,8 @@ use super::{RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp};
 ///   0. Read FP from FP_AS
 ///   1. Read to_fp_reg (FP offset for CALL/CALL_INDIRECT, absolute FP for RET) - always
 ///   2. Read to_pc_reg (for RET, CALL_INDIRECT) - conditional on has_pc_read
-///   3. Write save_fp (for CALL, CALL_INDIRECT) - conditional on has_save_fp
-///   4. Write save_pc (for CALL, CALL_INDIRECT) - conditional on has_save_pc
+///   3. Write save_fp (for CALL, CALL_INDIRECT) - conditional on has_save
+///   4. Write save_pc (for CALL, CALL_INDIRECT) - conditional on has_save
 ///   5. Write new FP to FP_AS - always
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
@@ -76,10 +76,8 @@ pub struct CallInstruction<T> {
     pub opcode: T,
     /// 1 if we read a register for PC (RET, CALL_INDIRECT), 0 otherwise
     pub has_pc_read: T,
-    /// 1 if we save FP (CALL, CALL_INDIRECT), 0 otherwise
-    pub has_save_fp: T,
-    /// 1 if we save PC (CALL, CALL_INDIRECT), 0 otherwise
-    pub has_save_pc: T,
+    /// 1 if we save FP and PC (CALL, CALL_INDIRECT), 0 otherwise
+    pub has_save: T,
 }
 
 impl<AB: InteractionBuilder> VmAdapterInterface<AB::Expr> for CallAdapterInterface<AB> {
@@ -131,8 +129,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
 
         let is_valid = ctx.instruction.is_valid.clone();
         let has_pc_read = ctx.instruction.has_pc_read.clone();
-        let has_save_fp = ctx.instruction.has_save_fp.clone();
-        let has_save_pc = ctx.instruction.has_save_pc.clone();
+        let has_save = ctx.instruction.has_save.clone();
 
         // 0. Read current FP from FP_AS
         self.memory_bridge
@@ -189,36 +186,36 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
             .when(is_valid.clone())
             .assert_eq(old_fp_composed, local.from_state.fp);
 
-        // 3. Write save_fp (conditional on has_save_fp)
+        // 3. Write save_fp (conditional on has_save)
         // All saves are relative to the NEW frame pointer
         let save_fp_data: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
             std::array::from_fn(|i| ctx.writes.0[0][i].clone());
         self.memory_bridge
             .write(
                 MemoryAddress::new(
-                    has_save_fp.clone(),
+                    has_save.clone(),
                     local.save_fp_ptr + new_fp_composed.clone(),
                 ),
                 save_fp_data,
                 timestamp_pp(),
                 &local.save_fp_write_aux,
             )
-            .eval(builder, has_save_fp);
+            .eval(builder, has_save.clone());
 
-        // 4. Write save_pc (conditional on has_save_pc)
+        // 4. Write save_pc (conditional on has_save)
         let save_pc_data: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
             std::array::from_fn(|i| ctx.writes.0[1][i].clone());
         self.memory_bridge
             .write(
                 MemoryAddress::new(
-                    has_save_pc.clone(),
+                    has_save.clone(),
                     local.save_pc_ptr + new_fp_composed.clone(),
                 ),
                 save_pc_data,
                 timestamp_pp(),
                 &local.save_pc_write_aux,
             )
-            .eval(builder, has_save_pc);
+            .eval(builder, has_save);
 
         // 5. Write new FP to FP_AS
         let new_fp_write: [AB::Expr; 1] = std::array::from_fn(|i| ctx.writes.1[i].clone());
@@ -292,8 +289,7 @@ pub struct CallAdapterRecord {
     pub to_pc_imm: u32,
 
     pub has_pc_read: u8,
-    pub has_save_fp: u8,
-    pub has_save_pc: u8,
+    pub has_save: u8,
 
     pub fp_read_aux: MemoryReadAuxRecord,
     pub to_fp_read_aux: MemoryReadAuxRecord,
@@ -350,11 +346,7 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
             CallOpcode::RET | CallOpcode::CALL_INDIRECT => 1,
             _ => 0,
         };
-        record.has_save_fp = match opcode {
-            CallOpcode::CALL | CallOpcode::CALL_INDIRECT => 1,
-            _ => 0,
-        };
-        record.has_save_pc = match opcode {
+        record.has_save = match opcode {
             CallOpcode::CALL | CallOpcode::CALL_INDIRECT => 1,
             _ => 0,
         };
@@ -393,8 +385,8 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
     ) {
         let (save_fp_bytes, save_pc_bytes, new_fp_val) = data;
 
-        // 3. Write save_fp (conditional) - relative to NEW frame
-        if record.has_save_fp == 1 {
+        // 3. Write save_fp (conditional on has_save) - relative to NEW frame
+        if record.has_save == 1 {
             let (t_prev, prev_data) = super::timed_write(
                 memory,
                 RV32_REGISTER_AS,
@@ -407,8 +399,8 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
             memory.increment_timestamp();
         }
 
-        // 4. Write save_pc (conditional) - relative to NEW frame
-        if record.has_save_pc == 1 {
+        // 4. Write save_pc (conditional on has_save) - relative to NEW frame
+        if record.has_save == 1 {
             let (t_prev, prev_data) = super::timed_write(
                 memory,
                 RV32_REGISTER_AS,
@@ -455,7 +447,7 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         timestamp -= 1;
 
         // 4. save_pc write
-        if record.has_save_pc != 0 {
+        if record.has_save != 0 {
             adapter_row
                 .save_pc_write_aux
                 .set_prev_data(record.save_pc_write_aux.prev_data.map(F::from_canonical_u8));
@@ -470,7 +462,7 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         timestamp -= 1;
 
         // 3. save_fp write
-        if record.has_save_fp != 0 {
+        if record.has_save != 0 {
             adapter_row
                 .save_fp_write_aux
                 .set_prev_data(record.save_fp_write_aux.prev_data.map(F::from_canonical_u8));
