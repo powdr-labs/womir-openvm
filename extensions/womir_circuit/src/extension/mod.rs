@@ -26,7 +26,7 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, JaafOpcode, JumpOpcode, LessThan64Opcode,
+    BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, JumpOpcode, LessThan64Opcode,
     LessThanOpcode, LoadStoreOpcode,
 };
 use serde::{Deserialize, Serialize};
@@ -83,7 +83,7 @@ pub enum WomirExecutor {
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     Jump(JumpExecutor),
     Const32(Const32Executor),
-    Jaaf(Rv32JaafExecutor),
+    Call(Rv32CallExecutor),
 }
 
 // ============ VmExtension Implementations ============
@@ -151,8 +151,8 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         let const32 = Const32Executor::new(ConstOpcodes::CLASS_OFFSET);
         inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 
-        let jaaf = Rv32JaafExecutor::new(JaafAdapterExecutor, JaafOpcode::CLASS_OFFSET);
-        inventory.add_executor(jaaf, JaafOpcode::iter().map(|x| x.global_opcode()))?;
+        let call = Rv32CallExecutor::new(CallAdapterExecutor, CallOpcode::CLASS_OFFSET);
+        inventory.add_executor(call, CallOpcode::iter().map(|x| x.global_opcode()))?;
 
         Ok(())
     }
@@ -243,11 +243,11 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         );
         inventory.add_air(const32);
 
-        let jaaf = JaafAir::new(
-            JaafAdapterAir::new(exec_bridge, memory_bridge),
-            JaafCoreAir::new(JaafOpcode::CLASS_OFFSET),
+        let call = CallAir::new(
+            CallAdapterAir::new(exec_bridge, memory_bridge),
+            CallCoreAir::new(CallOpcode::CLASS_OFFSET),
         );
-        inventory.add_air(jaaf);
+        inventory.add_air(call);
 
         Ok(())
     }
@@ -367,12 +367,12 @@ where
         let const32 = Const32Chip::new(Const32Filler::new(bitwise_lu.clone()), mem_helper.clone());
         inventory.add_executor_chip(const32);
 
-        inventory.next_air::<JaafAir>()?;
-        let jaaf = JaafChip::new(
-            JaafFiller::new(JaafAdapterFiller::new(), JaafOpcode::CLASS_OFFSET),
+        inventory.next_air::<CallAir>()?;
+        let call = CallChip::new(
+            CallFiller::new(CallAdapterFiller::new(), CallOpcode::CLASS_OFFSET),
             mem_helper.clone(),
         );
-        inventory.add_executor_chip(jaaf);
+        inventory.add_executor_chip(call);
 
         Ok(())
     }

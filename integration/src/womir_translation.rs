@@ -451,7 +451,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         _ret_info_to_copy: Option<ReturnInfosToCopy>,
         _saved_curr_fp_ptr: Option<Range<u32>>,
     ) -> Vec<Directive<F>> {
-        todo!("Loop frame jumps need redesign: JAAF/JAAF_SAVE removed, only CALL/RET remain")
+        todo!("Loop frame jumps need redesign: only CALL/RET remain")
     }
 
     fn emit_conditional_jump(
@@ -548,7 +548,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         _target_label: String,
         _target_frame_ptr: Range<u32>,
     ) -> Directive<F> {
-        todo!("Jump-out-of-loop frame change needs redesign: JAAF removed, only CALL/RET remain")
+        todo!("Jump-out-of-loop frame change needs redesign: only CALL/RET remain")
     }
 
     fn emit_return(

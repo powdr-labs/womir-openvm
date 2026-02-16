@@ -869,7 +869,7 @@ is_valid * (from_state__timestamp + 1 - write_aux__base__prev_timestamp - 1 - (0
 is_valid * (is_valid - 1) = 0
 
 
-# VmAirWrapper<JaafAdapterAir, JaafCoreAir>
+# VmAirWrapper<CallAdapterAir, CallCoreAir>
 Symbolic machine using 54 unique main columns:
   from_state__pc
   from_state__fp

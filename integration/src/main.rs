@@ -1362,7 +1362,7 @@ mod tests {
             wom::allocate_frame_imm::<F>(9, 100),   // Allocate new frame of size 100, x9 = new FP
             wom::add_imm::<F>(10, 0, 0_i16.into()), // PC=12: x10 = 0 (register to read into)
             wom::copy_into_frame::<F>(10, 8, 9), // PC=16: Copy x8 to [x9[x10]], which writes to address pointed by x10
-            wom::jump::<F>(24), // TODO: was jaaf, needs CALL with frame change               // Jump to PC=24, set FP=x9
+            wom::jump::<F>(24), // TODO: needs CALL with frame change               // Jump to PC=24, set FP=x9
             // Since copy_into_frame writes x8's value to memory at [x9[x10]],
             // and we activated the frame at x9, x10 should now contain 42.
             wom::const_32_imm(0, 0, 0),
@@ -1385,7 +1385,7 @@ mod tests {
             // by convention on the first allocation.
             wom::add_imm::<F>(10, 0, 0_i16.into()), // PC=12: x10 = 0 (destination register)
             wom::copy_into_frame::<F>(10, 8, 9),    // PC=16: Copy x8 to [x9[x10]]
-            wom::jump::<F>(28), // TODO: was jaaf, needs CALL with frame change                  // Jump to PC=28, set FP=x9
+            wom::jump::<F>(28), // TODO: needs CALL with frame change                  // Jump to PC=28, set FP=x9
             wom::halt(),        // Should be skipped
             wom::const_32_imm(0, 0, 0), // PC=28
             wom::reveal(10, 0), // wom::reveal x10 (should be 123, the value from x8)
@@ -1743,7 +1743,7 @@ mod tests {
             wom::allocate_frame_imm::<F>(9, 64), // Allocate frame, pointer in r9
             wom::copy_into_frame::<F>(2, 8, 9),  // Copy r8 to frame[2]
             // Jump to new frame
-            wom::jump::<F>(28), // TODO: was jaaf, needs CALL with frame change // Jump to PC=28, activate frame at r9
+            wom::jump::<F>(28), // TODO: needs CALL with frame change // Jump to PC=28, activate frame at r9
             // This should be skipped
             wom::halt(),
             wom::const_32_imm(0, 0, 0), // PC = 28

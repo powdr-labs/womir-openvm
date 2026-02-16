@@ -1,8 +1,8 @@
 use openvm_instructions::{LocalOpcode, SystemOpcode, VmOpcode, instruction::Instruction, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, CopyIntoFrameOpcode,
-    Eq64Opcode, EqOpcode, HintStoreOpcode, JaafOpcode, JumpOpcode, LessThan64Opcode,
+    AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes,
+    CopyIntoFrameOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JumpOpcode, LessThan64Opcode,
     LessThanOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 
@@ -342,7 +342,7 @@ pub fn and_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instru
 /// Sets PC and FP from registers (absolute FP value)
 pub fn ret<F: PrimeField32>(to_pc_reg: usize, to_fp_reg: usize) -> Instruction<F> {
     Instruction::new(
-        JaafOpcode::RET.global_opcode(),
+        CallOpcode::RET.global_opcode(),
         F::ZERO,                                                             // a: (not used)
         F::ZERO,                                                             // b: (not used)
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg), // c: to_pc_reg
@@ -362,7 +362,7 @@ pub fn call<F: PrimeField32>(
     fp_offset_reg: usize,
 ) -> Instruction<F> {
     Instruction::new(
-        JaafOpcode::CALL.global_opcode(),
+        CallOpcode::CALL.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_pc), // a: rd1 (save PC here)
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_fp), // b: rd2 (save FP here)
         F::ZERO,                                                           // c: (not used)
@@ -383,7 +383,7 @@ pub fn call_indirect<F: PrimeField32>(
     fp_offset_reg: usize,
 ) -> Instruction<F> {
     Instruction::new(
-        JaafOpcode::CALL_INDIRECT.global_opcode(),
+        CallOpcode::CALL_INDIRECT.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_pc),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_fp),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg),

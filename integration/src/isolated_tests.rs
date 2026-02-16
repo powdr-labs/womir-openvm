@@ -1436,9 +1436,9 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
-    // ==================== JAAF Tests ====================
+    // ==================== Call Tests ====================
     //
-    // JAAF instructions (RET, CALL, CALL_INDIRECT) change the frame pointer (FP)
+    // Call instructions (RET, CALL, CALL_INDIRECT) change the frame pointer (FP)
     // and jump to a new PC.
     // Register accesses are FP-relative: register N at FP=F is at absolute
     // register index (F + N), raw address ((F + N) * 4).

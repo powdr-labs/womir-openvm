@@ -8,14 +8,14 @@ use openvm_stark_backend::{
     p3_field::{Field, FieldAlgebra},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
-use openvm_womir_transpiler::JaafOpcode;
+use openvm_womir_transpiler::CallOpcode;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
 
 use crate::adapters::RV32_REGISTER_NUM_LIMBS;
-use crate::adapters::jaaf::{JaafAdapterInterface, JaafInstruction};
+use crate::adapters::call::{CallAdapterInterface, CallInstruction};
 
-/// Core columns for the JAAF chip.
+/// Core columns for the Call chip.
 ///
 /// The core is responsible for:
 /// - Opcode flag decoding (exactly one flag set per valid row)
@@ -23,7 +23,7 @@ use crate::adapters::jaaf::{JaafAdapterInterface, JaafInstruction};
 /// - Composing new FP from read data for the FP_AS write
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct JaafCoreCols<T> {
+pub struct CallCoreCols<T> {
     /// Data read from to_fp_reg (new FP as 4 bytes)
     pub new_fp_data: [T; RV32_REGISTER_NUM_LIMBS],
     /// Data read from to_pc_reg (target PC as 4 bytes, valid only for RET/CALL_INDIRECT)
@@ -41,13 +41,13 @@ pub struct JaafCoreCols<T> {
 }
 
 /// Core record written by the preflight executor during trace generation.
-/// This is overlaid on the same memory as JaafCoreCols during trace filling.
+/// This is overlaid on the same memory as CallCoreCols during trace filling.
 ///
-/// IMPORTANT: Fields must be in the same order as JaafCoreCols for the
+/// IMPORTANT: Fields must be in the same order as CallCoreCols for the
 /// reverse-order filling trick to work correctly (AlignedBytesBorrow layout).
 #[repr(C)]
 #[derive(openvm_circuit_primitives::AlignedBytesBorrow, Debug, Clone, Copy)]
-pub struct JaafCoreRecord {
+pub struct CallCoreRecord {
     pub new_fp_data: [u8; RV32_REGISTER_NUM_LIMBS],
     pub to_pc_data: [u8; RV32_REGISTER_NUM_LIMBS],
     pub old_fp_data: [u8; RV32_REGISTER_NUM_LIMBS],
@@ -56,31 +56,31 @@ pub struct JaafCoreRecord {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct JaafCoreAir {
+pub struct CallCoreAir {
     pub offset: usize,
 }
 
-impl JaafCoreAir {
+impl CallCoreAir {
     pub fn new(offset: usize) -> Self {
         Self { offset }
     }
 }
 
-impl<F: Field> BaseAir<F> for JaafCoreAir {
+impl<F: Field> BaseAir<F> for CallCoreAir {
     fn width(&self) -> usize {
-        JaafCoreCols::<F>::width()
+        CallCoreCols::<F>::width()
     }
 }
 
-impl<F: Field> BaseAirWithPublicValues<F> for JaafCoreAir {}
+impl<F: Field> BaseAirWithPublicValues<F> for CallCoreAir {}
 
-impl<F: Field> ColumnsAir<F> for JaafCoreAir {
+impl<F: Field> ColumnsAir<F> for CallCoreAir {
     fn columns(&self) -> Option<Vec<String>> {
-        JaafCoreCols::<F>::struct_reflection()
+        CallCoreCols::<F>::struct_reflection()
     }
 }
 
-impl<AB: InteractionBuilder> VmCoreAir<AB, JaafAdapterInterface<AB>> for JaafCoreAir {
+impl<AB: InteractionBuilder> VmCoreAir<AB, CallAdapterInterface<AB>> for CallCoreAir {
     fn start_offset(&self) -> usize {
         self.offset
     }
@@ -90,8 +90,8 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, JaafAdapterInterface<AB>> for JaafCor
         builder: &mut AB,
         local_core: &[AB::Var],
         from_pc: AB::Var,
-    ) -> AdapterAirContext<AB::Expr, JaafAdapterInterface<AB>> {
-        let cols: &JaafCoreCols<AB::Var> = local_core.borrow();
+    ) -> AdapterAirContext<AB::Expr, CallAdapterInterface<AB>> {
+        let cols: &CallCoreCols<AB::Var> = local_core.borrow();
 
         let flags = [cols.is_ret, cols.is_call, cols.is_call_indirect];
 
@@ -136,7 +136,7 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, JaafAdapterInterface<AB>> for JaafCor
             });
 
         // Build the opcode expression from flags
-        let expected_opcode = flags.iter().zip(JaafOpcode::iter()).fold(
+        let expected_opcode = flags.iter().zip(CallOpcode::iter()).fold(
             AB::Expr::ZERO,
             |acc, (&flag, local_opcode)| {
                 acc + flag.into() * AB::Expr::from_canonical_usize(local_opcode as usize)
@@ -170,7 +170,7 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, JaafAdapterInterface<AB>> for JaafCor
                 ],
                 [actual_new_fp],
             ),
-            instruction: JaafInstruction {
+            instruction: CallInstruction {
                 is_valid: is_valid.clone(),
                 opcode: expected_opcode,
                 has_pc_read,

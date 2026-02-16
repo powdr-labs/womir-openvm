@@ -23,7 +23,7 @@ use openvm_stark_backend::{
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::ColumnsAir,
 };
-use openvm_womir_transpiler::JaafOpcode;
+use openvm_womir_transpiler::CallOpcode;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use openvm_circuit::arch::ExecutionBridge;
@@ -33,7 +33,7 @@ use crate::memory_config::FP_AS;
 
 use super::{RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp};
 
-/// JAAF adapter columns.
+/// Call adapter columns.
 ///
 /// Memory operations in timestamp order:
 ///   0. Read FP from FP_AS
@@ -44,7 +44,7 @@ use super::{RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp};
 ///   5. Write new FP to FP_AS - always
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct JaafAdapterCols<T> {
+pub struct CallAdapterCols<T> {
     pub from_state: ExecutionState<T>,
 
     /// Operand e: pointer to register holding FP offset (CALL/CALL_INDIRECT) or absolute FP (RET)
@@ -68,10 +68,10 @@ pub struct JaafAdapterCols<T> {
     pub fp_write_aux: MemoryWriteAuxCols<T, 1>,
 }
 
-/// Custom interface for JAAF.
-pub struct JaafAdapterInterface<AB: InteractionBuilder>(std::marker::PhantomData<AB>);
+/// Custom interface for Call chip.
+pub struct CallAdapterInterface<AB: InteractionBuilder>(std::marker::PhantomData<AB>);
 
-pub struct JaafInstruction<T> {
+pub struct CallInstruction<T> {
     pub is_valid: T,
     pub opcode: T,
     /// 1 if we read a register for PC (RET, CALL_INDIRECT), 0 otherwise
@@ -82,7 +82,7 @@ pub struct JaafInstruction<T> {
     pub has_save_pc: T,
 }
 
-impl<AB: InteractionBuilder> VmAdapterInterface<AB::Expr> for JaafAdapterInterface<AB> {
+impl<AB: InteractionBuilder> VmAdapterInterface<AB::Expr> for CallAdapterInterface<AB> {
     /// Reads:
     ///   [0] = to_fp_reg data (4 limbs) - new FP value
     ///   [1] = to_pc_reg data (4 limbs) - target PC (when has_pc_read=1)
@@ -91,29 +91,29 @@ impl<AB: InteractionBuilder> VmAdapterInterface<AB::Expr> for JaafAdapterInterfa
     ///   0 = [save_fp_data, save_pc_data] (4 limbs each)
     ///   1 = [new_fp_as_field] (1 field element for FP_AS write)
     type Writes = ([[AB::Expr; RV32_REGISTER_NUM_LIMBS]; 2], [AB::Expr; 1]);
-    type ProcessedInstruction = JaafInstruction<AB::Expr>;
+    type ProcessedInstruction = CallInstruction<AB::Expr>;
 }
 
 #[derive(Clone, Copy, Debug, derive_new::new)]
-pub struct JaafAdapterAir {
+pub struct CallAdapterAir {
     pub(super) execution_bridge: ExecutionBridge,
     pub(super) memory_bridge: MemoryBridge,
 }
 
-impl<F: Field> BaseAir<F> for JaafAdapterAir {
+impl<F: Field> BaseAir<F> for CallAdapterAir {
     fn width(&self) -> usize {
-        JaafAdapterCols::<F>::width()
+        CallAdapterCols::<F>::width()
     }
 }
 
-impl<F: Field> ColumnsAir<F> for JaafAdapterAir {
+impl<F: Field> ColumnsAir<F> for CallAdapterAir {
     fn columns(&self) -> Option<Vec<String>> {
-        JaafAdapterCols::<F>::struct_reflection()
+        CallAdapterCols::<F>::struct_reflection()
     }
 }
 
-impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAir {
-    type Interface = JaafAdapterInterface<AB>;
+impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
+    type Interface = CallAdapterInterface<AB>;
 
     fn eval(
         &self,
@@ -121,7 +121,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAir {
         local: &[AB::Var],
         ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local: &JaafAdapterCols<_> = local.borrow();
+        let local: &CallAdapterCols<_> = local.borrow();
         let timestamp = local.from_state.timestamp;
         let mut timestamp_delta: usize = 0;
         let mut timestamp_pp = || {
@@ -259,7 +259,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAir {
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &JaafAdapterCols<_> = local.borrow();
+        let cols: &CallAdapterCols<_> = local.borrow();
         cols.from_state.pc
     }
 }
@@ -267,7 +267,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAir {
 // ========== Executor ==========
 
 #[derive(Clone, Default)]
-pub struct JaafAdapterExecutor;
+pub struct CallAdapterExecutor;
 
 /// Record for the FP_AS write. The prev_data is a single u32 (stored as field element
 /// in FP_AS which uses native32 cell type).
@@ -280,7 +280,7 @@ pub struct FpWriteAuxRecord {
 
 #[repr(C)]
 #[derive(AlignedBytesBorrow, Debug)]
-pub struct JaafAdapterRecord {
+pub struct CallAdapterRecord {
     pub from_pc: u32,
     pub fp: u32,
     pub from_timestamp: u32,
@@ -303,8 +303,8 @@ pub struct JaafAdapterRecord {
     pub fp_write_aux: FpWriteAuxRecord,
 }
 
-impl<F: PrimeField32> AdapterTraceExecutor<F> for JaafAdapterExecutor {
-    const WIDTH: usize = size_of::<JaafAdapterCols<u8>>();
+impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
+    const WIDTH: usize = size_of::<CallAdapterCols<u8>>();
     /// ReadData: [new_fp_bytes, to_pc_reg_bytes]
     type ReadData = [[u8; RV32_REGISTER_NUM_LIMBS]; 2];
     /// WriteData: (save_fp_bytes, save_pc_bytes, new_fp_value)
@@ -313,10 +313,10 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for JaafAdapterExecutor {
         [u8; RV32_REGISTER_NUM_LIMBS],
         u32,
     );
-    type RecordMut<'a> = &'a mut JaafAdapterRecord;
+    type RecordMut<'a> = &'a mut CallAdapterRecord;
 
     #[inline(always)]
-    fn start(pc: u32, memory: &TracingMemory, record: &mut &mut JaafAdapterRecord) {
+    fn start(pc: u32, memory: &TracingMemory, record: &mut &mut CallAdapterRecord) {
         record.from_pc = pc;
         record.from_timestamp = memory.timestamp;
     }
@@ -326,7 +326,7 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for JaafAdapterExecutor {
         &self,
         memory: &mut TracingMemory,
         instruction: &Instruction<F>,
-        record: &mut &mut JaafAdapterRecord,
+        record: &mut &mut CallAdapterRecord,
     ) -> Self::ReadData {
         let &Instruction { a, b, c, d, e, .. } = instruction;
 
@@ -343,19 +343,19 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for JaafAdapterExecutor {
         // Determine flags from opcode
         let local_idx = instruction
             .opcode
-            .local_opcode_idx(JaafOpcode::CLASS_OFFSET);
-        let opcode = JaafOpcode::from_usize(local_idx);
+            .local_opcode_idx(CallOpcode::CLASS_OFFSET);
+        let opcode = CallOpcode::from_usize(local_idx);
 
         record.has_pc_read = match opcode {
-            JaafOpcode::RET | JaafOpcode::CALL_INDIRECT => 1,
+            CallOpcode::RET | CallOpcode::CALL_INDIRECT => 1,
             _ => 0,
         };
         record.has_save_fp = match opcode {
-            JaafOpcode::CALL | JaafOpcode::CALL_INDIRECT => 1,
+            CallOpcode::CALL | CallOpcode::CALL_INDIRECT => 1,
             _ => 0,
         };
         record.has_save_pc = match opcode {
-            JaafOpcode::CALL | JaafOpcode::CALL_INDIRECT => 1,
+            CallOpcode::CALL | CallOpcode::CALL_INDIRECT => 1,
             _ => 0,
         };
 
@@ -389,7 +389,7 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for JaafAdapterExecutor {
         memory: &mut TracingMemory,
         _instruction: &Instruction<F>,
         data: Self::WriteData,
-        record: &mut &mut JaafAdapterRecord,
+        record: &mut &mut CallAdapterRecord,
     ) {
         let (save_fp_bytes, save_pc_bytes, new_fp_val) = data;
 
@@ -433,14 +433,14 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for JaafAdapterExecutor {
 // ========== Filler ==========
 
 #[derive(derive_new::new)]
-pub struct JaafAdapterFiller;
+pub struct CallAdapterFiller;
 
-impl<F: PrimeField32> AdapterTraceFiller<F> for JaafAdapterFiller {
-    const WIDTH: usize = size_of::<JaafAdapterCols<u8>>();
+impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
+    const WIDTH: usize = size_of::<CallAdapterCols<u8>>();
 
     fn fill_trace_row(&self, mem_helper: &MemoryAuxColsFactory<F>, mut adapter_row: &mut [F]) {
-        let record: &JaafAdapterRecord = unsafe { get_record_from_slice(&mut adapter_row, ()) };
-        let adapter_row: &mut JaafAdapterCols<F> = adapter_row.borrow_mut();
+        let record: &CallAdapterRecord = unsafe { get_record_from_slice(&mut adapter_row, ()) };
+        let adapter_row: &mut CallAdapterCols<F> = adapter_row.borrow_mut();
 
         // Total: 6 timestamp increments (indices 0..5)
         let mut timestamp = record.from_timestamp + 5;
