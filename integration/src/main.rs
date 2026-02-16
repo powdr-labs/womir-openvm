@@ -1920,137 +1920,56 @@ mod tests {
 mod wast_tests {
     use super::*;
     use openvm_sdk::StdIn;
-    use serde::Deserialize;
-    use serde_json::Value;
     use std::fs;
     use std::path::Path;
     use std::process::Command;
     use tracing::Level;
+    use wast::core::{WastArgCore, WastRetCore};
+    use wast::parser::{self, ParseBuffer};
+    use wast::{QuoteWat, Wast, WastArg, WastDirective, WastExecute, WastRet, Wat};
 
     type TestCase = (String, Vec<u32>, Vec<u32>);
     type TestModule = (String, u32, Vec<TestCase>);
 
-    #[derive(Debug, Deserialize)]
-    struct TestFile {
-        commands: Vec<CommandEntry>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct CommandEntry {
-        #[serde(rename = "type")]
-        cmd_type: String,
-        filename: Option<String>,
-        line: Option<u32>,
-        action: Option<Action>,
-        expected: Option<Vec<Expected>>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct Action {
-        #[serde(rename = "type")]
-        action_type: String,
-        field: Option<String>,
-        args: Option<Vec<Value>>,
-        #[allow(dead_code)]
-        module: Option<String>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct Expected {
-        #[serde(rename = "type")]
-        expected_type: String,
-        #[allow(dead_code)]
-        lane: Option<String>,
-        value: Option<String>,
-    }
-
     fn extract_wast_test_info(
         wast_file: &str,
     ) -> Result<(PathBuf, Vec<TestModule>), Box<dyn std::error::Error>> {
-        // Convert .wast to .json using wast2json
         let target_dir =
             PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("../wast_target");
-        fs::create_dir_all(&target_dir).unwrap();
+        fs::create_dir_all(&target_dir)?;
+
         let wast_path = Path::new(wast_file).canonicalize()?;
-        let json_path =
-            target_dir.join(Path::new(wast_path.file_stem().unwrap()).with_extension("json"));
-
-        let output = Command::new("wast2json")
-            .arg(wast_path)
-            .arg("--debug-names")
-            .current_dir(&target_dir)
-            .output()
-            .unwrap();
-
-        if !output.status.success() {
-            return Err(format!(
-                "wast2json failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            )
-            .into());
-        }
-
-        // Parse the JSON file
-        let json_content = fs::read_to_string(&json_path)?;
-        let test_file: TestFile = serde_json::from_str(&json_content)?;
+        let wast_content = fs::read_to_string(&wast_path)?;
+        let buffer = ParseBuffer::new(&wast_content)?;
+        let script = parser::parse::<Wast<'_>>(&buffer)?;
 
         let mut test_cases = Vec::new();
-        let mut current_module = None;
-        let mut current_line = 0;
+        let mut current_module: Option<String> = None;
         let mut assert_cases = Vec::new();
+        let mut module_counter = 0_u32;
 
-        for cmd in test_file.commands {
-            match cmd.cmd_type.as_str() {
-                "module" => {
-                    if let Some(module) = current_module.take()
+        for directive in script.directives {
+            match directive {
+                WastDirective::Wat(module) => {
+                    if let Some(module_name) = current_module.take()
                         && !assert_cases.is_empty()
                     {
-                        test_cases.push((module, current_line, assert_cases.clone()));
+                        test_cases.push((module_name, 0, assert_cases.clone()));
                         assert_cases.clear();
                     }
-                    current_module = cmd.filename;
-                    current_line = cmd.line.unwrap_or(0);
+
+                    let module_filename = format!("module_{module_counter}.wasm");
+                    module_counter += 1;
+                    let module_path = target_dir.join(&module_filename);
+                    let wasm_bytes = encode_quote_wat(module)?;
+                    fs::write(module_path, wasm_bytes)?;
+                    current_module = Some(module_filename);
                 }
-                "action" | "assert_return" => {
-                    if let (Some(action), Some(expected)) = (cmd.action, cmd.expected)
-                        && action.action_type == "invoke"
-                        && let (Some(field), Some(args)) = (action.field, action.args)
+                WastDirective::AssertReturn { exec, results, .. } => {
+                    if let Some((field, args)) = parse_invoke(exec)
+                        && let Some(expected) = parse_expected(results)
                     {
-                        let args_u32: Vec<u32> = args
-                            .iter()
-                            .filter_map(|v| {
-                                if let Value::Object(obj) = v {
-                                    if let Some(Value::String(val_str)) = obj.get("value") {
-                                        // In OpenVM we read the inputs as u32s, so here we
-                                        // need to parse the input as 32-bit limbs.
-                                        if let Some(Value::String(ty_str)) = obj.get("type") {
-                                            parse_as_vec_u32(ty_str, val_str)
-                                        } else {
-                                            Some(vec![val_str.parse::<u32>().unwrap()])
-                                        }
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                }
-                            })
-                            .flatten()
-                            .collect();
-
-                        let expected_u32: Vec<u32> = expected
-                            .iter()
-                            .filter_map(|e| {
-                                // Parse as 32-bit limbs for the same reason as
-                                // above.
-                                e.value
-                                    .as_ref()
-                                    .and_then(|v| parse_as_vec_u32(&e.expected_type, v))
-                            })
-                            .flatten()
-                            .collect();
-
-                        assert_cases.push((field, args_u32, expected_u32));
+                        assert_cases.push((field, args, expected));
                     }
                 }
                 _ => {}
@@ -2060,44 +1979,73 @@ mod wast_tests {
         if let Some(module) = current_module
             && !assert_cases.is_empty()
         {
-            test_cases.push((module, current_line, assert_cases));
+            test_cases.push((module, 0, assert_cases));
         }
 
         Ok((target_dir, test_cases))
     }
 
-    fn parse_as_vec_u32(ty: &str, value: &str) -> Option<Vec<u32>> {
-        if ty == "i32" {
-            let v = value.parse::<u32>().unwrap();
-            Some(vec![v])
-        } else if ty == "i64" {
-            let v = value.parse::<u64>().unwrap();
-            Some(vec![v as u32, (v >> 32) as u32])
-        } else {
-            None
+    fn encode_quote_wat(module: QuoteWat<'_>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        match module {
+            QuoteWat::Wat(wat) => match wat {
+                Wat::Module(module) => Ok(module.encode()?),
+                Wat::Component(component) => Ok(component.encode()?),
+            },
+            QuoteWat::QuoteModule(_, _) | QuoteWat::QuoteComponent(_, _) => {
+                Err("quoted modules/components are not supported".into())
+            }
         }
     }
 
-    #[allow(dead_code)]
-    fn parse_val(s: &str) -> Result<u32, Box<dyn std::error::Error>> {
-        if s.starts_with("i32.const ") {
-            let val_str = s.trim_start_matches("i32.const ").trim();
-            if val_str.starts_with("0x") {
-                u32::from_str_radix(val_str.trim_start_matches("0x"), 16).map_err(|e| e.into())
-            } else if val_str.starts_with("-0x") {
-                u32::from_str_radix(val_str.trim_start_matches("-0x"), 16)
-                    .map(|v| (!v).wrapping_add(1))
-                    .map_err(|e| e.into())
-            } else if val_str.starts_with("-") {
-                val_str
-                    .parse::<i32>()
-                    .map(|v| v as u32)
-                    .map_err(|e| e.into())
-            } else {
-                val_str.parse::<u32>().map_err(|e| e.into())
-            }
-        } else {
-            Err("Unsupported value format".into())
+    fn parse_invoke(exec: WastExecute<'_>) -> Option<(String, Vec<u32>)> {
+        let invoke = match exec {
+            WastExecute::Invoke(invoke) => invoke,
+            _ => return None,
+        };
+
+        let args = invoke
+            .args
+            .into_iter()
+            .filter_map(parse_arg)
+            .flatten()
+            .collect();
+        Some((invoke.name.to_string(), args))
+    }
+
+    fn parse_expected(results: Vec<WastRet<'_>>) -> Option<Vec<u32>> {
+        let parsed: Vec<u32> = results
+            .into_iter()
+            .filter_map(parse_ret)
+            .flatten()
+            .collect();
+        Some(parsed)
+    }
+
+    fn parse_arg(arg: WastArg<'_>) -> Option<Vec<u32>> {
+        match arg {
+            WastArg::Core(core) => match core {
+                WastArgCore::I32(v) => Some(vec![v as u32]),
+                WastArgCore::I64(v) => {
+                    let value = v as u64;
+                    Some(vec![value as u32, (value >> 32) as u32])
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn parse_ret(ret: WastRet<'_>) -> Option<Vec<u32>> {
+        match ret {
+            WastRet::Core(core) => match core {
+                WastRetCore::I32(v) => Some(vec![v as u32]),
+                WastRetCore::I64(v) => {
+                    let value = v as u64;
+                    Some(vec![value as u32, (value >> 32) as u32])
+                }
+                _ => None,
+            },
+            _ => None,
         }
     }
 
@@ -2124,7 +2072,6 @@ mod wast_tests {
         println!("Running WASM test with {function}({args:?}): expected {expected:?}");
 
         let vm_config = WomirConfig::default();
-        // Prepare input
         let mut stdin = StdIn::default();
         for &arg in args {
             stdin.write(&arg);
@@ -2132,9 +2079,7 @@ mod wast_tests {
 
         let output = module.execute(vm_config, function, stdin)?;
 
-        // Verify output
         if !expected.is_empty() {
-            // Read only as many bytes as expected by the test.
             let output: Vec<u32> = output[..expected.len() * 4]
                 .chunks(4)
                 .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
@@ -2217,11 +2162,8 @@ mod wast_tests {
     fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         let (target_dir, test_cases) = extract_wast_test_info(tf)?;
 
-        // Run all test cases
         for (module_path, _line, cases) in &test_cases {
             let full_module_path = target_dir.join(module_path);
-
-            // Load the module to be executed multiple times.
             println!("Loading test module: {module_path}");
             let wasm_bytes = std::fs::read(full_module_path).expect("Failed to read WASM file");
             let (module, functions) = load_wasm(&wasm_bytes);

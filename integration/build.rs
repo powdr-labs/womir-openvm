@@ -1,4 +1,5 @@
 use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -6,18 +7,17 @@ fn compile_wat_to_wasm(out_dir: &Path, name: &str) {
     let src_path = format!("builtin_src/{name}.wat");
     let wasm_output = out_dir.join(format!("{name}.wasm"));
 
-    // Tell cargo to re-run build.rs if the WAT source file changes
     println!("cargo:rerun-if-changed={src_path}");
 
-    // Compile the WAT file to WASM
-    let status = Command::new("wat2wasm")
-        .args([&src_path, "-o", wasm_output.to_str().unwrap()])
-        .status()
-        .expect("Failed to execute wat2wasm");
+    let wasm_bytes = wat::parse_file(&src_path)
+        .unwrap_or_else(|err| panic!("Failed to parse WAT source {src_path}: {err}"));
 
-    if !status.success() {
-        panic!("Failed to compile {src_path} to WebAssembly. Please install wabt (wat2wasm).");
-    }
+    fs::write(&wasm_output, wasm_bytes).unwrap_or_else(|err| {
+        panic!(
+            "Failed to write wasm output {}: {err}",
+            wasm_output.display()
+        )
+    });
 
     println!(
         "cargo:rustc-env={}_WASM_PATH={}",
@@ -30,10 +30,8 @@ fn compile_c_to_wasm(out_dir: &Path, name: &str) {
     let src_path = format!("builtin_src/{name}.c");
     let wasm_output = out_dir.join(format!("{name}.wasm"));
 
-    // Tell cargo to re-run build.rs if the C source file changes
     println!("cargo:rerun-if-changed={src_path}");
 
-    // Compile the C file to WASM
     let status = Command::new("clang")
         .args([
             "--target=wasm32-unknown-unknown",
