@@ -1155,40 +1155,35 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_call_instruction() {
-        // Test CALL: save PC and FP, then jump
+        // Test CALL: save PC and FP, then jump to new frame
+        // CALL saves return PC (pc+4=8) into x10 in the new frame, then jumps to PC=16
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::allocate_frame_imm::<F>(9, 100), // Allocate new frame of size 100, x9 = new FP
-            wom::call::<F>(10, 11, 20, 100), // Call to PC=20, FP offset=100, save PC→x10, FP→x11
-            wom::add_imm::<F>(8, 0, 123_i16.into()), // x8 = 123 (after return) - this should NOT execute
-            wom::reveal(8, 0),                       // wom::reveal x8 - this should NOT execute
-            // PC = 20 (function start)
-            wom::const_32_imm(0, 0, 0),
-            wom::reveal(10, 0), // wom::reveal x10 (should be 12, the return address)
-            wom::halt(),        // End the test here, don't return
+            wom::const_32_imm(0, 0, 0),              // PC=0
+            wom::call::<F>(10, 11, 16, 100),         // PC=4: CALL to PC=16, FP offset=100
+            wom::add_imm::<F>(8, 0, 123_i16.into()), // PC=8: should NOT execute
+            wom::halt(),                             // PC=12: padding
+            // New frame starts here (PC=16), FP = old_fp + 100
+            wom::reveal(10, 0), // PC=16: reveal x10 (should be 8, the return address)
+            wom::halt(),        // PC=20: End
         ];
 
-        run_vm_test("CALL instruction", instructions, 12, None).unwrap()
+        run_vm_test("CALL instruction", instructions, 8, None).unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_call_indirect_instruction() {
         // Test CALL_INDIRECT: save PC and FP, jump to register value
+        // x12 holds the target PC, CALL_INDIRECT saves old FP into x11 in the new frame
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::allocate_frame_imm::<F>(1, 100), // Allocate a frame at x1 just so we have some room to work
-            wom::add_imm::<F>(12, 0, 28_i16.into()), // x12 = 28 (target PC)
-            wom::add_imm::<F>(11, 0, 999_i16.into()), // x11 = 999
-            wom::call_indirect::<F>(10, 11, 12, 100), // Call to PC=x12, FP offset=100, save PC→x10, FP→x11
-            wom::add_imm::<F>(8, 0, 456_i16.into()), // x8 = 456 (after return) - this should NOT execute
-            wom::reveal(8, 0),                       // wom::reveal x8 - this should NOT execute
-            // PC = 28 (function start, where x12 points)
-            wom::const_32_imm(0, 0, 0),
-            wom::reveal(11, 0), // wom::reveal x11 (should be 0, the saved FP)
-            wom::halt(),        // End the test here, don't return
+            wom::const_32_imm(0, 0, 0),               // PC=0
+            wom::add_imm::<F>(12, 0, 20_i16.into()),  // PC=4: x12 = 20 (target PC)
+            wom::call_indirect::<F>(10, 11, 12, 100), // PC=8: CALL_INDIRECT to PC=x12, FP offset=100
+            wom::add_imm::<F>(8, 0, 456_i16.into()),  // PC=12: should NOT execute
+            wom::halt(),                              // PC=16: padding
+            // New frame starts here (PC=20), FP = old_fp + 100
+            wom::reveal(11, 0), // PC=20: reveal x11 (should be 0, the saved old FP)
+            wom::halt(),        // PC=24: End
         ];
 
         run_vm_test("CALL_INDIRECT instruction", instructions, 0, None).unwrap()
