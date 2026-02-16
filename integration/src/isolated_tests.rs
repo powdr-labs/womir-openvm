@@ -1615,7 +1615,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rem_s() {
+    fn test_rems() {
         setup_tracing_with_log_level(Level::WARN);
 
         // 42 % 7 = 0
@@ -1632,7 +1632,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rem_s_negative() {
+    fn test_rems_negative() {
         setup_tracing_with_log_level(Level::WARN);
 
         // -43 % 7 = -1 (remainder has sign of dividend)
@@ -1766,7 +1766,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rem_s_64() {
+    fn test_rems_64() {
         setup_tracing_with_log_level(Level::WARN);
 
         // -43 % 7 = -1 (64-bit signed)
@@ -1836,7 +1836,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rem_s_high_register_indices() {
+    fn test_rems_high_register_indices() {
         setup_tracing_with_log_level(Level::WARN);
 
         // -43 % 7 = -1
@@ -1908,7 +1908,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rem_s_64_high_register_indices() {
+    fn test_rems_64_high_register_indices() {
         setup_tracing_with_log_level(Level::WARN);
 
         // -43 % 7 = -1 (64-bit signed)
