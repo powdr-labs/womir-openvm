@@ -101,7 +101,9 @@ where
         // RET: new_fp = absolute FP from register
         let new_fp = match opcode {
             CallOpcode::CALL | CallOpcode::CALL_INDIRECT => {
-                old_fp_val + instruction.e.as_canonical_u32()
+                let nfp = old_fp_val + instruction.e.as_canonical_u32();
+                debug_assert!(nfp >= old_fp_val, "fp + offset overflows u32");
+                nfp
             }
             CallOpcode::RET => u32::from_le_bytes(new_fp_bytes),
         };
@@ -214,7 +216,11 @@ unsafe fn execute_call_impl<F: PrimeField32, CTX: ExecutionCtxTrait>(
     // CALL/CALL_INDIRECT: new_fp = old_fp + immediate offset (to_fp_operand)
     // RET: new_fp = absolute FP from register (to_fp_operand is register pointer)
     let new_fp = match opcode {
-        CallOpcode::CALL | CallOpcode::CALL_INDIRECT => fp + pre.to_fp_operand,
+        CallOpcode::CALL | CallOpcode::CALL_INDIRECT => {
+            let nfp = fp + pre.to_fp_operand;
+            debug_assert!(nfp >= fp, "fp + offset overflows u32");
+            nfp
+        }
         CallOpcode::RET => {
             let fp_bytes: [u8; RV32_REGISTER_NUM_LIMBS] =
                 exec_state.vm_read(RV32_REGISTER_AS, fp + pre.to_fp_operand);

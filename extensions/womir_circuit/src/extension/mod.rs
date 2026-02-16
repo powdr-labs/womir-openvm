@@ -244,7 +244,7 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(const32);
 
         let call = CallAir::new(
-            CallAdapterAir::new(exec_bridge, memory_bridge),
+            CallAdapterAir::new(exec_bridge, memory_bridge, range_checker, pointer_max_bits),
             CallCoreAir::new(CallOpcode::CLASS_OFFSET),
         );
         inventory.add_air(call);
@@ -369,7 +369,10 @@ where
 
         inventory.next_air::<CallAir>()?;
         let call = CallChip::new(
-            CallFiller::new(CallAdapterFiller::new(), CallOpcode::CLASS_OFFSET),
+            CallFiller::new(
+                CallAdapterFiller::new(range_checker.clone(), pointer_max_bits),
+                CallOpcode::CLASS_OFFSET,
+            ),
             mem_helper.clone(),
         );
         inventory.add_executor_chip(call);

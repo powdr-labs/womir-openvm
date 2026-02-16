@@ -870,7 +870,7 @@ is_valid * (is_valid - 1) = 0
 
 
 # VmAirWrapper<CallAdapterAir, CallCoreAir>
-Symbolic machine using 54 unique main columns:
+Symbolic machine using 58 unique main columns:
   from_state__pc
   from_state__fp
   from_state__timestamp
@@ -906,6 +906,10 @@ Symbolic machine using 54 unique main columns:
   fp_write_aux__base__timestamp_lt_aux__lower_decomp__0
   fp_write_aux__base__timestamp_lt_aux__lower_decomp__1
   fp_write_aux__prev_data__0
+  offset_limbs__0
+  offset_limbs__1
+  new_fp_limbs__0
+  new_fp_limbs__1
   new_fp_data__0
   new_fp_data__1
   new_fp_data__2
@@ -937,12 +941,12 @@ mult=2013265920 * (0 + is_ret + is_call + is_call_indirect - (is_call + is_call_
 mult=0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect), args=[0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect), to_fp_operand + from_state__fp, new_fp_data__0, new_fp_data__1, new_fp_data__2, new_fp_data__3, from_state__timestamp + 1]
 mult=2013265920 * (is_ret + is_call_indirect), args=[is_ret + is_call_indirect, to_pc_reg_ptr + from_state__fp, to_pc_data__0, to_pc_data__1, to_pc_data__2, to_pc_data__3, to_pc_read_aux__base__prev_timestamp]
 mult=is_ret + is_call_indirect, args=[is_ret + is_call_indirect, to_pc_reg_ptr + from_state__fp, to_pc_data__0, to_pc_data__1, to_pc_data__2, to_pc_data__3, from_state__timestamp + 2]
-mult=2013265920 * (is_call + is_call_indirect), args=[is_call + is_call_indirect, save_fp_ptr + ((0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (0 + new_fp_data__0 * 1 + new_fp_data__1 * 256 + new_fp_data__2 * 65536 + new_fp_data__3 * 16777216) + (1 - (0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect))) * (from_state__fp + to_fp_operand)), save_fp_write_aux__prev_data__0, save_fp_write_aux__prev_data__1, save_fp_write_aux__prev_data__2, save_fp_write_aux__prev_data__3, save_fp_write_aux__base__prev_timestamp]
-mult=is_call + is_call_indirect, args=[is_call + is_call_indirect, save_fp_ptr + ((0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (0 + new_fp_data__0 * 1 + new_fp_data__1 * 256 + new_fp_data__2 * 65536 + new_fp_data__3 * 16777216) + (1 - (0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect))) * (from_state__fp + to_fp_operand)), old_fp_data__0, old_fp_data__1, old_fp_data__2, old_fp_data__3, from_state__timestamp + 3]
-mult=2013265920 * (is_call + is_call_indirect), args=[is_call + is_call_indirect, save_pc_ptr + ((0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (0 + new_fp_data__0 * 1 + new_fp_data__1 * 256 + new_fp_data__2 * 65536 + new_fp_data__3 * 16777216) + (1 - (0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect))) * (from_state__fp + to_fp_operand)), save_pc_write_aux__prev_data__0, save_pc_write_aux__prev_data__1, save_pc_write_aux__prev_data__2, save_pc_write_aux__prev_data__3, save_pc_write_aux__base__prev_timestamp]
-mult=is_call + is_call_indirect, args=[is_call + is_call_indirect, save_pc_ptr + ((0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (0 + new_fp_data__0 * 1 + new_fp_data__1 * 256 + new_fp_data__2 * 65536 + new_fp_data__3 * 16777216) + (1 - (0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect))) * (from_state__fp + to_fp_operand)), return_pc_data__0, return_pc_data__1, return_pc_data__2, return_pc_data__3, from_state__timestamp + 4]
+mult=2013265920 * (is_call + is_call_indirect), args=[is_call + is_call_indirect, save_fp_ptr + ((0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (0 + new_fp_data__0 * 1 + new_fp_data__1 * 256 + new_fp_data__2 * 65536 + new_fp_data__3 * 16777216) + (is_call + is_call_indirect) * (new_fp_limbs__0 + new_fp_limbs__1 * 65536)), save_fp_write_aux__prev_data__0, save_fp_write_aux__prev_data__1, save_fp_write_aux__prev_data__2, save_fp_write_aux__prev_data__3, save_fp_write_aux__base__prev_timestamp]
+mult=is_call + is_call_indirect, args=[is_call + is_call_indirect, save_fp_ptr + ((0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (0 + new_fp_data__0 * 1 + new_fp_data__1 * 256 + new_fp_data__2 * 65536 + new_fp_data__3 * 16777216) + (is_call + is_call_indirect) * (new_fp_limbs__0 + new_fp_limbs__1 * 65536)), old_fp_data__0, old_fp_data__1, old_fp_data__2, old_fp_data__3, from_state__timestamp + 3]
+mult=2013265920 * (is_call + is_call_indirect), args=[is_call + is_call_indirect, save_pc_ptr + ((0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (0 + new_fp_data__0 * 1 + new_fp_data__1 * 256 + new_fp_data__2 * 65536 + new_fp_data__3 * 16777216) + (is_call + is_call_indirect) * (new_fp_limbs__0 + new_fp_limbs__1 * 65536)), save_pc_write_aux__prev_data__0, save_pc_write_aux__prev_data__1, save_pc_write_aux__prev_data__2, save_pc_write_aux__prev_data__3, save_pc_write_aux__base__prev_timestamp]
+mult=is_call + is_call_indirect, args=[is_call + is_call_indirect, save_pc_ptr + ((0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (0 + new_fp_data__0 * 1 + new_fp_data__1 * 256 + new_fp_data__2 * 65536 + new_fp_data__3 * 16777216) + (is_call + is_call_indirect) * (new_fp_limbs__0 + new_fp_limbs__1 * 65536)), return_pc_data__0, return_pc_data__1, return_pc_data__2, return_pc_data__3, from_state__timestamp + 4]
 mult=2013265920 * (0 + is_ret + is_call + is_call_indirect), args=[5, 0, fp_write_aux__prev_data__0, fp_write_aux__base__prev_timestamp]
-mult=0 + is_ret + is_call + is_call_indirect, args=[5, 0, (0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (0 + new_fp_data__0 * 1 + new_fp_data__1 * 256 + new_fp_data__2 * 65536 + new_fp_data__3 * 16777216) + (1 - (0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect))) * (from_state__fp + to_fp_operand), from_state__timestamp + 5]
+mult=0 + is_ret + is_call + is_call_indirect, args=[5, 0, (0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (0 + new_fp_data__0 * 1 + new_fp_data__1 * 256 + new_fp_data__2 * 65536 + new_fp_data__3 * 16777216) + (is_call + is_call_indirect) * (new_fp_limbs__0 + new_fp_limbs__1 * 65536), from_state__timestamp + 5]
 
 // Bus 2 (PC_LOOKUP):
 mult=0 + is_ret + is_call + is_call_indirect, args=[from_state__pc, 0 + is_ret * 0 + is_call * 1 + is_call_indirect * 2 + 4662, save_pc_ptr, save_fp_ptr, to_pc_reg_ptr, to_pc_imm, to_fp_operand, 0, 0]
@@ -954,6 +958,10 @@ mult=0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect), arg
 mult=0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect), args=[to_fp_read_aux__base__timestamp_lt_aux__lower_decomp__1, 12]
 mult=is_ret + is_call_indirect, args=[to_pc_read_aux__base__timestamp_lt_aux__lower_decomp__0, 17]
 mult=is_ret + is_call_indirect, args=[to_pc_read_aux__base__timestamp_lt_aux__lower_decomp__1, 12]
+mult=is_call + is_call_indirect, args=[offset_limbs__0, 16]
+mult=is_call + is_call_indirect, args=[offset_limbs__1, 13]
+mult=is_call + is_call_indirect, args=[new_fp_limbs__0, 16]
+mult=is_call + is_call_indirect, args=[new_fp_limbs__1, 13]
 mult=is_call + is_call_indirect, args=[save_fp_write_aux__base__timestamp_lt_aux__lower_decomp__0, 17]
 mult=is_call + is_call_indirect, args=[save_fp_write_aux__base__timestamp_lt_aux__lower_decomp__1, 12]
 mult=is_call + is_call_indirect, args=[save_pc_write_aux__base__timestamp_lt_aux__lower_decomp__0, 17]
@@ -971,6 +979,9 @@ is_call_indirect * (is_call_indirect - 1) = 0
 (0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (from_state__timestamp + 1 - to_fp_read_aux__base__prev_timestamp - 1 - (0 + to_fp_read_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + to_fp_read_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 (is_ret + is_call_indirect) * (from_state__timestamp + 2 - to_pc_read_aux__base__prev_timestamp - 1 - (0 + to_pc_read_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + to_pc_read_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 (0 + is_ret + is_call + is_call_indirect) * (0 + old_fp_data__0 * 1 + old_fp_data__1 * 256 + old_fp_data__2 * 65536 + old_fp_data__3 * 16777216 - from_state__fp) = 0
+(is_call + is_call_indirect) * (offset_limbs__0 + offset_limbs__1 * 65536 - to_fp_operand) = 0
+(is_call + is_call_indirect) * ((old_fp_data__0 + old_fp_data__1 * 256 + offset_limbs__0 - new_fp_limbs__0) * 2013235201 * ((old_fp_data__0 + old_fp_data__1 * 256 + offset_limbs__0 - new_fp_limbs__0) * 2013235201 - 1)) = 0
+(is_call + is_call_indirect) * (old_fp_data__2 + old_fp_data__3 * 256 + offset_limbs__1 + (old_fp_data__0 + old_fp_data__1 * 256 + offset_limbs__0 - new_fp_limbs__0) * 2013235201 - new_fp_limbs__1) = 0
 (is_call + is_call_indirect) * (from_state__timestamp + 3 - save_fp_write_aux__base__prev_timestamp - 1 - (0 + save_fp_write_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + save_fp_write_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 (is_call + is_call_indirect) * (from_state__timestamp + 4 - save_pc_write_aux__base__prev_timestamp - 1 - (0 + save_pc_write_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + save_pc_write_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 (0 + is_ret + is_call + is_call_indirect) * (from_state__timestamp + 5 - fp_write_aux__base__prev_timestamp - 1 - (0 + fp_write_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + fp_write_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
