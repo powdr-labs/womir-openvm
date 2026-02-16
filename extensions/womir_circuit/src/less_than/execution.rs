@@ -75,9 +75,9 @@ pub(super) struct LessThanPreCompute {
     /// Second operand value (if immediate) or register index (if register)
     c: u32,
     /// Result register index
-    a: u8,
+    a: u32,
     /// First operand register index
-    b: u8,
+    b: u32,
 }
 
 impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> LessThanExecutor<A, NUM_LIMBS, LIMB_BITS> {
@@ -114,8 +114,8 @@ impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> LessThanExecutor<A, NUM_
             } else {
                 c_u32
             },
-            a: a.as_canonical_u32() as u8,
-            b: b.as_canonical_u32() as u8,
+            a: a.as_canonical_u32(),
+            b: b.as_canonical_u32(),
         };
         Ok((is_imm, local_opcode == LessThanOpcode::SLTU))
     }
@@ -207,7 +207,7 @@ unsafe fn execute_e12_impl<
     const { assert!(NUM_LIMBS == 4 || NUM_LIMBS == 8) };
 
     let fp = exec_state.memory.fp::<F>();
-    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
+    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.b);
     let a = to_u64(rs1);
     let b = if E_IS_IMM {
         // pre_compute.c is already sign-extended to 32 bits by pre_compute_impl
@@ -229,7 +229,7 @@ unsafe fn execute_e12_impl<
     };
     let mut rd = [0u8; NUM_LIMBS];
     rd[0] = cmp_result as u8;
-    exec_state.vm_write(RV32_REGISTER_AS, fp + (pre_compute.a as u32), &rd);
+    exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &rd);
     let pc = exec_state.pc();
     exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
 }

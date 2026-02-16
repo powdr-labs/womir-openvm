@@ -1428,12 +1428,7 @@ mod tests {
 
         let spec = TestSpec {
             program: vec![wom::lt_u_64::<F>(304, 300, 302)],
-            start_registers: vec![
-                (300, 0),
-                (301, 1),
-                (302, 0),
-                (303, 2),
-            ],
+            start_registers: vec![(300, 0), (301, 1), (302, 0), (303, 2)],
             expected_registers: vec![(304, 1), (305, 0)],
             ..Default::default()
         };
