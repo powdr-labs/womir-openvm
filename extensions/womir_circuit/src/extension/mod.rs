@@ -15,7 +15,7 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
     SharedBitwiseOperationLookupChip,
 };
 use openvm_circuit_primitives::range_tuple::{
-    RangeTupleCheckerAir, RangeTupleCheckerBus, RangeTupleCheckerChip, SharedRangeTupleCheckerChip,
+    RangeTupleCheckerAir, RangeTupleCheckerBus, RangeTupleCheckerChip,
 };
 use openvm_instructions::LocalOpcode;
 use openvm_rv32im_circuit::{
@@ -47,23 +47,15 @@ pub use self::WomirCpuProverExt as WomirProverExt;
 // ============ Extension Struct Definitions ============
 
 /// RISC-V 32-bit Base (RV32I) Extension
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct Womir {
-    #[serde(default = "default_range_tuple_checker_sizes")]
-    pub range_tuple_checker_sizes: [u32; 2],
-}
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+pub struct Womir {}
 
-impl Default for Womir {
-    fn default() -> Self {
-        Self {
-            range_tuple_checker_sizes: default_range_tuple_checker_sizes(),
-        }
-    }
-}
-
-fn default_range_tuple_checker_sizes() -> [u32; 2] {
-    // 64-bit DivRem needs sizes[1] >= 256 * 2 * 8 = 4096 = 16 * (1 << 8)
-    [1 << 8, 16 * (1 << 8)]
+/// Returns range tuple checker sizes for DivRem with `num_limbs` limbs.
+/// sizes[0] = range of each limb = 1 << RV32_CELL_BITS
+/// sizes[1] = max carry = (1 << RV32_CELL_BITS) * 2 * num_limbs
+const fn divrem_range_tuple_sizes(num_limbs: u32) -> [u32; 2] {
+    let limb_range = 1u32 << RV32_CELL_BITS;
+    [limb_range, limb_range * 2 * num_limbs]
 }
 
 // ============ Executor and Periphery Enums for Extension ============
@@ -221,30 +213,35 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         );
         inventory.add_air(less_than_64);
 
-        let range_tuple_bus = {
-            let existing_air = inventory.find_air::<RangeTupleCheckerAir<2>>().next();
-            if let Some(air) = existing_air {
-                air.bus
-            } else {
-                let bus = RangeTupleCheckerBus::new(
-                    inventory.new_bus_idx(),
-                    self.range_tuple_checker_sizes,
-                );
-                let air = RangeTupleCheckerAir { bus };
-                inventory.add_air(air);
-                bus
-            }
-        };
+        let divrem32_range_tuple_bus =
+            RangeTupleCheckerBus::new(inventory.new_bus_idx(), divrem_range_tuple_sizes(4));
+        inventory.add_air(RangeTupleCheckerAir {
+            bus: divrem32_range_tuple_bus,
+        });
 
-        let divrem = Rv32DivRemAir::new(
+        let divrem_32 = Rv32DivRemAir::new(
             Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
-            DivRemCoreAir::new(bitwise_lu, range_tuple_bus, DivRemOpcode::CLASS_OFFSET),
+            DivRemCoreAir::new(
+                bitwise_lu,
+                divrem32_range_tuple_bus,
+                DivRemOpcode::CLASS_OFFSET,
+            ),
         );
-        inventory.add_air(divrem);
+        inventory.add_air(divrem_32);
+
+        let divrem64_range_tuple_bus =
+            RangeTupleCheckerBus::new(inventory.new_bus_idx(), divrem_range_tuple_sizes(8));
+        inventory.add_air(RangeTupleCheckerAir {
+            bus: divrem64_range_tuple_bus,
+        });
 
         let divrem_64 = DivRem64Air::new(
             BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
-            DivRemCoreAir::new(bitwise_lu, range_tuple_bus, DivRem64Opcode::CLASS_OFFSET),
+            DivRemCoreAir::new(
+                bitwise_lu,
+                divrem64_range_tuple_bus,
+                DivRem64Opcode::CLASS_OFFSET,
+            ),
         );
         inventory.add_air(divrem_64);
 
@@ -368,38 +365,34 @@ where
         );
         inventory.add_executor_chip(less_than_64);
 
-        let range_tuple_chip = {
-            let existing_chip = inventory
-                .find_chip::<SharedRangeTupleCheckerChip<2>>()
-                .next();
-            if let Some(chip) = existing_chip {
-                chip.clone()
-            } else {
-                let air: &RangeTupleCheckerAir<2> = inventory.next_air()?;
-                let chip = Arc::new(RangeTupleCheckerChip::new(air.bus));
-                inventory.add_periphery_chip(chip.clone());
-                chip
-            }
-        };
+        let divrem32_range_tuple_air: &RangeTupleCheckerAir<2> = inventory.next_air()?;
+        let divrem32_range_tuple_chip =
+            Arc::new(RangeTupleCheckerChip::new(divrem32_range_tuple_air.bus));
+        inventory.add_periphery_chip(divrem32_range_tuple_chip.clone());
 
         inventory.next_air::<Rv32DivRemAir>()?;
-        let divrem = Rv32DivRemChip::new(
+        let divrem32 = Rv32DivRemChip::new(
             DivRemFiller::new(
                 Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
-                range_tuple_chip.clone(),
+                divrem32_range_tuple_chip.clone(),
                 DivRemOpcode::CLASS_OFFSET,
             ),
             mem_helper.clone(),
         );
-        inventory.add_executor_chip(divrem);
+        inventory.add_executor_chip(divrem32);
+
+        let divrem64_range_tuple_air: &RangeTupleCheckerAir<2> = inventory.next_air()?;
+        let divrem64_range_tuple_chip =
+            Arc::new(RangeTupleCheckerChip::new(divrem64_range_tuple_air.bus));
+        inventory.add_periphery_chip(divrem64_range_tuple_chip.clone());
 
         inventory.next_air::<DivRem64Air>()?;
         let divrem_64 = DivRem64Chip::new(
             DivRemFiller::new(
                 BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
-                range_tuple_chip.clone(),
+                divrem64_range_tuple_chip.clone(),
                 DivRem64Opcode::CLASS_OFFSET,
             ),
             mem_helper.clone(),
