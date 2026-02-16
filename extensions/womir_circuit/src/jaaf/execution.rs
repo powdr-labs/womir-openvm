@@ -92,11 +92,19 @@ where
             self.adapter
                 .read(state.memory, instruction, &mut adapter_record);
 
-        let new_fp = u32::from_le_bytes(new_fp_bytes);
+        let raw_fp_reg_val = u32::from_le_bytes(new_fp_bytes);
         // Get old FP from memory (hasn't been modified yet by the write phase)
         let old_fp_val = state.memory.data.fp::<F>();
 
-        // Fill core record
+        // Compute actual new FP:
+        // CALL/CALL_INDIRECT: new_fp = old_fp + offset
+        // RET: new_fp = absolute FP from register
+        let new_fp = match opcode {
+            JaafOpcode::CALL | JaafOpcode::CALL_INDIRECT => old_fp_val + raw_fp_reg_val,
+            JaafOpcode::RET => raw_fp_reg_val,
+        };
+
+        // Fill core record (new_fp_data stores raw register value, not actual new FP)
         core_record.new_fp_data = new_fp_bytes;
         core_record.to_pc_data = to_pc_bytes;
         core_record.old_fp_data = old_fp_val.to_le_bytes();
@@ -118,7 +126,7 @@ where
         // Determine the target PC
         let to_pc = match opcode {
             JaafOpcode::RET | JaafOpcode::CALL_INDIRECT => u32::from_le_bytes(to_pc_bytes),
-            _ => instruction.d.as_canonical_u32(),
+            JaafOpcode::CALL => instruction.d.as_canonical_u32(),
         };
 
         *state.pc = to_pc;
@@ -200,10 +208,16 @@ unsafe fn execute_jaaf_impl<F: PrimeField32, CTX: ExecutionCtxTrait>(
     let opcode = JaafOpcode::from_repr(pre.opcode as usize).unwrap();
     let fp = exec_state.memory.fp::<F>();
 
-    // Read new FP value from register
-    let new_fp_bytes: [u8; RV32_REGISTER_NUM_LIMBS] =
+    // Read raw FP value from register (offset for CALL/CALL_INDIRECT, absolute for RET)
+    let raw_fp_bytes: [u8; RV32_REGISTER_NUM_LIMBS] =
         exec_state.vm_read(RV32_REGISTER_AS, fp + pre.to_fp_reg_ptr);
-    let new_fp = u32::from_le_bytes(new_fp_bytes);
+    let raw_fp_val = u32::from_le_bytes(raw_fp_bytes);
+
+    // Compute actual new FP
+    let new_fp = match opcode {
+        JaafOpcode::CALL | JaafOpcode::CALL_INDIRECT => fp + raw_fp_val,
+        JaafOpcode::RET => raw_fp_val,
+    };
 
     // Read target PC from register (for RET, CALL_INDIRECT)
     let to_pc = match opcode {
@@ -212,15 +226,15 @@ unsafe fn execute_jaaf_impl<F: PrimeField32, CTX: ExecutionCtxTrait>(
                 exec_state.vm_read(RV32_REGISTER_AS, fp + pre.to_pc_reg_ptr);
             u32::from_le_bytes(pc_bytes)
         }
-        _ => pre.to_pc_imm,
+        JaafOpcode::CALL => pre.to_pc_imm,
     };
 
     let old_pc = exec_state.pc();
     let old_fp = fp;
 
-    // Save old FP to register in new frame (for JAAF_SAVE, CALL, CALL_INDIRECT)
+    // Save old FP to register in new frame (for CALL, CALL_INDIRECT)
     match opcode {
-        JaafOpcode::JAAF_SAVE | JaafOpcode::CALL | JaafOpcode::CALL_INDIRECT => {
+        JaafOpcode::CALL | JaafOpcode::CALL_INDIRECT => {
             exec_state.vm_write::<u8, RV32_REGISTER_NUM_LIMBS>(
                 RV32_REGISTER_AS,
                 new_fp + pre.save_fp_ptr,

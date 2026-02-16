@@ -153,8 +153,6 @@ pub enum Eq64Opcode {
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 pub enum JaafOpcode {
-    JAAF,          // jump and activate frame
-    JAAF_SAVE,     // jump and activate frame, save fp
     RET,           // return to pc and restore frame
     CALL,          // call function, save pc and fp
     CALL_INDIRECT, // call function indirect, save pc and fp

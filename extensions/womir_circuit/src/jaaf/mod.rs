@@ -47,8 +47,6 @@ impl<F: PrimeField32> TraceFiller<F> for JaafFiller {
         core_row.is_call_indirect = F::from_bool(local_opcode == JaafOpcode::CALL_INDIRECT);
         core_row.is_call = F::from_bool(local_opcode == JaafOpcode::CALL);
         core_row.is_ret = F::from_bool(local_opcode == JaafOpcode::RET);
-        core_row.is_jaaf_save = F::from_bool(local_opcode == JaafOpcode::JAAF_SAVE);
-        core_row.is_jaaf = F::from_bool(local_opcode == JaafOpcode::JAAF);
 
         // return_pc_data
         core_row.return_pc_data = record.return_pc_data.map(F::from_canonical_u8);

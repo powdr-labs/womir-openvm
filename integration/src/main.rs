@@ -1136,48 +1136,6 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_jaaf_instruction() {
-        // Simple test with JAAF instruction
-        // We'll set up a value, jump with JAAF, and verify the result
-        let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::add_imm::<F>(8, 0, 42_i16.into()), // x8 = 42
-            wom::allocate_frame_imm::<F>(9, 100),   // Allocate new frame of size 100, x9 = new FP
-            wom::copy_into_frame::<F>(10, 8, 9), // PC=12: Copy x8 to [x9[x10]], which writes to address pointed by x10
-            wom::jaaf::<F>(24, 9),               // Jump to PC=24, set FP=x9
-            wom::halt(),                         // This should be skipped
-            // PC = 24
-            wom::const_32_imm(0, 0, 0),
-            wom::reveal(10, 0), // wom::reveal x8 (which should still be 42)
-            wom::halt(),
-        ];
-
-        run_vm_test("JAAF instruction", instructions, 42, None).unwrap()
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_jaaf_save_instruction() {
-        // Test JAAF_SAVE: jump and save FP
-        let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::allocate_frame_imm::<F>(1, 100), // Allocate entry frame
-            wom::add_imm::<F>(11, 0, 99_i16.into()), // x11 = 99
-            wom::allocate_frame_imm::<F>(9, 100), // Allocate new frame of size 100, x9 = new FP
-            wom::jaaf_save::<F>(11, 28, 9),       // Jump to PC=24, set FP=x9, save old FP to x11
-            wom::halt(),                          // This should be skipped
-            wom::halt(),                          // This should be skipped too
-            // PC = 28 (byte offset, so instruction at index 6)
-            wom::const_32_imm(0, 0, 0),
-            wom::reveal(11, 0), // wom::reveal x11 (should be 0, the old FP, not 99)
-            wom::halt(),
-        ];
-
-        run_vm_test("JAAF_SAVE instruction", instructions, 0, None).unwrap()
-    }
-
-    #[test]
-    #[should_panic]
     fn test_ret_instruction() {
         // Test RET: return to saved PC and FP
         let instructions = vec![
@@ -1404,7 +1362,7 @@ mod tests {
             wom::allocate_frame_imm::<F>(9, 100),   // Allocate new frame of size 100, x9 = new FP
             wom::add_imm::<F>(10, 0, 0_i16.into()), // PC=12: x10 = 0 (register to read into)
             wom::copy_into_frame::<F>(10, 8, 9), // PC=16: Copy x8 to [x9[x10]], which writes to address pointed by x10
-            wom::jaaf::<F>(24, 9),               // Jump to PC=24, set FP=x9
+            wom::jump::<F>(24), // TODO: was jaaf, needs CALL with frame change               // Jump to PC=24, set FP=x9
             // Since copy_into_frame writes x8's value to memory at [x9[x10]],
             // and we activated the frame at x9, x10 should now contain 42.
             wom::const_32_imm(0, 0, 0),
@@ -1427,9 +1385,9 @@ mod tests {
             // by convention on the first allocation.
             wom::add_imm::<F>(10, 0, 0_i16.into()), // PC=12: x10 = 0 (destination register)
             wom::copy_into_frame::<F>(10, 8, 9),    // PC=16: Copy x8 to [x9[x10]]
-            wom::jaaf::<F>(28, 9),                  // Jump to PC=28, set FP=x9
-            wom::halt(),                            // Should be skipped
-            wom::const_32_imm(0, 0, 0),             // PC=28
+            wom::jump::<F>(28), // TODO: was jaaf, needs CALL with frame change                  // Jump to PC=28, set FP=x9
+            wom::halt(),        // Should be skipped
+            wom::const_32_imm(0, 0, 0), // PC=28
             wom::reveal(10, 0), // wom::reveal x10 (should be 123, the value from x8)
             wom::halt(),
         ];
@@ -1785,7 +1743,7 @@ mod tests {
             wom::allocate_frame_imm::<F>(9, 64), // Allocate frame, pointer in r9
             wom::copy_into_frame::<F>(2, 8, 9),  // Copy r8 to frame[2]
             // Jump to new frame
-            wom::jaaf::<F>(28, 9), // Jump to PC=28, activate frame at r9
+            wom::jump::<F>(28), // TODO: was jaaf, needs CALL with frame change // Jump to PC=28, activate frame at r9
             // This should be skipped
             wom::halt(),
             wom::const_32_imm(0, 0, 0), // PC = 28

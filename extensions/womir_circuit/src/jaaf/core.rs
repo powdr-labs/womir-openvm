@@ -35,8 +35,6 @@ pub struct JaafCoreCols<T> {
     pub return_pc_data: [T; RV32_REGISTER_NUM_LIMBS],
 
     /// Opcode flags (exactly one is 1 per valid row)
-    pub is_jaaf: T,
-    pub is_jaaf_save: T,
     pub is_ret: T,
     pub is_call: T,
     pub is_call_indirect: T,
@@ -95,13 +93,7 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, JaafAdapterInterface<AB>> for JaafCor
     ) -> AdapterAirContext<AB::Expr, JaafAdapterInterface<AB>> {
         let cols: &JaafCoreCols<AB::Var> = local_core.borrow();
 
-        let flags = [
-            cols.is_jaaf,
-            cols.is_jaaf_save,
-            cols.is_ret,
-            cols.is_call,
-            cols.is_call_indirect,
-        ];
+        let flags = [cols.is_ret, cols.is_call, cols.is_call_indirect];
 
         // Each flag is boolean, and at most one is 1
         let is_valid = flags.iter().fold(AB::Expr::ZERO, |acc, &flag| {
@@ -123,8 +115,8 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, JaafAdapterInterface<AB>> for JaafCor
             from_pc + AB::Expr::from_canonical_u32(openvm_instructions::program::DEFAULT_PC_STEP),
         );
 
-        // Compose new_fp for the FP_AS write
-        let new_fp_composed = cols
+        // Compose raw register value (FP offset for CALL/CALL_INDIRECT, absolute FP for RET)
+        let raw_fp_from_reg = cols
             .new_fp_data
             .iter()
             .enumerate()
@@ -132,8 +124,16 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, JaafAdapterInterface<AB>> for JaafCor
                 acc + limb.into() * AB::Expr::from_canonical_u32(1u32 << (i * 8))
             });
 
+        // Compose old FP from old_fp_data
         // old_fp_data decomposition is constrained by the adapter:
         // adapter checks compose(old_fp_data) == from_state.fp
+        let old_fp_composed = cols
+            .old_fp_data
+            .iter()
+            .enumerate()
+            .fold(AB::Expr::ZERO, |acc, (i, &limb)| {
+                acc + limb.into() * AB::Expr::from_canonical_u32(1u32 << (i * 8))
+            });
 
         // Build the opcode expression from flags
         let expected_opcode = flags.iter().zip(JaafOpcode::iter()).fold(
@@ -146,9 +146,16 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, JaafAdapterInterface<AB>> for JaafCor
 
         // Derive conditional flags from opcode indicator variables
         let has_pc_read: AB::Expr = cols.is_ret.into() + cols.is_call_indirect.into();
-        let has_save_fp: AB::Expr =
-            cols.is_jaaf_save.into() + cols.is_call.into() + cols.is_call_indirect.into();
+        // For CALL/CALL_INDIRECT: save both FP and PC
+        let has_save_fp: AB::Expr = cols.is_call.into() + cols.is_call_indirect.into();
         let has_save_pc: AB::Expr = cols.is_call.into() + cols.is_call_indirect.into();
+        // For CALL/CALL_INDIRECT: new FP = old FP + offset; for RET: new FP = register value
+        let is_fp_offset: AB::Expr = cols.is_call.into() + cols.is_call_indirect.into();
+
+        // Compute actual new FP:
+        // For CALL/CALL_INDIRECT (is_fp_offset=1): new_fp = old_fp + offset
+        // For RET (is_fp_offset=0): new_fp = register value
+        let actual_new_fp = raw_fp_from_reg + is_fp_offset.clone() * old_fp_composed;
 
         AdapterAirContext {
             to_pc: None, // PC is handled by the adapter
@@ -161,7 +168,7 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, JaafAdapterInterface<AB>> for JaafCor
                     cols.old_fp_data.map(Into::into),
                     cols.return_pc_data.map(Into::into),
                 ],
-                [new_fp_composed],
+                [actual_new_fp],
             ),
             instruction: JaafInstruction {
                 is_valid: is_valid.clone(),

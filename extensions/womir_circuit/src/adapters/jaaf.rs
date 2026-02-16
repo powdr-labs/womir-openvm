@@ -37,9 +37,9 @@ use super::{RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp};
 ///
 /// Memory operations in timestamp order:
 ///   0. Read FP from FP_AS
-///   1. Read to_fp_reg (new FP value) - always
+///   1. Read to_fp_reg (FP offset for CALL/CALL_INDIRECT, absolute FP for RET) - always
 ///   2. Read to_pc_reg (for RET, CALL_INDIRECT) - conditional on has_pc_read
-///   3. Write save_fp (for JAAF_SAVE, CALL, CALL_INDIRECT) - conditional on has_save_fp
+///   3. Write save_fp (for CALL, CALL_INDIRECT) - conditional on has_save_fp
 ///   4. Write save_pc (for CALL, CALL_INDIRECT) - conditional on has_save_pc
 ///   5. Write new FP to FP_AS - always
 #[repr(C)]
@@ -47,7 +47,7 @@ use super::{RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp};
 pub struct JaafAdapterCols<T> {
     pub from_state: ExecutionState<T>,
 
-    /// Operand e: pointer to register holding new FP value (always used)
+    /// Operand e: pointer to register holding FP offset (CALL/CALL_INDIRECT) or absolute FP (RET)
     pub to_fp_reg_ptr: T,
     /// Operand b: pointer to register where old FP is saved
     pub save_fp_ptr: T,
@@ -55,7 +55,7 @@ pub struct JaafAdapterCols<T> {
     pub save_pc_ptr: T,
     /// Operand c: pointer to register holding target PC (for RET, CALL_INDIRECT)
     pub to_pc_reg_ptr: T,
-    /// Operand d: immediate PC target (for JAAF, JAAF_SAVE, CALL)
+    /// Operand d: immediate PC target (for CALL)
     pub to_pc_imm: T,
 
     /// Auxiliary columns for memory operations
@@ -76,7 +76,7 @@ pub struct JaafInstruction<T> {
     pub opcode: T,
     /// 1 if we read a register for PC (RET, CALL_INDIRECT), 0 otherwise
     pub has_pc_read: T,
-    /// 1 if we save FP (JAAF_SAVE, CALL, CALL_INDIRECT), 0 otherwise
+    /// 1 if we save FP (CALL, CALL_INDIRECT), 0 otherwise
     pub has_save_fp: T,
     /// 1 if we save PC (CALL, CALL_INDIRECT), 0 otherwise
     pub has_save_pc: T,
@@ -174,13 +174,9 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JaafAdapterAir {
             )
             .eval(builder, has_pc_read.clone());
 
-        // Compute new_fp_composed for use in save addresses (saves are relative to new frame)
-        let new_fp_composed = ctx.reads[0]
-            .iter()
-            .enumerate()
-            .fold(AB::Expr::ZERO, |acc, (i, limb)| {
-                acc + limb.clone() * AB::Expr::from_canonical_u32(1u32 << (i * 8))
-            });
+        // The core provides the actual new FP value in writes.1[0].
+        // For CALL/CALL_INDIRECT this is old_fp + offset, for RET this is the absolute FP.
+        let new_fp_composed = ctx.writes.1[0].clone();
 
         // Constrain that old_fp_data (from core writes.0[0]) decomposes to from_state.fp
         let old_fp_composed = ctx.writes.0[0]
@@ -355,7 +351,7 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for JaafAdapterExecutor {
             _ => 0,
         };
         record.has_save_fp = match opcode {
-            JaafOpcode::JAAF_SAVE | JaafOpcode::CALL | JaafOpcode::CALL_INDIRECT => 1,
+            JaafOpcode::CALL | JaafOpcode::CALL_INDIRECT => 1,
             _ => 0,
         };
         record.has_save_pc = match opcode {

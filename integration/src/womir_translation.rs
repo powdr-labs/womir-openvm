@@ -283,15 +283,6 @@ pub enum Directive<F> {
         target: String,
         condition_reg: u32,
     },
-    Jaaf {
-        target: String,
-        new_frame_ptr: u32,
-    },
-    JaafSave {
-        target: String,
-        new_frame_ptr: u32,
-        saved_caller_fp: u32,
-    },
     Call {
         target_pc: String,
         new_frame_ptr: u32,
@@ -455,44 +446,12 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     fn emit_jump_into_loop(
         &self,
         _c: &mut Ctx<F>,
-        loop_label: String,
-        loop_frame_ptr: Range<u32>,
-        ret_info_to_copy: Option<ReturnInfosToCopy>,
-        saved_curr_fp_ptr: Option<Range<u32>>,
+        _loop_label: String,
+        _loop_frame_ptr: Range<u32>,
+        _ret_info_to_copy: Option<ReturnInfosToCopy>,
+        _saved_curr_fp_ptr: Option<Range<u32>>,
     ) -> Vec<Directive<F>> {
-        let mut directives = if let Some(to_copy) = ret_info_to_copy {
-            assert_eq!(Self::words_per_ptr(), 1);
-            vec![
-                Directive::Instruction(ib::copy_into_frame(
-                    to_copy.dest.ret_pc.start as usize,
-                    to_copy.src.ret_pc.start as usize,
-                    loop_frame_ptr.start as usize,
-                )),
-                Directive::Instruction(ib::copy_into_frame(
-                    to_copy.dest.ret_fp.start as usize,
-                    to_copy.src.ret_fp.start as usize,
-                    loop_frame_ptr.start as usize,
-                )),
-            ]
-        } else {
-            Vec::new()
-        };
-
-        let jump = if let Some(saved_caller_fp) = saved_curr_fp_ptr {
-            Directive::JaafSave {
-                target: loop_label,
-                new_frame_ptr: loop_frame_ptr.start,
-                saved_caller_fp: saved_caller_fp.start,
-            }
-        } else {
-            Directive::Jaaf {
-                target: loop_label,
-                new_frame_ptr: loop_frame_ptr.start,
-            }
-        };
-
-        directives.push(jump);
-        directives
+        todo!("Loop frame jumps need redesign: JAAF/JAAF_SAVE removed, only CALL/RET remain")
     }
 
     fn emit_conditional_jump(
@@ -586,13 +545,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     fn emit_jump_out_of_loop(
         &self,
         _c: &mut Ctx<F>,
-        target_label: String,
-        target_frame_ptr: Range<u32>,
+        _target_label: String,
+        _target_frame_ptr: Range<u32>,
     ) -> Directive<F> {
-        Directive::Jaaf {
-            target: target_label,
-            new_frame_ptr: target_frame_ptr.start,
-        }
+        todo!("Jump-out-of-loop frame change needs redesign: JAAF removed, only CALL/RET remain")
     }
 
     fn emit_return(
@@ -754,25 +710,6 @@ impl<F: PrimeField32> Directive<F> {
             } => {
                 let pc = label_map.get(&target)?.pc;
                 Some(ib::jump_if_zero(condition_reg as usize, pc as usize))
-            }
-            Directive::Jaaf {
-                target,
-                new_frame_ptr,
-            } => {
-                let pc = label_map.get(&target)?.pc;
-                Some(ib::jaaf(pc as usize, new_frame_ptr as usize))
-            }
-            Directive::JaafSave {
-                target,
-                new_frame_ptr,
-                saved_caller_fp,
-            } => {
-                let pc = label_map.get(&target)?.pc;
-                Some(ib::jaaf_save(
-                    saved_caller_fp as usize,
-                    pc as usize,
-                    new_frame_ptr as usize,
-                ))
             }
             Directive::Call {
                 target_pc,
