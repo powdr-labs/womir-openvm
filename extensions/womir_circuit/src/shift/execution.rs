@@ -26,7 +26,7 @@ use openvm_rv32im_circuit::ShiftExecutor as ShiftExecutorInner;
 use openvm_rv32im_transpiler::ShiftOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
+use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes, sign_extend_u32};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]
@@ -75,9 +75,9 @@ pub(super) struct ShiftPreCompute {
     /// Second operand value (if immediate) or register index (if register)
     c: u32,
     /// Result register index
-    a: u8,
+    a: u32,
     /// First operand register index
-    b: u8,
+    b: u32,
 }
 
 impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> ShiftExecutor<A, NUM_LIMBS, LIMB_BITS> {
@@ -114,8 +114,8 @@ impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> ShiftExecutor<A, NUM_LIM
             } else {
                 c_u32
             },
-            a: a.as_canonical_u32() as u8,
-            b: b.as_canonical_u32() as u8,
+            a: a.as_canonical_u32(),
+            b: b.as_canonical_u32(),
         };
         Ok((is_imm, local_opcode))
     }
@@ -202,16 +202,6 @@ where
     }
 }
 
-/// Sign-extend a u32 value to `[u8; N]`.
-/// For N=4, this is equivalent to `c.to_le_bytes()`.
-/// For N>4, the upper bytes are sign-extended from bit 31.
-#[inline(always)]
-fn sign_extend_u32<const N: usize>(c: u32) -> [u8; N] {
-    let sign_byte = if c & 0x8000_0000 != 0 { 0xFF } else { 0x00 };
-    let le = c.to_le_bytes();
-    std::array::from_fn(|i| if i < 4 { le[i] } else { sign_byte })
-}
-
 #[inline(always)]
 unsafe fn execute_e12_impl<
     F: PrimeField32,
@@ -223,9 +213,11 @@ unsafe fn execute_e12_impl<
     pre_compute: &ShiftPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
+    const { assert!(NUM_LIMBS == 4 || NUM_LIMBS == 8) };
+
     let num_bits = NUM_LIMBS * 8;
     let fp = exec_state.memory.fp::<F>();
-    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
+    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.b);
     let rs2 = if E_IS_IMM {
         sign_extend_u32::<NUM_LIMBS>(pre_compute.c)
     } else {
@@ -233,70 +225,34 @@ unsafe fn execute_e12_impl<
     };
 
     // Shift amount is taken mod num_bits, from the lowest byte only
-    let shift_amount = (rs2[0] as usize) % num_bits;
+    let shift_amount = (rs2[0] as u32) % (num_bits as u32);
 
-    let rd = match OPCODE {
-        x if x == ShiftOpcode::SLL as u8 => {
-            // Shift left logical
-            shift_left::<NUM_LIMBS>(&rs1, shift_amount)
-        }
-        x if x == ShiftOpcode::SRL as u8 => {
-            // Shift right logical
-            shift_right::<NUM_LIMBS>(&rs1, shift_amount, false)
-        }
+    // Convert byte arrays to native u64 for computation
+    let val = u64::from_le_bytes(std::array::from_fn(
+        |i| if i < NUM_LIMBS { rs1[i] } else { 0 },
+    ));
+
+    let result = match OPCODE {
+        x if x == ShiftOpcode::SLL as u8 => val << shift_amount,
+        x if x == ShiftOpcode::SRL as u8 => val >> shift_amount,
         x if x == ShiftOpcode::SRA as u8 => {
-            // Shift right arithmetic
-            shift_right::<NUM_LIMBS>(&rs1, shift_amount, true)
+            // Sign-extend to i64 based on the actual bit width
+            let signed = if NUM_LIMBS == 4 {
+                (val as u32 as i32 as i64) >> shift_amount
+            } else {
+                (val as i64) >> shift_amount
+            };
+            signed as u64
         }
         _ => unreachable!(),
     };
 
-    exec_state.vm_write(RV32_REGISTER_AS, fp + (pre_compute.a as u32), &rd);
+    let result_bytes = result.to_le_bytes();
+    let rd: [u8; NUM_LIMBS] = std::array::from_fn(|i| result_bytes[i]);
+
+    exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &rd);
     let pc = exec_state.pc();
     exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
-}
-
-#[inline(always)]
-fn shift_left<const NUM_LIMBS: usize>(x: &[u8; NUM_LIMBS], shift: usize) -> [u8; NUM_LIMBS] {
-    let limb_shift = shift / 8;
-    let bit_shift = shift % 8;
-    let mut result = [0u8; NUM_LIMBS];
-    for i in limb_shift..NUM_LIMBS {
-        result[i] = if i > limb_shift {
-            (((x[i - limb_shift] as u16) << bit_shift)
-                | ((x[i - limb_shift - 1] as u16) >> (8 - bit_shift)))
-                % 256
-        } else {
-            ((x[i - limb_shift] as u16) << bit_shift) % 256
-        } as u8;
-    }
-    result
-}
-
-#[inline(always)]
-fn shift_right<const NUM_LIMBS: usize>(
-    x: &[u8; NUM_LIMBS],
-    shift: usize,
-    arithmetic: bool,
-) -> [u8; NUM_LIMBS] {
-    let fill = if arithmetic {
-        0xFF * (x[NUM_LIMBS - 1] >> 7)
-    } else {
-        0
-    };
-    let limb_shift = shift / 8;
-    let bit_shift = shift % 8;
-    let mut result = [fill; NUM_LIMBS];
-    for i in 0..(NUM_LIMBS - limb_shift) {
-        result[i] = if i + limb_shift + 1 < NUM_LIMBS {
-            (((x[i + limb_shift] >> bit_shift) as u16)
-                | ((x[i + limb_shift + 1] as u16) << (8 - bit_shift)))
-                % 256
-        } else {
-            (((x[i + limb_shift] >> bit_shift) as u16) | ((fill as u16) << (8 - bit_shift))) % 256
-        } as u8;
-    }
-    result
 }
 
 #[create_handler]
