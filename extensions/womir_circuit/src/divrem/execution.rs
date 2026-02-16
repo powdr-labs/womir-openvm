@@ -187,109 +187,78 @@ struct DivuOp;
 struct RemOp;
 struct RemuOp;
 
-impl DivRemOp<4> for DivOp {
-    #[inline(always)]
-    fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
-        let rs1_i32 = i32::from_le_bytes(rs1);
-        let rs2_i32 = i32::from_le_bytes(rs2);
-        match (rs1_i32, rs2_i32) {
-            (_, 0) => [u8::MAX; 4],
-            (i32::MIN, -1) => rs1,
-            _ => (rs1_i32 / rs2_i32).to_le_bytes(),
+/// Generates `DivRemOp<$n>` impls using native integer types.
+/// - `div`: div-by-zero returns `[u8::MAX; N]`, uses `/`
+/// - `rem`: div-by-zero returns the dividend, uses `%`
+macro_rules! impl_divrem {
+    // Signed division: div-by-zero → MAX, overflow (MIN / -1) → dividend
+    (signed $op:ident, $n:literal, $int_ty:ty, div) => {
+        impl DivRemOp<$n> for $op {
+            #[inline(always)]
+            fn compute(rs1: [u8; $n], rs2: [u8; $n]) -> [u8; $n] {
+                let rs1_val = <$int_ty>::from_le_bytes(rs1);
+                let rs2_val = <$int_ty>::from_le_bytes(rs2);
+                match (rs1_val, rs2_val) {
+                    (_, 0) => [u8::MAX; $n],
+                    (<$int_ty>::MIN, -1) => rs1,
+                    _ => (rs1_val / rs2_val).to_le_bytes(),
+                }
+            }
         }
-    }
+    };
+    // Signed remainder: div-by-zero → dividend, overflow (MIN % -1) → zero
+    (signed $op:ident, $n:literal, $int_ty:ty, rem) => {
+        impl DivRemOp<$n> for $op {
+            #[inline(always)]
+            fn compute(rs1: [u8; $n], rs2: [u8; $n]) -> [u8; $n] {
+                let rs1_val = <$int_ty>::from_le_bytes(rs1);
+                let rs2_val = <$int_ty>::from_le_bytes(rs2);
+                match (rs1_val, rs2_val) {
+                    (_, 0) => rs1,
+                    (<$int_ty>::MIN, -1) => [0; $n],
+                    _ => (rs1_val % rs2_val).to_le_bytes(),
+                }
+            }
+        }
+    };
+    // Unsigned division: div-by-zero → MAX
+    (unsigned $op:ident, $n:literal, $uint_ty:ty, div) => {
+        impl DivRemOp<$n> for $op {
+            #[inline(always)]
+            fn compute(rs1: [u8; $n], rs2: [u8; $n]) -> [u8; $n] {
+                let rs1_val = <$uint_ty>::from_le_bytes(rs1);
+                let rs2_val = <$uint_ty>::from_le_bytes(rs2);
+                match rs2_val {
+                    0 => [u8::MAX; $n],
+                    _ => (rs1_val / rs2_val).to_le_bytes(),
+                }
+            }
+        }
+    };
+    // Unsigned remainder: div-by-zero → dividend
+    (unsigned $op:ident, $n:literal, $uint_ty:ty, rem) => {
+        impl DivRemOp<$n> for $op {
+            #[inline(always)]
+            fn compute(rs1: [u8; $n], rs2: [u8; $n]) -> [u8; $n] {
+                let rs1_val = <$uint_ty>::from_le_bytes(rs1);
+                let rs2_val = <$uint_ty>::from_le_bytes(rs2);
+                match rs2_val {
+                    0 => rs1,
+                    _ => (rs1_val % rs2_val).to_le_bytes(),
+                }
+            }
+        }
+    };
 }
 
-impl DivRemOp<8> for DivOp {
-    #[inline(always)]
-    fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
-        let rs1_i64 = i64::from_le_bytes(rs1);
-        let rs2_i64 = i64::from_le_bytes(rs2);
-        match (rs1_i64, rs2_i64) {
-            (_, 0) => [u8::MAX; 8],
-            (i64::MIN, -1) => rs1,
-            _ => (rs1_i64 / rs2_i64).to_le_bytes(),
-        }
-    }
-}
-
-impl DivRemOp<4> for DivuOp {
-    #[inline(always)]
-    fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
-        if rs2 == [0; 4] {
-            [u8::MAX; 4]
-        } else {
-            let rs1 = u32::from_le_bytes(rs1);
-            let rs2 = u32::from_le_bytes(rs2);
-            (rs1 / rs2).to_le_bytes()
-        }
-    }
-}
-
-impl DivRemOp<8> for DivuOp {
-    #[inline(always)]
-    fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
-        if rs2 == [0; 8] {
-            [u8::MAX; 8]
-        } else {
-            let rs1 = u64::from_le_bytes(rs1);
-            let rs2 = u64::from_le_bytes(rs2);
-            (rs1 / rs2).to_le_bytes()
-        }
-    }
-}
-
-impl DivRemOp<4> for RemOp {
-    #[inline(always)]
-    fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
-        let rs1_i32 = i32::from_le_bytes(rs1);
-        let rs2_i32 = i32::from_le_bytes(rs2);
-        match (rs1_i32, rs2_i32) {
-            (_, 0) => rs1,
-            (i32::MIN, -1) => [0; 4],
-            _ => (rs1_i32 % rs2_i32).to_le_bytes(),
-        }
-    }
-}
-
-impl DivRemOp<8> for RemOp {
-    #[inline(always)]
-    fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
-        let rs1_i64 = i64::from_le_bytes(rs1);
-        let rs2_i64 = i64::from_le_bytes(rs2);
-        match (rs1_i64, rs2_i64) {
-            (_, 0) => rs1,
-            (i64::MIN, -1) => [0; 8],
-            _ => (rs1_i64 % rs2_i64).to_le_bytes(),
-        }
-    }
-}
-
-impl DivRemOp<4> for RemuOp {
-    #[inline(always)]
-    fn compute(rs1: [u8; 4], rs2: [u8; 4]) -> [u8; 4] {
-        if rs2 == [0; 4] {
-            rs1
-        } else {
-            let rs1 = u32::from_le_bytes(rs1);
-            let rs2 = u32::from_le_bytes(rs2);
-            (rs1 % rs2).to_le_bytes()
-        }
-    }
-}
-
-impl DivRemOp<8> for RemuOp {
-    #[inline(always)]
-    fn compute(rs1: [u8; 8], rs2: [u8; 8]) -> [u8; 8] {
-        if rs2 == [0; 8] {
-            rs1
-        } else {
-            let rs1 = u64::from_le_bytes(rs1);
-            let rs2 = u64::from_le_bytes(rs2);
-            (rs1 % rs2).to_le_bytes()
-        }
-    }
-}
+impl_divrem!(signed   DivOp,  4, i32, div);
+impl_divrem!(signed   DivOp,  8, i64, div);
+impl_divrem!(unsigned DivuOp, 4, u32, div);
+impl_divrem!(unsigned DivuOp, 8, u64, div);
+impl_divrem!(signed   RemOp,  4, i32, rem);
+impl_divrem!(signed   RemOp,  8, i64, rem);
+impl_divrem!(unsigned RemuOp, 4, u32, rem);
+impl_divrem!(unsigned RemuOp, 8, u64, rem);
 
 #[inline(always)]
 unsafe fn execute_e12_impl<
