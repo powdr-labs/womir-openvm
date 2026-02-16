@@ -105,7 +105,7 @@ pub fn divu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F
 }
 
 #[cfg(test)]
-pub fn rem_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+pub fn rems<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::DivRemOpcode;
     instr_r(DivRemOpcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
 }
@@ -134,7 +134,7 @@ pub fn divu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instructio
 }
 
 #[cfg(test)]
-pub fn rem_s_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+pub fn rems_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::DivRem64Opcode;
     instr_r(DivRem64Opcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
 }

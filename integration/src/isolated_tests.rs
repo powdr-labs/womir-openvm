@@ -1621,7 +1621,7 @@ mod tests {
         // 42 % 7 = 0
         // 43 % 7 = 1
         let spec = TestSpec {
-            program: vec![wom::rem_s::<F>(2, 0, 1), wom::rem_s::<F>(5, 3, 4)],
+            program: vec![wom::rems::<F>(2, 0, 1), wom::rems::<F>(5, 3, 4)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 7), (13, 43), (14, 7)],
             expected_registers: vec![(12, 0), (15, 1)],
@@ -1637,7 +1637,7 @@ mod tests {
 
         // -43 % 7 = -1 (remainder has sign of dividend)
         let spec = TestSpec {
-            program: vec![wom::rem_s::<F>(2, 0, 1)],
+            program: vec![wom::rems::<F>(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-43_i32) as u32), (11, 7)],
             expected_registers: vec![(12, (-1_i32) as u32)],
@@ -1773,7 +1773,7 @@ mod tests {
         // -43 as i64 = 0xFFFF_FFFF_FFFF_FFD5
         // -1 as i64 = 0xFFFF_FFFF_FFFF_FFFF
         let spec = TestSpec {
-            program: vec![wom::rem_s_64::<F>(4, 0, 2)],
+            program: vec![wom::rems_64::<F>(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_FFD5),
@@ -1841,7 +1841,7 @@ mod tests {
 
         // -43 % 7 = -1
         let spec = TestSpec {
-            program: vec![wom::rem_s::<F>(302, 300, 301)],
+            program: vec![wom::rems::<F>(302, 300, 301)],
             start_registers: vec![(300, (-43_i32) as u32), (301, 7)],
             expected_registers: vec![(302, (-1_i32) as u32)],
             ..Default::default()
@@ -1915,7 +1915,7 @@ mod tests {
         // -43 as i64 = 0xFFFF_FFFF_FFFF_FFD5
         // -1 as i64 = 0xFFFF_FFFF_FFFF_FFFF
         let spec = TestSpec {
-            program: vec![wom::rem_s_64::<F>(304, 300, 302)],
+            program: vec![wom::rems_64::<F>(304, 300, 302)],
             start_registers: vec![
                 (300, 0xFFFF_FFD5),
                 (301, 0xFFFF_FFFF), // reg 300 = -43 as i64
