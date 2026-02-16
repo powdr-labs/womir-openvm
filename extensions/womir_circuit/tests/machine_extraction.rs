@@ -83,9 +83,9 @@ fn extract_bus_map(chip_complex: &WomirChipComplex) -> BusMap<OpenVmBusType> {
     let shared_bitwise_lookup = inventory
         .find_chip::<SharedBitwiseOperationLookupChip<8>>()
         .next();
-    let shared_range_tuple_checker = inventory
+    let shared_range_tuple_checkers: Vec<_> = inventory
         .find_chip::<SharedRangeTupleCheckerChip<2>>()
-        .next();
+        .collect();
 
     let system_air_inventory = inventory.airs().system();
     let connector_air = system_air_inventory.connector;
@@ -119,7 +119,7 @@ fn extract_bus_map(chip_complex: &WomirChipComplex) -> BusMap<OpenVmBusType> {
                 BusType::Other(OpenVmBusType::BitwiseLookup),
             )
         }))
-        .chain(shared_range_tuple_checker.into_iter().map(|chip| {
+        .chain(shared_range_tuple_checkers.into_iter().map(|chip| {
             (
                 chip.bus().inner.index,
                 BusType::Other(OpenVmBusType::TupleRangeChecker),
