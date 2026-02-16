@@ -136,7 +136,7 @@ struct JumpPreCompute {
     /// Immediate value (to_pc for JUMP/JUMP_IF/JUMP_IF_ZERO, unused for SKIP).
     imm: u32,
     /// Register pointer for condition/offset register.
-    rs_ptr: u8,
+    rs_ptr: u32,
 }
 
 impl JumpExecutor {
@@ -157,7 +157,7 @@ impl JumpExecutor {
 
         *data = JumpPreCompute {
             imm: a.as_canonical_u32(),
-            rs_ptr: b.as_canonical_u32() as u8,
+            rs_ptr: b.as_canonical_u32(),
         };
         Ok(JumpOpcode::from_usize(local_opcode_idx))
     }
@@ -233,7 +233,7 @@ unsafe fn execute_e12_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const OPCODE
     // Always read the condition/offset register relative to FP.
     // For JUMP (b=0), this reads reg[fp+0]; the core chip ignores the value.
     let rs: [u8; RV32_REGISTER_NUM_LIMBS] =
-        exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.rs_ptr as u32);
+        exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.rs_ptr);
     let reg_value = u32::from_le_bytes(rs);
 
     let new_pc = match OPCODE {
