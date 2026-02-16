@@ -69,11 +69,11 @@ where
 #[repr(C)]
 pub(super) struct DivRemPreCompute {
     /// Result register index
-    a: u16,
+    a: u32,
     /// First operand register index
-    b: u16,
+    b: u32,
     /// Second operand register index
-    c: u16,
+    c: u32,
 }
 
 impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> DivRemExecutor<A, NUM_LIMBS, LIMB_BITS> {
@@ -93,9 +93,9 @@ impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> DivRemExecutor<A, NUM_LI
         }
         let local_opcode = DivRemOpcode::from_usize(opcode.local_opcode_idx(self.0.offset));
         *data = DivRemPreCompute {
-            a: a.as_canonical_u32() as u16,
-            b: b.as_canonical_u32() as u16,
-            c: c.as_canonical_u32() as u16,
+            a: a.as_canonical_u32(),
+            b: b.as_canonical_u32(),
+            c: c.as_canonical_u32(),
         };
         Ok(local_opcode)
     }
@@ -298,12 +298,12 @@ unsafe fn execute_e12_impl<
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     let fp = exec_state.memory.fp::<F>();
-    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.b as u32));
-    let rs2 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + (pre_compute.c as u32));
+    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.b);
+    let rs2 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c);
 
     let rd = OP::compute(rs1, rs2);
 
-    exec_state.vm_write(RV32_REGISTER_AS, fp + (pre_compute.a as u32), &rd);
+    exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &rd);
     let pc = exec_state.pc();
     exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
 }
