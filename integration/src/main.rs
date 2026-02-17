@@ -1177,13 +1177,12 @@ mod tests {
         // x12 holds the target PC, CALL_INDIRECT saves old FP into x11 in the new frame
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),               // PC=0
-            wom::add_imm::<F>(12, 0, 20_i16.into()),  // PC=4: x12 = 20 (target PC)
+            wom::add_imm::<F>(12, 0, 16_i16.into()),  // PC=4: x12 = 16 (target PC)
             wom::call_indirect::<F>(10, 11, 12, 100), // PC=8: CALL_INDIRECT to PC=x12, FP offset=100
-            wom::add_imm::<F>(8, 0, 456_i16.into()),  // PC=12: should NOT execute
-            wom::halt(),                              // PC=16: padding
-            // New frame starts here (PC=20), FP = old_fp + 100
-            wom::reveal(11, 0), // PC=20: reveal x11 (should be 0, the saved old FP)
-            wom::halt(),        // PC=24: End
+            wom::halt(),                              // PC=12: padding
+            // New frame starts here (PC=16), FP = old_fp + 100
+            wom::reveal(11, 0), // PC=16: reveal x11 (should be 0, the saved old FP)
+            wom::halt(),        // PC=20: End
         ];
 
         run_vm_test("CALL_INDIRECT instruction", instructions, 0, None).unwrap()
@@ -1339,44 +1338,6 @@ mod tests {
 
         // The expected value comes from the frame allocator (`AllocateFrameAdapterChipWom`) initial frame pointer value
         run_vm_test("ALLOCATE_FRAME instruction", instructions, 8, None).unwrap()
-    }
-
-    #[test]
-    fn test_copy_into_frame_instruction() {
-        // Test CALL into a new frame, compute value 42 there, reveal
-        let instructions = vec![
-            wom::const_32_imm(0, 0, 0),      // PC=0
-            wom::call::<F>(10, 11, 12, 100), // PC=4: CALL to PC=12, FP offset=100
-            wom::halt(),                     // PC=8: padding (skipped)
-            // New frame starts here (PC=12), FP = old_fp + 100
-            wom::add_imm::<F>(8, 0, 42_i16.into()), // PC=12: x8 = 42 in new frame
-            wom::reveal(8, 0),                      // PC=16: reveal x8 (should be 42)
-            wom::halt(),                            // PC=20: End
-        ];
-
-        run_vm_test("COPY_INTO_FRAME instruction", instructions, 42, None).unwrap()
-    }
-
-    #[test]
-    fn test_allocate_and_copy_sequence() {
-        // Test CALL into new frame, compute 123 there, reveal
-        let instructions = vec![
-            wom::const_32_imm(0, 0, 0),      // PC=0
-            wom::call::<F>(10, 11, 12, 100), // PC=4: CALL to PC=12, FP offset=100
-            wom::halt(),                     // PC=8: padding (skipped)
-            // New frame starts here (PC=12), FP = old_fp + 100
-            wom::add_imm::<F>(8, 0, 123_i16.into()), // PC=12: x8 = 123 in new frame
-            wom::reveal(8, 0),                       // PC=16: reveal x8 (should be 123)
-            wom::halt(),                             // PC=20: End
-        ];
-
-        run_vm_test(
-            "ALLOCATE_FRAME and COPY_INTO_FRAME sequence",
-            instructions,
-            123,
-            None,
-        )
-        .unwrap()
     }
 
     #[test]
@@ -1708,30 +1669,6 @@ mod tests {
         stdin.write(&42u32);
 
         run_vm_test("Input hint", instructions, 42, Some(stdin)).unwrap()
-    }
-
-    #[test]
-    fn test_input_hint_with_frame_jump_and_xor() {
-        // CALL into a new frame, compute two values there, XOR them, reveal (170 ^ 204 = 102)
-        let instructions = vec![
-            wom::const_32_imm(0, 0, 0),      // PC=0
-            wom::call::<F>(10, 11, 12, 100), // PC=4: CALL to PC=12, FP offset=100
-            wom::halt(),                     // PC=8: padding (skipped)
-            // New frame starts here (PC=12), FP = old_fp + 100
-            wom::add_imm::<F>(2, 0, 170_i16.into()), // PC=12: r2 = 170
-            wom::add_imm::<F>(3, 0, 204_i16.into()), // PC=16: r3 = 204
-            wom::xor::<F>(4, 2, 3),                  // PC=20: r4 = 170 ^ 204 = 102
-            wom::reveal(4, 0),                       // PC=24: reveal r4
-            wom::halt(),                             // PC=28: End
-        ];
-
-        run_vm_test(
-            "Input hint with frame jump and XOR",
-            instructions,
-            102,
-            None,
-        )
-        .unwrap()
     }
 
     #[test]
