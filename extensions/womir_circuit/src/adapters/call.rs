@@ -50,7 +50,7 @@ use super::{RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp};
 pub struct CallAdapterCols<T> {
     pub from_state: ExecutionState<T>,
 
-    /// Operand e: FP offset immediate (CALL/CALL_INDIRECT) or register pointer for absolute FP (RET)
+    /// Operand d: FP offset immediate (CALL/CALL_INDIRECT) or register pointer for absolute FP (RET)
     pub to_fp_operand: T,
     /// Operand b: pointer to register where old FP is saved
     pub save_fp_ptr: T,
