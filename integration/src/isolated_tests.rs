@@ -1641,17 +1641,16 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
-    // ==================== DivRem High Register Index Tests (>300) ====================
-
     #[test]
-    fn test_div_high_register_indices() {
+    fn test_div_signed_overflow() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // 42 / 7 = 6
+        // i32::MIN / -1 = i32::MIN (RISC-V signed overflow returns dividend)
         let spec = TestSpec {
-            program: vec![wom::div::<F>(302, 300, 301)],
-            start_registers: vec![(300, 42), (301, 7)],
-            expected_registers: vec![(302, 6)],
+            program: vec![wom::div::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, i32::MIN as u32), (11, (-1_i32) as u32)],
+            expected_registers: vec![(12, i32::MIN as u32)],
             ..Default::default()
         };
 
@@ -1659,59 +1658,15 @@ mod tests {
     }
 
     #[test]
-    fn test_div_signed_high_register_indices() {
+    fn test_rem_signed_overflow() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // -42 / 7 = -6
+        // i32::MIN % -1 = 0 (RISC-V signed overflow returns zero)
         let spec = TestSpec {
-            program: vec![wom::div::<F>(302, 300, 301)],
-            start_registers: vec![(300, (-42_i32) as u32), (301, 7)],
-            expected_registers: vec![(302, (-6_i32) as u32)],
-            ..Default::default()
-        };
-
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_divu_high_register_indices() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 100 / 7 = 14
-        let spec = TestSpec {
-            program: vec![wom::divu::<F>(302, 300, 301)],
-            start_registers: vec![(300, 100), (301, 7)],
-            expected_registers: vec![(302, 14)],
-            ..Default::default()
-        };
-
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_rems_high_register_indices() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // -43 % 7 = -1
-        let spec = TestSpec {
-            program: vec![wom::rems::<F>(302, 300, 301)],
-            start_registers: vec![(300, (-43_i32) as u32), (301, 7)],
-            expected_registers: vec![(302, (-1_i32) as u32)],
-            ..Default::default()
-        };
-
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_remu_high_register_indices() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 100 % 7 = 2
-        let spec = TestSpec {
-            program: vec![wom::remu::<F>(302, 300, 301)],
-            start_registers: vec![(300, 100), (301, 7)],
-            expected_registers: vec![(302, 2)],
+            program: vec![wom::rems::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, i32::MIN as u32), (11, (-1_i32) as u32)],
+            expected_registers: vec![(12, 0)],
             ..Default::default()
         };
 

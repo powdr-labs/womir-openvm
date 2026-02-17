@@ -187,78 +187,89 @@ struct DivuOp;
 struct RemOp;
 struct RemuOp;
 
-/// Generates `DivRemOp<$n>` impls using native integer types.
-/// - `div`: div-by-zero returns `[u8::MAX; N]`, uses `/`
-/// - `rem`: div-by-zero returns the dividend, uses `%`
-macro_rules! impl_divrem {
-    // Signed division: div-by-zero → MAX, overflow (MIN / -1) → dividend
-    (signed $op:ident, $n:literal, $int_ty:ty, div) => {
-        impl DivRemOp<$n> for $op {
-            #[inline(always)]
-            fn compute(rs1: [u8; $n], rs2: [u8; $n]) -> [u8; $n] {
-                let rs1_val = <$int_ty>::from_le_bytes(rs1);
-                let rs2_val = <$int_ty>::from_le_bytes(rs2);
-                match (rs1_val, rs2_val) {
-                    (_, 0) => [u8::MAX; $n],
-                    (<$int_ty>::MIN, -1) => rs1,
-                    _ => (rs1_val / rs2_val).to_le_bytes(),
-                }
-            }
-        }
-    };
-    // Signed remainder: div-by-zero → dividend, overflow (MIN % -1) → zero
-    (signed $op:ident, $n:literal, $int_ty:ty, rem) => {
-        impl DivRemOp<$n> for $op {
-            #[inline(always)]
-            fn compute(rs1: [u8; $n], rs2: [u8; $n]) -> [u8; $n] {
-                let rs1_val = <$int_ty>::from_le_bytes(rs1);
-                let rs2_val = <$int_ty>::from_le_bytes(rs2);
-                match (rs1_val, rs2_val) {
-                    (_, 0) => rs1,
-                    (<$int_ty>::MIN, -1) => [0; $n],
-                    _ => (rs1_val % rs2_val).to_le_bytes(),
-                }
-            }
-        }
-    };
-    // Unsigned division: div-by-zero → MAX
-    (unsigned $op:ident, $n:literal, $uint_ty:ty, div) => {
-        impl DivRemOp<$n> for $op {
-            #[inline(always)]
-            fn compute(rs1: [u8; $n], rs2: [u8; $n]) -> [u8; $n] {
-                let rs1_val = <$uint_ty>::from_le_bytes(rs1);
-                let rs2_val = <$uint_ty>::from_le_bytes(rs2);
-                match rs2_val {
-                    0 => [u8::MAX; $n],
-                    _ => (rs1_val / rs2_val).to_le_bytes(),
-                }
-            }
-        }
-    };
-    // Unsigned remainder: div-by-zero → dividend
-    (unsigned $op:ident, $n:literal, $uint_ty:ty, rem) => {
-        impl DivRemOp<$n> for $op {
-            #[inline(always)]
-            fn compute(rs1: [u8; $n], rs2: [u8; $n]) -> [u8; $n] {
-                let rs1_val = <$uint_ty>::from_le_bytes(rs1);
-                let rs2_val = <$uint_ty>::from_le_bytes(rs2);
-                match rs2_val {
-                    0 => rs1,
-                    _ => (rs1_val % rs2_val).to_le_bytes(),
-                }
-            }
-        }
-    };
+/// Sign-extend N bytes to i64. Only valid for N=4 or N=8.
+#[inline(always)]
+fn sign_extend<const N: usize>(bytes: &[u8; N]) -> i64 {
+    if N == 4 {
+        i32::from_le_bytes(bytes[..4].try_into().unwrap()) as i64
+    } else {
+        i64::from_le_bytes(bytes[..8].try_into().unwrap())
+    }
 }
 
-impl_divrem!(signed   DivOp,  4, i32, div);
-impl_divrem!(signed   DivOp,  8, i64, div);
-impl_divrem!(unsigned DivuOp, 4, u32, div);
-impl_divrem!(unsigned DivuOp, 8, u64, div);
-impl_divrem!(signed   RemOp,  4, i32, rem);
-impl_divrem!(signed   RemOp,  8, i64, rem);
-impl_divrem!(unsigned RemuOp, 4, u32, rem);
-impl_divrem!(unsigned RemuOp, 8, u64, rem);
+/// Zero-extend N bytes to u64. Only valid for N=4 or N=8.
+#[inline(always)]
+fn zero_extend<const N: usize>(bytes: &[u8; N]) -> u64 {
+    if N == 4 {
+        u32::from_le_bytes(bytes[..4].try_into().unwrap()) as u64
+    } else {
+        u64::from_le_bytes(bytes[..8].try_into().unwrap())
+    }
+}
+
+// Signed division: div-by-zero → all-ones, overflow (MIN / -1) → dividend.
+impl<const N: usize> DivRemOp<N> for DivOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; N], rs2: [u8; N]) -> [u8; N] {
+        const { assert!(N == 4 || N == 8) };
+        let rs1_val = sign_extend(&rs1);
+        let rs2_val = sign_extend(&rs2);
+        match (rs1_val, rs2_val) {
+            (_, 0) => [u8::MAX; N],
+            // For N=8, this handles the signed overflow case (i64::MIN / -1).
+            // For N=4, sign-extending i32::MIN gives -2147483648_i64 (not i64::MIN),
+            // so this arm is unreachable. The default arm computes
+            // -2147483648_i64 / -1_i64 = 2147483648_i64, which truncates back to
+            // i32::MIN bytes — the correct RISC-V result (dividend).
+            (i64::MIN, -1) => rs1,
+            _ => (rs1_val / rs2_val).to_le_bytes()[..N].try_into().unwrap(),
+        }
+    }
+}
+
+// Unsigned division: div-by-zero → all-ones
+impl<const N: usize> DivRemOp<N> for DivuOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; N], rs2: [u8; N]) -> [u8; N] {
+        const { assert!(N == 4 || N == 8) };
+        let rs1_val = zero_extend(&rs1);
+        let rs2_val = zero_extend(&rs2);
+        match rs2_val {
+            0 => [u8::MAX; N],
+            _ => (rs1_val / rs2_val).to_le_bytes()[..N].try_into().unwrap(),
+        }
+    }
+}
+
+// Signed remainder: div-by-zero → dividend, overflow (MIN % -1) → zero.
+impl<const N: usize> DivRemOp<N> for RemOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; N], rs2: [u8; N]) -> [u8; N] {
+        const { assert!(N == 4 || N == 8) };
+        let rs1_val = sign_extend(&rs1);
+        let rs2_val = sign_extend(&rs2);
+        match (rs1_val, rs2_val) {
+            (_, 0) => rs1,
+            // See DivOp comment: for N=4 this arm is unreachable.
+            (i64::MIN, -1) => [0; N],
+            _ => (rs1_val % rs2_val).to_le_bytes()[..N].try_into().unwrap(),
+        }
+    }
+}
+
+// Unsigned remainder: div-by-zero → dividend
+impl<const N: usize> DivRemOp<N> for RemuOp {
+    #[inline(always)]
+    fn compute(rs1: [u8; N], rs2: [u8; N]) -> [u8; N] {
+        const { assert!(N == 4 || N == 8) };
+        let rs1_val = zero_extend(&rs1);
+        let rs2_val = zero_extend(&rs2);
+        match rs2_val {
+            0 => rs1,
+            _ => (rs1_val % rs2_val).to_le_bytes()[..N].try_into().unwrap(),
+        }
+    }
+}
 
 #[inline(always)]
 unsafe fn execute_e12_impl<
