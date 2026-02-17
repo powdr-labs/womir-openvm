@@ -3,6 +3,7 @@ use std::ops::Mul;
 use openvm_circuit::{
     arch::{VmStateMut, execution_mode::ExecutionCtxTrait},
     system::memory::{
+        MemoryAddress,
         merkle::public_values::PUBLIC_VALUES_AS,
         online::{GuestMemory, TracingMemory},
     },
@@ -31,6 +32,11 @@ pub const RV_IS_TYPE_IMM_BITS: usize = 12;
 pub const RV_B_TYPE_IMM_BITS: usize = 13;
 
 pub const RV_J_TYPE_IMM_BITS: usize = 21;
+
+#[inline(always)]
+pub fn fp<F: FieldAlgebra>() -> MemoryAddress<F, F> {
+    MemoryAddress::new(F::from_canonical_u32(FP_AS), F::ZERO)
+}
 
 /// Convert the RISC-V register data (32 bits represented as 4 bytes, where each byte is represented
 /// as a field element) back into its value as u32.
