@@ -1156,7 +1156,7 @@ mod tests {
 
     #[test]
     fn test_call_instruction() {
-        // Test CALL: save PC and FP, then jump to new frame
+        // Test CALL: save PC and FP, sets a new frame then jump
         // CALL saves return PC (pc+4=8) into x10 in the new frame, then jumps to PC=16
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),              // PC=0
