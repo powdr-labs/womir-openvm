@@ -1759,12 +1759,18 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_input_hint() {
+        // hint_storew writes to memory AS, so we use a scratch register pointing to MEM[0].
+        // Each prepare_read + hint_storew(skip len) + hint_storew(data) + loadw pattern
+        // reads one u32 from stdin into a register.
+        let scratch = 5; // scratch register pointing to MEM[0]
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::prepare_read::<F>(),
-            wom::read_u32::<F>(10),
+            wom::const_32_imm(scratch, 0, 0), // scratch_reg = 0 (points to MEM[0])
+            wom::prepare_read(),
+            wom::hint_storew(scratch),  // skip length word
+            wom::hint_storew(scratch),  // write data to MEM[0]
+            wom::loadw(10, scratch, 0), // load MEM[0] → r10
             wom::reveal(10, 0),
             wom::halt(),
         ];
@@ -1777,21 +1783,28 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_input_hint_with_frame_jump_and_xor() {
+        let scratch = 5; // scratch register pointing to MEM[0]
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
+            wom::const_32_imm(scratch, 0, 0),
             // Read first value into r8
-            wom::prepare_read::<F>(),
-            wom::read_u32::<F>(8),
+            wom::prepare_read(),
+            wom::hint_storew(scratch),           // skip length
+            wom::hint_storew(scratch),           // write data to MEM[0]
+            wom::loadw(8, scratch, 0),           // load MEM[0] → r8
             wom::allocate_frame_imm::<F>(9, 64), // Allocate frame, pointer in r9
             wom::copy_into_frame::<F>(2, 8, 9),  // Copy r8 to frame[2]
             // Jump to new frame
-            wom::jaaf::<F>(28, 9), // Jump to PC=28, activate frame at r9
+            wom::jaaf::<F>(40, 9), // Jump to PC=40, activate frame at r9
             // This should be skipped
             wom::halt(),
-            wom::const_32_imm(0, 0, 0), // PC = 28
+            wom::const_32_imm(0, 0, 0), // PC = 40
+            wom::const_32_imm(scratch, 0, 0),
             // Read second value into r3
             wom::prepare_read::<F>(),
-            wom::read_u32::<F>(3),
+            wom::hint_storew::<F>(scratch), // skip length
+            wom::hint_storew::<F>(scratch), // write data to MEM[0]
+            wom::loadw::<F>(3, scratch, 0), // load MEM[0] → r3
             // Xor the two read values
             wom::xor::<F>(4, 2, 3),
             wom::reveal(4, 0),

@@ -6,16 +6,16 @@ use std::{
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
-    LocalOpcode,
-};
-use openvm_rv32im_transpiler::{
-    Rv32HintStoreOpcode,
-    Rv32HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
 };
 use openvm_stark_backend::p3_field::PrimeField32;
+use openvm_womir_transpiler::{
+    HintStoreOpcode,
+    HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
+};
 
 use super::Rv32HintStoreExecutor;
 
@@ -34,7 +34,7 @@ impl Rv32HintStoreExecutor {
         pc: u32,
         inst: &Instruction<F>,
         data: &mut HintStorePreCompute,
-    ) -> Result<Rv32HintStoreOpcode, StaticProgramError> {
+    ) -> Result<HintStoreOpcode, StaticProgramError> {
         let &Instruction {
             opcode,
             a,
@@ -54,7 +54,7 @@ impl Rv32HintStoreExecutor {
                 b: b.as_canonical_u32() as u8,
             }
         };
-        Ok(Rv32HintStoreOpcode::from_usize(
+        Ok(HintStoreOpcode::from_usize(
             opcode.local_opcode_idx(self.offset),
         ))
     }
@@ -160,14 +160,17 @@ unsafe fn execute_e12_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const IS_HIN
     pre_compute: &HintStorePreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) -> Result<u32, ExecutionError> {
+    use crate::memory_config::FpMemory;
     let pc = exec_state.pc();
-    let mem_ptr_limbs = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, pre_compute.b as u32);
+    let fp = exec_state.memory.fp::<F>();
+    let mem_ptr_limbs = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, fp + pre_compute.b as u32);
     let mem_ptr = u32::from_le_bytes(mem_ptr_limbs);
 
     let num_words = if IS_HINT_STOREW {
         1
     } else {
-        let num_words_limbs = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, pre_compute.a as u32);
+        let num_words_limbs =
+            exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, fp + pre_compute.a as u32);
         u32::from_le_bytes(num_words_limbs)
     };
     debug_assert_ne!(num_words, 0);
@@ -204,8 +207,9 @@ unsafe fn execute_e1_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const IS_HINT
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) -> Result<(), ExecutionError> {
     let pre_compute: &HintStorePreCompute =
-        std::slice::from_raw_parts(pre_compute, size_of::<HintStorePreCompute>()).borrow();
-    execute_e12_impl::<F, CTX, IS_HINT_STOREW>(pre_compute, exec_state)?;
+        unsafe { std::slice::from_raw_parts(pre_compute, size_of::<HintStorePreCompute>()) }
+            .borrow();
+    unsafe { execute_e12_impl::<F, CTX, IS_HINT_STOREW>(pre_compute, exec_state) }?;
     Ok(())
 }
 
@@ -219,10 +223,12 @@ unsafe fn execute_e2_impl<
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) -> Result<(), ExecutionError> {
-    let pre_compute: &E2PreCompute<HintStorePreCompute> =
+    let pre_compute: &E2PreCompute<HintStorePreCompute> = unsafe {
         std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<HintStorePreCompute>>())
-            .borrow();
-    let height_delta = execute_e12_impl::<F, CTX, IS_HINT_STOREW>(&pre_compute.data, exec_state)?;
+    }
+    .borrow();
+    let height_delta =
+        unsafe { execute_e12_impl::<F, CTX, IS_HINT_STOREW>(&pre_compute.data, exec_state) }?;
     exec_state
         .ctx
         .on_height_change(pre_compute.chip_idx as usize, height_delta);
