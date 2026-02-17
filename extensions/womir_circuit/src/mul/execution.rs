@@ -11,11 +11,9 @@ use std::{
     mem::size_of,
 };
 
-use crate::{memory_config::FpMemory, utils::sign_extend_u32};
-use openvm_circuit::{
-    arch::*,
-    system::memory::online::{GuestMemory, TracingMemory},
-};
+use crate::{adapters::BaseAluAdapterExecutor, memory_config::FpMemory, utils::sign_extend_u32};
+use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
+use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
     LocalOpcode,
@@ -30,45 +28,27 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
-#[derive(Clone, Copy)]
-pub struct MultiplicationExecutor<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>(
-    pub MultiplicationExecutorInner<A, NUM_LIMBS, LIMB_BITS>,
+#[derive(Clone, PreflightExecutor)]
+pub struct MultiplicationExecutor<
+    const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
+    const LIMB_BITS: usize,
+>(
+    pub  MultiplicationExecutorInner<
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        NUM_LIMBS,
+        LIMB_BITS,
+    >,
 );
 
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>
-    MultiplicationExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    MultiplicationExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
-    pub fn new(adapter: A, offset: usize) -> Self {
+    pub fn new(
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        offset: usize,
+    ) -> Self {
         Self(MultiplicationExecutorInner::new(adapter, offset))
-    }
-}
-
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> std::ops::Deref
-    for MultiplicationExecutor<A, NUM_LIMBS, LIMB_BITS>
-{
-    type Target = MultiplicationExecutorInner<A, NUM_LIMBS, LIMB_BITS>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<F, A, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> PreflightExecutor<F, RA>
-    for MultiplicationExecutor<A, NUM_LIMBS, LIMB_BITS>
-where
-    F: PrimeField32,
-    MultiplicationExecutorInner<A, NUM_LIMBS, LIMB_BITS>: PreflightExecutor<F, RA>,
-{
-    fn get_opcode_name(&self, opcode: usize) -> String {
-        self.0.get_opcode_name(opcode)
-    }
-
-    fn execute(
-        &self,
-        state: VmStateMut<F, TracingMemory, RA>,
-        instruction: &Instruction<F>,
-    ) -> Result<(), ExecutionError> {
-        self.0.execute(state, instruction)
     }
 }
 
@@ -85,8 +65,8 @@ pub(super) struct MulPreCompute {
     is_imm: bool,
 }
 
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>
-    MultiplicationExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    MultiplicationExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
     #[inline(always)]
     pub(super) fn pre_compute_impl<F: PrimeField32>(
@@ -130,8 +110,8 @@ impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>
     }
 }
 
-impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F>
-    for MultiplicationExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    InterpreterExecutor<F> for MultiplicationExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -161,8 +141,8 @@ where
     }
 }
 
-impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
-    for MultiplicationExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    InterpreterMeteredExecutor<F> for MultiplicationExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
