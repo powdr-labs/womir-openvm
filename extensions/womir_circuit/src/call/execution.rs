@@ -47,8 +47,7 @@ pub(super) struct CallPreCompute {
     pub to_fp_operand: u32,
     pub save_fp_ptr: u32,
     pub save_pc_ptr: u32,
-    pub to_pc_reg_ptr: u32,
-    pub to_pc_imm: u32,
+    pub to_pc_operand: u32,
     pub opcode: u8,
 }
 
@@ -97,11 +96,11 @@ where
         let old_fp_val = state.memory.data.fp::<F>();
 
         // Compute actual new FP:
-        // CALL/CALL_INDIRECT: new_fp = old_fp + immediate offset (e operand)
+        // CALL/CALL_INDIRECT: new_fp = old_fp + immediate offset (d operand)
         // RET: new_fp = absolute FP from register
         let new_fp = match opcode {
             CallOpcode::CALL | CallOpcode::CALL_INDIRECT => {
-                let nfp = old_fp_val + instruction.e.as_canonical_u32();
+                let nfp = old_fp_val + instruction.d.as_canonical_u32();
                 debug_assert!(nfp >= old_fp_val, "fp + offset overflows u32");
                 nfp
             }
@@ -130,7 +129,7 @@ where
         // Determine the target PC
         let to_pc = match opcode {
             CallOpcode::RET | CallOpcode::CALL_INDIRECT => u32::from_le_bytes(to_pc_bytes),
-            CallOpcode::CALL => instruction.d.as_canonical_u32(),
+            CallOpcode::CALL => instruction.c.as_canonical_u32(),
         };
 
         *state.pc = to_pc;
@@ -159,11 +158,10 @@ impl<F: PrimeField32, A> InterpreterExecutor<F> for CallExecutor<A> {
         let local_idx = inst.opcode.local_opcode_idx(CallOpcode::CLASS_OFFSET);
         let opcode = CallOpcode::from_usize(local_idx);
 
-        data.to_fp_operand = inst.e.as_canonical_u32();
+        data.to_fp_operand = inst.d.as_canonical_u32();
         data.save_fp_ptr = inst.b.as_canonical_u32();
         data.save_pc_ptr = inst.a.as_canonical_u32();
-        data.to_pc_reg_ptr = inst.c.as_canonical_u32();
-        data.to_pc_imm = inst.d.as_canonical_u32();
+        data.to_pc_operand = inst.c.as_canonical_u32();
         data.opcode = opcode as u8;
 
         Ok(execute_e1_handler::<F, Ctx>)
@@ -193,11 +191,10 @@ impl<F: PrimeField32, A> InterpreterMeteredExecutor<F> for CallExecutor<A> {
         let local_idx = inst.opcode.local_opcode_idx(CallOpcode::CLASS_OFFSET);
         let opcode = CallOpcode::from_usize(local_idx);
 
-        data.data.to_fp_operand = inst.e.as_canonical_u32();
+        data.data.to_fp_operand = inst.d.as_canonical_u32();
         data.data.save_fp_ptr = inst.b.as_canonical_u32();
         data.data.save_pc_ptr = inst.a.as_canonical_u32();
-        data.data.to_pc_reg_ptr = inst.c.as_canonical_u32();
-        data.data.to_pc_imm = inst.d.as_canonical_u32();
+        data.data.to_pc_operand = inst.c.as_canonical_u32();
         data.data.opcode = opcode as u8;
 
         Ok(execute_e2_handler::<F, Ctx>)
@@ -228,14 +225,14 @@ unsafe fn execute_call_impl<F: PrimeField32, CTX: ExecutionCtxTrait>(
         }
     };
 
-    // Read target PC from register (for RET, CALL_INDIRECT)
+    // Read target PC from register (for RET, CALL_INDIRECT) or use immediate (for CALL)
     let to_pc = match opcode {
         CallOpcode::RET | CallOpcode::CALL_INDIRECT => {
             let pc_bytes: [u8; RV32_REGISTER_NUM_LIMBS] =
-                exec_state.vm_read(RV32_REGISTER_AS, fp + pre.to_pc_reg_ptr);
+                exec_state.vm_read(RV32_REGISTER_AS, fp + pre.to_pc_operand);
             u32::from_le_bytes(pc_bytes)
         }
-        CallOpcode::CALL => pre.to_pc_imm,
+        CallOpcode::CALL => pre.to_pc_operand,
     };
 
     let old_pc = exec_state.pc();

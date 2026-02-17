@@ -345,10 +345,10 @@ pub fn ret<F: PrimeField32>(to_pc_reg: usize, to_fp_reg: usize) -> Instruction<F
         CallOpcode::RET.global_opcode(),
         F::ZERO,                                                             // a: (not used)
         F::ZERO,                                                             // b: (not used)
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg), // c: to_pc_reg
-        F::ZERO,                                                             // d: (not used)
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // e: to_fp_reg
-        F::ZERO,                                                             // f: (unused)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg), // c: to_pc_operand
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_fp_reg), // d: to_fp_operand
+        F::ONE,                                                              // e: PC read AS
+        F::ONE,                                                              // f: FP read AS
         F::ZERO,                                                             // g: (unused)
     )
 }
@@ -365,10 +365,10 @@ pub fn call<F: PrimeField32>(
         CallOpcode::CALL.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_pc), // a: rd1 (save PC here)
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_fp), // b: rd2 (save FP here)
-        F::ZERO,                                                           // c: (not used)
-        F::from_canonical_usize(to_pc_imm), // d: immediate for PC target
-        F::from_canonical_usize(fp_offset), // e: FP offset immediate
-        F::ZERO,                            // f: (unused)
+        F::from_canonical_usize(to_pc_imm), // c: to_pc_operand (immediate PC target)
+        F::from_canonical_usize(fp_offset), // d: to_fp_operand (FP offset)
+        F::ZERO,                            // e: PC read AS (0 = no register read)
+        F::ZERO,                            // f: FP read AS (0 = no register read)
         F::ZERO,                            // g: (unused)
     )
 }
@@ -386,10 +386,10 @@ pub fn call_indirect<F: PrimeField32>(
         CallOpcode::CALL_INDIRECT.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_pc),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * save_fp),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg),
-        F::ZERO,                            // d: immediate (not used)
-        F::from_canonical_usize(fp_offset), // e: FP offset immediate
-        F::ZERO,                            // f: (unused)
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * to_pc_reg), // c: to_pc_operand
+        F::from_canonical_usize(fp_offset), // d: to_fp_operand (FP offset)
+        F::ONE,                             // e: PC read AS (1 = register read)
+        F::ZERO,                            // f: FP read AS (0 = no register read)
         F::ZERO,                            // g: (unused)
     )
 }

@@ -56,10 +56,8 @@ pub struct CallAdapterCols<T> {
     pub save_fp_ptr: T,
     /// Operand a: pointer to register where old PC+1 is saved
     pub save_pc_ptr: T,
-    /// Operand c: pointer to register holding target PC (for RET, CALL_INDIRECT)
-    pub to_pc_reg_ptr: T,
-    /// Operand d: immediate PC target (for CALL)
-    pub to_pc_imm: T,
+    /// Operand c: merged PC operand (immediate PC for CALL, register pointer for RET/CALL_INDIRECT)
+    pub to_pc_operand: T,
 
     /// Auxiliary columns for memory operations
     pub fp_read_aux: MemoryReadAuxCols<T>,
@@ -192,7 +190,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
             .read(
                 MemoryAddress::new(
                     has_pc_read.clone(),
-                    local.to_pc_reg_ptr + local.from_state.fp,
+                    local.to_pc_operand + local.from_state.fp,
                 ),
                 to_pc_data,
                 timestamp_pp(),
@@ -301,15 +299,15 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
             )
             .eval(builder, is_valid.clone());
 
-        // Determine to_pc: either from immediate (d operand) or from register read
+        // Determine to_pc: either from immediate (c operand) or from register read
         let to_pc_from_reg = ctx.reads[1]
             .iter()
             .enumerate()
             .fold(AB::Expr::ZERO, |acc, (i, limb)| {
                 acc + limb.clone() * AB::Expr::from_canonical_u32(1u32 << (i * 8))
             });
-        let to_pc =
-            local.to_pc_imm * (AB::Expr::ONE - has_pc_read.clone()) + to_pc_from_reg * has_pc_read;
+        let to_pc = local.to_pc_operand * (AB::Expr::ONE - has_pc_read.clone())
+            + to_pc_from_reg * has_pc_read.clone();
 
         self.execution_bridge
             .execute_and_increment_or_set_pc(
@@ -317,9 +315,10 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
                 [
                     local.save_pc_ptr.into(),
                     local.save_fp_ptr.into(),
-                    local.to_pc_reg_ptr.into(),
-                    local.to_pc_imm.into(),
+                    local.to_pc_operand.into(),
                     local.to_fp_operand.into(),
+                    has_pc_read,
+                    has_fp_read,
                 ],
                 local.from_state.into(),
                 AB::F::from_canonical_usize(timestamp_delta),
@@ -358,8 +357,7 @@ pub struct CallAdapterRecord {
     pub to_fp_operand: u32,
     pub save_fp_ptr: u32,
     pub save_pc_ptr: u32,
-    pub to_pc_reg_ptr: u32,
-    pub to_pc_imm: u32,
+    pub to_pc_operand: u32,
 
     pub has_pc_read: u8,
     pub has_save: u8,
@@ -397,17 +395,16 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
         instruction: &Instruction<F>,
         record: &mut &mut CallAdapterRecord,
     ) -> Self::ReadData {
-        let &Instruction { a, b, c, d, e, .. } = instruction;
+        let &Instruction { a, b, c, d, .. } = instruction;
 
         // 0. Read FP
         record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
 
         // Decode instruction operands
-        record.to_fp_operand = e.as_canonical_u32();
+        record.to_fp_operand = d.as_canonical_u32();
         record.save_fp_ptr = b.as_canonical_u32();
         record.save_pc_ptr = a.as_canonical_u32();
-        record.to_pc_reg_ptr = c.as_canonical_u32();
-        record.to_pc_imm = d.as_canonical_u32();
+        record.to_pc_operand = c.as_canonical_u32();
 
         // Determine flags from opcode
         let local_idx = instruction
@@ -443,7 +440,7 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
             tracing_read(
                 memory,
                 RV32_REGISTER_AS,
-                record.to_pc_reg_ptr + record.fp,
+                record.to_pc_operand + record.fp,
                 &mut record.to_pc_read_aux.prev_timestamp,
             )
         } else {
@@ -609,8 +606,7 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         );
 
         // Scalar fields
-        adapter_row.to_pc_imm = F::from_canonical_u32(record.to_pc_imm);
-        adapter_row.to_pc_reg_ptr = F::from_canonical_u32(record.to_pc_reg_ptr);
+        adapter_row.to_pc_operand = F::from_canonical_u32(record.to_pc_operand);
         adapter_row.save_pc_ptr = F::from_canonical_u32(record.save_pc_ptr);
         adapter_row.save_fp_ptr = F::from_canonical_u32(record.save_fp_ptr);
         adapter_row.to_fp_operand = F::from_canonical_u32(to_fp_operand);
