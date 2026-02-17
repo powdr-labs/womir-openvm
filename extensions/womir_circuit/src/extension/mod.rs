@@ -70,6 +70,9 @@ impl Default for Womir {
 /// - sizes[1] = 2 * NUM_LIMBS * (1 << LIMB_BITS): upper bound on the carry
 ///   at any limb position. The carry at position i is the sum of up to i+1
 ///   products of LIMB_BITS-bit values, so it grows linearly with NUM_LIMBS.
+///
+/// See size requirements in DivRemFiller::new:
+/// https://github.com/powdr-labs/openvm/blob/4300c42df8f860085b6ca46311f2750a01da3dec/extensions/rv32im/circuit/src/divrem/core.rs#L390
 fn default_range_tuple_checker_sizes() -> [u32; 2] {
     [1 << RV32_CELL_BITS, 2 * 8 * (1 << RV32_CELL_BITS)]
 }
