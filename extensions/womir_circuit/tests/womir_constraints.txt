@@ -883,7 +883,7 @@ mult=opcode_div_flag + opcode_rem_flag, args=[2 * (b__7 - b_sign * 128), 2 * (c_
 mult=0 + opcode_div_flag + opcode_divu_flag + opcode_rem_flag + opcode_remu_flag - (zero_divisor + r_zero), args=[lt_diff - 1, 0, 0, 0]
 mult=0 + opcode_div_flag + opcode_divu_flag + opcode_rem_flag + opcode_remu_flag - rs2_as, args=[c__0, c__1, 0, 0]
 
-// Bus 8 (TUPLE_RANGE_CHECKER):
+// Bus 7 (TUPLE_RANGE_CHECKER):
 mult=0 + opcode_div_flag + opcode_divu_flag + opcode_rem_flag + opcode_remu_flag, args=[q__0, (0 + (r__0 + c__0 * q__0) - b__0) * 2005401601]
 mult=0 + opcode_div_flag + opcode_divu_flag + opcode_rem_flag + opcode_remu_flag, args=[q__1, ((0 + (r__0 + c__0 * q__0) - b__0) * 2005401601 + (r__1 + c__0 * q__1 + c__1 * q__0) - b__1) * 2005401601]
 mult=0 + opcode_div_flag + opcode_divu_flag + opcode_rem_flag + opcode_remu_flag, args=[q__2, (((0 + (r__0 + c__0 * q__0) - b__0) * 2005401601 + (r__1 + c__0 * q__1 + c__1 * q__0) - b__1) * 2005401601 + (r__2 + c__0 * q__2 + c__1 * q__1 + c__2 * q__0) - b__2) * 2005401601]
