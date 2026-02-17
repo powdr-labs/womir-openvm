@@ -1251,7 +1251,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1268,7 +1268,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1284,7 +1284,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1305,7 +1305,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -1326,7 +1326,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -1347,7 +1347,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -1363,7 +1363,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     // ==================== Jump Tests ====================
