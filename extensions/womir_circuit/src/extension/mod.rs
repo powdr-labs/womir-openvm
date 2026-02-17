@@ -71,7 +71,7 @@ impl Default for Womir {
 ///   at any limb position. The carry at position i is the sum of up to i+1
 ///   products of LIMB_BITS-bit values, so it grows linearly with NUM_LIMBS.
 fn default_range_tuple_checker_sizes() -> [u32; 2] {
-    [1 << RV32_CELL_BITS, 2 * 4 * (1 << RV32_CELL_BITS)]
+    [1 << RV32_CELL_BITS, 2 * 8 * (1 << RV32_CELL_BITS)]
 }
 
 // ============ Executor and Periphery Enums for Extension ============
