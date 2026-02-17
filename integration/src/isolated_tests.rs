@@ -1685,7 +1685,7 @@ mod tests {
             start_fp: 124,
             start_registers: vec![
                 (124, 1),
-                (125, 0),          // reg 0 = 1
+                (125, 0), // reg 0 = 1
                 (126, 0xFFFFFFFF),
                 (127, 0xFFFFFFFF), // reg 2 = -1 (i64)
             ],
