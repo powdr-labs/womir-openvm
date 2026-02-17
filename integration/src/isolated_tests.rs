@@ -1673,6 +1673,29 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
+    #[test]
+    fn test_div_64_large_carry() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 1 / (-1) = -1 (signed 64-bit)
+        // This produces carries up to 4079 in the range tuple checker,
+        // requiring sizes[1] >= 4096 (the 64-bit default).
+        let spec = TestSpec {
+            program: vec![wom::div_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 1),
+                (125, 0),          // reg 0 = 1
+                (126, 0xFFFFFFFF),
+                (127, 0xFFFFFFFF), // reg 2 = -1 (i64)
+            ],
+            expected_registers: vec![(128, 0xFFFFFFFF), (129, 0xFFFFFFFF)], // -1
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
     // ==================== Cross-width tests ====================
 
     #[test]
