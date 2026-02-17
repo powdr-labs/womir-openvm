@@ -70,9 +70,6 @@ impl Default for Womir {
 /// - sizes[1] = 2 * NUM_LIMBS * (1 << LIMB_BITS): upper bound on the carry
 ///   at any limb position. The carry at position i is the sum of up to i+1
 ///   products of LIMB_BITS-bit values, so it grows linearly with NUM_LIMBS.
-///
-/// See size requirements in DivRemFiller::new:
-/// https://github.com/powdr-labs/openvm/blob/4300c42df8f860085b6ca46311f2750a01da3dec/extensions/rv32im/circuit/src/divrem/core.rs#L390
 fn default_range_tuple_checker_sizes() -> [u32; 2] {
     [1 << RV32_CELL_BITS, 2 * 8 * (1 << RV32_CELL_BITS)]
 }
@@ -233,14 +230,21 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(less_than_64);
 
         let range_tuple_bus = {
-            let sizes = self.range_tuple_checker_sizes;
-            let existing_air = inventory
-                .find_air::<RangeTupleCheckerAir<2>>()
-                .find(|c| c.bus.sizes[0] >= sizes[0] && c.bus.sizes[1] >= sizes[1]);
+            let existing_air = inventory.find_air::<RangeTupleCheckerAir<2>>().next();
             if let Some(air) = existing_air {
+                assert!(
+                    air.bus.sizes[0] >= self.range_tuple_checker_sizes[0]
+                        && air.bus.sizes[1] >= self.range_tuple_checker_sizes[1],
+                    "Existing RangeTupleCheckerAir sizes {:?} are too small, need {:?}",
+                    air.bus.sizes,
+                    self.range_tuple_checker_sizes,
+                );
                 air.bus
             } else {
-                let bus = RangeTupleCheckerBus::new(inventory.new_bus_idx(), sizes);
+                let bus = RangeTupleCheckerBus::new(
+                    inventory.new_bus_idx(),
+                    self.range_tuple_checker_sizes,
+                );
                 inventory.add_air(RangeTupleCheckerAir { bus });
                 bus
             }
@@ -379,11 +383,17 @@ where
         inventory.add_executor_chip(less_than_64);
 
         let range_tuple_chip = {
-            let sizes = extension.range_tuple_checker_sizes;
             let existing_chip = inventory
                 .find_chip::<SharedRangeTupleCheckerChip<2>>()
-                .find(|c| c.bus().sizes[0] >= sizes[0] && c.bus().sizes[1] >= sizes[1]);
+                .next();
             if let Some(chip) = existing_chip {
+                assert!(
+                    chip.bus().sizes[0] >= extension.range_tuple_checker_sizes[0]
+                        && chip.bus().sizes[1] >= extension.range_tuple_checker_sizes[1],
+                    "Existing SharedRangeTupleCheckerChip sizes {:?} are too small, need {:?}",
+                    chip.bus().sizes,
+                    extension.range_tuple_checker_sizes,
+                );
                 chip.clone()
             } else {
                 let air: &RangeTupleCheckerAir<2> = inventory.next_air()?;
