@@ -14,7 +14,7 @@ use openvm_instructions::{
     LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
-    riscv::{RV32_IMM_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
+    riscv::{RV32_CELL_BITS, RV32_IMM_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
 };
 use openvm_rv32im_circuit::LoadSignExtendExecutor as LoadSignExtendExecutorInner;
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
@@ -25,11 +25,11 @@ use crate::memory_config::FpMemory;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
-pub struct LoadSignExtendExecutor<const NUM_LIMBS: usize, const LIMB_BITS: usize>(
-    pub LoadSignExtendExecutorInner<Rv32LoadStoreAdapterExecutor, NUM_LIMBS, LIMB_BITS>,
+pub struct LoadSignExtendExecutor<const NUM_LIMBS: usize>(
+    pub LoadSignExtendExecutorInner<Rv32LoadStoreAdapterExecutor, NUM_LIMBS, RV32_CELL_BITS>,
 );
 
-impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> LoadSignExtendExecutor<NUM_LIMBS, LIMB_BITS> {
+impl<const NUM_LIMBS: usize> LoadSignExtendExecutor<NUM_LIMBS> {
     pub fn new(adapter: Rv32LoadStoreAdapterExecutor) -> Self {
         Self(LoadSignExtendExecutorInner::new(adapter))
     }
@@ -44,7 +44,7 @@ struct LoadSignExtendPreCompute {
     e: u32,
 }
 
-impl<const LIMB_BITS: usize> LoadSignExtendExecutor<{ RV32_REGISTER_NUM_LIMBS }, LIMB_BITS> {
+impl LoadSignExtendExecutor<{ RV32_REGISTER_NUM_LIMBS }> {
     /// Return (is_loadb, enabled)
     fn pre_compute_impl<F: PrimeField32>(
         &self,
@@ -103,8 +103,7 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, const LIMB_BITS: usize> InterpreterExecutor<F>
-    for LoadSignExtendExecutor<{ RV32_REGISTER_NUM_LIMBS }, LIMB_BITS>
+impl<F> InterpreterExecutor<F> for LoadSignExtendExecutor<{ RV32_REGISTER_NUM_LIMBS }>
 where
     F: PrimeField32,
 {
@@ -125,8 +124,7 @@ where
     }
 }
 
-impl<F, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
-    for LoadSignExtendExecutor<{ RV32_REGISTER_NUM_LIMBS }, LIMB_BITS>
+impl<F> InterpreterMeteredExecutor<F> for LoadSignExtendExecutor<{ RV32_REGISTER_NUM_LIMBS }>
 where
     F: PrimeField32,
 {

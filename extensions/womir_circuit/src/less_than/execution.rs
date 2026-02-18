@@ -18,7 +18,7 @@ use openvm_instructions::{
     LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
-    riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
+    riscv::{RV32_CELL_BITS, RV32_IMM_AS, RV32_REGISTER_AS},
 };
 use openvm_rv32im_circuit::LessThanExecutor as LessThanExecutorInner;
 use openvm_rv32im_transpiler::LessThanOpcode;
@@ -28,23 +28,18 @@ use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_by
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
-pub struct LessThanExecutor<
-    const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
-    const LIMB_BITS: usize,
->(
+pub struct LessThanExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize>(
     pub  LessThanExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
         NUM_LIMBS,
-        LIMB_BITS,
+        RV32_REGISTER_NUM_LIMBS,
     >,
 );
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> LessThanExecutor<NUM_LIMBS, NUM_REG_OPS>
 {
     pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
         offset: usize,
     ) -> Self {
         Self(LessThanExecutorInner::new(adapter, offset))
@@ -62,8 +57,7 @@ pub(super) struct LessThanPreCompute {
     b: u32,
 }
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> LessThanExecutor<NUM_LIMBS, NUM_REG_OPS>
 {
     /// Return `(is_imm, is_sltu)`.
     #[inline(always)]
@@ -116,8 +110,8 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    InterpreterExecutor<F> for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize> InterpreterExecutor<F>
+    for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS>
 where
     F: PrimeField32,
 {
@@ -143,8 +137,8 @@ where
     }
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    InterpreterMeteredExecutor<F> for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize> InterpreterMeteredExecutor<F>
+    for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS>
 where
     F: PrimeField32,
 {
