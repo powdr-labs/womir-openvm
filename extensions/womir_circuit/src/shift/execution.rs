@@ -26,7 +26,8 @@ use openvm_rv32im_circuit::ShiftExecutor as ShiftExecutorInner;
 use openvm_rv32im_transpiler::ShiftOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes, sign_extend_u32};
+use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
+use crate::utils::sign_extend_u32;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]

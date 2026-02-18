@@ -10,7 +10,7 @@ use std::{
     mem::size_of,
 };
 
-use crate::memory_config::FpMemory;
+use crate::{memory_config::FpMemory, utils::sign_extend_u32};
 use openvm_circuit::{
     arch::*,
     system::memory::online::{GuestMemory, TracingMemory},
@@ -26,7 +26,7 @@ use openvm_rv32im_circuit::BaseAluExecutor as BaseAluExecutorInner;
 use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes, sign_extend_u32};
+use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, Copy)]

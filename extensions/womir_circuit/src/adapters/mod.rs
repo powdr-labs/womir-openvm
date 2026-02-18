@@ -3,6 +3,7 @@ use std::ops::Mul;
 use openvm_circuit::{
     arch::{VmStateMut, execution_mode::ExecutionCtxTrait},
     system::memory::{
+        MemoryAddress,
         merkle::public_values::PUBLIC_VALUES_AS,
         online::{GuestMemory, TracingMemory},
     },
@@ -32,6 +33,11 @@ pub const RV_B_TYPE_IMM_BITS: usize = 13;
 
 pub const RV_J_TYPE_IMM_BITS: usize = 21;
 
+#[inline(always)]
+pub fn fp<F: FieldAlgebra>() -> MemoryAddress<F, F> {
+    MemoryAddress::new(F::from_canonical_u32(FP_AS), F::ZERO)
+}
+
 /// Convert the RISC-V register data (32 bits represented as 4 bytes, where each byte is represented
 /// as a field element) back into its value as u32.
 pub fn compose<F: PrimeField32>(ptr_data: [F; RV32_REGISTER_NUM_LIMBS]) -> u32 {
@@ -47,16 +53,6 @@ pub fn decompose<F: PrimeField32>(value: u32) -> [F; RV32_REGISTER_NUM_LIMBS] {
     std::array::from_fn(|i| {
         F::from_canonical_u32((value >> (RV32_CELL_BITS * i)) & ((1 << RV32_CELL_BITS) - 1))
     })
-}
-
-/// Sign-extend a u32 value to `[u8; N]`.
-/// For N=4, this is equivalent to `c.to_le_bytes()`.
-/// For N>4, the upper bytes are sign-extended from bit 31.
-#[inline(always)]
-pub fn sign_extend_u32<const N: usize>(c: u32) -> [u8; N] {
-    let sign_byte = if c & 0x8000_0000 != 0 { 0xFF } else { 0x00 };
-    let le = c.to_le_bytes();
-    std::array::from_fn(|i| if i < 4 { le[i] } else { sign_byte })
 }
 
 /// Convert a 24-bit encoded immediate to `[u8; N]` with sign extension.

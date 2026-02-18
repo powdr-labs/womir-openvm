@@ -14,10 +14,14 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
     BitwiseOperationLookupAir, BitwiseOperationLookupBus, BitwiseOperationLookupChip,
     SharedBitwiseOperationLookupChip,
 };
+use openvm_circuit_primitives::range_tuple::{
+    RangeTupleCheckerAir, RangeTupleCheckerBus, RangeTupleCheckerChip, SharedRangeTupleCheckerChip,
+};
 use openvm_instructions::LocalOpcode;
 use openvm_rv32im_circuit::{
     BaseAluCoreAir, BaseAluFiller, LessThanCoreAir, LessThanFiller, LoadSignExtendCoreAir,
-    LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller, ShiftCoreAir, ShiftFiller,
+    LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller, MultiplicationCoreAir,
+    MultiplicationFiller, ShiftCoreAir, ShiftFiller,
 };
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
@@ -27,7 +31,7 @@ use openvm_stark_backend::{
 };
 use openvm_womir_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, JumpOpcode, LessThan64Opcode, LessThanOpcode,
-    LoadStoreOpcode, Shift64Opcode, ShiftOpcode,
+    LoadStoreOpcode, Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -77,6 +81,8 @@ fn default_range_tuple_checker_sizes() -> [u32; 2] {
 pub enum WomirExecutor {
     BaseAlu(Rv32BaseAluExecutor),
     BaseAlu64(BaseAlu64Executor),
+    Mul(Rv32MultiplicationExecutor),
+    Mul64(Mul64Executor),
     LessThan(Rv32LessThanExecutor),
     LessThan64(LessThan64Executor),
     Shift(Rv32ShiftExecutor),
@@ -113,6 +119,17 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             BaseAlu64Opcode::iter().map(|x| x.global_opcode()),
         )?;
 
+        let mul = Rv32MultiplicationExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            MulOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(mul, MulOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let mul_64 = Mul64Executor::new(
+            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            Mul64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(mul_64, Mul64Opcode::iter().map(|x| x.global_opcode()))?;
         let less_than = Rv32LessThanExecutor::new(
             Rv32BaseAluAdapterExecutor::default(),
             LessThanOpcode::CLASS_OFFSET,
@@ -205,6 +222,32 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         );
         inventory.add_air(base_alu_64);
 
+        let range_tuple_bus = {
+            let existing_air = inventory.find_air::<RangeTupleCheckerAir<2>>().next();
+            if let Some(air) = existing_air {
+                air.bus
+            } else {
+                let bus = RangeTupleCheckerBus::new(
+                    inventory.new_bus_idx(),
+                    self.range_tuple_checker_sizes,
+                );
+                let air = RangeTupleCheckerAir { bus };
+                inventory.add_air(air);
+                bus
+            }
+        };
+
+        let mul = Rv32MultiplicationAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            MultiplicationCoreAir::new(range_tuple_bus, MulOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(mul);
+
+        let mul_64 = Mul64Air::new(
+            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            MultiplicationCoreAir::new(range_tuple_bus, Mul64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(mul_64);
         let less_than = Rv32LessThanAir::new(
             Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
             LessThanCoreAir::new(bitwise_lu, LessThanOpcode::CLASS_OFFSET),
@@ -327,6 +370,41 @@ where
         );
         inventory.add_executor_chip(base_alu_64);
 
+        let range_tuple_chip = {
+            let existing_chip = inventory
+                .find_chip::<SharedRangeTupleCheckerChip<2>>()
+                .next();
+            if let Some(chip) = existing_chip {
+                chip.clone()
+            } else {
+                let air: &RangeTupleCheckerAir<2> = inventory.next_air()?;
+                let chip = Arc::new(RangeTupleCheckerChip::new(air.bus));
+                inventory.add_periphery_chip(chip.clone());
+                chip
+            }
+        };
+
+        inventory.next_air::<Rv32MultiplicationAir>()?;
+        let mul = Rv32MultiplicationChip::new(
+            MultiplicationFiller::new(
+                Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                range_tuple_chip.clone(),
+                MulOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(mul);
+
+        inventory.next_air::<Mul64Air>()?;
+        let mul_64 = Mul64Chip::new(
+            MultiplicationFiller::new(
+                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                range_tuple_chip.clone(),
+                Mul64Opcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(mul_64);
         inventory.next_air::<Rv32LessThanAir>()?;
         let less_than = Rv32LessThanChip::new(
             LessThanFiller::new(
