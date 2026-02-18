@@ -31,31 +31,40 @@ use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_by
 pub struct LessThanExecutor<
     const NUM_LIMBS: usize,
     const NUM_REG_OPS: usize,
+    const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
 >(
     pub  LessThanExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >,
 );
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<
+    const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
+    const NUM_WRITE_OPS: usize,
+    const LIMB_BITS: usize,
+> LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
     pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>,
         offset: usize,
     ) -> Self {
         Self(LessThanExecutorInner::new(adapter, offset))
     }
 }
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize> std::ops::Deref
-    for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<
+    const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
+    const NUM_WRITE_OPS: usize,
+    const LIMB_BITS: usize,
+> std::ops::Deref for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
     type Target = LessThanExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >;
@@ -76,8 +85,12 @@ pub(super) struct LessThanPreCompute {
     b: u32,
 }
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<
+    const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
+    const NUM_WRITE_OPS: usize,
+    const LIMB_BITS: usize,
+> LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
     /// Return `(is_imm, is_sltu)`.
     #[inline(always)]
@@ -130,8 +143,13 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    InterpreterExecutor<F> for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<
+    F,
+    const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
+    const NUM_WRITE_OPS: usize,
+    const LIMB_BITS: usize,
+> InterpreterExecutor<F> for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -157,8 +175,14 @@ where
     }
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    InterpreterMeteredExecutor<F> for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<
+    F,
+    const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
+    const NUM_WRITE_OPS: usize,
+    const LIMB_BITS: usize,
+> InterpreterMeteredExecutor<F>
+    for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -225,7 +249,9 @@ unsafe fn execute_e12_impl<
     } else {
         (a as i64) < (b as i64)
     };
-    let mut rd = [0u8; NUM_LIMBS];
+    // Write only one register-width (4 bytes): comparison results are always i32,
+    // even for 64-bit operands.
+    let mut rd = [0u8; RV32_REGISTER_NUM_LIMBS];
     rd[0] = cmp_result as u8;
     exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &rd);
     let pc = exec_state.pc();
