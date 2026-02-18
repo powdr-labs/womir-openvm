@@ -422,18 +422,14 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
             .local_opcode_idx(CallOpcode::CLASS_OFFSET);
         let opcode = CallOpcode::from_usize(local_idx);
 
-        record.has_pc_read = match opcode {
-            CallOpcode::RET | CallOpcode::CALL_INDIRECT => 1,
-            _ => 0,
-        };
-        record.has_save = match opcode {
-            CallOpcode::CALL | CallOpcode::CALL_INDIRECT => 1,
-            _ => 0,
-        };
+        let has_pc_read = matches!(opcode, CallOpcode::RET | CallOpcode::CALL_INDIRECT);
+        let has_save = matches!(opcode, CallOpcode::CALL | CallOpcode::CALL_INDIRECT);
+        record.has_pc_read = has_pc_read as u8;
+        record.has_save = has_save as u8;
 
         // 1. Read to_fp_reg (conditional - only RET reads absolute FP from register)
         // has_fp_read = !has_save
-        let new_fp_bytes: [u8; RV32_REGISTER_NUM_LIMBS] = if record.has_save == 0 {
+        let new_fp_bytes: [u8; RV32_REGISTER_NUM_LIMBS] = if !has_save {
             tracing_read(
                 memory,
                 RV32_REGISTER_AS,
@@ -446,7 +442,7 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
         };
 
         // 2. Read to_pc_reg (conditional)
-        let to_pc_bytes: [u8; RV32_REGISTER_NUM_LIMBS] = if record.has_pc_read == 1 {
+        let to_pc_bytes: [u8; RV32_REGISTER_NUM_LIMBS] = if has_pc_read {
             tracing_read(
                 memory,
                 RV32_REGISTER_AS,
@@ -479,7 +475,7 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
         } = data;
 
         // 3. Write save_fp (conditional on has_save) - relative to NEW frame
-        if record.has_save == 1 {
+        if record.has_save != 0 {
             let (t_prev, prev_data) = super::timed_write(
                 memory,
                 RV32_REGISTER_AS,
@@ -493,7 +489,7 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
         }
 
         // 4. Write save_pc (conditional on has_save) - relative to NEW frame
-        if record.has_save == 1 {
+        if record.has_save != 0 {
             let (t_prev, prev_data) = super::timed_write(
                 memory,
                 RV32_REGISTER_AS,
@@ -544,8 +540,8 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         // Cache record fields that will be overwritten when filling aux columns.
         // The record and columns share the same buffer; filling fp_read_aux overwrites
         // record.has_save and record.has_pc_read.
-        let has_save = record.has_save;
-        let has_pc_read = record.has_pc_read;
+        let has_save = record.has_save != 0;
+        let has_pc_read = record.has_pc_read != 0;
         let fp = record.fp;
         let to_fp_operand = record.to_fp_operand;
 
@@ -562,7 +558,7 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         timestamp -= 1;
 
         // 4. save_pc write
-        if has_save != 0 {
+        if has_save {
             adapter_row
                 .save_pc_write_aux
                 .set_prev_data(record.save_pc_write_aux.prev_data.map(F::from_canonical_u8));
@@ -577,7 +573,7 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         timestamp -= 1;
 
         // 3. save_fp write
-        if has_save != 0 {
+        if has_save {
             adapter_row
                 .save_fp_write_aux
                 .set_prev_data(record.save_fp_write_aux.prev_data.map(F::from_canonical_u8));
@@ -592,7 +588,7 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         timestamp -= 1;
 
         // 2. to_pc_reg read
-        if has_pc_read != 0 {
+        if has_pc_read {
             mem_helper.fill(
                 record.to_pc_read_aux.prev_timestamp,
                 timestamp,
@@ -603,8 +599,8 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         }
         timestamp -= 1;
 
-        // 1. to_fp_reg read (conditional - only RET, i.e. has_save == 0)
-        if has_save == 0 {
+        // 1. to_fp_reg read (conditional - only RET, i.e. !has_save)
+        if !has_save {
             mem_helper.fill(
                 record.to_fp_read_aux.prev_timestamp,
                 timestamp,
@@ -631,8 +627,8 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         adapter_row.from_state.fp = F::from_canonical_u32(fp);
         adapter_row.from_state.pc = F::from_canonical_u32(record.from_pc);
 
-        // Carry-chain limbs for CALL/CALL_INDIRECT (has_save != 0)
-        if has_save != 0 {
+        // Carry-chain limbs for CALL/CALL_INDIRECT (has_save)
+        if has_save {
             let new_fp = fp + to_fp_operand;
 
             adapter_row.offset_limbs = [
