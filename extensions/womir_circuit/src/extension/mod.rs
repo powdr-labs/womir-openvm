@@ -21,7 +21,7 @@ use openvm_instructions::LocalOpcode;
 use openvm_rv32im_circuit::{
     BaseAluCoreAir, BaseAluFiller, LessThanCoreAir, LessThanFiller, LoadSignExtendCoreAir,
     LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller, MultiplicationCoreAir,
-    MultiplicationFiller,
+    MultiplicationFiller, ShiftCoreAir, ShiftFiller,
 };
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
@@ -31,7 +31,7 @@ use openvm_stark_backend::{
 };
 use openvm_womir_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, JumpOpcode, LessThan64Opcode, LessThanOpcode,
-    LoadStoreOpcode, Mul64Opcode, MulOpcode,
+    LoadStoreOpcode, Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -85,6 +85,8 @@ pub enum WomirExecutor {
     Mul64(Mul64Executor),
     LessThan(Rv32LessThanExecutor),
     LessThan64(LessThan64Executor),
+    Shift(Rv32ShiftExecutor),
+    Shift64(Shift64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     Jump(JumpExecutor),
@@ -142,6 +144,18 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             less_than_64,
             LessThan64Opcode::iter().map(|x| x.global_opcode()),
         )?;
+
+        let shift = Rv32ShiftExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            ShiftOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(shift, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let shift_64 = Shift64Executor::new(
+            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            Shift64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(shift_64, Shift64Opcode::iter().map(|x| x.global_opcode()))?;
 
         let load_store = LoadStoreExecutor::new(
             Rv32LoadStoreAdapterExecutor::new(pointer_max_bits),
@@ -245,6 +259,18 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             LessThanCoreAir::new(bitwise_lu, LessThan64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(less_than_64);
+
+        let shift = Rv32ShiftAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            ShiftCoreAir::new(bitwise_lu, range_checker, ShiftOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(shift);
+
+        let shift_64 = Shift64Air::new(
+            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            ShiftCoreAir::new(bitwise_lu, range_checker, Shift64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(shift_64);
 
         let load_store = Rv32LoadStoreAir::new(
             Rv32LoadStoreAdapterAir::new(
@@ -400,6 +426,30 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(less_than_64);
+
+        inventory.next_air::<Rv32ShiftAir>()?;
+        let shift = Rv32ShiftChip::new(
+            ShiftFiller::new(
+                Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                range_checker.clone(),
+                ShiftOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(shift);
+
+        inventory.next_air::<Shift64Air>()?;
+        let shift_64 = Shift64Chip::new(
+            ShiftFiller::new(
+                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                range_checker.clone(),
+                Shift64Opcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(shift_64);
 
         inventory.next_air::<Rv32LoadStoreAir>()?;
         let load_store_chip = Rv32LoadStoreChip::new(
