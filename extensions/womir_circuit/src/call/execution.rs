@@ -16,6 +16,7 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::CallOpcode;
 
 use crate::adapters::RV32_REGISTER_NUM_LIMBS;
+use crate::adapters::call::{CallReadData, CallWriteData};
 use crate::memory_config::FpMemory;
 
 use super::core::CallCoreRecord;
@@ -55,15 +56,7 @@ impl<F, A, RA> PreflightExecutor<F, RA> for CallExecutor<A>
 where
     F: PrimeField32,
     A: 'static
-        + AdapterTraceExecutor<
-            F,
-            ReadData = [[u8; RV32_REGISTER_NUM_LIMBS]; 2],
-            WriteData = (
-                [u8; RV32_REGISTER_NUM_LIMBS],
-                [u8; RV32_REGISTER_NUM_LIMBS],
-                u32,
-            ),
-        >,
+        + AdapterTraceExecutor<F, ReadData = CallReadData<u8>, WriteData = CallWriteData<u8>>,
     for<'buf> RA: RecordArena<
             'buf,
             EmptyAdapterCoreLayout<F, A>,
@@ -88,9 +81,12 @@ where
 
         // Read through the adapter: [new_fp_bytes, to_pc_bytes]
         // new_fp_bytes is only valid for RET (register read); zeros for CALL/CALL_INDIRECT
-        let [new_fp_bytes, to_pc_bytes] =
-            self.adapter
-                .read(state.memory, instruction, &mut adapter_record);
+        let CallReadData {
+            to_fp_reg: new_fp_bytes,
+            to_pc_reg: to_pc_bytes,
+        } = self
+            .adapter
+            .read(state.memory, instruction, &mut adapter_record);
 
         // Get old FP from memory (hasn't been modified yet by the write phase)
         let old_fp_val = state.memory.data.fp::<F>();
@@ -122,7 +118,11 @@ where
         self.adapter.write(
             state.memory,
             instruction,
-            (save_fp_bytes, save_pc_bytes, new_fp),
+            CallWriteData {
+                save_fp: save_fp_bytes,
+                save_pc: save_pc_bytes,
+                new_fp,
+            },
             &mut adapter_record,
         );
 
