@@ -57,6 +57,11 @@ pub struct TestSpec {
     pub expected_registers: Vec<(usize, u32)>,
     /// Expected RAM values after execution: (address, value).
     pub expected_ram: Vec<(u32, u32)>,
+
+    /// Register indices whose values are raw FP pointers (e.g., saved FP in call/ret tests).
+    /// When rebasing, these values are shifted by `delta * RV32_REGISTER_NUM_LIMBS`.
+    /// Indices are in the original (pre-rebase) namespace.
+    pub fp_value_registers: Vec<usize>,
 }
 
 /// Read a register value from memory.
@@ -294,7 +299,7 @@ pub fn test_prove(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn test_spec(mut spec: TestSpec) {
+fn test_spec(mut spec: TestSpec) {
     // Append halt instruction:
     spec.program.push(wom::halt());
 
@@ -334,6 +339,7 @@ mod tests {
         let mut rebased = spec.clone();
         let old_base = spec.start_fp;
         let delta = new_base as i64 - old_base as i64;
+        let raw_delta = delta * RV32_REGISTER_NUM_LIMBS as i64;
 
         let shift_register = |register_index: usize| -> usize {
             let shifted = register_index as i64 + delta;
@@ -344,16 +350,31 @@ mod tests {
             shifted as usize
         };
 
+        let shift_reg_entry = |register_index: usize, value: u32| -> (usize, u32) {
+            let new_value = if spec.fp_value_registers.contains(&register_index) {
+                (value as i64 + raw_delta) as u32
+            } else {
+                value
+            };
+            (shift_register(register_index), new_value)
+        };
+
         rebased.start_fp = new_base;
+        rebased.expected_fp = spec.expected_fp.map(|fp| (fp as i64 + delta) as u32);
         rebased.start_registers = spec
             .start_registers
             .iter()
-            .map(|(register_index, value)| (shift_register(*register_index), *value))
+            .map(|&(reg, val)| shift_reg_entry(reg, val))
             .collect();
         rebased.expected_registers = spec
             .expected_registers
             .iter()
-            .map(|(register_index, value)| (shift_register(*register_index), *value))
+            .map(|&(reg, val)| shift_reg_entry(reg, val))
+            .collect();
+        rebased.fp_value_registers = spec
+            .fp_value_registers
+            .iter()
+            .map(|&reg| shift_register(reg))
             .collect();
         rebased
     }
@@ -1487,9 +1508,10 @@ mod tests {
                 (20, 100), // caller_frame[0] at abs 20: 99 + 1
                 (25, 99),  // caller_frame[5] unchanged
             ],
+            fp_value_registers: vec![61],
             ..Default::default()
         };
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1525,9 +1547,10 @@ mod tests {
                 (60, 4),  // new_frame[10] at abs 60: saved return PC
                 (61, 80), // new_frame[11] at abs 61: saved old raw FP
             ],
+            fp_value_registers: vec![61],
             ..Default::default()
         };
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1565,9 +1588,10 @@ mod tests {
                 (60, 4),  // new_frame[10] at abs 60: saved return PC
                 (61, 80), // new_frame[11] at abs 61: saved old raw FP
             ],
+            fp_value_registers: vec![61],
             ..Default::default()
         };
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1612,6 +1636,6 @@ mod tests {
             ],
             ..Default::default()
         };
-        test_spec(spec)
+        test_spec_for_all_register_bases(spec)
     }
 }
