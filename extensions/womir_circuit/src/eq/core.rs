@@ -147,8 +147,11 @@ where
         core_row.opcode_eq_flag = F::from_bool(record.local_opcode == EqOpcode::EQ as u8);
 
         core_row.cmp_result = F::from_bool(cmp_result);
-        core_row.b = record.b.map(F::from_canonical_u8);
+        // Write c before b: the record bytes overlap with the core columns in memory
+        // (record.c occupies the same bytes as core_row.b[1]), so we must write in
+        // reverse field order to avoid overwriting record data before reading it.
         core_row.c = record.c.map(F::from_canonical_u8);
+        core_row.b = record.b.map(F::from_canonical_u8);
     }
 }
 
@@ -163,7 +166,7 @@ pub(super) fn run_eq<F: Field, const NUM_LIMBS: usize>(
             return (
                 !is_eq_opcode,
                 i,
-                F::from_canonical_u8(xi.wrapping_sub(yi)).inverse(),
+                (F::from_canonical_u8(xi) - F::from_canonical_u8(yi)).inverse(),
             );
         }
     }
