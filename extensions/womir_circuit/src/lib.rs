@@ -41,6 +41,9 @@ pub use loadstore::*;
 pub use mul::*;
 pub use shift::*;
 
+mod hintstore;
+pub use hintstore::*;
+
 mod extension;
 pub use extension::*;
 

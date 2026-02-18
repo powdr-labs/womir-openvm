@@ -233,12 +233,20 @@ where
     // address 3: reserved for frame pointer
     // address 4: first argument
     // address 4 + i: i-th argument
+    // Use a scratch register to hold a pointer to MEM[0] for hint_storew.
+    // hint_storew writes to memory AS (not register AS), so we need a scratch
+    // memory location. MEM[0] serves as scratch, with a register holding 0 as pointer.
     let mut ptr = 4;
+    let scratch_reg = ptr;
+    ptr += 1;
+    if num_input_words > 0 {
+        code.push(ib::const_32_imm(scratch_reg as usize, 0, 0));
+    }
     for _ in 0..num_input_words {
-        //code.push(ib::read32(ptr as usize));
-        // code.push(ib::const_32_imm(ptr as usize, 10, 0));
         code.push(ib::prepare_read());
-        code.push(ib::read_u32(ptr as usize));
+        code.push(ib::hint_storew(scratch_reg as usize)); // skip length word
+        code.push(ib::hint_storew(scratch_reg as usize)); // write data to MEM[0]
+        code.push(ib::loadw(ptr as usize, scratch_reg as usize, 0)); // load MEM[0] → register
         ptr += 1;
     }
 
@@ -617,10 +625,15 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     ) -> Vec<Directive<F>> {
         match (module, function) {
             ("env", "read_u32") => {
+                // hint_storew writes to memory AS, so use the output register as a
+                // scratch pointer to MEM[0].
                 let output = outputs[0].start as usize;
                 vec![
                     Directive::Instruction(ib::prepare_read()),
-                    Directive::Instruction(ib::read_u32(output)),
+                    Directive::Instruction(ib::const_32_imm(output, 0, 0)),
+                    Directive::Instruction(ib::hint_storew(output)), // skip length
+                    Directive::Instruction(ib::hint_storew(output)), // write data to MEM[0]
+                    Directive::Instruction(ib::loadw(output, output, 0)), // load into dest
                 ]
             }
             ("env", "__debug_print") => {
@@ -650,11 +663,16 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 let mem_ptr = inputs[0].start as usize;
                 let num_words = inputs[1].start as usize;
-                vec![Directive::Instruction(ib::read_buffer(
-                    num_words,
-                    mem_ptr,
-                    mem_start as usize,
-                ))]
+                let mut directives = vec![];
+                if mem_start > 0 {
+                    directives.push(Directive::Instruction(ib::add_imm(
+                        mem_ptr,
+                        mem_ptr,
+                        AluImm::try_from(mem_start).unwrap(),
+                    )));
+                }
+                directives.push(Directive::Instruction(ib::hint_buffer(num_words, mem_ptr)));
+                directives
             }
             ("env", "abort") => {
                 vec![Directive::Instruction(ib::abort())]

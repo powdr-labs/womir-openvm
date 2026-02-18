@@ -820,28 +820,26 @@ pub fn debug_print<F: PrimeField32>(
     )
 }
 
-pub fn read_u32<F: PrimeField32>(rd: usize) -> Instruction<F> {
+/// HINT_STOREW: Read one word from hint stream and write to MEM[reg[mem_ptr_reg]]
+pub fn hint_storew<F: PrimeField32>(mem_ptr_reg: usize) -> Instruction<F> {
     Instruction::from_isize(
         HintStoreOpcode::HINT_STOREW.global_opcode(),
-        (riscv::RV32_REGISTER_NUM_LIMBS * rd) as isize,
         0,
+        (riscv::RV32_REGISTER_NUM_LIMBS * mem_ptr_reg) as isize,
         0,
-        1,
-        0,
+        riscv::RV32_REGISTER_AS as isize,
+        riscv::RV32_MEMORY_AS as isize,
     )
 }
 
-pub fn read_buffer<F: PrimeField32>(
-    num_words_reg: usize,
-    mem_ptr_reg: usize,
-    mem_imm: usize,
-) -> Instruction<F> {
+/// HINT_BUFFER: Read num_words words from hint stream and write to MEM[reg[mem_ptr_reg]..]
+pub fn hint_buffer<F: PrimeField32>(num_words_reg: usize, mem_ptr_reg: usize) -> Instruction<F> {
     Instruction::from_isize(
         HintStoreOpcode::HINT_BUFFER.global_opcode(),
-        0, // dest reg, not used here
         (riscv::RV32_REGISTER_NUM_LIMBS * num_words_reg) as isize,
         (riscv::RV32_REGISTER_NUM_LIMBS * mem_ptr_reg) as isize,
-        mem_imm as isize, // immediate memory offset
         0,
+        riscv::RV32_REGISTER_AS as isize,
+        riscv::RV32_MEMORY_AS as isize,
     )
 }
