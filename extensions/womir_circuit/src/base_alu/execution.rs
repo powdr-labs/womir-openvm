@@ -34,7 +34,7 @@ pub struct BaseAluExecutor<
     const LIMB_BITS: usize,
 >(
     pub  BaseAluExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_READ_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >,
@@ -44,7 +44,7 @@ impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize>
     BaseAluExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>
 {
     pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_READ_OPS, LIMB_BITS>,
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>,
         offset: usize,
     ) -> Self {
         Self(BaseAluExecutorInner::new(adapter, offset))
@@ -55,7 +55,7 @@ impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize> 
     for BaseAluExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>
 {
     type Target = BaseAluExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_READ_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >;

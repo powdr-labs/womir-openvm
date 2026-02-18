@@ -24,7 +24,9 @@ use openvm_rv32im_circuit::LessThanExecutor as LessThanExecutorInner;
 use openvm_rv32im_transpiler::LessThanOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
+use crate::adapters::{
+    BaseAluAdapterExecutorDifferentInputsOutputs, RV32_REGISTER_NUM_LIMBS, imm_to_bytes,
+};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
@@ -35,7 +37,12 @@ pub struct LessThanExecutor<
     const LIMB_BITS: usize,
 >(
     pub  LessThanExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutorDifferentInputsOutputs<
+            NUM_LIMBS,
+            NUM_READ_OPS,
+            NUM_WRITE_OPS,
+            LIMB_BITS,
+        >,
         NUM_LIMBS,
         LIMB_BITS,
     >,
@@ -49,7 +56,12 @@ impl<
 > LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
     pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>,
+        adapter: BaseAluAdapterExecutorDifferentInputsOutputs<
+            NUM_LIMBS,
+            NUM_READ_OPS,
+            NUM_WRITE_OPS,
+            LIMB_BITS,
+        >,
         offset: usize,
     ) -> Self {
         Self(LessThanExecutorInner::new(adapter, offset))
@@ -64,7 +76,12 @@ impl<
 > std::ops::Deref for LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
     type Target = LessThanExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutorDifferentInputsOutputs<
+            NUM_LIMBS,
+            NUM_READ_OPS,
+            NUM_WRITE_OPS,
+            LIMB_BITS,
+        >,
         NUM_LIMBS,
         LIMB_BITS,
     >;

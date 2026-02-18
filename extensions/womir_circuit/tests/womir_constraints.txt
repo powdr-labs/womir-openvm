@@ -15,7 +15,7 @@ mult=is_valid, args=[pc + 4, timestamp + 1]
 mult=is_valid, args=[pc, 1, operands__0, operands__1, operands__2, 0, 0, 0, 0]
 
 
-# VmAirWrapper<BaseAluAdapterAir<4, 1, 1>, BaseAluCoreAir<4, 8>
+# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, BaseAluCoreAir<4, 8>
 Symbolic machine using 40 unique main columns:
   from_state__pc
   from_state__fp
@@ -118,7 +118,7 @@ rs2_as * (from_state__timestamp + 2 - rs2_reads_aux__0__base__prev_timestamp - 1
 (0 + opcode_add_flag + opcode_sub_flag + opcode_xor_flag + opcode_or_flag + opcode_and_flag) * (from_state__timestamp + 3 - writes_aux__0__base__prev_timestamp - 1 - (0 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 
 
-# VmAirWrapper<BaseAluAdapterAir<8, 2, 2>, BaseAluCoreAir<8, 8>
+# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 2>, BaseAluCoreAir<8, 8>
 Symbolic machine using 65 unique main columns:
   from_state__pc
   from_state__fp
@@ -277,7 +277,7 @@ rs2_as * (from_state__timestamp + 4 - rs2_reads_aux__1__base__prev_timestamp - 1
 (0 + opcode_add_flag + opcode_sub_flag + opcode_xor_flag + opcode_or_flag + opcode_and_flag) * (from_state__timestamp + 6 - writes_aux__1__base__prev_timestamp - 1 - (0 + writes_aux__1__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__1__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 
 
-# VmAirWrapper<BaseAluAdapterAir<4, 1, 1>, MultiplicationCoreAir<4, 8>
+# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, MultiplicationCoreAir<4, 8>
 Symbolic machine using 36 unique main columns:
   from_state__pc
   from_state__fp
@@ -365,7 +365,7 @@ rs2_as * (from_state__timestamp + 2 - rs2_reads_aux__0__base__prev_timestamp - 1
 is_valid * (from_state__timestamp + 3 - writes_aux__0__base__prev_timestamp - 1 - (0 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 
 
-# VmAirWrapper<BaseAluAdapterAir<8, 2, 2>, MultiplicationCoreAir<8, 8>
+# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 2>, MultiplicationCoreAir<8, 8>
 Symbolic machine using 61 unique main columns:
   from_state__pc
   from_state__fp
@@ -501,7 +501,7 @@ is_valid * (from_state__timestamp + 5 - writes_aux__0__base__prev_timestamp - 1 
 is_valid * (from_state__timestamp + 6 - writes_aux__1__base__prev_timestamp - 1 - (0 + writes_aux__1__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__1__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 
 
-# VmAirWrapper<BaseAluAdapterAir<4, 1, 1>, LessThanCoreAir<4, 8>
+# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, LessThanCoreAir<4, 8>
 Symbolic machine using 41 unique main columns:
   from_state__pc
   from_state__fp
@@ -609,7 +609,7 @@ rs2_as * (from_state__timestamp + 2 - rs2_reads_aux__0__base__prev_timestamp - 1
 (0 + opcode_slt_flag + opcode_sltu_flag) * (from_state__timestamp + 3 - writes_aux__0__base__prev_timestamp - 1 - (0 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 
 
-# VmAirWrapper<BaseAluAdapterAir<8, 2, 1>, LessThanCoreAir<8, 8>
+# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 1>, LessThanCoreAir<8, 8>
 Symbolic machine using 59 unique main columns:
   from_state__pc
   from_state__fp
@@ -761,7 +761,7 @@ rs2_as * (from_state__timestamp + 4 - rs2_reads_aux__1__base__prev_timestamp - 1
 (0 + opcode_slt_flag + opcode_sltu_flag) * (from_state__timestamp + 5 - writes_aux__0__base__prev_timestamp - 1 - (0 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 
 
-# VmAirWrapper<BaseAluAdapterAir<4, 1, 1>, ShiftCoreAir<4, 8>
+# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, ShiftCoreAir<4, 8>
 Symbolic machine using 57 unique main columns:
   from_state__pc
   from_state__fp
@@ -939,7 +939,7 @@ rs2_as * (from_state__timestamp + 2 - rs2_reads_aux__0__base__prev_timestamp - 1
 (0 + opcode_sll_flag + opcode_srl_flag + opcode_sra_flag) * (from_state__timestamp + 3 - writes_aux__0__base__prev_timestamp - 1 - (0 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 
 
-# VmAirWrapper<BaseAluAdapterAir<8, 2, 2>, ShiftCoreAir<8, 8>
+# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 2>, ShiftCoreAir<8, 8>
 Symbolic machine using 90 unique main columns:
   from_state__pc
   from_state__fp

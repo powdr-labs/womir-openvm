@@ -26,15 +26,11 @@ pub type Rv32BaseAluChip<F> = VmChipWrapper<
 
 // 64-bit type aliases
 pub type BaseAlu64Air = VmAirWrapper<
-    BaseAluAdapterAir<W64_NUM_LIMBS, W64_REG_OPS, W64_REG_OPS>,
+    BaseAluAdapterAir<W64_NUM_LIMBS, W64_REG_OPS>,
     BaseAluCoreAir<W64_NUM_LIMBS, RV32_CELL_BITS>,
 >;
 pub type BaseAlu64Executor = BaseAluExecutor<W64_NUM_LIMBS, W64_REG_OPS, RV32_CELL_BITS>;
 pub type BaseAlu64Chip<F> = VmChipWrapper<
     F,
-    BaseAluFiller<
-        BaseAluAdapterFiller<W64_REG_OPS, W64_REG_OPS, RV32_CELL_BITS>,
-        W64_NUM_LIMBS,
-        RV32_CELL_BITS,
-    >,
+    BaseAluFiller<BaseAluAdapterFiller<W64_REG_OPS, RV32_CELL_BITS>, W64_NUM_LIMBS, RV32_CELL_BITS>,
 >;

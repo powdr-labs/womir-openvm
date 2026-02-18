@@ -28,14 +28,14 @@ pub type Rv32MultiplicationChip<F> = VmChipWrapper<
 
 // 64-bit type aliases
 pub type Mul64Air = VmAirWrapper<
-    BaseAluAdapterAir<W64_NUM_LIMBS, W64_REG_OPS, W64_REG_OPS>,
+    BaseAluAdapterAir<W64_NUM_LIMBS, W64_REG_OPS>,
     MultiplicationCoreAir<W64_NUM_LIMBS, RV32_CELL_BITS>,
 >;
 pub type Mul64Executor = MultiplicationExecutor<W64_NUM_LIMBS, W64_REG_OPS, RV32_CELL_BITS>;
 pub type Mul64Chip<F> = VmChipWrapper<
     F,
     MultiplicationFiller<
-        BaseAluAdapterFiller<W64_REG_OPS, W64_REG_OPS, RV32_CELL_BITS>,
+        BaseAluAdapterFiller<W64_REG_OPS, RV32_CELL_BITS>,
         W64_NUM_LIMBS,
         RV32_CELL_BITS,
     >,

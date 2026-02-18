@@ -21,15 +21,11 @@ pub type Rv32ShiftChip<F> = VmChipWrapper<
 
 // 64-bit type aliases
 pub type Shift64Air = VmAirWrapper<
-    BaseAluAdapterAir<W64_NUM_LIMBS, W64_REG_OPS, W64_REG_OPS>,
+    BaseAluAdapterAir<W64_NUM_LIMBS, W64_REG_OPS>,
     ShiftCoreAir<W64_NUM_LIMBS, RV32_CELL_BITS>,
 >;
 pub type Shift64Executor = ShiftExecutor<W64_NUM_LIMBS, W64_REG_OPS, RV32_CELL_BITS>;
 pub type Shift64Chip<F> = VmChipWrapper<
     F,
-    ShiftFiller<
-        BaseAluAdapterFiller<W64_REG_OPS, W64_REG_OPS, RV32_CELL_BITS>,
-        W64_NUM_LIMBS,
-        RV32_CELL_BITS,
-    >,
+    ShiftFiller<BaseAluAdapterFiller<W64_REG_OPS, RV32_CELL_BITS>, W64_NUM_LIMBS, RV32_CELL_BITS>,
 >;
