@@ -115,7 +115,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
 
         let base_alu_64 = BaseAlu64Executor::new(
-            BaseAluAdapterExecutor::<8, 2, 2, RV32_CELL_BITS>::default(),
+            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS, W64_REG_OPS, RV32_CELL_BITS>::default(),
             BaseAlu64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(
@@ -130,7 +130,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(mul, MulOpcode::iter().map(|x| x.global_opcode()))?;
 
         let mul_64 = Mul64Executor::new(
-            BaseAluAdapterExecutor::<8, 2, 2, RV32_CELL_BITS>::default(),
+            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS, W64_REG_OPS, RV32_CELL_BITS>::default(),
             Mul64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(mul_64, Mul64Opcode::iter().map(|x| x.global_opcode()))?;
@@ -141,7 +141,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(less_than, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
 
         let less_than_64 = LessThan64Executor::new(
-            BaseAluAdapterExecutor::<8, 2, 1, RV32_CELL_BITS>::default(),
+            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS, W32_REG_OPS, RV32_CELL_BITS>::default(),
             LessThan64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(
@@ -156,7 +156,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(shift, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
 
         let shift_64 = Shift64Executor::new(
-            BaseAluAdapterExecutor::<8, 2, 2, RV32_CELL_BITS>::default(),
+            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS, W64_REG_OPS, RV32_CELL_BITS>::default(),
             Shift64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(shift_64, Shift64Opcode::iter().map(|x| x.global_opcode()))?;
@@ -246,7 +246,11 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(base_alu);
 
         let base_alu_64 = BaseAlu64Air::new(
-            BaseAluAdapterAir::<8, 2, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluAdapterAir::<W64_NUM_LIMBS, W64_REG_OPS, W64_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
             BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu_64);
@@ -273,7 +277,11 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(mul);
 
         let mul_64 = Mul64Air::new(
-            BaseAluAdapterAir::<8, 2, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluAdapterAir::<W64_NUM_LIMBS, W64_REG_OPS, W64_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
             MultiplicationCoreAir::new(range_tuple_bus, Mul64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(mul_64);
@@ -284,7 +292,11 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(less_than);
 
         let less_than_64 = LessThan64Air::new(
-            BaseAluAdapterAir::<8, 2, 1>::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluAdapterAir::<W64_NUM_LIMBS, W64_REG_OPS, W32_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
             LessThanCoreAir::new(bitwise_lu, LessThan64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(less_than_64);
@@ -296,7 +308,11 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(shift);
 
         let shift_64 = Shift64Air::new(
-            BaseAluAdapterAir::<8, 2, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluAdapterAir::<W64_NUM_LIMBS, W64_REG_OPS, W64_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
             ShiftCoreAir::new(bitwise_lu, range_checker, Shift64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(shift_64);
@@ -400,7 +416,9 @@ where
         inventory.next_air::<BaseAlu64Air>()?;
         let base_alu_64 = BaseAlu64Chip::new(
             BaseAluFiller::new(
-                BaseAluAdapterFiller::<2, 2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::<W64_REG_OPS, W64_REG_OPS, RV32_CELL_BITS>::new(
+                    bitwise_lu.clone(),
+                ),
                 bitwise_lu.clone(),
                 BaseAlu64Opcode::CLASS_OFFSET,
             ),
@@ -436,7 +454,9 @@ where
         inventory.next_air::<Mul64Air>()?;
         let mul_64 = Mul64Chip::new(
             MultiplicationFiller::new(
-                BaseAluAdapterFiller::<2, 2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::<W64_REG_OPS, W64_REG_OPS, RV32_CELL_BITS>::new(
+                    bitwise_lu.clone(),
+                ),
                 range_tuple_chip.clone(),
                 Mul64Opcode::CLASS_OFFSET,
             ),
@@ -457,7 +477,9 @@ where
         inventory.next_air::<LessThan64Air>()?;
         let less_than_64 = LessThan64Chip::new(
             LessThanFiller::new(
-                BaseAluAdapterFiller::<2, 1, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::<W64_REG_OPS, W32_REG_OPS, RV32_CELL_BITS>::new(
+                    bitwise_lu.clone(),
+                ),
                 bitwise_lu.clone(),
                 LessThan64Opcode::CLASS_OFFSET,
             ),
@@ -480,7 +502,9 @@ where
         inventory.next_air::<Shift64Air>()?;
         let shift_64 = Shift64Chip::new(
             ShiftFiller::new(
-                BaseAluAdapterFiller::<2, 2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::<W64_REG_OPS, W64_REG_OPS, RV32_CELL_BITS>::new(
+                    bitwise_lu.clone(),
+                ),
                 bitwise_lu.clone(),
                 range_checker.clone(),
                 Shift64Opcode::CLASS_OFFSET,

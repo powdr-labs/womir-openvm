@@ -41,8 +41,8 @@ use openvm_circuit::arch::ExecutionBridge;
 use crate::execution::ExecutionState;
 
 use super::{
-    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, fp, tracing_read, tracing_read_fp, tracing_read_imm,
-    tracing_write,
+    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, W32_REG_OPS, fp, tracing_read, tracing_read_fp,
+    tracing_read_imm, tracing_write,
 };
 
 #[repr(C)]
@@ -517,10 +517,12 @@ impl<F: PrimeField32, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize, con
     }
 }
 
-// Backward-compatible type aliases for 32-bit (NUM_READ_OPS=1, NUM_WRITE_OPS=1)
-pub type Rv32BaseAluAdapterCols<T> = BaseAluAdapterCols<T, 1, 1>;
-pub type Rv32BaseAluAdapterAir = BaseAluAdapterAir<RV32_REGISTER_NUM_LIMBS, 1, 1>;
-pub type Rv32BaseAluAdapterRecord = BaseAluAdapterRecord<1, 1>;
+// Backward-compatible type aliases for 32-bit
+pub type Rv32BaseAluAdapterCols<T> = BaseAluAdapterCols<T, W32_REG_OPS, W32_REG_OPS>;
+pub type Rv32BaseAluAdapterAir =
+    BaseAluAdapterAir<RV32_REGISTER_NUM_LIMBS, W32_REG_OPS, W32_REG_OPS>;
+pub type Rv32BaseAluAdapterRecord = BaseAluAdapterRecord<W32_REG_OPS, W32_REG_OPS>;
 pub type Rv32BaseAluAdapterExecutor<const LIMB_BITS: usize> =
-    BaseAluAdapterExecutor<RV32_REGISTER_NUM_LIMBS, 1, 1, LIMB_BITS>;
-pub type Rv32BaseAluAdapterFiller<const LIMB_BITS: usize> = BaseAluAdapterFiller<1, 1, LIMB_BITS>;
+    BaseAluAdapterExecutor<RV32_REGISTER_NUM_LIMBS, W32_REG_OPS, W32_REG_OPS, LIMB_BITS>;
+pub type Rv32BaseAluAdapterFiller<const LIMB_BITS: usize> =
+    BaseAluAdapterFiller<W32_REG_OPS, W32_REG_OPS, LIMB_BITS>;
