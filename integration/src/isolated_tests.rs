@@ -769,6 +769,73 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
+    // ==================== Eq Tests ====================
+
+    #[test]
+    fn test_eq_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::eq(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 42)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_neq_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::neq(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 24)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_eq_imm_64_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::eq_imm_64(4, 0, -1_i16)],
+            start_fp: 124,
+            start_registers: vec![(124, 0xFFFF_FFFF), (125, 0xFFFF_FFFF)],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_neq_64_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::neq_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0xAAAA_BBBB),
+                (125, 0xCCCC_DDDD),
+                (126, 0xAAAA_BBBB),
+                (127, 0xCCCC_DDDE),
+            ],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
     // ==================== LessThan Tests ====================
 
     #[test]

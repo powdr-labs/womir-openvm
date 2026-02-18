@@ -249,8 +249,20 @@ pub fn eq_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) ->
     instr_i(EqOpcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+pub fn eq_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
 pub fn eq_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
+}
+
+pub fn neq<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(EqOpcode::NEQ.global_opcode().as_usize(), rd, rs1, rs2)
+}
+
+pub fn neq_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
+    instr_r(Eq64Opcode::NEQ.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 pub fn neq_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {

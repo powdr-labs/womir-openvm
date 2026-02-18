@@ -30,8 +30,9 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, JumpOpcode, LessThan64Opcode, LessThanOpcode,
-    LoadStoreOpcode, Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, Eq64Opcode, EqOpcode, JumpOpcode,
+    LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode, Shift64Opcode,
+    ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -85,6 +86,8 @@ pub enum WomirExecutor {
     Mul64(Mul64Executor),
     LessThan(Rv32LessThanExecutor),
     LessThan64(LessThan64Executor),
+    Eq(Rv32EqExecutor),
+    Eq64(Eq64Executor),
     Shift(Rv32ShiftExecutor),
     Shift64(Shift64Executor),
     LoadStore(Rv32LoadStoreExecutor),
@@ -144,6 +147,18 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             less_than_64,
             LessThan64Opcode::iter().map(|x| x.global_opcode()),
         )?;
+
+        let eq = Rv32EqExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            EqOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(eq, EqOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let eq_64 = Eq64Executor::new(
+            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            Eq64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(eq_64, Eq64Opcode::iter().map(|x| x.global_opcode()))?;
 
         let shift = Rv32ShiftExecutor::new(
             Rv32BaseAluAdapterExecutor::default(),
@@ -259,6 +274,18 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             LessThanCoreAir::new(bitwise_lu, LessThan64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(less_than_64);
+
+        let eq = Rv32EqAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            EqCoreAir::new(EqOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(eq);
+
+        let eq_64 = Eq64Air::new(
+            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            EqCoreAir::new(Eq64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(eq_64);
 
         let shift = Rv32ShiftAir::new(
             Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
@@ -426,6 +453,26 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(less_than_64);
+
+        inventory.next_air::<Rv32EqAir>()?;
+        let eq = Rv32EqChip::new(
+            EqFiller::new(
+                Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                EqOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(eq);
+
+        inventory.next_air::<Eq64Air>()?;
+        let eq_64 = Eq64Chip::new(
+            EqFiller::new(
+                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                Eq64Opcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(eq_64);
 
         inventory.next_air::<Rv32ShiftAir>()?;
         let shift = Rv32ShiftChip::new(
