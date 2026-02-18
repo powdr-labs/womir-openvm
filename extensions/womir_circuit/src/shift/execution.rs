@@ -29,30 +29,30 @@ use crate::utils::sign_extend_u32;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
-pub struct ShiftExecutor<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize>(
+pub struct ShiftExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>(
     pub  ShiftExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >,
 );
 
-impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize>
-    ShiftExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    ShiftExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
     pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>,
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
         offset: usize,
     ) -> Self {
         Self(ShiftExecutorInner::new(adapter, offset))
     }
 }
 
-impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize> std::ops::Deref
-    for ShiftExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize> std::ops::Deref
+    for ShiftExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
     type Target = ShiftExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >;
@@ -73,8 +73,8 @@ pub(super) struct ShiftPreCompute {
     b: u32,
 }
 
-impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize>
-    ShiftExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    ShiftExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
     /// Return `(is_imm, opcode)`.
     #[inline(always)]
@@ -141,8 +141,8 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize>
-    InterpreterExecutor<F> for ShiftExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    InterpreterExecutor<F> for ShiftExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -168,8 +168,8 @@ where
     }
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize>
-    InterpreterMeteredExecutor<F> for ShiftExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    InterpreterMeteredExecutor<F> for ShiftExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
