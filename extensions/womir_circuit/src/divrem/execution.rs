@@ -11,11 +11,10 @@ use std::{
     mem::size_of,
 };
 
+use crate::adapters::BaseAluAdapterExecutor;
 use crate::memory_config::FpMemory;
-use openvm_circuit::{
-    arch::*,
-    system::memory::online::{GuestMemory, TracingMemory},
-};
+use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
+use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
     LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP, riscv::RV32_REGISTER_AS,
@@ -25,43 +24,23 @@ use openvm_rv32im_transpiler::DivRemOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
-#[derive(Clone, Copy)]
-pub struct DivRemExecutor<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>(
-    pub DivRemExecutorInner<A, NUM_LIMBS, LIMB_BITS>,
+#[derive(Clone, PreflightExecutor)]
+pub struct DivRemExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>(
+    pub  DivRemExecutorInner<
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        NUM_LIMBS,
+        LIMB_BITS,
+    >,
 );
 
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> DivRemExecutor<A, NUM_LIMBS, LIMB_BITS> {
-    pub fn new(adapter: A, offset: usize) -> Self {
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    DivRemExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+{
+    pub fn new(
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        offset: usize,
+    ) -> Self {
         Self(DivRemExecutorInner::new(adapter, offset))
-    }
-}
-
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> std::ops::Deref
-    for DivRemExecutor<A, NUM_LIMBS, LIMB_BITS>
-{
-    type Target = DivRemExecutorInner<A, NUM_LIMBS, LIMB_BITS>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<F, A, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> PreflightExecutor<F, RA>
-    for DivRemExecutor<A, NUM_LIMBS, LIMB_BITS>
-where
-    F: PrimeField32,
-    DivRemExecutorInner<A, NUM_LIMBS, LIMB_BITS>: PreflightExecutor<F, RA>,
-{
-    fn get_opcode_name(&self, opcode: usize) -> String {
-        self.0.get_opcode_name(opcode)
-    }
-
-    fn execute(
-        &self,
-        state: VmStateMut<F, TracingMemory, RA>,
-        instruction: &Instruction<F>,
-    ) -> Result<(), ExecutionError> {
-        self.0.execute(state, instruction)
     }
 }
 
@@ -76,7 +55,9 @@ pub(super) struct DivRemPreCompute {
     c: u32,
 }
 
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> DivRemExecutor<A, NUM_LIMBS, LIMB_BITS> {
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    DivRemExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+{
     /// Return the local opcode.
     #[inline(always)]
     pub(super) fn pre_compute_impl<F: PrimeField32>(
@@ -112,8 +93,8 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F>
-    for DivRemExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    InterpreterExecutor<F> for DivRemExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 where
     F: PrimeField32,
     DivOp: DivRemOp<NUM_LIMBS>,
@@ -143,8 +124,8 @@ where
     }
 }
 
-impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
-    for DivRemExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    InterpreterMeteredExecutor<F> for DivRemExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 where
     F: PrimeField32,
     DivOp: DivRemOp<NUM_LIMBS>,
