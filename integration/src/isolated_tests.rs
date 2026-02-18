@@ -802,6 +802,46 @@ mod tests {
     }
 
     #[test]
+    fn test_eq_64_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::eq_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0xAAAA_BBBB),
+                (125, 0xCCCC_DDDD),
+                (126, 0xAAAA_BBBB),
+                (127, 0xCCCC_DDDD),
+            ],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_eq_64_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::eq_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0xAAAA_BBBB),
+                (125, 0xCCCC_DDDD),
+                (126, 0xAAAA_BBBB),
+                (127, 0xCCCC_DDDE),
+            ],
+            expected_registers: vec![(128, 0), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
     fn test_eq_imm_64_true() {
         setup_tracing_with_log_level(Level::WARN);
 
