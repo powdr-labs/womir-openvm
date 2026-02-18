@@ -6,11 +6,9 @@ use std::{
 
 use openvm_circuit::{
     arch::*,
-    system::memory::{
-        POINTER_MAX_BITS,
-        online::{GuestMemory, TracingMemory},
-    },
+    system::memory::{POINTER_MAX_BITS, online::GuestMemory},
 };
+use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives::AlignedBytesBorrow;
 use openvm_instructions::{
     LocalOpcode, NATIVE_AS,
@@ -22,41 +20,26 @@ use openvm_rv32im_circuit::LoadStoreExecutor as LoadStoreExecutorInner;
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::p3_field::PrimeField32;
 
+use crate::adapters::Rv32LoadStoreAdapterExecutor;
 use crate::memory_config::FpMemory;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
-#[derive(Clone, Copy)]
-pub struct LoadStoreExecutor<A, const NUM_LIMBS: usize>(pub LoadStoreExecutorInner<A, NUM_LIMBS>);
+#[derive(Clone, PreflightExecutor)]
+pub struct LoadStoreExecutor<const NUM_LIMBS: usize>(
+    pub LoadStoreExecutorInner<Rv32LoadStoreAdapterExecutor, NUM_LIMBS>,
+);
 
-impl<A, const NUM_LIMBS: usize> LoadStoreExecutor<A, NUM_LIMBS> {
-    pub fn new(adapter: A, offset: usize) -> Self {
+impl<const NUM_LIMBS: usize> LoadStoreExecutor<NUM_LIMBS> {
+    pub fn new(adapter: Rv32LoadStoreAdapterExecutor, offset: usize) -> Self {
         Self(LoadStoreExecutorInner::new(adapter, offset))
     }
 }
 
-impl<A, const NUM_LIMBS: usize> std::ops::Deref for LoadStoreExecutor<A, NUM_LIMBS> {
-    type Target = LoadStoreExecutorInner<A, NUM_LIMBS>;
+impl<const NUM_LIMBS: usize> std::ops::Deref for LoadStoreExecutor<NUM_LIMBS> {
+    type Target = LoadStoreExecutorInner<Rv32LoadStoreAdapterExecutor, NUM_LIMBS>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl<F, A, RA, const NUM_LIMBS: usize> PreflightExecutor<F, RA> for LoadStoreExecutor<A, NUM_LIMBS>
-where
-    F: PrimeField32,
-    LoadStoreExecutorInner<A, NUM_LIMBS>: PreflightExecutor<F, RA>,
-{
-    fn get_opcode_name(&self, opcode: usize) -> String {
-        self.0.get_opcode_name(opcode)
-    }
-
-    fn execute(
-        &self,
-        state: VmStateMut<F, TracingMemory, RA>,
-        instruction: &Instruction<F>,
-    ) -> Result<(), ExecutionError> {
-        self.0.execute(state, instruction)
     }
 }
 
@@ -69,7 +52,7 @@ struct LoadStorePreCompute {
     e: u32,
 }
 
-impl<A, const NUM_CELLS: usize> LoadStoreExecutor<A, NUM_CELLS> {
+impl<const NUM_CELLS: usize> LoadStoreExecutor<NUM_CELLS> {
     /// Return (local_opcode, enabled, is_native_store)
     fn pre_compute_impl<F: PrimeField32>(
         &self,
@@ -149,7 +132,7 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, A, const NUM_CELLS: usize> InterpreterExecutor<F> for LoadStoreExecutor<A, NUM_CELLS>
+impl<F, const NUM_CELLS: usize> InterpreterExecutor<F> for LoadStoreExecutor<NUM_CELLS>
 where
     F: PrimeField32,
 {
@@ -172,7 +155,7 @@ where
     }
 }
 
-impl<F, A, const NUM_CELLS: usize> InterpreterMeteredExecutor<F> for LoadStoreExecutor<A, NUM_CELLS>
+impl<F, const NUM_CELLS: usize> InterpreterMeteredExecutor<F> for LoadStoreExecutor<NUM_CELLS>
 where
     F: PrimeField32,
 {
