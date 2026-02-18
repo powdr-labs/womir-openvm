@@ -102,6 +102,11 @@ pub struct CallWriteData<T> {
 
 impl<AB: InteractionBuilder> VmAdapterInterface<AB::Expr> for CallAdapterInterface<AB> {
     type Reads = CallReadData<AB::Expr>;
+    // VmAdapterInterface::{Reads,Writes} are AIR witness channels (expr-typed), not the runtime
+    // executor payloads. In Call, both channels carry the same two 4-byte limbs (fp-related and
+    // pc-related), so reusing CallReadData keeps names explicit without duplicating an identical
+    // shape. The executor's write payload is separate (CallWriteData) because it also carries
+    // `new_fp: u32` for runtime memory writes.
     type Writes = CallReadData<AB::Expr>;
     type ProcessedInstruction = CallInstruction<AB::Expr>;
 }
