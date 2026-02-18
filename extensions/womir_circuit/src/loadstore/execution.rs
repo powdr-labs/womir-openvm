@@ -35,14 +35,6 @@ impl<const NUM_LIMBS: usize> LoadStoreExecutor<NUM_LIMBS> {
     }
 }
 
-impl<const NUM_LIMBS: usize> std::ops::Deref for LoadStoreExecutor<NUM_LIMBS> {
-    type Target = LoadStoreExecutorInner<Rv32LoadStoreAdapterExecutor, NUM_LIMBS>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
 struct LoadStorePreCompute {

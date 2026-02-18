@@ -24,10 +24,6 @@ rand.workspace = true
 eyre.workspace = true
 cfg-if.workspace = true
 itertools.workspace = true
-
-# for div_rem:
-num-bigint.workspace = true
-num-integer.workspace = true
 serde = { workspace = true, features = ["derive", "std"] }
 struct-reflection.workspace = true
 

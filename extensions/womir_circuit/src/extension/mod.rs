@@ -20,9 +20,9 @@ use openvm_circuit_primitives::range_tuple::{
 use openvm_instructions::LocalOpcode;
 use openvm_instructions::PhantomDiscriminant;
 use openvm_rv32im_circuit::{
-    BaseAluCoreAir, BaseAluFiller, LessThanCoreAir, LessThanFiller, LoadSignExtendCoreAir,
-    LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller, MultiplicationCoreAir,
-    MultiplicationFiller, ShiftCoreAir, ShiftFiller,
+    BaseAluCoreAir, BaseAluFiller, DivRemCoreAir, DivRemFiller, LessThanCoreAir, LessThanFiller,
+    LoadSignExtendCoreAir, LoadSignExtendFiller, LoadStoreCoreAir, LoadStoreFiller,
+    MultiplicationCoreAir, MultiplicationFiller, ShiftCoreAir, ShiftFiller,
 };
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
@@ -31,10 +31,11 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, HintStoreOpcode, JumpOpcode,
-    LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom,
-    Shift64Opcode, ShiftOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode,
+    HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode,
+    MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
+
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
@@ -51,7 +52,7 @@ pub use self::WomirCpuProverExt as WomirProverExt;
 
 // ============ Extension Struct Definitions ============
 
-/// RISC-V 32-bit Base (RV32I) Extension
+/// WOMIR Extension
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Womir {
     #[serde(default = "default_range_tuple_checker_sizes")]
@@ -66,8 +67,17 @@ impl Default for Womir {
     }
 }
 
+/// Default range tuple checker sizes, must be large enough for the widest
+/// DivRem variant (64-bit, NUM_LIMBS = 8).
+///
+/// The range tuple checker verifies (limb, carry) pairs produced during
+/// limb-by-limb multiplication `b = c * q + r`:
+/// - sizes[0] = 1 << LIMB_BITS: each limb must fit in LIMB_BITS (= 8) bits.
+/// - sizes[1] = 2 * NUM_LIMBS * (1 << LIMB_BITS): upper bound on the carry
+///   at any limb position. The carry at position i is the sum of up to i+1
+///   products of LIMB_BITS-bit values, so it grows linearly with NUM_LIMBS.
 fn default_range_tuple_checker_sizes() -> [u32; 2] {
-    [1 << 8, 8 * (1 << 8)]
+    [1 << RV32_CELL_BITS, 2 * 8 * (1 << RV32_CELL_BITS)]
 }
 
 // ============ Executor and Periphery Enums for Extension ============
@@ -89,6 +99,8 @@ pub enum WomirExecutor {
     Mul64(Mul64Executor),
     LessThan(Rv32LessThanExecutor),
     LessThan64(LessThan64Executor),
+    DivRem(Rv32DivRemExecutor),
+    DivRem64(DivRem64Executor),
     Shift(Rv32ShiftExecutor),
     Shift64(Shift64Executor),
     LoadStore(Rv32LoadStoreExecutor),
@@ -117,7 +129,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
 
         let base_alu_64 = BaseAlu64Executor::new(
-            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS>::default(),
             BaseAlu64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(
@@ -132,7 +144,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(mul, MulOpcode::iter().map(|x| x.global_opcode()))?;
 
         let mul_64 = Mul64Executor::new(
-            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS>::default(),
             Mul64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(mul_64, Mul64Opcode::iter().map(|x| x.global_opcode()))?;
@@ -142,14 +154,31 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         );
         inventory.add_executor(less_than, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
 
-        let less_than_64 = LessThan64Executor::new(
-            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
-            LessThan64Opcode::CLASS_OFFSET,
-        );
+        let less_than_64 =
+            LessThan64Executor::new(
+                BaseAluAdapterExecutorDifferentInputsOutputs::<
+                    W64_NUM_LIMBS,
+                    W64_REG_OPS,
+                    W32_REG_OPS,
+                >::default(),
+                LessThan64Opcode::CLASS_OFFSET,
+            );
         inventory.add_executor(
             less_than_64,
             LessThan64Opcode::iter().map(|x| x.global_opcode()),
         )?;
+
+        let divrem = Rv32DivRemExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            DivRemOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(divrem, DivRemOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let divrem_64 = DivRem64Executor::new(
+            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS>::default(),
+            DivRem64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(divrem_64, DivRem64Opcode::iter().map(|x| x.global_opcode()))?;
 
         let shift = Rv32ShiftExecutor::new(
             Rv32BaseAluAdapterExecutor::default(),
@@ -158,7 +187,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(shift, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
 
         let shift_64 = Shift64Executor::new(
-            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS>::default(),
             Shift64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(shift_64, Shift64Opcode::iter().map(|x| x.global_opcode()))?;
@@ -251,7 +280,11 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(base_alu);
 
         let base_alu_64 = BaseAlu64Air::new(
-            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluAdapterAir::<W64_NUM_LIMBS, W64_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
             BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu_64);
@@ -278,7 +311,11 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(mul);
 
         let mul_64 = Mul64Air::new(
-            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluAdapterAir::<W64_NUM_LIMBS, W64_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
             MultiplicationCoreAir::new(range_tuple_bus, Mul64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(mul_64);
@@ -289,10 +326,26 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(less_than);
 
         let less_than_64 = LessThan64Air::new(
-            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluAdapterAirDifferentInputsOutputs::<W64_NUM_LIMBS, W64_REG_OPS, W32_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
             LessThanCoreAir::new(bitwise_lu, LessThan64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(less_than_64);
+
+        let divrem = Rv32DivRemAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            DivRemCoreAir::new(bitwise_lu, range_tuple_bus, DivRemOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(divrem);
+
+        let divrem_64 = DivRem64Air::new(
+            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            DivRemCoreAir::new(bitwise_lu, range_tuple_bus, DivRem64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(divrem_64);
 
         let shift = Rv32ShiftAir::new(
             Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
@@ -301,7 +354,11 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(shift);
 
         let shift_64 = Shift64Air::new(
-            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluAdapterAir::<W64_NUM_LIMBS, W64_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
             ShiftCoreAir::new(bitwise_lu, range_checker, Shift64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(shift_64);
@@ -411,7 +468,7 @@ where
         inventory.next_air::<BaseAlu64Air>()?;
         let base_alu_64 = BaseAlu64Chip::new(
             BaseAluFiller::new(
-                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::<W64_REG_OPS>::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
                 BaseAlu64Opcode::CLASS_OFFSET,
             ),
@@ -447,7 +504,7 @@ where
         inventory.next_air::<Mul64Air>()?;
         let mul_64 = Mul64Chip::new(
             MultiplicationFiller::new(
-                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::<W64_REG_OPS>::new(bitwise_lu.clone()),
                 range_tuple_chip.clone(),
                 Mul64Opcode::CLASS_OFFSET,
             ),
@@ -468,13 +525,39 @@ where
         inventory.next_air::<LessThan64Air>()?;
         let less_than_64 = LessThan64Chip::new(
             LessThanFiller::new(
-                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFillerDifferentInputsOutputs::<W64_REG_OPS, W32_REG_OPS>::new(
+                    bitwise_lu.clone(),
+                ),
                 bitwise_lu.clone(),
                 LessThan64Opcode::CLASS_OFFSET,
             ),
             mem_helper.clone(),
         );
         inventory.add_executor_chip(less_than_64);
+
+        inventory.next_air::<Rv32DivRemAir>()?;
+        let divrem = Rv32DivRemChip::new(
+            DivRemFiller::new(
+                Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                range_tuple_chip.clone(),
+                DivRemOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(divrem);
+
+        inventory.next_air::<DivRem64Air>()?;
+        let divrem_64 = DivRem64Chip::new(
+            DivRemFiller::new(
+                BaseAluAdapterFiller::<W64_REG_OPS>::new(bitwise_lu.clone()),
+                bitwise_lu.clone(),
+                range_tuple_chip.clone(),
+                DivRem64Opcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(divrem_64);
 
         inventory.next_air::<Rv32ShiftAir>()?;
         let shift = Rv32ShiftChip::new(
@@ -491,7 +574,7 @@ where
         inventory.next_air::<Shift64Air>()?;
         let shift_64 = Shift64Chip::new(
             ShiftFiller::new(
-                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::<W64_REG_OPS>::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
                 range_checker.clone(),
                 Shift64Opcode::CLASS_OFFSET,
