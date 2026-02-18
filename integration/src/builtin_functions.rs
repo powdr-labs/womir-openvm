@@ -85,14 +85,13 @@ impl BuiltinFunction {
     ) -> WriteOnceAsm<Directive<F>> {
         // Load the built-in function module.
         let program =
-            womir::loader::load_wasm(OpenVMSettings::<F>::new(), self.definition.wasm_bytes)
-                .unwrap();
+            womir::loader::load_wasm(OpenVMSettings::new(), self.definition.wasm_bytes).unwrap();
 
         // Compile the built-in function.
         let function = program.functions.into_iter().exactly_one().unwrap();
         function
             .advance_all_stages(
-                &OpenVMSettings::<F>::new(),
+                &OpenVMSettings::new(),
                 // It shouldn't make any difference which module we pass here,
                 // because the built-in function should be self-contained.
                 module,

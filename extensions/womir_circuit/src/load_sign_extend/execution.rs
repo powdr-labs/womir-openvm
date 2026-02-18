@@ -6,11 +6,9 @@ use std::{
 
 use openvm_circuit::{
     arch::*,
-    system::memory::{
-        POINTER_MAX_BITS,
-        online::{GuestMemory, TracingMemory},
-    },
+    system::memory::{POINTER_MAX_BITS, online::GuestMemory},
 };
+use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
     LocalOpcode,
@@ -22,48 +20,18 @@ use openvm_rv32im_circuit::LoadSignExtendExecutor as LoadSignExtendExecutorInner
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode::{self, *};
 use openvm_stark_backend::p3_field::PrimeField32;
 
+use crate::adapters::Rv32LoadStoreAdapterExecutor;
 use crate::memory_config::FpMemory;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
-#[derive(Clone, Copy)]
-pub struct LoadSignExtendExecutor<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>(
-    pub LoadSignExtendExecutorInner<A, NUM_LIMBS, LIMB_BITS>,
+#[derive(Clone, PreflightExecutor)]
+pub struct LoadSignExtendExecutor<const NUM_LIMBS: usize, const LIMB_BITS: usize>(
+    pub LoadSignExtendExecutorInner<Rv32LoadStoreAdapterExecutor, NUM_LIMBS, LIMB_BITS>,
 );
 
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>
-    LoadSignExtendExecutor<A, NUM_LIMBS, LIMB_BITS>
-{
-    pub fn new(adapter: A) -> Self {
+impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> LoadSignExtendExecutor<NUM_LIMBS, LIMB_BITS> {
+    pub fn new(adapter: Rv32LoadStoreAdapterExecutor) -> Self {
         Self(LoadSignExtendExecutorInner::new(adapter))
-    }
-}
-
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> std::ops::Deref
-    for LoadSignExtendExecutor<A, NUM_LIMBS, LIMB_BITS>
-{
-    type Target = LoadSignExtendExecutorInner<A, NUM_LIMBS, LIMB_BITS>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<F, A, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> PreflightExecutor<F, RA>
-    for LoadSignExtendExecutor<A, NUM_LIMBS, LIMB_BITS>
-where
-    F: PrimeField32,
-    LoadSignExtendExecutorInner<A, NUM_LIMBS, LIMB_BITS>: PreflightExecutor<F, RA>,
-{
-    fn get_opcode_name(&self, opcode: usize) -> String {
-        self.0.get_opcode_name(opcode)
-    }
-
-    fn execute(
-        &self,
-        state: VmStateMut<F, TracingMemory, RA>,
-        instruction: &Instruction<F>,
-    ) -> Result<(), ExecutionError> {
-        self.0.execute(state, instruction)
     }
 }
 
@@ -76,7 +44,7 @@ struct LoadSignExtendPreCompute {
     e: u32,
 }
 
-impl<A, const LIMB_BITS: usize> LoadSignExtendExecutor<A, { RV32_REGISTER_NUM_LIMBS }, LIMB_BITS> {
+impl<const LIMB_BITS: usize> LoadSignExtendExecutor<{ RV32_REGISTER_NUM_LIMBS }, LIMB_BITS> {
     /// Return (is_loadb, enabled)
     fn pre_compute_impl<F: PrimeField32>(
         &self,
@@ -135,8 +103,8 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, A, const LIMB_BITS: usize> InterpreterExecutor<F>
-    for LoadSignExtendExecutor<A, { RV32_REGISTER_NUM_LIMBS }, LIMB_BITS>
+impl<F, const LIMB_BITS: usize> InterpreterExecutor<F>
+    for LoadSignExtendExecutor<{ RV32_REGISTER_NUM_LIMBS }, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -157,8 +125,8 @@ where
     }
 }
 
-impl<F, A, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
-    for LoadSignExtendExecutor<A, { RV32_REGISTER_NUM_LIMBS }, LIMB_BITS>
+impl<F, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
+    for LoadSignExtendExecutor<{ RV32_REGISTER_NUM_LIMBS }, LIMB_BITS>
 where
     F: PrimeField32,
 {
