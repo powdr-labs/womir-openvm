@@ -33,7 +33,7 @@ pub struct ShiftExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize>(
     pub  ShiftExecutorInner<
         BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
         NUM_LIMBS,
-        RV32_REGISTER_NUM_LIMBS,
+        RV32_CELL_BITS,
     >,
 );
 

@@ -33,7 +33,7 @@ pub struct MultiplicationExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usi
     pub  MultiplicationExecutorInner<
         BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
         NUM_LIMBS,
-        RV32_REGISTER_NUM_LIMBS,
+        RV32_CELL_BITS,
     >,
 );
 
