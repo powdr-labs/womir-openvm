@@ -35,16 +35,6 @@ impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> LoadSignExtendExecutor<NUM_
     }
 }
 
-impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> std::ops::Deref
-    for LoadSignExtendExecutor<NUM_LIMBS, LIMB_BITS>
-{
-    type Target = LoadSignExtendExecutorInner<Rv32LoadStoreAdapterExecutor, NUM_LIMBS, LIMB_BITS>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
 struct LoadSignExtendPreCompute {

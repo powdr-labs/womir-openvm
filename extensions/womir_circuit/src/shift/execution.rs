@@ -48,20 +48,6 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
     }
 }
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize> std::ops::Deref
-    for ShiftExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
-{
-    type Target = ShiftExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
-        NUM_LIMBS,
-        LIMB_BITS,
-    >;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
 pub(super) struct ShiftPreCompute {
