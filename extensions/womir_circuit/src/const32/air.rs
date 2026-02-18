@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 
+use crate::adapters::fp;
 use crate::execution::ExecutionState;
-use crate::memory_config::FP_AS;
 use openvm_circuit::arch::{ExecutionBridge, ExecutionState as OvmExecutionState};
 use openvm_circuit::system::memory::MemoryAddress;
 use openvm_circuit::system::memory::offline_checker::{
@@ -87,7 +87,7 @@ where
         // Read fp from FP address space (address space FP_AS, address 0)
         self.memory_bridge
             .read(
-                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                fp::<AB::F>(),
                 [cols.from_state.fp],
                 timestamp_pp(),
                 &cols.fp_read_aux,

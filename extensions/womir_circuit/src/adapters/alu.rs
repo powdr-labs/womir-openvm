@@ -38,10 +38,10 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use openvm_circuit::arch::ExecutionBridge;
 
-use crate::{execution::ExecutionState, memory_config::FP_AS};
+use crate::execution::ExecutionState;
 
 use super::{
-    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp, tracing_read_imm,
+    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, fp, tracing_read, tracing_read_fp, tracing_read_imm,
     tracing_write,
 };
 
@@ -110,7 +110,7 @@ impl<AB: InteractionBuilder, const NUM_LIMBS: usize, const NUM_REG_OPS: usize> V
         // Read fp from FP address space (address space FP_AS, address 0).
         self.memory_bridge
             .read(
-                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                fp::<AB::F>(),
                 [local.from_state.fp],
                 timestamp_pp(),
                 &local.fp_read_aux,
