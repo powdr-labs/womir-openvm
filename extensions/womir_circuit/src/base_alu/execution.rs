@@ -28,11 +28,7 @@ use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_by
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
-pub struct BaseAluExecutor<
-    const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
-    const LIMB_BITS: usize,
->(
+pub struct BaseAluExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>(
     pub  BaseAluExecutorInner<
         BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
         NUM_LIMBS,
