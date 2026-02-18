@@ -15,19 +15,40 @@ use openvm_instructions::{
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::EqOpcode;
 
-use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
+use crate::adapters::{
+    BaseAluAdapterExecutorDifferentInputsOutputs, RV32_REGISTER_NUM_LIMBS, imm_to_bytes,
+};
 
 #[derive(Clone)]
-pub struct EqExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize> {
-    pub adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+pub struct EqExecutor<
+    const NUM_LIMBS: usize,
+    const NUM_READ_OPS: usize,
+    const NUM_WRITE_OPS: usize,
+    const LIMB_BITS: usize,
+> {
+    pub adapter: BaseAluAdapterExecutorDifferentInputsOutputs<
+        NUM_LIMBS,
+        NUM_READ_OPS,
+        NUM_WRITE_OPS,
+        LIMB_BITS,
+    >,
     pub offset: usize,
 }
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    EqExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<
+    const NUM_LIMBS: usize,
+    const NUM_READ_OPS: usize,
+    const NUM_WRITE_OPS: usize,
+    const LIMB_BITS: usize,
+> EqExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
     pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        adapter: BaseAluAdapterExecutorDifferentInputsOutputs<
+            NUM_LIMBS,
+            NUM_READ_OPS,
+            NUM_WRITE_OPS,
+            LIMB_BITS,
+        >,
         offset: usize,
     ) -> Self {
         Self { adapter, offset }
@@ -93,8 +114,13 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    InterpreterExecutor<F> for EqExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<
+    F,
+    const NUM_LIMBS: usize,
+    const NUM_READ_OPS: usize,
+    const NUM_WRITE_OPS: usize,
+    const LIMB_BITS: usize,
+> InterpreterExecutor<F> for EqExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -119,8 +145,13 @@ where
     }
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    InterpreterMeteredExecutor<F> for EqExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<
+    F,
+    const NUM_LIMBS: usize,
+    const NUM_READ_OPS: usize,
+    const NUM_WRITE_OPS: usize,
+    const LIMB_BITS: usize,
+> InterpreterMeteredExecutor<F> for EqExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -184,12 +215,10 @@ unsafe fn execute_e12_impl<
         lhs_u64 != rhs_u64
     };
 
-    let mut rd = [0u8; NUM_LIMBS];
+    // Write only one register-width (4 bytes): comparison results are always i32,
+    // even for 64-bit operands.
+    let mut rd = [0u8; RV32_REGISTER_NUM_LIMBS];
     rd[0] = cmp_result as u8;
-    if NUM_LIMBS == 8 {
-        let rd_upper = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, fp + pre_compute.a + 4);
-        rd[4..8].copy_from_slice(&rd_upper);
-    }
     exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &rd);
 
     let pc = exec_state.pc();
@@ -238,24 +267,43 @@ unsafe fn execute_e2_impl<
     }
 }
 
-impl<F, RA, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    PreflightExecutor<F, RA> for EqExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<
+    F,
+    RA,
+    const NUM_LIMBS: usize,
+    const NUM_READ_OPS: usize,
+    const NUM_WRITE_OPS: usize,
+    const LIMB_BITS: usize,
+> PreflightExecutor<F, RA> for EqExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 where
     F: PrimeField32,
-    BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>:
+    BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>:
         AdapterTraceExecutor<
-            F,
-            ReadData: Into<[[u8; NUM_LIMBS]; 2]>,
-            WriteData: From<[[u8; NUM_LIMBS]; 1]>,
-        >,
+                F,
+                ReadData: Into<[[u8; NUM_LIMBS]; 2]>,
+                WriteData: From<[[u8; NUM_LIMBS]; 1]>,
+            >,
     for<'buf> RA: RecordArena<
-        'buf,
-        EmptyAdapterCoreLayout<F, BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>>,
-        (
-            <BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS> as AdapterTraceExecutor<F>>::RecordMut<'buf>,
-            &'buf mut EqCoreRecord<NUM_LIMBS>,
-        ),
-    >,
+            'buf,
+            EmptyAdapterCoreLayout<
+                F,
+                BaseAluAdapterExecutorDifferentInputsOutputs<
+                    NUM_LIMBS,
+                    NUM_READ_OPS,
+                    NUM_WRITE_OPS,
+                    LIMB_BITS,
+                >,
+            >,
+            (
+                <BaseAluAdapterExecutorDifferentInputsOutputs<
+                    NUM_LIMBS,
+                    NUM_READ_OPS,
+                    NUM_WRITE_OPS,
+                    LIMB_BITS,
+                > as AdapterTraceExecutor<F>>::RecordMut<'buf>,
+                &'buf mut EqCoreRecord<NUM_LIMBS>,
+            ),
+        >,
 {
     fn get_opcode_name(&self, opcode: usize) -> String {
         format!("{:?}", EqOpcode::from_usize(opcode - self.offset))
@@ -271,13 +319,17 @@ where
         let local_opcode = EqOpcode::from_usize(opcode.local_opcode_idx(self.offset));
         let (mut adapter_record, core_record) = state.ctx.alloc(EmptyAdapterCoreLayout::new());
 
-        BaseAluAdapterExecutor::<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>::start(
-            *state.pc,
-            state.memory,
-            &mut adapter_record,
-        );
+        BaseAluAdapterExecutorDifferentInputsOutputs::<
+            NUM_LIMBS,
+            NUM_READ_OPS,
+            NUM_WRITE_OPS,
+            LIMB_BITS,
+        >::start(*state.pc, state.memory, &mut adapter_record);
 
-        let [lhs, rhs] = self.adapter.read(state.memory, instruction, &mut adapter_record).into();
+        let [lhs, rhs] = self
+            .adapter
+            .read(state.memory, instruction, &mut adapter_record)
+            .into();
 
         let cmp_result = match local_opcode {
             EqOpcode::EQ => lhs == rhs,
@@ -286,8 +338,12 @@ where
 
         let mut write_data = [[0u8; NUM_LIMBS]; 1];
         write_data[0][0] = cmp_result as u8;
-        self.adapter
-            .write(state.memory, instruction, write_data.into(), &mut adapter_record);
+        self.adapter.write(
+            state.memory,
+            instruction,
+            write_data.into(),
+            &mut adapter_record,
+        );
 
         core_record.b = lhs;
         core_record.c = rhs;

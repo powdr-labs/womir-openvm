@@ -32,8 +32,8 @@ use openvm_stark_backend::{
 };
 use openvm_womir_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, Eq64Opcode, EqOpcode, HintStoreOpcode,
-    JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode,
-    Phantom, Shift64Opcode, ShiftOpcode,
+    JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom,
+    Shift64Opcode, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -164,7 +164,12 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(eq, EqOpcode::iter().map(|x| x.global_opcode()))?;
 
         let eq_64 = Eq64Executor::new(
-            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            BaseAluAdapterExecutorDifferentInputsOutputs::<
+                W64_NUM_LIMBS,
+                W64_REG_OPS,
+                W32_REG_OPS,
+                RV32_CELL_BITS,
+            >::default(),
             Eq64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(eq_64, Eq64Opcode::iter().map(|x| x.global_opcode()))?;
@@ -328,7 +333,11 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(eq);
 
         let eq_64 = Eq64Air::new(
-            BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
+            BaseAluAdapterAirDifferentInputsOutputs::<W64_NUM_LIMBS, W64_REG_OPS, W32_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
             EqCoreAir::new(Eq64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(eq_64);
@@ -530,7 +539,11 @@ where
         inventory.next_air::<Eq64Air>()?;
         let eq_64 = Eq64Chip::new(
             EqFiller::new(
-                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFillerDifferentInputsOutputs::<
+                    W64_REG_OPS,
+                    W32_REG_OPS,
+                    RV32_CELL_BITS,
+                >::new(bitwise_lu.clone()),
                 Eq64Opcode::CLASS_OFFSET,
             ),
             mem_helper.clone(),
