@@ -1261,7 +1261,7 @@ mod tests {
         // reg[fp+1] = reg[fp+0] * 10
         // 42 * 10 = 420
         let spec = TestSpec {
-            program: vec![wom::mul_imm::<F>(1, 0, 10_i16.into())],
+            program: vec![wom::mul_imm::<F>(1, 0, 10_i16)],
             start_fp: 10,
             start_registers: vec![(10, 42)],
             expected_registers: vec![(11, 420)],
