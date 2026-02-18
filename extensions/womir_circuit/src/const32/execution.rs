@@ -12,13 +12,13 @@ use openvm_circuit_primitives::bitwise_op_lookup::SharedBitwiseOperationLookupCh
 use openvm_instructions::{
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
-    riscv::{RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
+    riscv::{RV32_CELL_BITS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
 };
 use openvm_stark_backend::p3_field::PrimeField32;
 use std::borrow::{Borrow, BorrowMut};
 // Minimal executor for CONST32 - no computation needed, just write immediate to register
 #[derive(Clone, derive_new::new)]
-pub struct Const32Executor<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
+pub struct Const32Executor<const NUM_LIMBS: usize> {
     pub offset: usize,
 }
 
@@ -30,7 +30,7 @@ struct Const32PreCompute {
     imm: u32,
 }
 
-impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> Const32Executor<NUM_LIMBS, LIMB_BITS> {
+impl<const NUM_LIMBS: usize> Const32Executor<NUM_LIMBS> {
     #[inline(always)]
     fn pre_compute_impl<F: PrimeField32>(
         &self,
@@ -46,8 +46,7 @@ impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> Const32Executor<NUM_LIMBS, 
     }
 }
 
-impl<F, RA, const LIMB_BITS: usize> PreflightExecutor<F, RA>
-    for Const32Executor<RV32_REGISTER_NUM_LIMBS, LIMB_BITS>
+impl<F, RA> PreflightExecutor<F, RA> for Const32Executor<RV32_REGISTER_NUM_LIMBS>
 where
     F: PrimeField32,
     for<'buf> RA: RecordArena<'buf, EmptyMultiRowLayout, &'buf mut Const32Record>,
@@ -97,8 +96,7 @@ where
 }
 
 // InterpreterExecutor implementation
-impl<F, const LIMB_BITS: usize> InterpreterExecutor<F>
-    for Const32Executor<RV32_REGISTER_NUM_LIMBS, LIMB_BITS>
+impl<F> InterpreterExecutor<F> for Const32Executor<RV32_REGISTER_NUM_LIMBS>
 where
     F: PrimeField32,
 {
@@ -119,12 +117,11 @@ where
         let data: &mut Const32PreCompute = data.borrow_mut();
         self.pre_compute_impl(inst, data);
 
-        Ok(execute_e1_handler::<F, Ctx, RV32_REGISTER_NUM_LIMBS, LIMB_BITS>)
+        Ok(execute_e1_handler::<F, Ctx, RV32_REGISTER_NUM_LIMBS>)
     }
 }
 
-impl<F, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
-    for Const32Executor<RV32_REGISTER_NUM_LIMBS, LIMB_BITS>
+impl<F> InterpreterMeteredExecutor<F> for Const32Executor<RV32_REGISTER_NUM_LIMBS>
 where
     F: PrimeField32,
 {
@@ -148,17 +145,12 @@ where
         data.chip_idx = chip_idx as u32;
         self.pre_compute_impl(inst, &mut data.data);
 
-        Ok(execute_e2_handler::<F, Ctx, RV32_REGISTER_NUM_LIMBS, LIMB_BITS>)
+        Ok(execute_e2_handler::<F, Ctx, RV32_REGISTER_NUM_LIMBS>)
     }
 }
 
 // Execute function for CONST32
-unsafe fn execute_e12_impl<
-    F: PrimeField32,
-    Ctx: ExecutionCtxTrait,
-    const NUM_LIMBS: usize,
-    const LIMB_BITS: usize,
->(
+unsafe fn execute_e12_impl<F: PrimeField32, Ctx: ExecutionCtxTrait, const NUM_LIMBS: usize>(
     pre_compute: &Const32PreCompute,
     exec_state: &mut VmExecState<F, openvm_circuit::system::memory::online::GuestMemory, Ctx>,
 ) {
@@ -174,19 +166,14 @@ unsafe fn execute_e12_impl<
 
 #[create_handler]
 #[inline(always)]
-unsafe fn execute_e1_impl<
-    F: PrimeField32,
-    CTX: ExecutionCtxTrait,
-    const NUM_LIMBS: usize,
-    const LIMB_BITS: usize,
->(
+unsafe fn execute_e1_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const NUM_LIMBS: usize>(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, openvm_circuit::system::memory::online::GuestMemory, CTX>,
 ) {
     unsafe {
         let pre_compute: &Const32PreCompute =
             std::slice::from_raw_parts(pre_compute, size_of::<Const32PreCompute>()).borrow();
-        execute_e12_impl::<F, CTX, NUM_LIMBS, LIMB_BITS>(pre_compute, exec_state);
+        execute_e12_impl::<F, CTX, NUM_LIMBS>(pre_compute, exec_state);
     }
 }
 
@@ -196,7 +183,6 @@ unsafe fn execute_e2_impl<
     F: PrimeField32,
     CTX: MeteredExecutionCtxTrait,
     const NUM_LIMBS: usize,
-    const LIMB_BITS: usize,
 >(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, openvm_circuit::system::memory::online::GuestMemory, CTX>,
@@ -208,7 +194,7 @@ unsafe fn execute_e2_impl<
         exec_state
             .ctx
             .on_height_change(pre_compute.chip_idx as usize, 1);
-        execute_e12_impl::<F, CTX, NUM_LIMBS, LIMB_BITS>(&pre_compute.data, exec_state);
+        execute_e12_impl::<F, CTX, NUM_LIMBS>(&pre_compute.data, exec_state);
     }
 }
 
@@ -226,20 +212,18 @@ pub struct Const32Record {
 }
 
 #[derive(derive_new::new)]
-pub struct Const32Filler<const NUM_LIMBS: usize, const LIMB_BITS: usize> {
-    pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<LIMB_BITS>,
+pub struct Const32Filler<const NUM_LIMBS: usize> {
+    pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
 }
 
-impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> TraceFiller<F>
-    for Const32Filler<NUM_LIMBS, LIMB_BITS>
-{
+impl<F: PrimeField32, const NUM_LIMBS: usize> TraceFiller<F> for Const32Filler<NUM_LIMBS> {
     fn fill_trace_row(
         &self,
         mem_helper: &openvm_circuit::system::memory::MemoryAuxColsFactory<F>,
         mut row_slice: &mut [F],
     ) {
         let record: &Const32Record = unsafe { get_record_from_slice(&mut row_slice, ()) };
-        let cols: &mut Const32AdapterAirCol<F, NUM_LIMBS, LIMB_BITS> = row_slice.borrow_mut();
+        let cols: &mut Const32AdapterAirCol<F, NUM_LIMBS> = row_slice.borrow_mut();
 
         // fp_read_aux: fill timestamp proof for FP read at from_timestamp + 0
         mem_helper.fill(
@@ -260,10 +244,9 @@ impl<F: PrimeField32, const NUM_LIMBS: usize, const LIMB_BITS: usize> TraceFille
         );
 
         // imm_limbs: decompose the immediate into limbs and range-check
-        assert_eq!(LIMB_BITS, 8);
         let imm = record.imm;
-        let mask = (1u32 << LIMB_BITS) - 1;
-        let imm_limbs_u32 = std::array::from_fn(|i| (imm >> (LIMB_BITS * i)) & mask);
+        let mask = (1u32 << RV32_CELL_BITS) - 1;
+        let imm_limbs_u32 = std::array::from_fn(|i| (imm >> (RV32_CELL_BITS * i)) & mask);
         cols.imm_limbs = imm_limbs_u32.map(F::from_canonical_u32);
         for (lo, hi) in imm_limbs_u32.iter().copied().tuples() {
             self.bitwise_lookup_chip.request_range(lo, hi);

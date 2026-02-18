@@ -36,12 +36,7 @@ pub struct LessThanExecutor<
     const NUM_WRITE_OPS: usize,
 >(
     pub  LessThanExecutorInner<
-        BaseAluAdapterExecutorDifferentInputsOutputs<
-            NUM_LIMBS,
-            NUM_READ_OPS,
-            NUM_WRITE_OPS,
-            RV32_CELL_BITS,
-        >,
+        BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>,
         NUM_LIMBS,
         RV32_CELL_BITS,
     >,
@@ -55,7 +50,6 @@ impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usi
             NUM_LIMBS,
             NUM_READ_OPS,
             NUM_WRITE_OPS,
-            RV32_CELL_BITS,
         >,
         offset: usize,
     ) -> Self {

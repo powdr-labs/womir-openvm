@@ -30,17 +30,14 @@ use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_by
 #[derive(Clone, PreflightExecutor)]
 pub struct BaseAluExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize>(
     pub  BaseAluExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS>,
         NUM_LIMBS,
         RV32_CELL_BITS,
     >,
 );
 
 impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS> {
-    pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
-        offset: usize,
-    ) -> Self {
+    pub fn new(adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS>, offset: usize) -> Self {
         Self(BaseAluExecutorInner::new(adapter, offset))
     }
 }

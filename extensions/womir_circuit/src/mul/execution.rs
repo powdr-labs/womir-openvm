@@ -31,7 +31,7 @@ use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 #[derive(Clone, PreflightExecutor)]
 pub struct MultiplicationExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize>(
     pub  MultiplicationExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS>,
         NUM_LIMBS,
         RV32_CELL_BITS,
     >,
@@ -40,10 +40,7 @@ pub struct MultiplicationExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usi
 impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize>
     MultiplicationExecutor<NUM_LIMBS, NUM_REG_OPS>
 {
-    pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
-        offset: usize,
-    ) -> Self {
+    pub fn new(adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS>, offset: usize) -> Self {
         Self(MultiplicationExecutorInner::new(adapter, offset))
     }
 }

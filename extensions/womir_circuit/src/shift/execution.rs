@@ -31,17 +31,14 @@ use crate::utils::sign_extend_u32;
 #[derive(Clone, PreflightExecutor)]
 pub struct ShiftExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize>(
     pub  ShiftExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS>,
         NUM_LIMBS,
         RV32_CELL_BITS,
     >,
 );
 
 impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> ShiftExecutor<NUM_LIMBS, NUM_REG_OPS> {
-    pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
-        offset: usize,
-    ) -> Self {
+    pub fn new(adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS>, offset: usize) -> Self {
         Self(ShiftExecutorInner::new(adapter, offset))
     }
 }
