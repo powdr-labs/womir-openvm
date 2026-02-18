@@ -8,22 +8,22 @@
 //! - Proof generation (VirtualMachine::prove)
 
 use openvm_circuit::{
-    arch::{debug_proving_ctx, execution_mode::Segment, VirtualMachine, VmExecutor, VmState},
+    arch::{VirtualMachine, VmExecutor, VmState, debug_proving_ctx, execution_mode::Segment},
     system::memory::online::GuestMemory,
 };
 use openvm_instructions::{
     exe::VmExe,
     instruction::Instruction,
-    program::{Program, DEFAULT_PC_STEP},
+    program::{DEFAULT_PC_STEP, Program},
     riscv::RV32_REGISTER_AS,
 };
-use openvm_sdk::{config::DEFAULT_APP_LOG_BLOWUP, StdIn};
+use openvm_sdk::{StdIn, config::DEFAULT_APP_LOG_BLOWUP};
 use openvm_stark_sdk::{
-    config::{baby_bear_poseidon2::BabyBearPoseidon2Engine, FriParameters},
+    config::{FriParameters, baby_bear_poseidon2::BabyBearPoseidon2Engine},
     engine::StarkFriEngine,
 };
 use womir_circuit::{
-    adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory, WomirConfig, WomirCpuBuilder,
+    WomirConfig, WomirCpuBuilder, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory,
 };
 
 use crate::instruction_builder as wom;
