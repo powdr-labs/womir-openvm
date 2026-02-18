@@ -68,29 +68,6 @@ impl<
     }
 }
 
-impl<
-    const NUM_LIMBS: usize,
-    const NUM_READ_OPS: usize,
-    const NUM_WRITE_OPS: usize,
-    const LIMB_BITS: usize,
-> std::ops::Deref for LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
-{
-    type Target = LessThanExecutorInner<
-        BaseAluAdapterExecutorDifferentInputsOutputs<
-            NUM_LIMBS,
-            NUM_READ_OPS,
-            NUM_WRITE_OPS,
-            LIMB_BITS,
-        >,
-        NUM_LIMBS,
-        LIMB_BITS,
-    >;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
 pub(super) struct LessThanPreCompute {
