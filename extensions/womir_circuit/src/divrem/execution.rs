@@ -17,7 +17,10 @@ use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
-    LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP, riscv::RV32_REGISTER_AS,
+    LocalOpcode,
+    instruction::Instruction,
+    program::DEFAULT_PC_STEP,
+    riscv::{RV32_CELL_BITS, RV32_REGISTER_AS},
 };
 use openvm_rv32im_circuit::DivRemExecutor as DivRemExecutorInner;
 use openvm_rv32im_transpiler::DivRemOpcode;
@@ -25,21 +28,16 @@ use openvm_stark_backend::p3_field::PrimeField32;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
-pub struct DivRemExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>(
+pub struct DivRemExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize>(
     pub  DivRemExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS>,
         NUM_LIMBS,
-        LIMB_BITS,
+        RV32_CELL_BITS,
     >,
 );
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    DivRemExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
-{
-    pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
-        offset: usize,
-    ) -> Self {
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> DivRemExecutor<NUM_LIMBS, NUM_REG_OPS> {
+    pub fn new(adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS>, offset: usize) -> Self {
         Self(DivRemExecutorInner::new(adapter, offset))
     }
 }
@@ -55,9 +53,7 @@ pub(super) struct DivRemPreCompute {
     c: u32,
 }
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    DivRemExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
-{
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> DivRemExecutor<NUM_LIMBS, NUM_REG_OPS> {
     /// Return the local opcode.
     #[inline(always)]
     pub(super) fn pre_compute_impl<F: PrimeField32>(
@@ -94,8 +90,8 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    InterpreterExecutor<F> for DivRemExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize> InterpreterExecutor<F>
+    for DivRemExecutor<NUM_LIMBS, NUM_REG_OPS>
 where
     F: PrimeField32,
 {
@@ -122,8 +118,8 @@ where
     }
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    InterpreterMeteredExecutor<F> for DivRemExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize> InterpreterMeteredExecutor<F>
+    for DivRemExecutor<NUM_LIMBS, NUM_REG_OPS>
 where
     F: PrimeField32,
 {

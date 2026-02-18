@@ -174,7 +174,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(divrem, DivRemOpcode::iter().map(|x| x.global_opcode()))?;
 
         let divrem_64 = DivRem64Executor::new(
-            BaseAluAdapterExecutor::<8, 2, RV32_CELL_BITS>::default(),
+            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS>::default(),
             DivRem64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(divrem_64, DivRem64Opcode::iter().map(|x| x.global_opcode()))?;
@@ -540,7 +540,7 @@ where
         inventory.next_air::<DivRem64Air>()?;
         let divrem_64 = DivRem64Chip::new(
             DivRemFiller::new(
-                BaseAluAdapterFiller::<2, RV32_CELL_BITS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::<W64_REG_OPS>::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
                 range_tuple_chip.clone(),
                 DivRem64Opcode::CLASS_OFFSET,
