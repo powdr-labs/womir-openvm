@@ -1235,6 +1235,137 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
+    // ==================== Mul Tests ====================
+
+    #[test]
+    fn test_mul() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = reg[fp+0] * reg[fp+1]
+        // 7 * 6 = 42
+        let spec = TestSpec {
+            program: vec![wom::mul::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 7), (11, 6)],
+            expected_registers: vec![(12, 42)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = reg[fp+0] * 10
+        // 42 * 10 = 420
+        let spec = TestSpec {
+            program: vec![wom::mul_imm::<F>(1, 0, 10_i16.into())],
+            start_fp: 10,
+            start_registers: vec![(10, 42)],
+            expected_registers: vec![(11, 420)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_overflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x10000 * 0x10000 = 0x1_0000_0000, wraps to 0
+        let spec = TestSpec {
+            program: vec![wom::mul::<F>(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0x10000), (11, 0x10000)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0000_0000_0007 * 0x0000_0000_0000_0006 = 0x0000_0000_0000_002A
+        let spec = TestSpec {
+            program: vec![wom::mul_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 7),
+                (125, 0), // reg 0 = 7
+                (126, 6),
+                (127, 0), // reg 2 = 6
+            ],
+            expected_registers: vec![(128, 0x2a), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec);
+    }
+
+    #[test]
+    fn test_mul_64_large() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0000 * 0x0000_0000_0000_0003 = 0x0000_0003_0000_0000
+        let spec = TestSpec {
+            program: vec![wom::mul_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x1_0000_0000
+                (126, 3),
+                (127, 0), // reg 2 = 3
+            ],
+            expected_registers: vec![(128, 0), (129, 3)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec);
+    }
+
+    #[test]
+    fn test_mul_64_overflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0001 * 0x0000_0001_0000_0001 = wraps to 0x0000_0002_0000_0001
+        let spec = TestSpec {
+            program: vec![wom::mul_64::<F>(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 1),
+                (125, 1), // reg 0 = 0x1_0000_0001
+                (126, 1),
+                (127, 1), // reg 2 = 0x1_0000_0001
+            ],
+            expected_registers: vec![(128, 1), (129, 2)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec);
+    }
+
+    #[test]
+    fn test_mul_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0000_0000_000A * 3 = 0x0000_0000_0000_001E
+        let spec = TestSpec {
+            program: vec![wom::mul_imm_64::<F>(2, 0, 3_i16.into())],
+            start_fp: 124,
+            start_registers: vec![(124, 0xa), (125, 0)],
+            expected_registers: vec![(126, 0x1e), (127, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec);
+    }
+
     // ==================== Jump Tests ====================
 
     #[test]
