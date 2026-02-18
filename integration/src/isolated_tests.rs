@@ -26,7 +26,7 @@ use womir_circuit::{
     WomirConfig, WomirCpuBuilder, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory,
 };
 
-use crate::instruction_builder::{self as wom, AluImm};
+use crate::instruction_builder::{self as wom};
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -1563,7 +1563,7 @@ mod tests {
 
         // 0x0000_0000_0000_000A * 3 = 0x0000_0000_0000_001E
         let spec = TestSpec {
-            program: vec![wom::mul_imm_64(2, 0, AluImm::from(3_i16))],
+            program: vec![wom::mul_imm_64(2, 0, 3_i16.into())],
             start_fp: 124,
             start_registers: vec![(124, 0xa), (125, 0)],
             expected_registers: vec![(126, 0x1e), (127, 0)],
