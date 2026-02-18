@@ -25,7 +25,7 @@ use openvm_rv32im_circuit::MultiplicationExecutor as MultiplicationExecutorInner
 use openvm_rv32im_transpiler::MulOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
+use crate::adapters::imm_to_bytes;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
@@ -91,7 +91,7 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize>
         let c_u32 = c.as_canonical_u32();
         *data = MulPreCompute {
             c: if is_imm {
-                u32::from_le_bytes(imm_to_bytes::<{ RV32_REGISTER_NUM_LIMBS }>(c_u32))
+                u32::from_le_bytes(imm_to_bytes(c_u32))
             } else {
                 c_u32
             },
@@ -204,7 +204,7 @@ unsafe fn execute_e12_impl<
         exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c)
     };
 
-    let result = wrapping_mul_bytes::<NUM_LIMBS>(&rs1, &rs2);
+    let result = wrapping_mul_bytes(&rs1, &rs2);
 
     exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &result);
     let pc = exec_state.pc();
