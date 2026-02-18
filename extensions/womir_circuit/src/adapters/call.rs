@@ -428,8 +428,8 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
         record.has_save = has_save;
 
         // 1. Read to_fp_reg (conditional - only RET reads absolute FP from register)
-        // has_fp_read = !has_save
-        let new_fp_bytes: [u8; RV32_REGISTER_NUM_LIMBS] = if !has_save {
+        let has_fp_read = !has_save;
+        let new_fp_bytes: [u8; RV32_REGISTER_NUM_LIMBS] = if has_fp_read {
             tracing_read(
                 memory,
                 RV32_REGISTER_AS,
@@ -599,8 +599,9 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         }
         timestamp -= 1;
 
-        // 1. to_fp_reg read (conditional - only RET, i.e. !has_save)
-        if !has_save {
+        // 1. to_fp_reg read (conditional on has_fp_read)
+        let has_fp_read = !has_save;
+        if has_fp_read {
             mem_helper.fill(
                 record.to_fp_read_aux.prev_timestamp,
                 timestamp,
