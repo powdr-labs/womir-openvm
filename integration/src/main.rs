@@ -1121,20 +1121,18 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_ret_instruction() {
         // Test RET: return to saved PC and FP
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::allocate_frame_imm(1, 100), // Allocate entry frame
-            wom::add_imm(10, 0, 28_i16),     // x10 = 24 (return PC)
-            wom::add_imm(11, 0, 0_i16),      // x11 = 0 (saved FP)
-            wom::add_imm(8, 0, 88_i16),      // x8 = 88
-            wom::ret(10, 11),                // Return to PC=x10, FP=x11
-            wom::halt(),                     // This should be skipped
+            wom::const_32_imm(0, 0, 0),  // PC=0
+            wom::add_imm(10, 0, 24_i16), // PC=4: x10 = 24 (return PC)
+            wom::add_imm(11, 0, 0_i16),  // PC=8: x11 = 0 (saved FP)
+            wom::add_imm(8, 0, 88_i16),  // PC=12: x8 = 88
+            wom::ret(10, 11),            // PC=16: Return to PC=x10, FP=x11
+            wom::halt(),                 // PC=20: This should be skipped
             // PC = 24 (where x10 points)
-            wom::reveal(8, 0), // wom::reveal x8 (should be 88)
-            wom::halt(),
+            wom::reveal(8, 0), // PC=24: reveal x8 (should be 88)
+            wom::halt(),       // PC=28
         ];
 
         run_vm_test("RET instruction", instructions, 88, None).unwrap()
@@ -1309,21 +1307,6 @@ mod tests {
             None,
         )
         .unwrap()
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_allocate_frame_instruction() {
-        // Test ALLOCATE_FRAME instruction
-        let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::allocate_frame_imm(8, 256), // Allocate 256 bytes, store pointer in x8
-            wom::reveal(8, 0),               // wom::reveal x8 (should be allocated pointer)
-            wom::halt(),
-        ];
-
-        // The expected value comes from the frame allocator (`AllocateFrameAdapterChipWom`) initial frame pointer value
-        run_vm_test("ALLOCATE_FRAME instruction", instructions, 8, None).unwrap()
     }
 
     #[test]
