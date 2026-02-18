@@ -13,8 +13,9 @@ use std::{
 use crate::memory_config::FpMemory;
 use openvm_circuit::{
     arch::*,
-    system::memory::online::{GuestMemory, TracingMemory},
+    system::memory::online::GuestMemory,
 };
+use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
     LocalOpcode,
@@ -26,46 +27,33 @@ use openvm_rv32im_circuit::LessThanExecutor as LessThanExecutorInner;
 use openvm_rv32im_transpiler::LessThanOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
+use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
-#[derive(Clone, Copy)]
-pub struct LessThanExecutor<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>(
-    pub LessThanExecutorInner<A, NUM_LIMBS, LIMB_BITS>,
+#[derive(Clone, PreflightExecutor)]
+pub struct LessThanExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>(
+    pub LessThanExecutorInner<BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>, NUM_LIMBS, LIMB_BITS>,
 );
 
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> LessThanExecutor<A, NUM_LIMBS, LIMB_BITS> {
-    pub fn new(adapter: A, offset: usize) -> Self {
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+{
+    pub fn new(
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        offset: usize,
+    ) -> Self {
         Self(LessThanExecutorInner::new(adapter, offset))
     }
 }
 
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> std::ops::Deref
-    for LessThanExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize> std::ops::Deref
+    for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
-    type Target = LessThanExecutorInner<A, NUM_LIMBS, LIMB_BITS>;
+    type Target =
+        LessThanExecutorInner<BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>, NUM_LIMBS, LIMB_BITS>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl<F, A, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> PreflightExecutor<F, RA>
-    for LessThanExecutor<A, NUM_LIMBS, LIMB_BITS>
-where
-    F: PrimeField32,
-    LessThanExecutorInner<A, NUM_LIMBS, LIMB_BITS>: PreflightExecutor<F, RA>,
-{
-    fn get_opcode_name(&self, opcode: usize) -> String {
-        self.0.get_opcode_name(opcode)
-    }
-
-    fn execute(
-        &self,
-        state: VmStateMut<F, TracingMemory, RA>,
-        instruction: &Instruction<F>,
-    ) -> Result<(), ExecutionError> {
-        self.0.execute(state, instruction)
     }
 }
 
@@ -80,7 +68,9 @@ pub(super) struct LessThanPreCompute {
     b: u32,
 }
 
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> LessThanExecutor<A, NUM_LIMBS, LIMB_BITS> {
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+{
     /// Return `(is_imm, is_sltu)`.
     #[inline(always)]
     pub(super) fn pre_compute_impl<F: PrimeField32>(
@@ -132,8 +122,8 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F>
-    for LessThanExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    InterpreterExecutor<F> for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -159,8 +149,8 @@ where
     }
 }
 
-impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
-    for LessThanExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    InterpreterMeteredExecutor<F> for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
