@@ -238,10 +238,10 @@ unsafe fn execute_e12_impl<
         x if x == ShiftOpcode::SRL as u8 => val >> shift_amount,
         x if x == ShiftOpcode::SRA as u8 => {
             // Sign-extend to i64 based on the actual bit width
-            let signed = if NUM_LIMBS == 4 {
-                (val as u32 as i32 as i64) >> shift_amount
-            } else {
-                (val as i64) >> shift_amount
+            let signed = match NUM_LIMBS {
+                4 => (val as u32 as i32 as i64) >> shift_amount,
+                8 => (val as i64) >> shift_amount,
+                _ => unreachable!(),
             };
             signed as u64
         }
@@ -249,9 +249,9 @@ unsafe fn execute_e12_impl<
     };
 
     let result_bytes = result.to_le_bytes();
-    let rd: [u8; NUM_LIMBS] = std::array::from_fn(|i| result_bytes[i]);
+    let result_val: [u8; NUM_LIMBS] = std::array::from_fn(|i| result_bytes[i]);
 
-    exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &rd);
+    exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &result_val);
     let pc = exec_state.pc();
     exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
 }
