@@ -141,7 +141,7 @@ Columns include the operand and result limbs, plus some internal columns (in thi
 ```rust
 #[repr(C)]
 #[derive(AlignedBorrow, Debug)]
-pub struct BaseAluCoreCols<T, const NUM_LIMBS: usize, const LIMB_BITS: usize> {
+pub struct BaseAluCoreCols<T, const NUM_LIMBS: usize> {
     pub a: [T; NUM_LIMBS],
     pub b: [T; NUM_LIMBS],
     pub c: [T; NUM_LIMBS],
@@ -158,7 +158,7 @@ This is a sketch of the `VmCoreAir` implementation:
 ```rust
 fn eval(&self, builder: &mut AB, local: &[AB::Var], _from_pc: AB::Var) -> AdapterAirContext<...> {
     // Parse the columns as the struct for easier access
-    let cols: &BaseAluCoreCols<_, NUM_LIMBS, LIMB_BITS> = local_core.borrow();
+    let cols: &BaseAluCoreCols<_, NUM_LIMBS> = local_core.borrow();
 
     // is_valid indicates whether the current row is used.
     // It's an expression which in this case is the sum of the flags (which are mutually exclusive and boolean).

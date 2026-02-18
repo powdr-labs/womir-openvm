@@ -24,6 +24,7 @@ pub mod execution;
 pub mod adapters;
 mod base_alu;
 mod const32;
+mod divrem;
 mod eq;
 mod jump;
 mod less_than;
@@ -35,6 +36,7 @@ mod utils;
 
 pub use base_alu::*;
 pub use const32::*;
+pub use divrem::*;
 pub use eq::*;
 pub use jump::*;
 pub use less_than::*;

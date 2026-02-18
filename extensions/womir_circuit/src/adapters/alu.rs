@@ -247,25 +247,14 @@ pub struct BaseAluAdapterExecutorDifferentInputsOutputs<
     const NUM_LIMBS: usize,
     const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
-    const LIMB_BITS: usize,
 > {
     /// Hack: This flag is used so that we fetch the frame pointer exactly once per instruction execution,
     ///       BEFORE the first read.
     has_fetched_fp: RefCell<bool>,
 }
 
-impl<
-    const NUM_LIMBS: usize,
-    const NUM_READ_OPS: usize,
-    const NUM_WRITE_OPS: usize,
-    const LIMB_BITS: usize,
-> Default
-    for BaseAluAdapterExecutorDifferentInputsOutputs<
-        NUM_LIMBS,
-        NUM_READ_OPS,
-        NUM_WRITE_OPS,
-        LIMB_BITS,
-    >
+impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize> Default
+    for BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
 {
     fn default() -> Self {
         Self {
@@ -278,9 +267,8 @@ impl<
 pub struct BaseAluAdapterFillerDifferentInputsOutputs<
     const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
-    const LIMB_BITS: usize,
 > {
-    bitwise_lookup_chip: SharedBitwiseOperationLookupChip<LIMB_BITS>,
+    bitwise_lookup_chip: SharedBitwiseOperationLookupChip<RV32_CELL_BITS>,
 }
 
 // Intermediate type that should not be copied or cloned and should be directly written to
@@ -307,12 +295,8 @@ pub struct BaseAluAdapterRecordDifferentInputsOutputs<
     pub writes_aux: [MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>; NUM_WRITE_OPS],
 }
 
-impl<
-    const NUM_LIMBS: usize,
-    const NUM_READ_OPS: usize,
-    const NUM_WRITE_OPS: usize,
-    const LIMB_BITS: usize,
-> BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
+    BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
 {
     fn maybe_fetch_fp<F: PrimeField32>(
         &self,
@@ -330,19 +314,9 @@ impl<
     }
 }
 
-impl<
-    F: PrimeField32,
-    const NUM_LIMBS: usize,
-    const NUM_READ_OPS: usize,
-    const NUM_WRITE_OPS: usize,
-    const LIMB_BITS: usize,
-> AdapterTraceExecutor<F>
-    for BaseAluAdapterExecutorDifferentInputsOutputs<
-        NUM_LIMBS,
-        NUM_READ_OPS,
-        NUM_WRITE_OPS,
-        LIMB_BITS,
-    >
+impl<F: PrimeField32, const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
+    AdapterTraceExecutor<F>
+    for BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
 {
     const WIDTH: usize =
         size_of::<BaseAluAdapterColsDifferentInputsOutputs<u8, NUM_READ_OPS, NUM_WRITE_OPS>>();
@@ -456,9 +430,8 @@ impl<
     }
 }
 
-impl<F: PrimeField32, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize, const LIMB_BITS: usize>
-    AdapterTraceFiller<F>
-    for BaseAluAdapterFillerDifferentInputsOutputs<NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
+impl<F: PrimeField32, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize> AdapterTraceFiller<F>
+    for BaseAluAdapterFillerDifferentInputsOutputs<NUM_READ_OPS, NUM_WRITE_OPS>
 {
     const WIDTH: usize =
         size_of::<BaseAluAdapterColsDifferentInputsOutputs<u8, NUM_READ_OPS, NUM_WRITE_OPS>>();
@@ -551,13 +524,10 @@ pub type BaseAluAdapterCols<T, const NUM_OPS: usize> =
     BaseAluAdapterColsDifferentInputsOutputs<T, NUM_OPS, NUM_OPS>;
 pub type BaseAluAdapterAir<const NUM_LIMBS: usize, const NUM_OPS: usize> =
     BaseAluAdapterAirDifferentInputsOutputs<NUM_LIMBS, NUM_OPS, NUM_OPS>;
-pub type BaseAluAdapterExecutor<
-    const NUM_LIMBS: usize,
-    const NUM_OPS: usize,
-    const LIMB_BITS: usize,
-> = BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_OPS, NUM_OPS, LIMB_BITS>;
-pub type BaseAluAdapterFiller<const NUM_OPS: usize, const LIMB_BITS: usize> =
-    BaseAluAdapterFillerDifferentInputsOutputs<NUM_OPS, NUM_OPS, LIMB_BITS>;
+pub type BaseAluAdapterExecutor<const NUM_LIMBS: usize, const NUM_OPS: usize> =
+    BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_OPS, NUM_OPS>;
+pub type BaseAluAdapterFiller<const NUM_OPS: usize> =
+    BaseAluAdapterFillerDifferentInputsOutputs<NUM_OPS, NUM_OPS>;
 pub type BaseAluAdapterRecord<const NUM_OPS: usize> =
     BaseAluAdapterRecordDifferentInputsOutputs<NUM_OPS, NUM_OPS>;
 
@@ -565,7 +535,5 @@ pub type BaseAluAdapterRecord<const NUM_OPS: usize> =
 pub type Rv32BaseAluAdapterCols<T> = BaseAluAdapterCols<T, W32_REG_OPS>;
 pub type Rv32BaseAluAdapterAir = BaseAluAdapterAir<RV32_REGISTER_NUM_LIMBS, W32_REG_OPS>;
 pub type Rv32BaseAluAdapterRecord = BaseAluAdapterRecord<W32_REG_OPS>;
-pub type Rv32BaseAluAdapterExecutor<const LIMB_BITS: usize> =
-    BaseAluAdapterExecutor<RV32_REGISTER_NUM_LIMBS, W32_REG_OPS, LIMB_BITS>;
-pub type Rv32BaseAluAdapterFiller<const LIMB_BITS: usize> =
-    BaseAluAdapterFiller<W32_REG_OPS, LIMB_BITS>;
+pub type Rv32BaseAluAdapterExecutor = BaseAluAdapterExecutor<RV32_REGISTER_NUM_LIMBS, W32_REG_OPS>;
+pub type Rv32BaseAluAdapterFiller = BaseAluAdapterFiller<W32_REG_OPS>;

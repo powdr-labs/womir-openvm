@@ -13,7 +13,6 @@ pub type Rv32LoadSignExtendAir = VmAirWrapper<
     Rv32LoadStoreAdapterAir,
     LoadSignExtendCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;
-pub type Rv32LoadSignExtendExecutor =
-    LoadSignExtendExecutor<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>;
+pub type Rv32LoadSignExtendExecutor = LoadSignExtendExecutor<RV32_REGISTER_NUM_LIMBS>;
 pub type Rv32LoadSignExtendChip<F> =
     VmChipWrapper<F, LoadSignExtendFiller<Rv32LoadStoreAdapterFiller>>;
