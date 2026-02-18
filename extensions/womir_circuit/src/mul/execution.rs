@@ -35,7 +35,7 @@ pub struct MultiplicationExecutor<
     const LIMB_BITS: usize,
 >(
     pub  MultiplicationExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_REG_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >,
@@ -45,7 +45,7 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
     MultiplicationExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
     pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_REG_OPS, LIMB_BITS>,
         offset: usize,
     ) -> Self {
         Self(MultiplicationExecutorInner::new(adapter, offset))

@@ -30,7 +30,7 @@ use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_by
 #[derive(Clone, PreflightExecutor)]
 pub struct BaseAluExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>(
     pub  BaseAluExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_REG_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >,
@@ -40,7 +40,7 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
     BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
     pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_REG_OPS, LIMB_BITS>,
         offset: usize,
     ) -> Self {
         Self(BaseAluExecutorInner::new(adapter, offset))
@@ -51,7 +51,7 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize> s
     for BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
     type Target = BaseAluExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_REG_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >;
