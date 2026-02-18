@@ -375,8 +375,8 @@ pub struct CallAdapterRecord {
     pub save_pc_ptr: u32,
     pub to_pc_operand: u32,
 
-    pub has_pc_read: u8,
-    pub has_save: u8,
+    pub has_pc_read: bool,
+    pub has_save: bool,
 
     pub fp_read_aux: MemoryReadAuxRecord,
     pub to_fp_read_aux: MemoryReadAuxRecord,
@@ -424,8 +424,8 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
 
         let has_pc_read = matches!(opcode, CallOpcode::RET | CallOpcode::CALL_INDIRECT);
         let has_save = matches!(opcode, CallOpcode::CALL | CallOpcode::CALL_INDIRECT);
-        record.has_pc_read = has_pc_read as u8;
-        record.has_save = has_save as u8;
+        record.has_pc_read = has_pc_read;
+        record.has_save = has_save;
 
         // 1. Read to_fp_reg (conditional - only RET reads absolute FP from register)
         // has_fp_read = !has_save
@@ -475,7 +475,7 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
         } = data;
 
         // 3. Write save_fp (conditional on has_save) - relative to NEW frame
-        if record.has_save != 0 {
+        if record.has_save {
             let (t_prev, prev_data) = super::timed_write(
                 memory,
                 RV32_REGISTER_AS,
@@ -489,7 +489,7 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
         }
 
         // 4. Write save_pc (conditional on has_save) - relative to NEW frame
-        if record.has_save != 0 {
+        if record.has_save {
             let (t_prev, prev_data) = super::timed_write(
                 memory,
                 RV32_REGISTER_AS,
@@ -540,8 +540,8 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         // Cache record fields that will be overwritten when filling aux columns.
         // The record and columns share the same buffer; filling fp_read_aux overwrites
         // record.has_save and record.has_pc_read.
-        let has_save = record.has_save != 0;
-        let has_pc_read = record.has_pc_read != 0;
+        let has_save = record.has_save;
+        let has_pc_read = record.has_pc_read;
         let fp = record.fp;
         let to_fp_operand = record.to_fp_operand;
 
