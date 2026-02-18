@@ -331,11 +331,11 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         );
         inventory.add_air(less_than_64);
 
-        let divrem_32 = Rv32DivRemAir::new(
+        let divrem = Rv32DivRemAir::new(
             Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
             DivRemCoreAir::new(bitwise_lu, range_tuple_bus, DivRemOpcode::CLASS_OFFSET),
         );
-        inventory.add_air(divrem_32);
+        inventory.add_air(divrem);
 
         let divrem_64 = DivRem64Air::new(
             BaseAluAdapterAir::<8, 2>::new(exec_bridge, memory_bridge, bitwise_lu),
@@ -526,7 +526,7 @@ where
         inventory.add_executor_chip(less_than_64);
 
         inventory.next_air::<Rv32DivRemAir>()?;
-        let divrem32 = Rv32DivRemChip::new(
+        let divrem = Rv32DivRemChip::new(
             DivRemFiller::new(
                 Rv32BaseAluAdapterFiller::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
@@ -535,7 +535,7 @@ where
             ),
             mem_helper.clone(),
         );
-        inventory.add_executor_chip(divrem32);
+        inventory.add_executor_chip(divrem);
 
         inventory.next_air::<DivRem64Air>()?;
         let divrem_64 = DivRem64Chip::new(
