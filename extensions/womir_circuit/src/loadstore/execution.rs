@@ -6,10 +6,7 @@ use std::{
 
 use openvm_circuit::{
     arch::*,
-    system::memory::{
-        POINTER_MAX_BITS,
-        online::GuestMemory,
-    },
+    system::memory::{POINTER_MAX_BITS, online::GuestMemory},
 };
 use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives::AlignedBytesBorrow;

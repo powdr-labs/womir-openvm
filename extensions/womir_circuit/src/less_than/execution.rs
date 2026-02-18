@@ -11,10 +11,7 @@ use std::{
 };
 
 use crate::memory_config::FpMemory;
-use openvm_circuit::{
-    arch::*,
-    system::memory::online::GuestMemory,
-};
+use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
@@ -31,8 +28,16 @@ use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_by
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
-pub struct LessThanExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>(
-    pub LessThanExecutorInner<BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>, NUM_LIMBS, LIMB_BITS>,
+pub struct LessThanExecutor<
+    const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
+    const LIMB_BITS: usize,
+>(
+    pub  LessThanExecutorInner<
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        NUM_LIMBS,
+        LIMB_BITS,
+    >,
 );
 
 impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
@@ -49,8 +54,11 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
 impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize> std::ops::Deref
     for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
-    type Target =
-        LessThanExecutorInner<BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>, NUM_LIMBS, LIMB_BITS>;
+    type Target = LessThanExecutorInner<
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        NUM_LIMBS,
+        LIMB_BITS,
+    >;
 
     fn deref(&self) -> &Self::Target {
         &self.0

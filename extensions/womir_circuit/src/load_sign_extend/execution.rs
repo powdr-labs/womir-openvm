@@ -6,10 +6,7 @@ use std::{
 
 use openvm_circuit::{
     arch::*,
-    system::memory::{
-        POINTER_MAX_BITS,
-        online::GuestMemory,
-    },
+    system::memory::{POINTER_MAX_BITS, online::GuestMemory},
 };
 use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
@@ -32,8 +29,7 @@ pub struct LoadSignExtendExecutor<const NUM_LIMBS: usize, const LIMB_BITS: usize
     pub LoadSignExtendExecutorInner<Rv32LoadStoreAdapterExecutor, NUM_LIMBS, LIMB_BITS>,
 );
 
-impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> LoadSignExtendExecutor<NUM_LIMBS, LIMB_BITS>
-{
+impl<const NUM_LIMBS: usize, const LIMB_BITS: usize> LoadSignExtendExecutor<NUM_LIMBS, LIMB_BITS> {
     pub fn new(adapter: Rv32LoadStoreAdapterExecutor) -> Self {
         Self(LoadSignExtendExecutorInner::new(adapter))
     }

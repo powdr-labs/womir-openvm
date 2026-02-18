@@ -11,6 +11,5 @@ pub mod execution;
 
 pub type Rv32LoadStoreAir =
     VmAirWrapper<Rv32LoadStoreAdapterAir, LoadStoreCoreAir<RV32_REGISTER_NUM_LIMBS>>;
-pub type Rv32LoadStoreExecutor =
-    LoadStoreExecutor<RV32_REGISTER_NUM_LIMBS>;
+pub type Rv32LoadStoreExecutor = LoadStoreExecutor<RV32_REGISTER_NUM_LIMBS>;
 pub type Rv32LoadStoreChip<F> = VmChipWrapper<F, LoadStoreFiller<Rv32LoadStoreAdapterFiller>>;
