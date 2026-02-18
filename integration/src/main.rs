@@ -1089,7 +1089,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_div_and_mul_inverse() {
         // Test that (a / b) * b ≈ a (with integer truncation)
         let instructions = vec![

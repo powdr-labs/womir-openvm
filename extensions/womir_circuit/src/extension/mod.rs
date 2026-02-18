@@ -314,28 +314,6 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         );
         inventory.add_air(less_than_64);
 
-        let range_tuple_bus = {
-            let existing_air = inventory.find_air::<RangeTupleCheckerAir<2>>().next();
-            if let Some(air) = existing_air {
-                // TODO: re-enable once we use the correct sizes for 64-bit
-                // assert!(
-                //     air.bus.sizes[0] >= self.range_tuple_checker_sizes[0]
-                //         && air.bus.sizes[1] >= self.range_tuple_checker_sizes[1],
-                //     "Existing RangeTupleCheckerAir sizes {:?} are too small, need {:?}",
-                //     air.bus.sizes,
-                //     self.range_tuple_checker_sizes,
-                // );
-                air.bus
-            } else {
-                let bus = RangeTupleCheckerBus::new(
-                    inventory.new_bus_idx(),
-                    self.range_tuple_checker_sizes,
-                );
-                inventory.add_air(RangeTupleCheckerAir { bus });
-                bus
-            }
-        };
-
         let divrem_32 = Rv32DivRemAir::new(
             Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
             DivRemCoreAir::new(bitwise_lu, range_tuple_bus, DivRemOpcode::CLASS_OFFSET),
@@ -421,7 +399,7 @@ where
 {
     fn extend_prover(
         &self,
-        _extension: &Womir,
+        _: &Womir,
         inventory: &mut ChipInventory<SC, RA, CpuBackend<SC>>,
     ) -> Result<(), ChipInventoryError> {
         let range_checker = inventory.range_checker()?.clone();
@@ -523,28 +501,6 @@ where
             mem_helper.clone(),
         );
         inventory.add_executor_chip(less_than_64);
-
-        let range_tuple_chip = {
-            let existing_chip = inventory
-                .find_chip::<SharedRangeTupleCheckerChip<2>>()
-                .next();
-            if let Some(chip) = existing_chip {
-                // TODO: re-enable once we use the correct sizes for 64-bit
-                // assert!(
-                //     chip.bus().sizes[0] >= extension.range_tuple_checker_sizes[0]
-                //         && chip.bus().sizes[1] >= extension.range_tuple_checker_sizes[1],
-                //     "Existing SharedRangeTupleCheckerChip sizes {:?} are too small, need {:?}",
-                //     chip.bus().sizes,
-                //     extension.range_tuple_checker_sizes,
-                // );
-                chip.clone()
-            } else {
-                let air: &RangeTupleCheckerAir<2> = inventory.next_air()?;
-                let chip = SharedRangeTupleCheckerChip::new(RangeTupleCheckerChip::new(air.bus));
-                inventory.add_periphery_chip(chip.clone());
-                chip
-            }
-        };
 
         inventory.next_air::<Rv32DivRemAir>()?;
         let divrem32 = Rv32DivRemChip::new(
