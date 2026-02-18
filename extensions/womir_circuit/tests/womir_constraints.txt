@@ -1544,7 +1544,7 @@ opcode_jump_if_zero_flag * (do_absolute_jump - cond_is_zero) = 0
 (0 + opcode_jump_flag + opcode_skip_flag + opcode_jump_if_flag + opcode_jump_if_zero_flag) * (from_state__timestamp + 1 - rs_read_aux__base__prev_timestamp - 1 - (0 + rs_read_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + rs_read_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 
 
-# Const32AdapterAir<4, 8>
+# Const32AdapterAir<4>
 Symbolic machine using 19 unique main columns:
   is_valid
   from_state__pc
