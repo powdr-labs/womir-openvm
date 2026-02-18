@@ -30,12 +30,12 @@ use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_by
 #[derive(Clone, PreflightExecutor)]
 pub struct LessThanExecutor<
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
 >(
     pub  LessThanExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >,
@@ -43,13 +43,13 @@ pub struct LessThanExecutor<
 
 impl<
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
-> LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
+> LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
     pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>,
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>,
         offset: usize,
     ) -> Self {
         Self(LessThanExecutorInner::new(adapter, offset))
@@ -58,13 +58,13 @@ impl<
 
 impl<
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
-> std::ops::Deref for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
+> std::ops::Deref for LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
     type Target = LessThanExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >;
@@ -87,10 +87,10 @@ pub(super) struct LessThanPreCompute {
 
 impl<
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
-> LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
+> LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
     /// Return `(is_imm, is_sltu)`.
     #[inline(always)]
@@ -146,10 +146,10 @@ macro_rules! dispatch {
 impl<
     F,
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
-> InterpreterExecutor<F> for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
+> InterpreterExecutor<F> for LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -178,11 +178,11 @@ where
 impl<
     F,
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
 > InterpreterMeteredExecutor<F>
-    for LessThanExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
+    for LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {

@@ -23,7 +23,7 @@ pub type Rv32BaseAluChip<F> = VmChipWrapper<
     >,
 >;
 
-// 64-bit type aliases (NUM_REG_OPS=2: two 4-byte register operations per operand)
+// 64-bit type aliases (NUM_READ_OPS=2: two 4-byte register operations per operand)
 pub type BaseAlu64Air = VmAirWrapper<BaseAluAdapterAir<8, 2, 2>, BaseAluCoreAir<8, RV32_CELL_BITS>>;
 pub type BaseAlu64Executor = BaseAluExecutor<8, 2, RV32_CELL_BITS>;
 pub type BaseAlu64Chip<F> =

@@ -31,21 +31,21 @@ use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 #[derive(Clone, PreflightExecutor)]
 pub struct MultiplicationExecutor<
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const LIMB_BITS: usize,
 >(
     pub  MultiplicationExecutorInner<
-        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_REG_OPS, LIMB_BITS>,
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_READ_OPS, LIMB_BITS>,
         NUM_LIMBS,
         LIMB_BITS,
     >,
 );
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    MultiplicationExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize>
+    MultiplicationExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>
 {
     pub fn new(
-        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_REG_OPS, LIMB_BITS>,
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_READ_OPS, LIMB_BITS>,
         offset: usize,
     ) -> Self {
         Self(MultiplicationExecutorInner::new(adapter, offset))
@@ -65,8 +65,8 @@ pub(super) struct MulPreCompute {
     is_imm: bool,
 }
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    MultiplicationExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize>
+    MultiplicationExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>
 {
     #[inline(always)]
     pub(super) fn pre_compute_impl<F: PrimeField32>(
@@ -110,8 +110,8 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
     }
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    InterpreterExecutor<F> for MultiplicationExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize>
+    InterpreterExecutor<F> for MultiplicationExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -141,8 +141,8 @@ where
     }
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
-    InterpreterMeteredExecutor<F> for MultiplicationExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const LIMB_BITS: usize>
+    InterpreterMeteredExecutor<F> for MultiplicationExecutor<NUM_LIMBS, NUM_READ_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {

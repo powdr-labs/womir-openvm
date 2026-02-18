@@ -23,7 +23,8 @@ pub type Rv32LessThanChip<F> = VmChipWrapper<
     >,
 >;
 
-// 64-bit type aliases (NUM_REG_OPS=2: two 4-byte register operations per operand)
+// 64-bit type aliases
+// NUM_READ_OPS=2: two 4-byte register reads per operand (64-bit inputs)
 // NUM_WRITE_OPS=1: comparison results are i32, so only one 4-byte register write
 pub type LessThan64Air =
     VmAirWrapper<BaseAluAdapterAir<8, 2, 1>, LessThanCoreAir<8, RV32_CELL_BITS>>;

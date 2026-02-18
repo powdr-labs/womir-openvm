@@ -47,7 +47,7 @@ use super::{
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct BaseAluAdapterCols<T, const NUM_REG_OPS: usize, const NUM_WRITE_OPS: usize> {
+pub struct BaseAluAdapterCols<T, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize> {
     pub from_state: ExecutionState<T>,
     pub rd_ptr: T,
     pub rs1_ptr: T,
@@ -56,8 +56,8 @@ pub struct BaseAluAdapterCols<T, const NUM_REG_OPS: usize, const NUM_WRITE_OPS: 
     /// 1 if rs2 was a read, 0 if an immediate
     pub rs2_as: T,
     pub fp_read_aux: MemoryReadAuxCols<T>,
-    pub rs1_reads_aux: [MemoryReadAuxCols<T>; NUM_REG_OPS],
-    pub rs2_reads_aux: [MemoryReadAuxCols<T>; NUM_REG_OPS],
+    pub rs1_reads_aux: [MemoryReadAuxCols<T>; NUM_READ_OPS],
+    pub rs2_reads_aux: [MemoryReadAuxCols<T>; NUM_READ_OPS],
     pub writes_aux: [MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS>; NUM_WRITE_OPS],
 }
 
@@ -65,14 +65,14 @@ pub struct BaseAluAdapterCols<T, const NUM_REG_OPS: usize, const NUM_WRITE_OPS: 
 /// Operand d can only be 1, and e can be either 1 (for register reads) or 0 (when c
 /// is an immediate).
 ///
-/// `NUM_REG_OPS` controls how many 4-byte chunks are read per operand.
+/// `NUM_READ_OPS` controls how many 4-byte chunks are read per operand.
 /// `NUM_WRITE_OPS` controls how many 4-byte chunks are written for the result.
 /// For most 64-bit ops both are 2, but for comparisons (LessThan64) the result is
-/// only 32 bits so `NUM_WRITE_OPS=1` while `NUM_REG_OPS=2`.
+/// only 32 bits so `NUM_WRITE_OPS=1` while `NUM_READ_OPS=2`.
 #[derive(Clone, Copy, Debug, derive_new::new)]
 pub struct BaseAluAdapterAir<
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
 > {
     pub(super) execution_bridge: ExecutionBridge,
@@ -80,28 +80,28 @@ pub struct BaseAluAdapterAir<
     bitwise_lookup_bus: BitwiseOperationLookupBus,
 }
 
-impl<F: Field, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const NUM_WRITE_OPS: usize>
-    BaseAir<F> for BaseAluAdapterAir<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS>
+impl<F: Field, const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
+    BaseAir<F> for BaseAluAdapterAir<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
 {
     fn width(&self) -> usize {
-        BaseAluAdapterCols::<F, NUM_REG_OPS, NUM_WRITE_OPS>::width()
+        BaseAluAdapterCols::<F, NUM_READ_OPS, NUM_WRITE_OPS>::width()
     }
 }
 
-impl<F: Field, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const NUM_WRITE_OPS: usize>
-    ColumnsAir<F> for BaseAluAdapterAir<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS>
+impl<F: Field, const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
+    ColumnsAir<F> for BaseAluAdapterAir<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
 {
     fn columns(&self) -> Option<Vec<String>> {
-        BaseAluAdapterCols::<F, NUM_REG_OPS, NUM_WRITE_OPS>::struct_reflection()
+        BaseAluAdapterCols::<F, NUM_READ_OPS, NUM_WRITE_OPS>::struct_reflection()
     }
 }
 
 impl<
     AB: InteractionBuilder,
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
-> VmAdapterAir<AB> for BaseAluAdapterAir<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS>
+> VmAdapterAir<AB> for BaseAluAdapterAir<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
 {
     type Interface =
         BasicAdapterInterface<AB::Expr, MinimalInstruction<AB::Expr>, 2, 1, NUM_LIMBS, NUM_LIMBS>;
@@ -112,7 +112,7 @@ impl<
         local: &[AB::Var],
         ctx: AdapterAirContext<AB::Expr, Self::Interface>,
     ) {
-        let local: &BaseAluAdapterCols<_, NUM_REG_OPS, NUM_WRITE_OPS> = local.borrow();
+        let local: &BaseAluAdapterCols<_, NUM_READ_OPS, NUM_WRITE_OPS> = local.borrow();
         let timestamp = local.from_state.timestamp;
         let mut timestamp_delta: usize = 0;
         let mut timestamp_pp = || {
@@ -153,7 +153,7 @@ impl<
             .eval(builder, ctx.instruction.is_valid.clone() - local.rs2_as);
 
         // rs1 reads: loop over register-sized chunks
-        for r in 0..NUM_REG_OPS {
+        for r in 0..NUM_READ_OPS {
             let offset = r * RV32_REGISTER_NUM_LIMBS;
             let chunk: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
                 std::array::from_fn(|i| ctx.reads[0][offset + i].clone());
@@ -176,7 +176,7 @@ impl<
             .assert_one(ctx.instruction.is_valid.clone());
 
         // rs2 reads: loop over register-sized chunks, enabled only when rs2_as=1
-        for r in 0..NUM_REG_OPS {
+        for r in 0..NUM_READ_OPS {
             let offset = r * RV32_REGISTER_NUM_LIMBS;
             let chunk: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
                 std::array::from_fn(|i| ctx.reads[1][offset + i].clone());
@@ -229,7 +229,7 @@ impl<
     }
 
     fn get_from_pc(&self, local: &[AB::Var]) -> AB::Var {
-        let cols: &BaseAluAdapterCols<_, NUM_REG_OPS, NUM_WRITE_OPS> = local.borrow();
+        let cols: &BaseAluAdapterCols<_, NUM_READ_OPS, NUM_WRITE_OPS> = local.borrow();
         cols.from_state.pc
     }
 }
@@ -237,7 +237,7 @@ impl<
 #[derive(Clone)]
 pub struct BaseAluAdapterExecutor<
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
 > {
@@ -248,10 +248,10 @@ pub struct BaseAluAdapterExecutor<
 
 impl<
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
-> Default for BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
+> Default for BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
     fn default() -> Self {
         Self {
@@ -262,7 +262,7 @@ impl<
 
 #[derive(derive_new::new)]
 pub struct BaseAluAdapterFiller<
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
 > {
@@ -272,7 +272,7 @@ pub struct BaseAluAdapterFiller<
 // Intermediate type that should not be copied or cloned and should be directly written to
 #[repr(C)]
 #[derive(AlignedBytesBorrow, Debug)]
-pub struct BaseAluAdapterRecord<const NUM_REG_OPS: usize, const NUM_WRITE_OPS: usize> {
+pub struct BaseAluAdapterRecord<const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize> {
     pub from_pc: u32,
     pub fp: u32,
     pub from_timestamp: u32,
@@ -285,22 +285,22 @@ pub struct BaseAluAdapterRecord<const NUM_REG_OPS: usize, const NUM_WRITE_OPS: u
     pub rs2_as: u8,
 
     pub fp_read_aux: MemoryReadAuxRecord,
-    pub rs1_reads_aux: [MemoryReadAuxRecord; NUM_REG_OPS],
-    pub rs2_reads_aux: [MemoryReadAuxRecord; NUM_REG_OPS],
+    pub rs1_reads_aux: [MemoryReadAuxRecord; NUM_READ_OPS],
+    pub rs2_reads_aux: [MemoryReadAuxRecord; NUM_READ_OPS],
     pub writes_aux: [MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>; NUM_WRITE_OPS],
 }
 
 impl<
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
-> BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
+> BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
     fn maybe_fetch_fp<F: PrimeField32>(
         &self,
         memory: &mut TracingMemory,
-        record: &mut BaseAluAdapterRecord<NUM_REG_OPS, NUM_WRITE_OPS>,
+        record: &mut BaseAluAdapterRecord<NUM_READ_OPS, NUM_WRITE_OPS>,
     ) {
         if !*self.has_fetched_fp.borrow() {
             record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
@@ -316,22 +316,22 @@ impl<
 impl<
     F: PrimeField32,
     const NUM_LIMBS: usize,
-    const NUM_REG_OPS: usize,
+    const NUM_READ_OPS: usize,
     const NUM_WRITE_OPS: usize,
     const LIMB_BITS: usize,
 > AdapterTraceExecutor<F>
-    for BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
+    for BaseAluAdapterExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
-    const WIDTH: usize = size_of::<BaseAluAdapterCols<u8, NUM_REG_OPS, NUM_WRITE_OPS>>();
+    const WIDTH: usize = size_of::<BaseAluAdapterCols<u8, NUM_READ_OPS, NUM_WRITE_OPS>>();
     type ReadData = [[u8; NUM_LIMBS]; 2];
     type WriteData = [[u8; NUM_LIMBS]; 1];
-    type RecordMut<'a> = &'a mut BaseAluAdapterRecord<NUM_REG_OPS, NUM_WRITE_OPS>;
+    type RecordMut<'a> = &'a mut BaseAluAdapterRecord<NUM_READ_OPS, NUM_WRITE_OPS>;
 
     #[inline(always)]
     fn start(
         pc: u32,
         memory: &TracingMemory,
-        record: &mut &mut BaseAluAdapterRecord<NUM_REG_OPS, NUM_WRITE_OPS>,
+        record: &mut &mut BaseAluAdapterRecord<NUM_READ_OPS, NUM_WRITE_OPS>,
     ) {
         record.from_pc = pc;
         record.from_timestamp = memory.timestamp;
@@ -343,7 +343,7 @@ impl<
         &self,
         memory: &mut TracingMemory,
         instruction: &Instruction<F>,
-        record: &mut &mut BaseAluAdapterRecord<NUM_REG_OPS, NUM_WRITE_OPS>,
+        record: &mut &mut BaseAluAdapterRecord<NUM_READ_OPS, NUM_WRITE_OPS>,
     ) -> Self::ReadData {
         let &Instruction { b, c, d, e, .. } = instruction;
 
@@ -358,7 +358,7 @@ impl<
 
         // Read rs1 in register-sized chunks
         let mut rs1 = [0u8; NUM_LIMBS];
-        for r in 0..NUM_REG_OPS {
+        for r in 0..NUM_READ_OPS {
             let offset = r * RV32_REGISTER_NUM_LIMBS;
             let chunk: [u8; RV32_REGISTER_NUM_LIMBS] = tracing_read(
                 memory,
@@ -375,7 +375,7 @@ impl<
 
             // Read rs2 in register-sized chunks
             let mut rs2 = [0u8; NUM_LIMBS];
-            for r in 0..NUM_REG_OPS {
+            for r in 0..NUM_READ_OPS {
                 let offset = r * RV32_REGISTER_NUM_LIMBS;
                 let chunk: [u8; RV32_REGISTER_NUM_LIMBS] = tracing_read(
                     memory,
@@ -389,9 +389,9 @@ impl<
         } else {
             record.rs2_as = RV32_IMM_AS as u8;
 
-            // Immediate uses 1 timestamp, pad with extra increments for remaining NUM_REG_OPS-1
+            // Immediate uses 1 timestamp, pad with extra increments for remaining NUM_READ_OPS-1
             let rs2 = tracing_read_imm::<NUM_LIMBS>(memory, c.as_canonical_u32(), &mut record.rs2);
-            for _ in 1..NUM_REG_OPS {
+            for _ in 1..NUM_READ_OPS {
                 memory.increment_timestamp();
             }
             rs2
@@ -406,7 +406,7 @@ impl<
         memory: &mut TracingMemory,
         instruction: &Instruction<F>,
         data: Self::WriteData,
-        record: &mut &mut BaseAluAdapterRecord<NUM_REG_OPS, NUM_WRITE_OPS>,
+        record: &mut &mut BaseAluAdapterRecord<NUM_READ_OPS, NUM_WRITE_OPS>,
     ) {
         let &Instruction { a, d, .. } = instruction;
 
@@ -432,10 +432,10 @@ impl<
     }
 }
 
-impl<F: PrimeField32, const NUM_REG_OPS: usize, const NUM_WRITE_OPS: usize, const LIMB_BITS: usize>
-    AdapterTraceFiller<F> for BaseAluAdapterFiller<NUM_REG_OPS, NUM_WRITE_OPS, LIMB_BITS>
+impl<F: PrimeField32, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize, const LIMB_BITS: usize>
+    AdapterTraceFiller<F> for BaseAluAdapterFiller<NUM_READ_OPS, NUM_WRITE_OPS, LIMB_BITS>
 {
-    const WIDTH: usize = size_of::<BaseAluAdapterCols<u8, NUM_REG_OPS, NUM_WRITE_OPS>>();
+    const WIDTH: usize = size_of::<BaseAluAdapterCols<u8, NUM_READ_OPS, NUM_WRITE_OPS>>();
 
     fn fill_trace_row(&self, mem_helper: &MemoryAuxColsFactory<F>, mut adapter_row: &mut [F]) {
         // SAFETY: the following is highly unsafe. We are going to cast `adapter_row` to a record
@@ -447,14 +447,14 @@ impl<F: PrimeField32, const NUM_REG_OPS: usize, const NUM_WRITE_OPS: usize, cons
         //   otherwise)
         // - adapter_row contains a valid BaseAluAdapterRecord representation
         // - get_record_from_slice correctly interprets the bytes as BaseAluAdapterRecord
-        let record: &BaseAluAdapterRecord<NUM_REG_OPS, NUM_WRITE_OPS> =
+        let record: &BaseAluAdapterRecord<NUM_READ_OPS, NUM_WRITE_OPS> =
             unsafe { get_record_from_slice(&mut adapter_row, ()) };
-        let adapter_row: &mut BaseAluAdapterCols<F, NUM_REG_OPS, NUM_WRITE_OPS> =
+        let adapter_row: &mut BaseAluAdapterCols<F, NUM_READ_OPS, NUM_WRITE_OPS> =
             adapter_row.borrow_mut();
 
         // We must assign in reverse
-        // Total memory ops after fp read: NUM_REG_OPS (rs1) + NUM_REG_OPS (rs2) + NUM_WRITE_OPS (rd)
-        let timestamp_delta: u32 = 2 * NUM_REG_OPS as u32 + NUM_WRITE_OPS as u32;
+        // Total memory ops after fp read: NUM_READ_OPS (rs1) + NUM_READ_OPS (rs2) + NUM_WRITE_OPS (rd)
+        let timestamp_delta: u32 = 2 * NUM_READ_OPS as u32 + NUM_WRITE_OPS as u32;
         let mut timestamp = record.from_timestamp + timestamp_delta;
 
         // Writes (reverse order)
@@ -471,7 +471,7 @@ impl<F: PrimeField32, const NUM_REG_OPS: usize, const NUM_WRITE_OPS: usize, cons
 
         // rs2 reads (reverse order)
         if record.rs2_as != 0 {
-            for r in (0..NUM_REG_OPS).rev() {
+            for r in (0..NUM_READ_OPS).rev() {
                 mem_helper.fill(
                     record.rs2_reads_aux[r].prev_timestamp,
                     timestamp,
@@ -480,7 +480,7 @@ impl<F: PrimeField32, const NUM_REG_OPS: usize, const NUM_WRITE_OPS: usize, cons
                 timestamp -= 1;
             }
         } else {
-            for r in (0..NUM_REG_OPS).rev() {
+            for r in (0..NUM_READ_OPS).rev() {
                 mem_helper.fill_zero(adapter_row.rs2_reads_aux[r].as_mut());
                 timestamp -= 1;
             }
@@ -491,7 +491,7 @@ impl<F: PrimeField32, const NUM_REG_OPS: usize, const NUM_WRITE_OPS: usize, cons
         }
 
         // rs1 reads (reverse order)
-        for r in (0..NUM_REG_OPS).rev() {
+        for r in (0..NUM_READ_OPS).rev() {
             mem_helper.fill(
                 record.rs1_reads_aux[r].prev_timestamp,
                 timestamp,
@@ -517,7 +517,7 @@ impl<F: PrimeField32, const NUM_REG_OPS: usize, const NUM_WRITE_OPS: usize, cons
     }
 }
 
-// Backward-compatible type aliases for 32-bit (NUM_REG_OPS=1, NUM_WRITE_OPS=1)
+// Backward-compatible type aliases for 32-bit (NUM_READ_OPS=1, NUM_WRITE_OPS=1)
 pub type Rv32BaseAluAdapterCols<T> = BaseAluAdapterCols<T, 1, 1>;
 pub type Rv32BaseAluAdapterAir = BaseAluAdapterAir<RV32_REGISTER_NUM_LIMBS, 1, 1>;
 pub type Rv32BaseAluAdapterRecord = BaseAluAdapterRecord<1, 1>;

@@ -921,11 +921,10 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
-    // ==================== LessThan64 output width bug tests ====================
-    // These tests demonstrate that LessThan64 should only write 1 word (32 bits)
-    // as the result, since WASM comparison instructions produce i32 results.
-    // Currently LessThan64 writes 2 words (64 bits), zeroing the high word and
-    // potentially losing data.
+    // ==================== LessThan64 output width tests ====================
+    // WASM comparison instructions produce i32 results, so LessThan64 must
+    // write only 1 word (32 bits). These tests pre-fill the high word of the
+    // destination register and verify it is preserved after the comparison.
 
     #[test]
     fn test_lt_u_64_preserves_rd_high_word() {
