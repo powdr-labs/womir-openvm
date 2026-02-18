@@ -27,6 +27,7 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use crate::adapters::{
     BaseAluAdapterExecutorDifferentInputsOutputs, RV32_REGISTER_NUM_LIMBS, imm_to_bytes,
 };
+use crate::utils::to_u64;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
@@ -176,11 +177,6 @@ where
 
         dispatch!(execute_e2_handler, is_imm, is_sltu, NUM_LIMBS)
     }
-}
-
-#[inline(always)]
-fn to_u64<const N: usize>(bytes: [u8; N]) -> u64 {
-    u64::from_le_bytes(std::array::from_fn(|i| if i < N { bytes[i] } else { 0 }))
 }
 
 #[inline(always)]

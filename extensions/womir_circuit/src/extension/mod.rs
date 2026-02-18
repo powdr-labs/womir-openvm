@@ -180,15 +180,10 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         );
         inventory.add_executor(eq, EqOpcode::iter().map(|x| x.global_opcode()))?;
 
-        let eq_64 =
-            Eq64Executor::new(
-                BaseAluAdapterExecutorDifferentInputsOutputs::<
-                    W64_NUM_LIMBS,
-                    W64_REG_OPS,
-                    W32_REG_OPS,
-                >::default(),
-                Eq64Opcode::CLASS_OFFSET,
-            );
+        let eq_64 = Eq64Executor::new(
+            BaseAluAdapterExecutorDifferentInputsOutputs::default(),
+            Eq64Opcode::CLASS_OFFSET,
+        );
         inventory.add_executor(eq_64, Eq64Opcode::iter().map(|x| x.global_opcode()))?;
 
         let shift = Rv32ShiftExecutor::new(
@@ -362,11 +357,7 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
         inventory.add_air(eq);
 
         let eq_64 = Eq64Air::new(
-            BaseAluAdapterAirDifferentInputsOutputs::<W64_NUM_LIMBS, W64_REG_OPS, W32_REG_OPS>::new(
-                exec_bridge,
-                memory_bridge,
-                bitwise_lu,
-            ),
+            BaseAluAdapterAirDifferentInputsOutputs::new(exec_bridge, memory_bridge, bitwise_lu),
             EqCoreAir::new(Eq64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(eq_64);
@@ -588,9 +579,7 @@ where
         inventory.next_air::<Eq64Air>()?;
         let eq_64 = Eq64Chip::new(
             EqFiller::new(
-                BaseAluAdapterFillerDifferentInputsOutputs::<W64_REG_OPS, W32_REG_OPS>::new(
-                    bitwise_lu.clone(),
-                ),
+                BaseAluAdapterFillerDifferentInputsOutputs::new(bitwise_lu.clone()),
                 Eq64Opcode::CLASS_OFFSET,
             ),
             mem_helper.clone(),

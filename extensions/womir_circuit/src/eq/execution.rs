@@ -27,6 +27,7 @@ use super::core::EqExecutorInner;
 use crate::adapters::{
     BaseAluAdapterExecutorDifferentInputsOutputs, RV32_REGISTER_NUM_LIMBS, imm_to_bytes,
 };
+use crate::utils::to_u64;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
@@ -95,7 +96,7 @@ impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usi
         let c_u32 = c.as_canonical_u32();
         *data = EqPreCompute {
             c: if is_imm {
-                u32::from_le_bytes(imm_to_bytes::<{ RV32_REGISTER_NUM_LIMBS }>(c_u32))
+                u32::from_le_bytes(imm_to_bytes(c_u32))
             } else {
                 c_u32
             },
@@ -171,11 +172,6 @@ where
 
         dispatch!(execute_e2_handler, is_imm, is_neq, NUM_LIMBS)
     }
-}
-
-#[inline(always)]
-fn to_u64<const N: usize>(bytes: [u8; N]) -> u64 {
-    u64::from_le_bytes(std::array::from_fn(|i| if i < N { bytes[i] } else { 0 }))
 }
 
 #[inline(always)]
