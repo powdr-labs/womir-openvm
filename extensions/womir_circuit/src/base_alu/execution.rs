@@ -10,11 +10,9 @@ use std::{
     mem::size_of,
 };
 
-use crate::memory_config::FpMemory;
-use openvm_circuit::{
-    arch::*,
-    system::memory::online::{GuestMemory, TracingMemory},
-};
+use crate::{memory_config::FpMemory, utils::sign_extend_u32};
+use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
+use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
 use openvm_instructions::{
     LocalOpcode,
@@ -26,46 +24,40 @@ use openvm_rv32im_circuit::BaseAluExecutor as BaseAluExecutorInner;
 use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::{RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
+use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
-#[derive(Clone, Copy)]
-pub struct BaseAluExecutor<A, const NUM_LIMBS: usize, const LIMB_BITS: usize>(
-    pub BaseAluExecutorInner<A, NUM_LIMBS, LIMB_BITS>,
+#[derive(Clone, PreflightExecutor)]
+pub struct BaseAluExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>(
+    pub  BaseAluExecutorInner<
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        NUM_LIMBS,
+        LIMB_BITS,
+    >,
 );
 
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS> {
-    pub fn new(adapter: A, offset: usize) -> Self {
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+{
+    pub fn new(
+        adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        offset: usize,
+    ) -> Self {
         Self(BaseAluExecutorInner::new(adapter, offset))
     }
 }
 
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> std::ops::Deref
-    for BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize> std::ops::Deref
+    for BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 {
-    type Target = BaseAluExecutorInner<A, NUM_LIMBS, LIMB_BITS>;
+    type Target = BaseAluExecutorInner<
+        BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>,
+        NUM_LIMBS,
+        LIMB_BITS,
+    >;
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl<F, A, RA, const NUM_LIMBS: usize, const LIMB_BITS: usize> PreflightExecutor<F, RA>
-    for BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>
-where
-    F: PrimeField32,
-    BaseAluExecutorInner<A, NUM_LIMBS, LIMB_BITS>: PreflightExecutor<F, RA>,
-{
-    fn get_opcode_name(&self, opcode: usize) -> String {
-        self.0.get_opcode_name(opcode)
-    }
-
-    fn execute(
-        &self,
-        state: VmStateMut<F, TracingMemory, RA>,
-        instruction: &Instruction<F>,
-    ) -> Result<(), ExecutionError> {
-        self.0.execute(state, instruction)
     }
 }
 
@@ -80,7 +72,9 @@ pub(super) struct BaseAluPreCompute {
     b: u32,
 }
 
-impl<A, const NUM_LIMBS: usize, const LIMB_BITS: usize> BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS> {
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
+{
     /// Return `is_imm`, true if `e` is RV32_IMM_AS.
     #[inline(always)]
     pub(super) fn pre_compute_impl<F: PrimeField32>(
@@ -134,8 +128,8 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterExecutor<F>
-    for BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    InterpreterExecutor<F> for BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -167,8 +161,8 @@ where
     }
 }
 
-impl<F, A, const NUM_LIMBS: usize, const LIMB_BITS: usize> InterpreterMeteredExecutor<F>
-    for BaseAluExecutor<A, NUM_LIMBS, LIMB_BITS>
+impl<F, const NUM_LIMBS: usize, const NUM_REG_OPS: usize, const LIMB_BITS: usize>
+    InterpreterMeteredExecutor<F> for BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS, LIMB_BITS>
 where
     F: PrimeField32,
 {
@@ -200,16 +194,6 @@ where
             NUM_LIMBS
         )
     }
-}
-
-/// Sign-extend a u32 value to `[u8; N]`.
-/// For N=4, this is equivalent to `c.to_le_bytes()`.
-/// For N>4, the upper bytes are sign-extended from bit 31.
-#[inline(always)]
-fn sign_extend_u32<const N: usize>(c: u32) -> [u8; N] {
-    let sign_byte = if c & 0x8000_0000 != 0 { 0xFF } else { 0x00 };
-    let le = c.to_le_bytes();
-    std::array::from_fn(|i| if i < 4 { le[i] } else { sign_byte })
 }
 
 #[inline(always)]

@@ -233,12 +233,20 @@ where
     // address 3: reserved for frame pointer
     // address 4: first argument
     // address 4 + i: i-th argument
+    // Use a scratch register to hold a pointer to MEM[0] for hint_storew.
+    // hint_storew writes to memory AS (not register AS), so we need a scratch
+    // memory location. MEM[0] serves as scratch, with a register holding 0 as pointer.
     let mut ptr = 4;
+    let scratch_reg = ptr;
+    ptr += 1;
+    if num_input_words > 0 {
+        code.push(ib::const_32_imm(scratch_reg as usize, 0, 0));
+    }
     for _ in 0..num_input_words {
-        //code.push(ib::read32(ptr as usize));
-        // code.push(ib::const_32_imm(ptr as usize, 10, 0));
-        code.push(ib::prepare_read::<F>());
-        code.push(ib::read_u32::<F>(ptr as usize));
+        code.push(ib::prepare_read());
+        code.push(ib::hint_storew(scratch_reg as usize)); // skip length word
+        code.push(ib::hint_storew(scratch_reg as usize)); // write data to MEM[0]
+        code.push(ib::loadw(ptr as usize, scratch_reg as usize, 0)); // load MEM[0] → register
         ptr += 1;
     }
 
@@ -483,10 +491,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     ) -> Vec<Directive<F>> {
         let comparison = c.register_gen.allocate_type(ValType::I32);
 
-        let mut directives = if let Ok(imm_f) = immediate.try_into() {
+        let mut directives = if let Ok(imm_f) = AluImm::try_from(immediate) {
             // If immediate fits into field, we can save one instruction:
             let cmp_insn = match cmp {
-                ComparisonFunction::Equal => ib::eq_imm::<F>,
+                ComparisonFunction::Equal => ib::eq_imm,
                 ComparisonFunction::GreaterThanOrEqualUnsigned
                 | ComparisonFunction::LessThanUnsigned => ib::lt_u_imm,
             };
@@ -573,10 +581,15 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
     ) -> Vec<Directive<F>> {
         match (module, function) {
             ("env", "read_u32") => {
+                // hint_storew writes to memory AS, so use the output register as a
+                // scratch pointer to MEM[0].
                 let output = outputs[0].start as usize;
                 vec![
                     Directive::Instruction(ib::prepare_read()),
-                    Directive::Instruction(ib::read_u32(output)),
+                    Directive::Instruction(ib::const_32_imm(output, 0, 0)),
+                    Directive::Instruction(ib::hint_storew(output)), // skip length
+                    Directive::Instruction(ib::hint_storew(output)), // write data to MEM[0]
+                    Directive::Instruction(ib::loadw(output, output, 0)), // load into dest
                 ]
             }
             ("env", "__debug_print") => {
@@ -606,11 +619,16 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
                 let mem_ptr = inputs[0].start as usize;
                 let num_words = inputs[1].start as usize;
-                vec![Directive::Instruction(ib::read_buffer(
-                    num_words,
-                    mem_ptr,
-                    mem_start as usize,
-                ))]
+                let mut directives = vec![];
+                if mem_start > 0 {
+                    directives.push(Directive::Instruction(ib::add_imm(
+                        mem_ptr,
+                        mem_ptr,
+                        AluImm::try_from(mem_start).unwrap(),
+                    )));
+                }
+                directives.push(Directive::Instruction(ib::hint_buffer(num_words, mem_ptr)));
+                directives
             }
             ("env", "abort") => {
                 vec![Directive::Instruction(ib::abort())]
@@ -1030,7 +1048,7 @@ fn translate_complex_ins_with_const<F: PrimeField32>(
                                 opcode.as_usize(),
                                 output,
                                 reg.start as usize,
-                                inc_c.into(),
+                                inc_c,
                             ))
                             .into(),
                         );
@@ -1188,8 +1206,7 @@ fn translate_complex_ins<F: PrimeField32>(
                 Op::I32Extend8S => 24_i16,
                 Op::I32Extend16S => 16_i16,
                 _ => unreachable!(),
-            }
-            .into();
+            };
 
             // Left shift followed by arithmetic right shift
             vec![
@@ -1209,8 +1226,7 @@ fn translate_complex_ins<F: PrimeField32>(
                 Op::I64Extend16S => 48_i16,
                 Op::I64Extend32S => 32_i16,
                 _ => unreachable!(),
-            }
-            .into();
+            };
 
             // Left shift followed by arithmetic right shift
             vec![
@@ -1234,7 +1250,7 @@ fn translate_complex_ins<F: PrimeField32>(
                 // shr will read 64 bits, so we need to zero the other half due to WOM
                 Directive::Instruction(ib::const_32_imm(high_shifted, 0, 0)),
                 // Arithmetic shift right to fill the high bits with the sign bit.
-                Directive::Instruction(ib::shr_s_imm_64(output, high_shifted, 32_i16.into())),
+                Directive::Instruction(ib::shr_s_imm_64(output, high_shifted, 32_i16)),
             ]
             .into()
         }
@@ -1292,9 +1308,9 @@ fn translate_complex_ins<F: PrimeField32>(
                         Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
                         Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
                         Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
-                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
-                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
-                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16)),
+                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16)),
+                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16)),
                         Directive::Instruction(ib::or(lo, b0, b1_shifted)),
                         Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
                         Directive::Instruction(ib::or(output, lo, hi)),
@@ -1309,7 +1325,7 @@ fn translate_complex_ins<F: PrimeField32>(
                     vec![
                         Directive::Instruction(ib::loadhu(lo, base_addr, imm)),
                         Directive::Instruction(ib::loadhu(hi, base_addr, imm + 2)),
-                        Directive::Instruction(ib::shl_imm(hi_shifted, hi, 16_i16.into())),
+                        Directive::Instruction(ib::shl_imm(hi_shifted, hi, 16_i16)),
                         Directive::Instruction(ib::or(output, lo, hi_shifted)),
                     ]
                     .into()
@@ -1336,7 +1352,7 @@ fn translate_complex_ins<F: PrimeField32>(
                         } else {
                             Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
                         },
-                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16)),
                         Directive::Instruction(ib::or(output, b0, b1_shifted)),
                     ]
                     .into()
@@ -1402,16 +1418,16 @@ fn translate_complex_ins<F: PrimeField32>(
                         Directive::Instruction(ib::loadbu(b6, base_addr, imm + 6)),
                         Directive::Instruction(ib::loadbu(b7, base_addr, imm + 7)),
                         // build lo 32 bits
-                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
-                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
-                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16)),
+                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16)),
+                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16)),
                         Directive::Instruction(ib::or(lo0, b0, b1_shifted)),
                         Directive::Instruction(ib::or(lo1, b2_shifted, b3_shifted)),
                         Directive::Instruction(ib::or(output, lo0, lo1)),
                         // build hi 32 bits
-                        Directive::Instruction(ib::shl_imm(b5_shifted, b5, 8_i16.into())),
-                        Directive::Instruction(ib::shl_imm(b6_shifted, b6, 16_i16.into())),
-                        Directive::Instruction(ib::shl_imm(b7_shifted, b7, 24_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b5_shifted, b5, 8_i16)),
+                        Directive::Instruction(ib::shl_imm(b6_shifted, b6, 16_i16)),
+                        Directive::Instruction(ib::shl_imm(b7_shifted, b7, 24_i16)),
                         Directive::Instruction(ib::or(hi0, b4, b5_shifted)),
                         Directive::Instruction(ib::or(hi1, b6_shifted, b7_shifted)),
                         Directive::Instruction(ib::or(output + 1, hi0, hi1)),
@@ -1431,8 +1447,8 @@ fn translate_complex_ins<F: PrimeField32>(
                         Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
                         Directive::Instruction(ib::loadhu(h2, base_addr, imm + 4)),
                         Directive::Instruction(ib::loadhu(h3, base_addr, imm + 6)),
-                        Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16.into())),
-                        Directive::Instruction(ib::shl_imm(h3_shifted, h3, 16_i16.into())),
+                        Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16)),
+                        Directive::Instruction(ib::shl_imm(h3_shifted, h3, 16_i16)),
                         Directive::Instruction(ib::or(output, h0, h1_shifted)),
                         Directive::Instruction(ib::or(output + 1, h2, h3_shifted)),
                     ]
@@ -1463,7 +1479,7 @@ fn translate_complex_ins<F: PrimeField32>(
                 // shr will read 64 bits, so we need to zero the other half due to WOM
                 Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                 // shift i64 val right, keeping the sign
-                Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into())),
+                Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
             ]
             .into()
         }
@@ -1486,7 +1502,7 @@ fn translate_complex_ins<F: PrimeField32>(
                             Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
                         },
                         // shift b1
-                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16)),
                         // load b0
                         Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
                         // combine b0 and b1
@@ -1494,7 +1510,7 @@ fn translate_complex_ins<F: PrimeField32>(
                         // shr will read 64 bits, so we need to zero the other half due to WOM
                         Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                         // shift i64 val right, keeping the sign
-                        Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into())),
+                        Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
                     ]
                 }
                 1.. => {
@@ -1505,7 +1521,7 @@ fn translate_complex_ins<F: PrimeField32>(
                             // shr will read 64 bits, so we need to zero the other half due to WOM
                             Directive::Instruction(ib::const_32_imm(val, 0, 0)),
                             // shift i64 val right, keeping the sign
-                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16.into())),
+                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
                         ]
                     } else {
                         vec![
@@ -1557,9 +1573,9 @@ fn translate_complex_ins<F: PrimeField32>(
                         Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
                         Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
                         // shifts
-                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16.into())),
-                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16.into())),
-                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16.into())),
+                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16)),
+                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16)),
+                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16)),
                         // build hi and lo
                         Directive::Instruction(ib::or(lo, b0, b1_shifted)),
                         Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
@@ -1576,7 +1592,7 @@ fn translate_complex_ins<F: PrimeField32>(
                         Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
                         Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
                         // shift h1
-                        Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16.into())),
+                        Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16)),
                         // combine h0 and h1
                         Directive::Instruction(ib::or(val_32, h0, h1_shifted)),
                     ]);
@@ -1586,7 +1602,7 @@ fn translate_complex_ins<F: PrimeField32>(
 
             // In case of signed, we need to right shift the loaded value into the output
             if let Op::I64Load32S { .. } = op {
-                let d = Directive::Instruction(ib::shr_s_imm_64(output, zeroed, 32_i16.into()));
+                let d = Directive::Instruction(ib::shr_s_imm_64(output, zeroed, 32_i16));
                 directives.push(d);
             }
 
@@ -1607,13 +1623,13 @@ fn translate_complex_ins<F: PrimeField32>(
                         // store byte 0
                         Directive::Instruction(ib::storeb(value, base_addr, imm)),
                         // shift and store byte 1
-                        Directive::Instruction(ib::shr_u_imm(b1, value, 8_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(b1, value, 8_i16)),
                         Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
                         // shift and store byte 2
-                        Directive::Instruction(ib::shr_u_imm(b2, value, 16_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(b2, value, 16_i16)),
                         Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
                         // shift and store byte 3
-                        Directive::Instruction(ib::shr_u_imm(b3, value, 24_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(b3, value, 24_i16)),
                         Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
                     ]
                     .into()
@@ -1624,7 +1640,7 @@ fn translate_complex_ins<F: PrimeField32>(
                         // store halfword 0
                         Directive::Instruction(ib::storeh(value, base_addr, imm)),
                         // shift and store halfword 1
-                        Directive::Instruction(ib::shr_u_imm(h1, value, 16_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(h1, value, 16_i16)),
                         Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
                     ]
                     .into()
@@ -1651,7 +1667,7 @@ fn translate_complex_ins<F: PrimeField32>(
                         // store byte 0
                         Directive::Instruction(ib::storeb(value, base_addr, imm)),
                         // shift and store byte 1
-                        Directive::Instruction(ib::shr_u_imm(b1, value, 8_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(b1, value, 8_i16)),
                         Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
                     ]
                     .into()
@@ -1678,24 +1694,24 @@ fn translate_complex_ins<F: PrimeField32>(
                         // store byte 0
                         Directive::Instruction(ib::storeb(value_lo, base_addr, imm)),
                         // shift and store byte 1
-                        Directive::Instruction(ib::shr_u_imm(b1, value_lo, 8_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(b1, value_lo, 8_i16)),
                         Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
                         // shift and store byte 2
-                        Directive::Instruction(ib::shr_u_imm(b2, value_lo, 16_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(b2, value_lo, 16_i16)),
                         Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
                         // shift and store byte 3
-                        Directive::Instruction(ib::shr_u_imm(b3, value_lo, 24_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(b3, value_lo, 24_i16)),
                         Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
                         // store byte 4
                         Directive::Instruction(ib::storeb(value_hi, base_addr, imm + 4)),
                         // shift and store byte 5
-                        Directive::Instruction(ib::shr_u_imm(b5, value_hi, 8_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(b5, value_hi, 8_i16)),
                         Directive::Instruction(ib::storeb(b5, base_addr, imm + 5)),
                         // shift and store byte 6
-                        Directive::Instruction(ib::shr_u_imm(b6, value_hi, 16_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(b6, value_hi, 16_i16)),
                         Directive::Instruction(ib::storeb(b6, base_addr, imm + 6)),
                         // shift and store byte 7
-                        Directive::Instruction(ib::shr_u_imm(b7, value_hi, 24_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(b7, value_hi, 24_i16)),
                         Directive::Instruction(ib::storeb(b7, base_addr, imm + 7)),
                     ]
                 }
@@ -1707,12 +1723,12 @@ fn translate_complex_ins<F: PrimeField32>(
                         // store halfword 0
                         Directive::Instruction(ib::storeh(value_lo, base_addr, imm)),
                         // shift and store halfword 1
-                        Directive::Instruction(ib::shr_u_imm(h1, value_lo, 16_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(h1, value_lo, 16_i16)),
                         Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
                         // store halfword 2
                         Directive::Instruction(ib::storeh(value_hi, base_addr, imm + 4)),
                         // shift and store halfword 3
-                        Directive::Instruction(ib::shr_u_imm(h3, value_hi, 16_i16.into())),
+                        Directive::Instruction(ib::shr_u_imm(h3, value_hi, 16_i16)),
                         Directive::Instruction(ib::storeh(h3, base_addr, imm + 6)),
                     ]
                 }
@@ -1765,7 +1781,7 @@ fn translate_complex_ins<F: PrimeField32>(
                 },
                 // Check if the new size is less than to the current size (which means an overflow occurred),
                 // which means the requested size is too large.
-                Directive::Instruction(ib::lt_u::<F>(is_lt_curr as usize, new_size, size_reg)),
+                Directive::Instruction(ib::lt_u(is_lt_curr as usize, new_size, size_reg)),
                 // If the requested size overflows, branch to the error label.
                 Directive::JumpIf {
                     target: error_label.clone(),
@@ -1951,10 +1967,10 @@ fn emit_table_get<F: PrimeField32>(
     // Read the 3 words of the reference into contiguous registers
     assert_eq!(dest_ptr.len(), 3);
 
-    let mut instrs = vec![Directive::Instruction(ib::mul_imm::<F>(
+    let mut instrs = vec![Directive::Instruction(ib::mul_imm(
         mul_result,
         entry_idx_ptr.start as usize,
-        TABLE_ENTRY_SIZE.into(),
+        TABLE_ENTRY_SIZE,
     ))];
 
     instrs.extend(dest_ptr.enumerate().map(|(i, dest_reg)| {
@@ -1980,8 +1996,8 @@ trait RotOps<F: PrimeField32> {
     fn num_bits_const(dest: usize) -> Vec<Directive<F>>;
     fn shl(dest: usize, val: usize, amount: usize) -> Instruction<F>;
     fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F>;
-    fn shl_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F>;
-    fn shr_u_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F>;
+    fn shl_imm(dest: usize, val: usize, amount: impl Into<AluImm>) -> Instruction<F>;
+    fn shr_u_imm(dest: usize, val: usize, amount: impl Into<AluImm>) -> Instruction<F>;
     fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F>;
     fn or(dest: usize, lhs: usize, rhs: usize) -> Instruction<F>;
 }
@@ -1996,7 +2012,7 @@ impl<F: PrimeField32> RotOps<F> for I32Rot {
         32
     }
     fn mask_rot_bits(dest: usize, src: usize) -> Instruction<F> {
-        ib::and_imm(dest, src, (32_i16 - 1).into())
+        ib::and_imm(dest, src, 32_i16 - 1)
     }
 
     fn num_bits_const(dest: usize) -> Vec<Directive<F>> {
@@ -2008,10 +2024,10 @@ impl<F: PrimeField32> RotOps<F> for I32Rot {
     fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F> {
         ib::shr_u(dest, val, amount)
     }
-    fn shl_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F> {
+    fn shl_imm(dest: usize, val: usize, amount: impl Into<AluImm>) -> Instruction<F> {
         ib::shl_imm(dest, val, amount)
     }
-    fn shr_u_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F> {
+    fn shr_u_imm(dest: usize, val: usize, amount: impl Into<AluImm>) -> Instruction<F> {
         ib::shr_u_imm(dest, val, amount)
     }
     fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F> {
@@ -2032,7 +2048,7 @@ impl<F: PrimeField32> RotOps<F> for I64Rot {
         64
     }
     fn mask_rot_bits(dest: usize, src: usize) -> Instruction<F> {
-        ib::and_imm_64(dest, src, (64_i16 - 1).into())
+        ib::and_imm_64(dest, src, 64_i16 - 1)
     }
     fn num_bits_const(dest: usize) -> Vec<Directive<F>> {
         vec![
@@ -2046,10 +2062,10 @@ impl<F: PrimeField32> RotOps<F> for I64Rot {
     fn shr_u(dest: usize, val: usize, amount: usize) -> Instruction<F> {
         ib::shr_u_64(dest, val, amount)
     }
-    fn shl_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F> {
+    fn shl_imm(dest: usize, val: usize, amount: impl Into<AluImm>) -> Instruction<F> {
         ib::shl_imm_64(dest, val, amount)
     }
-    fn shr_u_imm(dest: usize, val: usize, amount: AluImm) -> Instruction<F> {
+    fn shr_u_imm(dest: usize, val: usize, amount: impl Into<AluImm>) -> Instruction<F> {
         ib::shr_u_imm_64(dest, val, amount)
     }
     fn sub(dest: usize, lhs: usize, rhs: usize) -> Instruction<F> {
@@ -2123,9 +2139,6 @@ fn translate_rot<F: PrimeField32, R: RotOps<F>>(
                 _ => panic!("not valid i16"),
             } & (R::num_bits() - 1);
             let shift_bits_back = R::num_bits() - shift_bits_ref;
-
-            let shift_bits_ref = shift_bits_ref.into();
-            let shift_bits_back = shift_bits_back.into();
 
             match direction {
                 RotDirection::Left => vec![
