@@ -8,25 +8,25 @@
 //! - Proof generation (VirtualMachine::prove)
 
 use openvm_circuit::{
-    arch::{VirtualMachine, VmExecutor, VmState, debug_proving_ctx, execution_mode::Segment},
+    arch::{debug_proving_ctx, execution_mode::Segment, VirtualMachine, VmExecutor, VmState},
     system::memory::online::GuestMemory,
 };
 use openvm_instructions::{
     exe::VmExe,
     instruction::Instruction,
-    program::{DEFAULT_PC_STEP, Program},
+    program::{Program, DEFAULT_PC_STEP},
     riscv::RV32_REGISTER_AS,
 };
-use openvm_sdk::{StdIn, config::DEFAULT_APP_LOG_BLOWUP};
+use openvm_sdk::{config::DEFAULT_APP_LOG_BLOWUP, StdIn};
 use openvm_stark_sdk::{
-    config::{FriParameters, baby_bear_poseidon2::BabyBearPoseidon2Engine},
+    config::{baby_bear_poseidon2::BabyBearPoseidon2Engine, FriParameters},
     engine::StarkFriEngine,
 };
 use womir_circuit::{
-    WomirConfig, WomirCpuBuilder, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory,
+    adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory, WomirConfig, WomirCpuBuilder,
 };
 
-use crate::instruction_builder::{self as wom};
+use crate::instruction_builder as wom;
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
