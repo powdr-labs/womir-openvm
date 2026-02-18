@@ -15,15 +15,10 @@ pub type Rv32MultiplicationAir = VmAirWrapper<
     Rv32BaseAluAdapterAir,
     MultiplicationCoreAir<RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;
-pub type Rv32MultiplicationExecutor =
-    MultiplicationExecutor<RV32_REGISTER_NUM_LIMBS, W32_REG_OPS, RV32_CELL_BITS>;
+pub type Rv32MultiplicationExecutor = MultiplicationExecutor<RV32_REGISTER_NUM_LIMBS, W32_REG_OPS>;
 pub type Rv32MultiplicationChip<F> = VmChipWrapper<
     F,
-    MultiplicationFiller<
-        Rv32BaseAluAdapterFiller<RV32_CELL_BITS>,
-        RV32_REGISTER_NUM_LIMBS,
-        RV32_CELL_BITS,
-    >,
+    MultiplicationFiller<Rv32BaseAluAdapterFiller, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>,
 >;
 
 // 64-bit type aliases
@@ -31,12 +26,8 @@ pub type Mul64Air = VmAirWrapper<
     BaseAluAdapterAir<W64_NUM_LIMBS, W64_REG_OPS>,
     MultiplicationCoreAir<W64_NUM_LIMBS, RV32_CELL_BITS>,
 >;
-pub type Mul64Executor = MultiplicationExecutor<W64_NUM_LIMBS, W64_REG_OPS, RV32_CELL_BITS>;
+pub type Mul64Executor = MultiplicationExecutor<W64_NUM_LIMBS, W64_REG_OPS>;
 pub type Mul64Chip<F> = VmChipWrapper<
     F,
-    MultiplicationFiller<
-        BaseAluAdapterFiller<W64_REG_OPS, RV32_CELL_BITS>,
-        W64_NUM_LIMBS,
-        RV32_CELL_BITS,
-    >,
+    MultiplicationFiller<BaseAluAdapterFiller<W64_REG_OPS>, W64_NUM_LIMBS, RV32_CELL_BITS>,
 >;
