@@ -100,7 +100,7 @@ impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usi
         let c_u32 = c.as_canonical_u32();
         *data = LessThanPreCompute {
             c: if is_imm {
-                u32::from_le_bytes(imm_to_bytes::<{ RV32_REGISTER_NUM_LIMBS }>(c_u32))
+                u32::from_le_bytes(imm_to_bytes(c_u32))
             } else {
                 c_u32
             },
