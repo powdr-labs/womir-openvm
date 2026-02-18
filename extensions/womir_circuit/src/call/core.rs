@@ -13,7 +13,7 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
 
 use crate::adapters::RV32_REGISTER_NUM_LIMBS;
-use crate::adapters::call::{CallAdapterInterface, CallInstruction};
+use crate::adapters::call::{CallAdapterInterface, CallData, CallInstruction};
 
 /// Core columns for the Call chip.
 ///
@@ -132,14 +132,14 @@ impl<AB: InteractionBuilder> VmCoreAir<AB, CallAdapterInterface<AB>> for CallCor
 
         AdapterAirContext {
             to_pc: None, // PC is handled by the adapter
-            reads: [
-                cols.new_fp_data.map(Into::into),
-                cols.to_pc_data.map(Into::into),
-            ],
-            writes: [
-                cols.old_fp_data.map(Into::into),
-                cols.return_pc_data.map(Into::into),
-            ],
+            reads: CallData {
+                fp_data: cols.new_fp_data.map(Into::into),
+                pc_data: cols.to_pc_data.map(Into::into),
+            },
+            writes: CallData {
+                fp_data: cols.old_fp_data.map(Into::into),
+                pc_data: cols.return_pc_data.map(Into::into),
+            },
             instruction: CallInstruction {
                 is_valid: is_valid.clone(),
                 opcode: expected_opcode,
