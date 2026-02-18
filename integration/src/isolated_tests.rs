@@ -921,6 +921,90 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
+    // ==================== LessThan64 output width bug tests ====================
+    // These tests demonstrate that LessThan64 should only write 1 word (32 bits)
+    // as the result, since WASM comparison instructions produce i32 results.
+    // Currently LessThan64 writes 2 words (64 bits), zeroing the high word and
+    // potentially losing data.
+
+    #[test]
+    fn test_lt_u_64_preserves_rd_high_word() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Pre-fill the high word of the destination register (rd=4, high word at fp+5)
+        // with 0xDEAD_BEEF. After the comparison, it should be preserved because
+        // a comparison result is only 32 bits (i32 in WASM).
+        //
+        // 0x0000_0001_0000_0000 < 0x0000_0002_0000_0000 = 1 (unsigned)
+        let spec = TestSpec {
+            program: vec![wom::lt_u_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x0000_0001_0000_0000
+                (126, 0),
+                (127, 2),           // reg 2 = 0x0000_0002_0000_0000
+                (129, 0xDEAD_BEEF), // Pre-fill high word of rd
+            ],
+            // Result=1 in low word; high word should remain 0xDEAD_BEEF
+            expected_registers: vec![(128, 1), (129, 0xDEAD_BEEF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_s_64_preserves_rd_high_word() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Same idea: pre-fill high word of rd with non-zero data, run signed comparison,
+        // verify high word is preserved.
+        //
+        // -1 (0xFFFF_FFFF_FFFF_FFFF) < 1 (0x0000_0000_0000_0001) = 1 (signed)
+        let spec = TestSpec {
+            program: vec![wom::lt_s_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0xFFFF_FFFF),
+                (125, 0xFFFF_FFFF), // reg 0 = -1
+                (126, 1),
+                (127, 0),           // reg 2 = 1
+                (129, 0xCAFE_BABE), // Pre-fill high word of rd
+            ],
+            // Result=1 in low word; high word should remain 0xCAFE_BABE
+            expected_registers: vec![(128, 1), (129, 0xCAFE_BABE)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_lt_u_64_false_preserves_rd_high_word() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Even when the result is 0 (false), the high word should not be touched.
+        //
+        // 0x0000_0002_0000_0000 < 0x0000_0001_0000_0000 = 0 (unsigned)
+        let spec = TestSpec {
+            program: vec![wom::lt_u_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 2), // reg 0 = 0x0000_0002_0000_0000
+                (126, 0),
+                (127, 1),           // reg 2 = 0x0000_0001_0000_0000
+                (129, 0x1234_5678), // Pre-fill high word of rd
+            ],
+            // Result=0 in low word; high word should remain 0x1234_5678
+            expected_registers: vec![(128, 0), (129, 0x1234_5678)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
     // ==================== Shift Tests ====================
 
     #[test]
