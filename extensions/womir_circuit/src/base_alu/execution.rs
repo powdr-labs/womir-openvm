@@ -36,8 +36,7 @@ pub struct BaseAluExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize>(
     >,
 );
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS>
-{
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS> {
     pub fn new(
         adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
         offset: usize,
@@ -57,8 +56,7 @@ pub(super) struct BaseAluPreCompute {
     b: u32,
 }
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS>
-{
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> BaseAluExecutor<NUM_LIMBS, NUM_REG_OPS> {
     /// Return `is_imm`, true if `e` is RV32_IMM_AS.
     #[inline(always)]
     pub(super) fn pre_compute_impl<F: PrimeField32>(

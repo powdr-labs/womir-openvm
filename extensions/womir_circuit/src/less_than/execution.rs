@@ -36,8 +36,7 @@ pub struct LessThanExecutor<const NUM_LIMBS: usize, const NUM_REG_OPS: usize>(
     >,
 );
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> LessThanExecutor<NUM_LIMBS, NUM_REG_OPS>
-{
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> LessThanExecutor<NUM_LIMBS, NUM_REG_OPS> {
     pub fn new(
         adapter: BaseAluAdapterExecutor<NUM_LIMBS, NUM_REG_OPS, RV32_CELL_BITS>,
         offset: usize,
@@ -57,8 +56,7 @@ pub(super) struct LessThanPreCompute {
     b: u32,
 }
 
-impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> LessThanExecutor<NUM_LIMBS, NUM_REG_OPS>
-{
+impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> LessThanExecutor<NUM_LIMBS, NUM_REG_OPS> {
     /// Return `(is_imm, is_sltu)`.
     #[inline(always)]
     pub(super) fn pre_compute_impl<F: PrimeField32>(
