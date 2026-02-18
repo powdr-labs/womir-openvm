@@ -817,6 +817,21 @@ mod tests {
     }
 
     #[test]
+    fn test_eq_64_preserves_upper_word() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::eq_imm_64(4, 0, -1_i16)],
+            start_fp: 124,
+            start_registers: vec![(124, 0xFFFF_FFFF), (125, 0xFFFF_FFFF), (129, 0xDEAD_BEEF)],
+            expected_registers: vec![(128, 1), (129, 0xDEAD_BEEF)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
     fn test_neq_64_true() {
         setup_tracing_with_log_level(Level::WARN);
 
@@ -940,6 +955,21 @@ mod tests {
                 (127, 2), // reg 2 = 0x0000_0002_0000_0000
             ],
             expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_lt_u_64_preserves_upper_word() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let spec = TestSpec {
+            program: vec![wom::lt_u_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![(124, 0), (125, 1), (126, 0), (127, 2), (129, 0xBEEF_CAFE)],
+            expected_registers: vec![(128, 1), (129, 0xBEEF_CAFE)],
             ..Default::default()
         };
 

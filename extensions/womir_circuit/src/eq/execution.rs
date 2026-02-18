@@ -186,6 +186,10 @@ unsafe fn execute_e12_impl<
 
     let mut rd = [0u8; NUM_LIMBS];
     rd[0] = cmp_result as u8;
+    if NUM_LIMBS == 8 {
+        let rd_upper = exec_state.vm_read::<u8, 4>(RV32_REGISTER_AS, fp + pre_compute.a + 4);
+        rd[4..8].copy_from_slice(&rd_upper);
+    }
     exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &rd);
 
     let pc = exec_state.pc();
