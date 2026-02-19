@@ -2181,10 +2181,10 @@ mod tests {
         // Verifies: FP restored, post-return instruction operates in the caller frame.
         let spec = TestSpec {
             program: vec![
-                wom::ret::<F>(10, 11), // PC=0: return to PC=8, FP=reg[11]
-                wom::halt(),           // PC=4: skipped
+                wom::ret(10, 11), // PC=0: return to PC=8, FP=reg[11]
+                wom::halt(),      // PC=4: skipped
                 wom::add_imm(0, 5, 1_i16), // PC=8: caller[0] = caller[5] + 1
-                                       // PC=12: halt (appended by test_spec)
+                                  // PC=12: halt (appended by test_spec)
             ],
             start_fp: 50,
             start_registers: vec![
@@ -2220,11 +2220,11 @@ mod tests {
         // Verifies: saved PC/FP and post-call computation in the new frame.
         let spec = TestSpec {
             program: vec![
-                wom::call::<F>(10, 11, 12, 120), // PC=0: call to PC=12, FP offset=120
-                wom::halt(),                     // PC=4: skipped (return would land here)
-                wom::halt(),                     // PC=8: skipped
-                wom::add_imm(0, 3, 7_i16),       // PC=12: new_frame[0] = new_frame[3]+7
-                                                 // PC=16: halt (appended by test_spec)
+                wom::call(10, 11, 12, 120), // PC=0: call to PC=12, FP offset=120
+                wom::halt(),                // PC=4: skipped (return would land here)
+                wom::halt(),                // PC=8: skipped
+                wom::add_imm(0, 3, 7_i16),  // PC=12: new_frame[0] = new_frame[3]+7
+                                            // PC=16: halt (appended by test_spec)
             ],
             start_fp: 20,
             start_registers: vec![
@@ -2260,11 +2260,11 @@ mod tests {
         // Verifies: saved PC/FP and post-call computation, with PC from register.
         let spec = TestSpec {
             program: vec![
-                wom::call_indirect::<F>(10, 11, 12, 120), // PC=0: call indirect, FP offset=120
-                wom::halt(),                              // PC=4: skipped
-                wom::halt(),                              // PC=8: skipped
-                wom::add_imm(0, 3, 7_i16),                // PC=12: new_frame[0] = new_frame[3]+7
-                                                          // PC=16: halt (appended by test_spec)
+                wom::call_indirect(10, 11, 12, 120), // PC=0: call indirect, FP offset=120
+                wom::halt(),                         // PC=4: skipped
+                wom::halt(),                         // PC=8: skipped
+                wom::add_imm(0, 3, 7_i16),           // PC=12: new_frame[0] = new_frame[3]+7
+                                                     // PC=16: halt (appended by test_spec)
             ],
             start_fp: 20,
             start_registers: vec![
@@ -2306,12 +2306,12 @@ mod tests {
         // Verifies: round-trip call/return, computation in both frames persists.
         let spec = TestSpec {
             program: vec![
-                wom::call::<F>(10, 11, 16, 120), // PC=0: call to PC=16, FP offset=120
-                wom::add_imm(0, 5, 1_i16),       // PC=4: caller[0] = caller[5]+1 (after return)
-                wom::halt(),                     // PC=8: halt after return
-                wom::halt(),                     // PC=12: padding
-                wom::add_imm(3, 3, 42_i16),      // PC=16: callee[3] = 0 + 42
-                wom::ret::<F>(10, 11),           // PC=20: return to caller
+                wom::call(10, 11, 16, 120), // PC=0: call to PC=16, FP offset=120
+                wom::add_imm(0, 5, 1_i16),  // PC=4: caller[0] = caller[5]+1 (after return)
+                wom::halt(),                // PC=8: halt after return
+                wom::halt(),                // PC=12: padding
+                wom::add_imm(3, 3, 42_i16), // PC=16: callee[3] = 0 + 42
+                wom::ret(10, 11),           // PC=20: return to caller
             ],
             start_fp: 20,
             start_registers: vec![
