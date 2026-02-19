@@ -72,7 +72,7 @@ itertools = "0.14"
 rrs-lib = "0.1.0"
 tracing = "0.1.40"
 
-womir = { git = "https://github.com/powdr-labs/womir.git", rev = "d71e4c0" }
+womir = { git = "https://github.com/powdr-labs/womir.git", rev = "330dec2" }
 wasmparser = { version = "0.235", default-features = false }
 
 # [patch."https://github.com/powdr-labs/openvm.git"]
