@@ -7,8 +7,13 @@
 //! - Preflight (VirtualMachine::execute_preflight)
 //! - Proof generation (VirtualMachine::prove)
 
+use std::sync::OnceLock;
+
 use openvm_circuit::{
-    arch::{VirtualMachine, VmExecutor, VmState, debug_proving_ctx, execution_mode::Segment},
+    arch::{
+        VirtualMachine, VmCircuitConfig, VmExecutor, VmState, debug_proving_ctx,
+        execution_mode::Segment,
+    },
     system::memory::online::GuestMemory,
 };
 use openvm_instructions::{
@@ -19,8 +24,14 @@ use openvm_instructions::{
 };
 use openvm_sdk::{StdIn, config::DEFAULT_APP_LOG_BLOWUP};
 use openvm_stark_sdk::{
-    config::{FriParameters, baby_bear_poseidon2::BabyBearPoseidon2Engine},
-    engine::StarkFriEngine,
+    config::{
+        FriParameters,
+        baby_bear_poseidon2::{BabyBearPoseidon2Config, BabyBearPoseidon2Engine},
+    },
+    engine::{StarkEngine, StarkFriEngine},
+    openvm_stark_backend::{
+        keygen::types::MultiStarkProvingKey, prover::hal::DeviceDataTransporter,
+    },
 };
 use womir_circuit::{
     WomirConfig, WomirCpuBuilder, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory,
@@ -29,6 +40,9 @@ use womir_circuit::{
 use crate::instruction_builder as wom;
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
+type SC = BabyBearPoseidon2Config;
+
+static VM_PROVING_KEY: OnceLock<MultiStarkProvingKey<SC>> = OnceLock::new();
 
 /// Memory address space for RAM (heap memory).
 const RV32_MEMORY_AS: u32 = openvm_instructions::riscv::RV32_MEMORY_AS;
@@ -180,6 +194,17 @@ fn default_engine() -> BabyBearPoseidon2Engine {
     BabyBearPoseidon2Engine::new(fri_params)
 }
 
+fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
+    VM_PROVING_KEY.get_or_init(|| {
+        let config = WomirConfig::default();
+        let engine = default_engine();
+        let circuit = config
+            .create_airs()
+            .expect("failed to create AIR inventory for test keygen");
+        circuit.keygen(&engine)
+    })
+}
+
 /// Test Stage 1: Raw Execution using InterpretedInstance::execute_from_state
 pub fn test_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
@@ -254,10 +279,14 @@ pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>>
 pub fn test_prove(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-    let (mut vm, pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
-        default_engine(),
+    let engine = default_engine();
+    let pk = vm_proving_key();
+    let d_pk = engine.device().transport_pk_to_device(pk);
+    let mut vm = VirtualMachine::<_, WomirCpuBuilder>::new(
+        engine,
         WomirCpuBuilder,
         vm_config.clone(),
+        d_pk,
     )?;
 
     // Run metered execution to get segment info
@@ -294,7 +323,7 @@ pub fn test_prove(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     // Verify all constraints using mock prover
-    debug_proving_ctx(&vm, &pk, &ctx);
+    debug_proving_ctx(&vm, pk, &ctx);
 
     Ok(())
 }
