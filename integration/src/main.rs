@@ -1110,123 +1110,68 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn test_jaaf_instruction() {
-        // Simple test with JAAF instruction
-        // We'll set up a value, jump with JAAF, and verify the result
-        let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::add_imm(8, 0, 42_i16),      // x8 = 42
-            wom::allocate_frame_imm(9, 100), // Allocate new frame of size 100, x9 = new FP
-            wom::copy_into_frame(10, 8, 9), // PC=12: Copy x8 to [x9[x10]], which writes to address pointed by x10
-            wom::jaaf(24, 9),               // Jump to PC=24, set FP=x9
-            wom::halt(),                    // This should be skipped
-            // PC = 24
-            wom::const_32_imm(0, 0, 0),
-            wom::reveal(10, 0), // wom::reveal x8 (which should still be 42)
-            wom::halt(),
-        ];
-
-        run_vm_test("JAAF instruction", instructions, 42, None).unwrap()
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_jaaf_save_instruction() {
-        // Test JAAF_SAVE: jump and save FP
-        let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::allocate_frame_imm(1, 100), // Allocate entry frame
-            wom::add_imm(11, 0, 99_i16),     // x11 = 99
-            wom::allocate_frame_imm(9, 100), // Allocate new frame of size 100, x9 = new FP
-            wom::jaaf_save(11, 28, 9),       // Jump to PC=24, set FP=x9, save old FP to x11
-            wom::halt(),                     // This should be skipped
-            wom::halt(),                     // This should be skipped too
-            // PC = 28 (byte offset, so instruction at index 6)
-            wom::const_32_imm(0, 0, 0),
-            wom::reveal(11, 0), // wom::reveal x11 (should be 0, the old FP, not 99)
-            wom::halt(),
-        ];
-
-        run_vm_test("JAAF_SAVE instruction", instructions, 0, None).unwrap()
-    }
-
-    #[test]
-    #[should_panic]
     fn test_ret_instruction() {
         // Test RET: return to saved PC and FP
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::allocate_frame_imm(1, 100), // Allocate entry frame
-            wom::add_imm(10, 0, 28_i16),     // x10 = 24 (return PC)
-            wom::add_imm(11, 0, 0_i16),      // x11 = 0 (saved FP)
-            wom::add_imm(8, 0, 88_i16),      // x8 = 88
-            wom::ret(10, 11),                // Return to PC=x10, FP=x11
-            wom::halt(),                     // This should be skipped
+            wom::const_32_imm(0, 0, 0),  // PC=0
+            wom::add_imm(10, 0, 24_i16), // PC=4: x10 = 24 (return PC)
+            wom::add_imm(11, 0, 0_i16),  // PC=8: x11 = 0 (saved FP)
+            wom::add_imm(8, 0, 88_i16),  // PC=12: x8 = 88
+            wom::ret(10, 11),            // PC=16: Return to PC=x10, FP=x11
+            wom::halt(),                 // PC=20: This should be skipped
             // PC = 24 (where x10 points)
-            wom::reveal(8, 0), // wom::reveal x8 (should be 88)
-            wom::halt(),
+            wom::reveal(8, 0), // PC=24: reveal x8 (should be 88)
+            wom::halt(),       // PC=28
         ];
 
         run_vm_test("RET instruction", instructions, 88, None).unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_call_instruction() {
-        // Test CALL: save PC and FP, then jump
+        // Test CALL: save PC and FP, sets a new frame then jump
+        // CALL saves return PC (pc+4=8) into x10 in the new frame, then jumps to PC=16
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::allocate_frame_imm(9, 100), // Allocate new frame of size 100, x9 = new FP
-            wom::call(10, 11, 24, 9),        // Call to PC=24, FP=x9, save PC to x10, FP to x11
-            wom::add_imm(8, 0, 123_i16),     // x8 = 123 (after return) - this should NOT execute
-            wom::reveal(8, 0),               // wom::reveal x8 - this should NOT execute
-            wom::halt(),                     // Padding
-            // PC = 24 (function start)
-            wom::const_32_imm(0, 0, 0),
-            wom::reveal(10, 0), // wom::reveal x10 (should be 12, the return address)
-            wom::halt(),        // End the test here, don't return
+            wom::const_32_imm(0, 0, 0),  // PC=0
+            wom::call(10, 11, 16, 100),  // PC=4: CALL to PC=16, FP offset=100
+            wom::add_imm(8, 0, 123_i16), // PC=8: should NOT execute
+            wom::halt(),                 // PC=12: padding
+            // New frame starts here (PC=16), FP = old_fp + 100
+            wom::reveal(10, 0), // PC=16: reveal x10 (should be 8, the return address)
+            wom::halt(),        // PC=20: End
         ];
 
-        run_vm_test("CALL instruction", instructions, 12, None).unwrap()
+        run_vm_test("CALL instruction", instructions, 8, None).unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_call_indirect_instruction() {
         // Test CALL_INDIRECT: save PC and FP, jump to register value
+        // x12 holds the target PC, CALL_INDIRECT saves old FP into x11 in the new frame
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::allocate_frame_imm(1, 100), // Allocate a frame at x1 just so we have some room to work
-            wom::add_imm(12, 0, 32_i16),     // x12 = 32 (target PC)
-            wom::allocate_frame_imm(9, 100), // Allocate new frame of size 100, x9 = new FP
-            wom::add_imm(11, 0, 999_i16),    // x11 = 999
-            wom::call_indirect(10, 11, 12, 9), // Call to PC=x12, FP=x9, save PC to x10, FP to x11
-            wom::add_imm(8, 0, 456_i16),     // x8 = 456 (after return) - this should NOT execute
-            wom::reveal(8, 0),               // wom::reveal x8 - this should NOT execute
-            // PC = 32 (function start, where x12 points)
-            wom::const_32_imm(0, 0, 0),
-            wom::reveal(11, 0), // wom::reveal x11 (should be 0, the saved FP)
-            wom::halt(),        // End the test here, don't return
+            wom::const_32_imm(0, 0, 0),          // PC=0
+            wom::add_imm(12, 0, 16_i16),         // PC=4: x12 = 16 (target PC)
+            wom::call_indirect(10, 11, 12, 100), // PC=8: CALL_INDIRECT to PC=x12, FP offset=100
+            wom::halt(),                         // PC=12: padding
+            // New frame starts here (PC=16), FP = old_fp + 100
+            wom::reveal(11, 0), // PC=16: reveal x11 (should be 0, the saved old FP)
+            wom::halt(),        // PC=20: End
         ];
 
         run_vm_test("CALL_INDIRECT instruction", instructions, 0, None).unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_call_and_return() {
         // Test a complete call and return sequence
         // Note: When FP changes, register addressing changes too
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm(8, 0, 50_i16),      // x8 = 50 (at FP=0)
-            wom::allocate_frame_imm(9, 100), // Allocate new frame of size 100, x9 = new FP
-            wom::call(10, 11, 28, 9),        // Call function at PC=28, FP=0
-            wom::reveal(8, 0),               // wom::reveal x8 after return (should be 75)
+            wom::add_imm(8, 0, 50_i16), // x8 = 50 (at FP=0)
+            wom::call(10, 11, 20, 100), // Call function at PC=20, FP offset=100
+            wom::reveal(8, 0),          // wom::reveal x8 after return (should be 50)
             wom::halt(),
-            wom::halt(), // Padding
-            // Function at PC = 28
+            // Function at PC = 20
             wom::const_32_imm(8, 1, 0), // x8 = 1 in new frame
             wom::ret(10, 11),           // Return using saved PC and FP
             wom::halt(),
@@ -1348,71 +1293,6 @@ mod tests {
             "JUMP_IF_ZERO instruction (false condition)",
             instructions,
             40,
-            None,
-        )
-        .unwrap()
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_allocate_frame_instruction() {
-        // Test ALLOCATE_FRAME instruction
-        let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::allocate_frame_imm(8, 256), // Allocate 256 bytes, store pointer in x8
-            wom::reveal(8, 0),               // wom::reveal x8 (should be allocated pointer)
-            wom::halt(),
-        ];
-
-        // The expected value comes from the frame allocator (`AllocateFrameAdapterChipWom`) initial frame pointer value
-        run_vm_test("ALLOCATE_FRAME instruction", instructions, 8, None).unwrap()
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_copy_into_frame_instruction() {
-        // Test COPY_INTO_FRAME instruction
-        // This test verifies that copy_into_frame actually writes to memory
-        let instructions = vec![
-            wom::const_32_imm(0, 0, 0),      // PC=0
-            wom::add_imm(8, 0, 42_i16),      // PC=4: x8 = 42 (value to copy)
-            wom::allocate_frame_imm(9, 100), // Allocate new frame of size 100, x9 = new FP
-            wom::add_imm(10, 0, 0_i16),      // PC=12: x10 = 0 (register to read into)
-            wom::copy_into_frame(10, 8, 9), // PC=16: Copy x8 to [x9[x10]], which writes to address pointed by x10
-            wom::jaaf(24, 9),               // Jump to PC=24, set FP=x9
-            // Since copy_into_frame writes x8's value to memory at [x9[x10]],
-            // and we activated the frame at x9, x10 should now contain 42.
-            wom::const_32_imm(0, 0, 0),
-            wom::reveal(10, 0), // PC=24: wom::reveal x10 (should be 42, the value from x8)
-            wom::halt(),        // PC=28: End
-        ];
-
-        run_vm_test("COPY_INTO_FRAME instruction", instructions, 42, None).unwrap()
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_allocate_and_copy_sequence() {
-        // Test sequence: allocate frame, then copy into it
-        // This test verifies that copy_into_frame actually writes the value
-        let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::add_imm(8, 0, 123_i16), // PC=4: x8 = 123 (value to store)
-            wom::allocate_frame_imm(9, 128), // PC=8: Allocate 128 bytes, pointer in x9. x9=2
-            // by convention on the first allocation.
-            wom::add_imm(10, 0, 0_i16), // PC=12: x10 = 0 (destination register)
-            wom::copy_into_frame(10, 8, 9), // PC=16: Copy x8 to [x9[x10]]
-            wom::jaaf(28, 9),           // Jump to PC=28, set FP=x9
-            wom::halt(),                // Should be skipped
-            wom::const_32_imm(0, 0, 0), // PC=28
-            wom::reveal(10, 0),         // wom::reveal x10 (should be 123, the value from x8)
-            wom::halt(),
-        ];
-
-        run_vm_test(
-            "ALLOCATE_FRAME and COPY_INTO_FRAME sequence",
-            instructions,
-            123,
             None,
         )
         .unwrap()
@@ -1756,34 +1636,37 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_input_hint_with_frame_jump_and_xor() {
         let scratch = 5; // scratch register pointing to MEM[0]
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),
-            wom::const_32_imm(scratch, 0, 0),
+            wom::const_32_imm(0, 0, 0),       // PC=0
+            wom::const_32_imm(scratch, 0, 0), // PC=4: scratch = 0
             // Read first value into r8
-            wom::prepare_read(),
-            wom::hint_storew(scratch),      // skip length
-            wom::hint_storew(scratch),      // write data to MEM[0]
-            wom::loadw(8, scratch, 0),      // load MEM[0] → r8
-            wom::allocate_frame_imm(9, 64), // Allocate frame, pointer in r9
-            wom::copy_into_frame(2, 8, 9),  // Copy r8 to frame[2]
-            // Jump to new frame
-            wom::jaaf(40, 9), // Jump to PC=40, activate frame at r9
-            // This should be skipped
-            wom::halt(),
-            wom::const_32_imm(0, 0, 0), // PC = 40
-            wom::const_32_imm(scratch, 0, 0),
+            wom::prepare_read(),       // PC=8
+            wom::hint_storew(scratch), // PC=12: skip length
+            wom::hint_storew(scratch), // PC=16: write data to MEM[0]
+            wom::loadw(8, scratch, 0), // PC=20: load MEM[0] → r8
+            // Store r8 to memory address 100 so the new frame can access it
+            wom::add_imm(6, 0, 100_i16), // PC=24: r6 = 100
+            wom::storew(8, 6, 0),        // PC=28: MEM[100] = r8
+            // Call into a new frame
+            wom::call(10, 11, 40, 200), // PC=32: jump to PC=40, FP += 200
+            wom::halt(),                // PC=36: padding (skipped)
+            // === New frame (PC=40), FP = old_FP + 200 ===
+            wom::const_32_imm(0, 0, 0),       // PC=40
+            wom::const_32_imm(scratch, 0, 0), // PC=44: scratch = 0
+            // Load the first value from memory into r2
+            wom::add_imm(6, 0, 100_i16), // PC=48: r6 = 100
+            wom::loadw(2, 6, 0),         // PC=52: r2 = MEM[100]
             // Read second value into r3
-            wom::prepare_read(),
-            wom::hint_storew(scratch), // skip length
-            wom::hint_storew(scratch), // write data to MEM[0]
-            wom::loadw(3, scratch, 0), // load MEM[0] → r3
-            // Xor the two read values
-            wom::xor(4, 2, 3),
-            wom::reveal(4, 0),
-            wom::halt(),
+            wom::prepare_read(),       // PC=56
+            wom::hint_storew(scratch), // PC=60: skip length
+            wom::hint_storew(scratch), // PC=64: write data to MEM[0]
+            wom::loadw(3, scratch, 0), // PC=68: load MEM[0] → r3
+            // XOR the two values
+            wom::xor(4, 2, 3), // PC=72
+            wom::reveal(4, 0), // PC=76
+            wom::halt(),       // PC=80
         ];
 
         let mut stdin = StdIn::default();

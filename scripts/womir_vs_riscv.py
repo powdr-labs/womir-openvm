@@ -30,7 +30,7 @@ womir_shift_64 = "VmAirWrapper<WomBaseAluAdapterAir<4, 8, 8>, ShiftCoreAir<8, 8>
 womir_loadstore = "VmAirWrapper<Rv32LoadStoreAdapterAir, LoadStoreCoreAir<4>"
 womir_copy_into_frame = "VmAirWrapper<CopyIntoFrameAdapterAirWom, CopyIntoFrameCoreAir>"
 womir_less_than = "VmAirWrapper<WomBaseAluAdapterAir<2, 4, 4>, LessThanCoreAir<4, 4, 8>"
-womir_jaaf = "VmAirWrapper<JaafAdapterAirWom, JaafCoreAir>"
+womir_call = "VmAirWrapper<CallAdapterAirWom, CallCoreAir>"
 womir_allocate_frame = "VmAirWrapper<AllocateFrameAdapterAirWom, AllocateFrameCoreAir>"
 womir_jump = "VmAirWrapper<JumpAdapterAirWom, JumpCoreAir>"
 womir_consts = "VmAirWrapper<ConstsAdapterAirWom, ConstsCoreAir>"
@@ -88,8 +88,8 @@ def main(womir_metrics_path, riscv_metrics_path):
     compare("Mul WOMIR (32, 64) vs RISC-V 32", [w[womir_mul_32], w[womir_mul_64]], [r[riscv_mul]])
     compare("LoadStore", [w[womir_loadstore]], [r[riscv_loadstore]])
     compare("Comparison WOMIR (lt, eq_32, eq_64) vs RISC-V lt", [w[womir_less_than], w[womir_eq_32], w[womir_eq_64]], [r[riscv_less_than]])
-    compare("Branch/Jump WOMIR (jaaf, jump) vs RISC-V (beq, blt, jalr, auipc)", [w[womir_jaaf], w[womir_jump]], [r[riscv_branch_eq], r[riscv_branch_less_than], r[riscv_jalr], r[riscv_auipc]])
-    compare("Comparison + Branch/Jump (often combined) WOMIR (lt, eq_32, eq_64, jaaf, jump) vs RISC-V (lt, beq, blt, jalr, auipc)", [w[womir_less_than], w[womir_eq_32], w[womir_eq_64], w[womir_jaaf], w[womir_jump]], [r[riscv_less_than], r[riscv_branch_eq], r[riscv_branch_less_than], r[riscv_jalr], r[riscv_auipc]])
+    compare("Branch/Jump WOMIR (call, jump) vs RISC-V (beq, blt, jalr, auipc)", [w[womir_call], w[womir_jump]], [r[riscv_branch_eq], r[riscv_branch_less_than], r[riscv_jalr], r[riscv_auipc]])
+    compare("Comparison + Branch/Jump (often combined) WOMIR (lt, eq_32, eq_64, call, jump) vs RISC-V (lt, beq, blt, jalr, auipc)", [w[womir_less_than], w[womir_eq_32], w[womir_eq_64], w[womir_call], w[womir_jump]], [r[riscv_less_than], r[riscv_branch_eq], r[riscv_branch_less_than], r[riscv_jalr], r[riscv_auipc]])
     compare("HintStore", [w[womir_hintstore]], [r[riscv_hintstore]])
     compare("Frame WOMIR (copy, allocate)", [w[womir_copy_into_frame], w[womir_allocate_frame]], [])
     compare("Consts WOMIR", [w[womir_consts]], [])

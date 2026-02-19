@@ -6,7 +6,7 @@ use openvm_circuit::{
         ImmInstruction, VmAdapterAir, get_record_from_slice,
     },
     system::memory::{
-        MemoryAddress, MemoryAuxColsFactory,
+        MemoryAuxColsFactory,
         offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryReadAuxRecord},
         online::TracingMemory,
     },
@@ -28,7 +28,7 @@ use openvm_circuit::arch::ExecutionBridge;
 
 use crate::execution::ExecutionState;
 
-use super::{RV32_REGISTER_NUM_LIMBS, fp, tracing_read, tracing_read_fp};
+use super::{RV32_REGISTER_NUM_LIMBS, fp_addr, reg_addr, tracing_read, tracing_read_fp};
 
 /// Trace columns for the JUMP adapter.
 ///
@@ -86,10 +86,10 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAir {
             timestamp + AB::F::from_canonical_usize(timestamp_delta - 1)
         };
 
-        // Read FP from FP_AS address space (address space FP_AS, address 0).
+        // Read FP
         self.memory_bridge
             .read(
-                fp::<AB::F>(),
+                fp_addr::<AB::F>(),
                 [local.from_state.fp],
                 timestamp_pp(),
                 &local.fp_read_aux,
@@ -100,10 +100,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAir {
         // For JUMP (b=0), this reads reg[fp+0]; the core chip ignores the value.
         self.memory_bridge
             .read(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local.rs_ptr + local.from_state.fp,
-                ),
+                reg_addr(local.rs_ptr + local.from_state.fp),
                 ctx.reads[0].clone(),
                 timestamp_pp(),
                 &local.rs_read_aux,

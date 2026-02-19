@@ -57,6 +57,11 @@ pub struct TestSpec {
     pub expected_registers: Vec<(usize, u32)>,
     /// Expected RAM values after execution: (address, value).
     pub expected_ram: Vec<(u32, u32)>,
+
+    /// Register indices whose values are raw FP pointers (e.g., saved FP in call/ret tests).
+    /// When rebasing, these values are shifted by `delta * RV32_REGISTER_NUM_LIMBS`.
+    /// Indices are in the original (pre-rebase) namespace.
+    pub fp_value_registers: Vec<usize>,
 }
 
 /// Read a register value from memory.
@@ -294,7 +299,7 @@ pub fn test_prove(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn test_spec(mut spec: TestSpec) {
+fn test_spec(mut spec: TestSpec) {
     // Append halt instruction:
     spec.program.push(wom::halt());
 
@@ -334,6 +339,7 @@ mod tests {
         let mut rebased = spec.clone();
         let old_base = spec.start_fp;
         let delta = new_base as i64 - old_base as i64;
+        let raw_delta = delta * RV32_REGISTER_NUM_LIMBS as i64;
 
         let shift_register = |register_index: usize| -> usize {
             let shifted = register_index as i64 + delta;
@@ -344,18 +350,32 @@ mod tests {
             shifted as usize
         };
 
+        let shift_reg_entry = |register_index: usize, value: u32| -> (usize, u32) {
+            let new_value = if spec.fp_value_registers.contains(&register_index) {
+                (value as i64 + raw_delta) as u32
+            } else {
+                value
+            };
+            (shift_register(register_index), new_value)
+        };
+
         rebased.start_fp = new_base;
+        rebased.expected_fp = spec.expected_fp.map(|fp| (fp as i64 + delta) as u32);
         rebased.start_registers = spec
             .start_registers
             .iter()
-            .map(|(register_index, value)| (shift_register(*register_index), *value))
+            .map(|&(reg, val)| shift_reg_entry(reg, val))
             .collect();
         rebased.expected_registers = spec
             .expected_registers
             .iter()
-            .map(|(register_index, value)| (shift_register(*register_index), *value))
+            .map(|&(reg, val)| shift_reg_entry(reg, val))
             .collect();
-
+        rebased.fp_value_registers = spec
+            .fp_value_registers
+            .iter()
+            .map(|&reg| shift_register(reg))
+            .collect();
         rebased
     }
 
@@ -2121,7 +2141,7 @@ mod tests {
 
         // 42 / 7 = 6
         let spec = TestSpec {
-            program: vec![wom::div::<F>(2, 0, 1)],
+            program: vec![wom::div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 7)],
             expected_registers: vec![(12, 6)],
@@ -2137,7 +2157,7 @@ mod tests {
 
         // -42 / 7 = -6
         let spec = TestSpec {
-            program: vec![wom::div::<F>(2, 0, 1)],
+            program: vec![wom::div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-42_i32) as u32), (11, 7)],
             expected_registers: vec![(12, (-6_i32) as u32)],
@@ -2153,7 +2173,7 @@ mod tests {
 
         // 42 / 0 = 0xFFFFFFFF (RISC-V spec)
         let spec = TestSpec {
-            program: vec![wom::div::<F>(2, 0, 1)],
+            program: vec![wom::div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 0)],
             expected_registers: vec![(12, 0xFFFFFFFF)],
@@ -2169,7 +2189,7 @@ mod tests {
 
         // 100 / 7 = 14
         let spec = TestSpec {
-            program: vec![wom::divu::<F>(2, 0, 1)],
+            program: vec![wom::divu(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 100), (11, 7)],
             expected_registers: vec![(12, 14)],
@@ -2186,7 +2206,7 @@ mod tests {
         // 42 % 7 = 0
         // 43 % 7 = 1
         let spec = TestSpec {
-            program: vec![wom::rems::<F>(2, 0, 1), wom::rems::<F>(5, 3, 4)],
+            program: vec![wom::rems(2, 0, 1), wom::rems(5, 3, 4)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 7), (13, 43), (14, 7)],
             expected_registers: vec![(12, 0), (15, 1)],
@@ -2202,7 +2222,7 @@ mod tests {
 
         // -43 % 7 = -1 (remainder has sign of dividend)
         let spec = TestSpec {
-            program: vec![wom::rems::<F>(2, 0, 1)],
+            program: vec![wom::rems(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-43_i32) as u32), (11, 7)],
             expected_registers: vec![(12, (-1_i32) as u32)],
@@ -2218,7 +2238,7 @@ mod tests {
 
         // 100 % 7 = 2
         let spec = TestSpec {
-            program: vec![wom::remu::<F>(2, 0, 1)],
+            program: vec![wom::remu(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 100), (11, 7)],
             expected_registers: vec![(12, 2)],
@@ -2234,7 +2254,7 @@ mod tests {
 
         // 42 % 0 = 42 (RISC-V spec: returns dividend)
         let spec = TestSpec {
-            program: vec![wom::remu::<F>(2, 0, 1)],
+            program: vec![wom::remu(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 0)],
             expected_registers: vec![(12, 42)],
@@ -2252,7 +2272,7 @@ mod tests {
 
         // 0x0000_0000_0000_002A / 0x0000_0000_0000_0007 = 0x0000_0000_0000_0006
         let spec = TestSpec {
-            program: vec![wom::div_64::<F>(4, 0, 2)],
+            program: vec![wom::div_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 42),
@@ -2273,7 +2293,7 @@ mod tests {
 
         // 0x0000_0001_0000_0000 / 0x0000_0000_0000_0002 = 0x0000_0000_8000_0000
         let spec = TestSpec {
-            program: vec![wom::div_64::<F>(4, 0, 2)],
+            program: vec![wom::div_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -2294,7 +2314,7 @@ mod tests {
 
         // 0xFFFF_FFFF_FFFF_FFFF / 0x0000_0000_0000_0002 = 0x7FFF_FFFF_FFFF_FFFF
         let spec = TestSpec {
-            program: vec![wom::divu_64::<F>(4, 0, 2)],
+            program: vec![wom::divu_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_FFFF),
@@ -2315,7 +2335,7 @@ mod tests {
 
         // 4294967297 % 3 = 2
         let spec = TestSpec {
-            program: vec![wom::remu_64::<F>(4, 0, 2)],
+            program: vec![wom::remu_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 1),
@@ -2338,7 +2358,7 @@ mod tests {
         // -43 as i64 = 0xFFFF_FFFF_FFFF_FFD5
         // -1 as i64 = 0xFFFF_FFFF_FFFF_FFFF
         let spec = TestSpec {
-            program: vec![wom::rems_64::<F>(4, 0, 2)],
+            program: vec![wom::rems_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_FFD5),
@@ -2359,7 +2379,7 @@ mod tests {
 
         // i32::MIN / -1 = i32::MIN (RISC-V signed overflow returns dividend)
         let spec = TestSpec {
-            program: vec![wom::div::<F>(2, 0, 1)],
+            program: vec![wom::div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, i32::MIN as u32), (11, (-1_i32) as u32)],
             expected_registers: vec![(12, i32::MIN as u32)],
@@ -2375,7 +2395,7 @@ mod tests {
 
         // i32::MIN % -1 = 0 (RISC-V signed overflow returns zero)
         let spec = TestSpec {
-            program: vec![wom::rems::<F>(2, 0, 1)],
+            program: vec![wom::rems(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, i32::MIN as u32), (11, (-1_i32) as u32)],
             expected_registers: vec![(12, 0)],
@@ -2393,7 +2413,7 @@ mod tests {
         // This produces carries up to 4079 in the range tuple checker,
         // requiring sizes[1] >= 4096 (the 64-bit default).
         let spec = TestSpec {
-            program: vec![wom::div_64::<F>(4, 0, 2)],
+            program: vec![wom::div_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 1),
@@ -2433,6 +2453,188 @@ mod tests {
             program: vec![wom::add_imm_64(0, 0, 0x42_i16), wom::add_imm(2, 0, 0_i16)],
             start_fp: 10,
             expected_registers: vec![(10, 0x42), (11, 0), (12, 0x42)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    // ==================== Call Tests ====================
+    //
+    // Call instructions (RET, CALL, CALL_INDIRECT) change the frame pointer (FP)
+    // and jump to a new PC.
+    // Register accesses are FP-relative: register N at FP=F is at absolute
+    // register index (F + N), raw address ((F + N) * 4).
+    //
+    // Notation:
+    //   fp(L)  = logical FP L, raw FP = L * 4
+    //   reg[N] = FP-relative register N, absolute index = logical_fp + N
+    //
+    // FP semantics:
+    //   CALL/CALL_INDIRECT: new_fp = current_fp + offset_from_register
+    //   RET: new_fp = absolute_fp_from_register
+    //
+    // Common setup: caller at fp(20), callee at fp(50) (offset = 30).
+
+    #[test]
+    fn test_ret() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // RET: Restore PC and FP from registers, then operate in the restored frame.
+        //
+        // Start at fp(50) (raw 200, callee frame).
+        // reg[10] at abs 60 = 8 (return PC), reg[11] at abs 61 = 80 (caller raw FP → fp(20)).
+        // Pre-populate caller_frame[5] at abs 25 = 99.
+        //
+        // PC=0: RET → PC=8, FP=80 → fp(20)
+        // PC=4: skipped
+        // PC=8: add_imm caller_frame[0] = caller_frame[5] + 1 = 99 + 1 = 100
+        //
+        // Verifies: FP restored, post-return instruction operates in the caller frame.
+        let spec = TestSpec {
+            program: vec![
+                wom::ret(10, 11), // PC=0: return to PC=8, FP=reg[11]
+                wom::halt(),      // PC=4: skipped
+                wom::add_imm(0, 5, 1_i16), // PC=8: caller[0] = caller[5] + 1
+                                  // PC=12: halt (appended by test_spec)
+            ],
+            start_fp: 50,
+            start_registers: vec![
+                (60, 8),  // reg[10] at fp(50): return PC
+                (61, 80), // reg[11] at fp(50): caller raw FP
+                (25, 99), // caller_frame[5] at abs 20+5=25
+            ],
+            expected_pc: Some(12),
+            expected_fp: Some(20),
+            expected_registers: vec![
+                (20, 100), // caller_frame[0] at abs 20: 99 + 1
+                (25, 99),  // caller_frame[5] unchanged
+            ],
+            fp_value_registers: vec![61],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_call() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // CALL: Save PC and FP, jump to immediate PC with new FP, then compute in new frame.
+        //
+        // Start at fp(20) (raw 80). FP offset = 120 (immediate): 80 + 120 = 200 → fp(50).
+        // Pre-populate new_frame[3] at abs 53 = 55.
+        // call(save_pc=10, save_fp=11, to_pc=12, fp_offset=120)
+        //
+        // Saves: return PC=4 → new_frame[10] (abs 60), old FP=80 → new_frame[11] (abs 61).
+        // PC=12: add_imm new_frame[0] = new_frame[3] + 7 = 55 + 7 = 62
+        //
+        // Verifies: saved PC/FP and post-call computation in the new frame.
+        let spec = TestSpec {
+            program: vec![
+                wom::call(10, 11, 12, 120), // PC=0: call to PC=12, FP offset=120
+                wom::halt(),                // PC=4: skipped (return would land here)
+                wom::halt(),                // PC=8: skipped
+                wom::add_imm(0, 3, 7_i16),  // PC=12: new_frame[0] = new_frame[3]+7
+                                            // PC=16: halt (appended by test_spec)
+            ],
+            start_fp: 20,
+            start_registers: vec![
+                (53, 55), // new_frame[3] at abs 53: pre-populated
+            ],
+            expected_pc: Some(16),
+            expected_fp: Some(50),
+            expected_registers: vec![
+                (50, 62), // new_frame[0] at abs 50: 55 + 7
+                (60, 4),  // new_frame[10] at abs 60: saved return PC
+                (61, 80), // new_frame[11] at abs 61: saved old raw FP
+            ],
+            fp_value_registers: vec![61],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_call_indirect() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // CALL_INDIRECT: Save PC and FP, jump to register PC with new FP, then compute.
+        //
+        // Start at fp(20) (raw 80). FP offset = 120 (immediate): 80 + 120 = 200 → fp(50).
+        // reg[12] at abs 32 = 12 (target PC).
+        // Pre-populate new_frame[3] at abs 53 = 55.
+        // call_indirect(save_pc=10, save_fp=11, to_pc_reg=12, fp_offset=120)
+        //
+        // Saves: return PC=4 → abs 60, old FP=80 → abs 61.
+        // PC=12: add_imm new_frame[0] = new_frame[3] + 7 = 55 + 7 = 62
+        //
+        // Verifies: saved PC/FP and post-call computation, with PC from register.
+        let spec = TestSpec {
+            program: vec![
+                wom::call_indirect(10, 11, 12, 120), // PC=0: call indirect, FP offset=120
+                wom::halt(),                         // PC=4: skipped
+                wom::halt(),                         // PC=8: skipped
+                wom::add_imm(0, 3, 7_i16),           // PC=12: new_frame[0] = new_frame[3]+7
+                                                     // PC=16: halt (appended by test_spec)
+            ],
+            start_fp: 20,
+            start_registers: vec![
+                (32, 12), // reg[12] at fp(20): target PC
+                (53, 55), // new_frame[3] at abs 53: pre-populated
+            ],
+            expected_pc: Some(16),
+            expected_fp: Some(50),
+            expected_registers: vec![
+                (50, 62), // new_frame[0] at abs 50: 55 + 7
+                (60, 4),  // new_frame[10] at abs 60: saved return PC
+                (61, 80), // new_frame[11] at abs 61: saved old raw FP
+            ],
+            fp_value_registers: vec![61],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_call_and_return() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Complete call + return sequence with computation in both frames.
+        //
+        // Start at fp(20) (raw 80). caller_frame[5] (abs 25) = 100.
+        // FP offset = 120 (immediate): 80 + 120 = 200 → fp(50).
+        //
+        // PC=0:  CALL(save_pc=10, save_fp=11, to_pc=16, fp_offset=120)
+        //        saves return PC=4 → abs 60, old FP=80 → abs 61
+        //        jumps to PC=16, FP=200
+        // PC=4:  (return lands here) add_imm caller[0] = caller[5] + 1 = 101
+        // PC=8:  halt (after return, verifies caller frame computation)
+        // PC=12: skipped padding
+        // PC=16: add_imm callee[3] = callee[3] + 42 = 0+42 = 42
+        // PC=20: RET(10, 11) → PC=4, FP=80
+        //
+        // After return: caller does add_imm, then halts.
+        // Verifies: round-trip call/return, computation in both frames persists.
+        let spec = TestSpec {
+            program: vec![
+                wom::call(10, 11, 16, 120), // PC=0: call to PC=16, FP offset=120
+                wom::add_imm(0, 5, 1_i16),  // PC=4: caller[0] = caller[5]+1 (after return)
+                wom::halt(),                // PC=8: halt after return
+                wom::halt(),                // PC=12: padding
+                wom::add_imm(3, 3, 42_i16), // PC=16: callee[3] = 0 + 42
+                wom::ret(10, 11),           // PC=20: return to caller
+            ],
+            start_fp: 20,
+            start_registers: vec![
+                (25, 100), // caller_frame[5] at abs 25
+            ],
+            expected_pc: Some(8),
+            expected_fp: Some(20), // returned to caller
+            expected_registers: vec![
+                (20, 101), // caller_frame[0] at abs 20: 100 + 1
+                (25, 100), // caller_frame[5] unchanged
+                (53, 42),  // callee_frame[3] at abs 53: written by callee, persists
+            ],
             ..Default::default()
         };
         test_spec_for_all_register_bases(spec)
