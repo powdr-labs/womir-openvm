@@ -1138,10 +1138,10 @@ mod tests {
         // Test CALL: save PC and FP, sets a new frame then jump
         // CALL saves return PC (pc+4=8) into x10 in the new frame, then jumps to PC=16
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),      // PC=0
-            wom::call::<F>(10, 11, 16, 100), // PC=4: CALL to PC=16, FP offset=100
-            wom::add_imm(8, 0, 123_i16),     // PC=8: should NOT execute
-            wom::halt(),                     // PC=12: padding
+            wom::const_32_imm(0, 0, 0),  // PC=0
+            wom::call(10, 11, 16, 100),  // PC=4: CALL to PC=16, FP offset=100
+            wom::add_imm(8, 0, 123_i16), // PC=8: should NOT execute
+            wom::halt(),                 // PC=12: padding
             // New frame starts here (PC=16), FP = old_fp + 100
             wom::reveal(10, 0), // PC=16: reveal x10 (should be 8, the return address)
             wom::halt(),        // PC=20: End
@@ -1155,10 +1155,10 @@ mod tests {
         // Test CALL_INDIRECT: save PC and FP, jump to register value
         // x12 holds the target PC, CALL_INDIRECT saves old FP into x11 in the new frame
         let instructions = vec![
-            wom::const_32_imm(0, 0, 0),               // PC=0
-            wom::add_imm(12, 0, 16_i16),              // PC=4: x12 = 16 (target PC)
-            wom::call_indirect::<F>(10, 11, 12, 100), // PC=8: CALL_INDIRECT to PC=x12, FP offset=100
-            wom::halt(),                              // PC=12: padding
+            wom::const_32_imm(0, 0, 0),          // PC=0
+            wom::add_imm(12, 0, 16_i16),         // PC=4: x12 = 16 (target PC)
+            wom::call_indirect(10, 11, 12, 100), // PC=8: CALL_INDIRECT to PC=x12, FP offset=100
+            wom::halt(),                         // PC=12: padding
             // New frame starts here (PC=16), FP = old_fp + 100
             wom::reveal(11, 0), // PC=16: reveal x11 (should be 0, the saved old FP)
             wom::halt(),        // PC=20: End
@@ -1173,9 +1173,9 @@ mod tests {
         // Note: When FP changes, register addressing changes too
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
-            wom::add_imm(8, 0, 50_i16),      // x8 = 50 (at FP=0)
-            wom::call::<F>(10, 11, 20, 100), // Call function at PC=20, FP offset=100
-            wom::reveal(8, 0),               // wom::reveal x8 after return (should be 50)
+            wom::add_imm(8, 0, 50_i16), // x8 = 50 (at FP=0)
+            wom::call(10, 11, 20, 100), // Call function at PC=20, FP offset=100
+            wom::reveal(8, 0),          // wom::reveal x8 after return (should be 50)
             wom::halt(),
             // Function at PC = 20
             wom::const_32_imm(8, 1, 0), // x8 = 1 in new frame
@@ -1656,8 +1656,8 @@ mod tests {
             wom::add_imm(6, 0, 100_i16), // PC=24: r6 = 100
             wom::storew(8, 6, 0),        // PC=28: MEM[100] = r8
             // Call into a new frame
-            wom::call::<F>(10, 11, 40, 200), // PC=32: jump to PC=40, FP += 200
-            wom::halt(),                     // PC=36: padding (skipped)
+            wom::call(10, 11, 40, 200), // PC=32: jump to PC=40, FP += 200
+            wom::halt(),                // PC=36: padding (skipped)
             // === New frame (PC=40), FP = old_FP + 200 ===
             wom::const_32_imm(0, 0, 0),       // PC=40
             wom::const_32_imm(scratch, 0, 0), // PC=44: scratch = 0

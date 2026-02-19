@@ -3,7 +3,7 @@ use std::borrow::{Borrow, BorrowMut};
 use openvm_circuit::{
     arch::*,
     system::memory::{
-        MemoryAddress, MemoryAuxColsFactory,
+        MemoryAuxColsFactory,
         offline_checker::{
             MemoryBridge, MemoryReadAuxCols, MemoryReadAuxRecord, MemoryWriteAuxCols,
             MemoryWriteBytesAuxRecord,
@@ -35,9 +35,10 @@ use openvm_womir_transpiler::{
     HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
 };
 
-use crate::adapters::{read_rv32_register, tracing_read, tracing_read_fp, tracing_write};
+use crate::adapters::{
+    fp_addr, mem_addr, read_rv32_register, reg_addr, tracing_read, tracing_read_fp, tracing_write,
+};
 use crate::execution::ExecutionState;
-use crate::memory_config::FP_AS;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 mod execution;
@@ -152,7 +153,7 @@ impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
         // read fp
         self.memory_bridge
             .read(
-                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                fp_addr::<AB::F>(),
                 [local_cols.from_state.fp],
                 timestamp_pp(),
                 &local_cols.fp_read_aux,
@@ -162,10 +163,7 @@ impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
         // read mem_ptr
         self.memory_bridge
             .read(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.mem_ptr_ptr + local_cols.from_state.fp,
-                ),
+                reg_addr(local_cols.mem_ptr_ptr + local_cols.from_state.fp),
                 local_cols.mem_ptr_limbs,
                 timestamp_pp(),
                 &local_cols.mem_ptr_aux_cols,
@@ -175,10 +173,7 @@ impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
         // read num_words
         self.memory_bridge
             .read(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.num_words_ptr + local_cols.from_state.fp,
-                ),
+                reg_addr(local_cols.num_words_ptr + local_cols.from_state.fp),
                 local_cols.rem_words_limbs,
                 timestamp_pp(),
                 &local_cols.num_words_aux_cols,
@@ -188,7 +183,7 @@ impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
         // write hint
         self.memory_bridge
             .write(
-                MemoryAddress::new(AB::F::from_canonical_u32(RV32_MEMORY_AS), mem_ptr.clone()),
+                mem_addr(mem_ptr.clone()),
                 local_cols.data,
                 timestamp_pp(),
                 &local_cols.write_aux,

@@ -46,7 +46,9 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 use openvm_circuit::arch::{ExecutionBridge, ExecutionState as OvmExecutionState};
 
 use super::RV32_REGISTER_NUM_LIMBS;
-use super::{RV32_CELL_BITS, fp, memory_read, timed_write, tracing_read, tracing_read_fp};
+use super::{
+    RV32_CELL_BITS, fp_addr, memory_read, reg_addr, timed_write, tracing_read, tracing_read_fp,
+};
 use crate::execution::ExecutionState;
 
 pub struct Rv32LoadStoreAdapterAirInterface<AB: InteractionBuilder>(PhantomData<AB>);
@@ -148,10 +150,10 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             .when(is_valid.clone() - write_count)
             .assert_zero(local_cols.rd_rs2_ptr);
 
-        // Read fp from FP address space (address space FP_AS, address 0).
+        // Read fp
         self.memory_bridge
             .read(
-                fp::<AB::F>(),
+                fp_addr::<AB::F>(),
                 [local_cols.from_state.fp],
                 timestamp_pp(),
                 &local_cols.fp_read_aux,
@@ -161,10 +163,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
         // read rs1
         self.memory_bridge
             .read(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    local_cols.rs1_ptr + local_cols.from_state.fp,
-                ),
+                reg_addr(local_cols.rs1_ptr + local_cols.from_state.fp),
                 local_cols.rs1_data,
                 timestamp_pp(),
                 &local_cols.rs1_aux_cols,

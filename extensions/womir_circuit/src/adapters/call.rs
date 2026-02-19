@@ -6,7 +6,7 @@ use openvm_circuit::{
         VmAdapterInterface, get_record_from_slice,
     },
     system::memory::{
-        MemoryAddress, MemoryAuxColsFactory,
+        MemoryAuxColsFactory,
         offline_checker::{
             MemoryBridge, MemoryReadAuxCols, MemoryReadAuxRecord, MemoryWriteAuxCols,
             MemoryWriteBytesAuxRecord,
@@ -31,8 +31,11 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use openvm_circuit::arch::ExecutionBridge;
 
-use crate::execution::ExecutionState;
 use crate::memory_config::FP_AS;
+use crate::{
+    adapters::{fp_addr, reg_addr},
+    execution::ExecutionState,
+};
 
 use super::{RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp};
 
@@ -171,7 +174,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
         // 0. Read current FP from FP_AS
         self.memory_bridge
             .read(
-                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                fp_addr::<AB::F>(),
                 [local.from_state.fp],
                 timestamp_pp(),
                 &local.fp_read_aux,
@@ -183,10 +186,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
             std::array::from_fn(|i| ctx.reads.fp_data[i].clone());
         self.memory_bridge
             .read(
-                MemoryAddress::new(
-                    has_fp_read.clone(),
-                    local.to_fp_operand + local.from_state.fp,
-                ),
+                reg_addr(local.to_fp_operand + local.from_state.fp),
                 to_fp_data,
                 timestamp_pp(),
                 &local.to_fp_read_aux,
@@ -198,10 +198,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
             std::array::from_fn(|i| ctx.reads.pc_data[i].clone());
         self.memory_bridge
             .read(
-                MemoryAddress::new(
-                    has_pc_read.clone(),
-                    local.to_pc_operand + local.from_state.fp,
-                ),
+                reg_addr(local.to_pc_operand + local.from_state.fp),
                 to_pc_data,
                 timestamp_pp(),
                 &local.to_pc_read_aux,
@@ -278,10 +275,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
             std::array::from_fn(|i| ctx.writes.fp_data[i].clone());
         self.memory_bridge
             .write(
-                MemoryAddress::new(
-                    has_save.clone(),
-                    local.save_fp_ptr + new_fp_composed.clone(),
-                ),
+                reg_addr(local.save_fp_ptr + new_fp_composed.clone()),
                 save_fp_data,
                 timestamp_pp(),
                 &local.save_fp_write_aux,
@@ -293,10 +287,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
             std::array::from_fn(|i| ctx.writes.pc_data[i].clone());
         self.memory_bridge
             .write(
-                MemoryAddress::new(
-                    has_save.clone(),
-                    local.save_pc_ptr + new_fp_composed.clone(),
-                ),
+                reg_addr(local.save_pc_ptr + new_fp_composed.clone()),
                 save_pc_data,
                 timestamp_pp(),
                 &local.save_pc_write_aux,
@@ -306,7 +297,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
         // 5. Write new FP to FP_AS
         self.memory_bridge
             .write(
-                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                fp_addr::<AB::F>(),
                 [new_fp_composed],
                 timestamp_pp(),
                 &local.fp_write_aux,

@@ -1830,7 +1830,7 @@ mod tests {
 
         // 42 / 7 = 6
         let spec = TestSpec {
-            program: vec![wom::div::<F>(2, 0, 1)],
+            program: vec![wom::div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 7)],
             expected_registers: vec![(12, 6)],
@@ -1846,7 +1846,7 @@ mod tests {
 
         // -42 / 7 = -6
         let spec = TestSpec {
-            program: vec![wom::div::<F>(2, 0, 1)],
+            program: vec![wom::div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-42_i32) as u32), (11, 7)],
             expected_registers: vec![(12, (-6_i32) as u32)],
@@ -1862,7 +1862,7 @@ mod tests {
 
         // 42 / 0 = 0xFFFFFFFF (RISC-V spec)
         let spec = TestSpec {
-            program: vec![wom::div::<F>(2, 0, 1)],
+            program: vec![wom::div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 0)],
             expected_registers: vec![(12, 0xFFFFFFFF)],
@@ -1878,7 +1878,7 @@ mod tests {
 
         // 100 / 7 = 14
         let spec = TestSpec {
-            program: vec![wom::divu::<F>(2, 0, 1)],
+            program: vec![wom::divu(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 100), (11, 7)],
             expected_registers: vec![(12, 14)],
@@ -1895,7 +1895,7 @@ mod tests {
         // 42 % 7 = 0
         // 43 % 7 = 1
         let spec = TestSpec {
-            program: vec![wom::rems::<F>(2, 0, 1), wom::rems::<F>(5, 3, 4)],
+            program: vec![wom::rems(2, 0, 1), wom::rems(5, 3, 4)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 7), (13, 43), (14, 7)],
             expected_registers: vec![(12, 0), (15, 1)],
@@ -1911,7 +1911,7 @@ mod tests {
 
         // -43 % 7 = -1 (remainder has sign of dividend)
         let spec = TestSpec {
-            program: vec![wom::rems::<F>(2, 0, 1)],
+            program: vec![wom::rems(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-43_i32) as u32), (11, 7)],
             expected_registers: vec![(12, (-1_i32) as u32)],
@@ -1927,7 +1927,7 @@ mod tests {
 
         // 100 % 7 = 2
         let spec = TestSpec {
-            program: vec![wom::remu::<F>(2, 0, 1)],
+            program: vec![wom::remu(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 100), (11, 7)],
             expected_registers: vec![(12, 2)],
@@ -1943,7 +1943,7 @@ mod tests {
 
         // 42 % 0 = 42 (RISC-V spec: returns dividend)
         let spec = TestSpec {
-            program: vec![wom::remu::<F>(2, 0, 1)],
+            program: vec![wom::remu(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 0)],
             expected_registers: vec![(12, 42)],
@@ -1961,7 +1961,7 @@ mod tests {
 
         // 0x0000_0000_0000_002A / 0x0000_0000_0000_0007 = 0x0000_0000_0000_0006
         let spec = TestSpec {
-            program: vec![wom::div_64::<F>(4, 0, 2)],
+            program: vec![wom::div_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 42),
@@ -1982,7 +1982,7 @@ mod tests {
 
         // 0x0000_0001_0000_0000 / 0x0000_0000_0000_0002 = 0x0000_0000_8000_0000
         let spec = TestSpec {
-            program: vec![wom::div_64::<F>(4, 0, 2)],
+            program: vec![wom::div_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -2003,7 +2003,7 @@ mod tests {
 
         // 0xFFFF_FFFF_FFFF_FFFF / 0x0000_0000_0000_0002 = 0x7FFF_FFFF_FFFF_FFFF
         let spec = TestSpec {
-            program: vec![wom::divu_64::<F>(4, 0, 2)],
+            program: vec![wom::divu_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_FFFF),
@@ -2024,7 +2024,7 @@ mod tests {
 
         // 4294967297 % 3 = 2
         let spec = TestSpec {
-            program: vec![wom::remu_64::<F>(4, 0, 2)],
+            program: vec![wom::remu_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 1),
@@ -2047,7 +2047,7 @@ mod tests {
         // -43 as i64 = 0xFFFF_FFFF_FFFF_FFD5
         // -1 as i64 = 0xFFFF_FFFF_FFFF_FFFF
         let spec = TestSpec {
-            program: vec![wom::rems_64::<F>(4, 0, 2)],
+            program: vec![wom::rems_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_FFD5),
@@ -2068,7 +2068,7 @@ mod tests {
 
         // i32::MIN / -1 = i32::MIN (RISC-V signed overflow returns dividend)
         let spec = TestSpec {
-            program: vec![wom::div::<F>(2, 0, 1)],
+            program: vec![wom::div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, i32::MIN as u32), (11, (-1_i32) as u32)],
             expected_registers: vec![(12, i32::MIN as u32)],
@@ -2084,7 +2084,7 @@ mod tests {
 
         // i32::MIN % -1 = 0 (RISC-V signed overflow returns zero)
         let spec = TestSpec {
-            program: vec![wom::rems::<F>(2, 0, 1)],
+            program: vec![wom::rems(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, i32::MIN as u32), (11, (-1_i32) as u32)],
             expected_registers: vec![(12, 0)],
@@ -2102,7 +2102,7 @@ mod tests {
         // This produces carries up to 4079 in the range tuple checker,
         // requiring sizes[1] >= 4096 (the 64-bit default).
         let spec = TestSpec {
-            program: vec![wom::div_64::<F>(4, 0, 2)],
+            program: vec![wom::div_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 1),
@@ -2181,10 +2181,10 @@ mod tests {
         // Verifies: FP restored, post-return instruction operates in the caller frame.
         let spec = TestSpec {
             program: vec![
-                wom::ret::<F>(10, 11), // PC=0: return to PC=8, FP=reg[11]
-                wom::halt(),           // PC=4: skipped
+                wom::ret(10, 11), // PC=0: return to PC=8, FP=reg[11]
+                wom::halt(),      // PC=4: skipped
                 wom::add_imm(0, 5, 1_i16), // PC=8: caller[0] = caller[5] + 1
-                                       // PC=12: halt (appended by test_spec)
+                                  // PC=12: halt (appended by test_spec)
             ],
             start_fp: 50,
             start_registers: vec![
@@ -2220,11 +2220,11 @@ mod tests {
         // Verifies: saved PC/FP and post-call computation in the new frame.
         let spec = TestSpec {
             program: vec![
-                wom::call::<F>(10, 11, 12, 120), // PC=0: call to PC=12, FP offset=120
-                wom::halt(),                     // PC=4: skipped (return would land here)
-                wom::halt(),                     // PC=8: skipped
-                wom::add_imm(0, 3, 7_i16),       // PC=12: new_frame[0] = new_frame[3]+7
-                                                 // PC=16: halt (appended by test_spec)
+                wom::call(10, 11, 12, 120), // PC=0: call to PC=12, FP offset=120
+                wom::halt(),                // PC=4: skipped (return would land here)
+                wom::halt(),                // PC=8: skipped
+                wom::add_imm(0, 3, 7_i16),  // PC=12: new_frame[0] = new_frame[3]+7
+                                            // PC=16: halt (appended by test_spec)
             ],
             start_fp: 20,
             start_registers: vec![
@@ -2260,11 +2260,11 @@ mod tests {
         // Verifies: saved PC/FP and post-call computation, with PC from register.
         let spec = TestSpec {
             program: vec![
-                wom::call_indirect::<F>(10, 11, 12, 120), // PC=0: call indirect, FP offset=120
-                wom::halt(),                              // PC=4: skipped
-                wom::halt(),                              // PC=8: skipped
-                wom::add_imm(0, 3, 7_i16),                // PC=12: new_frame[0] = new_frame[3]+7
-                                                          // PC=16: halt (appended by test_spec)
+                wom::call_indirect(10, 11, 12, 120), // PC=0: call indirect, FP offset=120
+                wom::halt(),                         // PC=4: skipped
+                wom::halt(),                         // PC=8: skipped
+                wom::add_imm(0, 3, 7_i16),           // PC=12: new_frame[0] = new_frame[3]+7
+                                                     // PC=16: halt (appended by test_spec)
             ],
             start_fp: 20,
             start_registers: vec![
@@ -2306,12 +2306,12 @@ mod tests {
         // Verifies: round-trip call/return, computation in both frames persists.
         let spec = TestSpec {
             program: vec![
-                wom::call::<F>(10, 11, 16, 120), // PC=0: call to PC=16, FP offset=120
-                wom::add_imm(0, 5, 1_i16),       // PC=4: caller[0] = caller[5]+1 (after return)
-                wom::halt(),                     // PC=8: halt after return
-                wom::halt(),                     // PC=12: padding
-                wom::add_imm(3, 3, 42_i16),      // PC=16: callee[3] = 0 + 42
-                wom::ret::<F>(10, 11),           // PC=20: return to caller
+                wom::call(10, 11, 16, 120), // PC=0: call to PC=16, FP offset=120
+                wom::add_imm(0, 5, 1_i16),  // PC=4: caller[0] = caller[5]+1 (after return)
+                wom::halt(),                // PC=8: halt after return
+                wom::halt(),                // PC=12: padding
+                wom::add_imm(3, 3, 42_i16), // PC=16: callee[3] = 0 + 42
+                wom::ret(10, 11),           // PC=20: return to caller
             ],
             start_fp: 20,
             start_registers: vec![
