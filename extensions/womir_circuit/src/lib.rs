@@ -23,6 +23,7 @@ pub mod execution;
 
 pub mod adapters;
 mod base_alu;
+mod call;
 mod const32;
 mod divrem;
 mod jump;
@@ -34,6 +35,7 @@ mod shift;
 mod utils;
 
 pub use base_alu::*;
+pub use call::*;
 pub use const32::*;
 pub use divrem::*;
 pub use jump::*;

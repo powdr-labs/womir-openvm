@@ -31,9 +31,9 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode, HintStoreOpcode,
-    JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom,
-    Shift64Opcode, ShiftOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode,
+    HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode,
+    MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 
 use serde::{Deserialize, Serialize};
@@ -107,6 +107,7 @@ pub enum WomirExecutor {
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     Jump(JumpExecutor),
     Const32(Const32Executor),
+    Call(Rv32CallExecutor),
     HintStore(Rv32HintStoreExecutor),
 }
 
@@ -207,6 +208,9 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
 
         let const32 = Const32Executor::new(ConstOpcodes::CLASS_OFFSET);
         inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
+
+        let call = Rv32CallExecutor::new(CallAdapterExecutor, CallOpcode::CLASS_OFFSET);
+        inventory.add_executor(call, CallOpcode::iter().map(|x| x.global_opcode()))?;
 
         let hint_store =
             Rv32HintStoreExecutor::new(pointer_max_bits, HintStoreOpcode::CLASS_OFFSET);
@@ -387,6 +391,12 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Womir {
             memory_bridge,
         );
         inventory.add_air(const32);
+
+        let call = CallAir::new(
+            CallAdapterAir::new(exec_bridge, memory_bridge, range_checker, pointer_max_bits),
+            CallCoreAir::new(CallOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(call);
 
         let hint_store = Rv32HintStoreAir::new(
             exec_bridge,
@@ -597,6 +607,16 @@ where
         inventory.next_air::<Const32Air>()?;
         let const32 = Const32Chip::new(Const32Filler::new(bitwise_lu.clone()), mem_helper.clone());
         inventory.add_executor_chip(const32);
+
+        inventory.next_air::<CallAir>()?;
+        let call = CallChip::new(
+            CallFiller::new(
+                CallAdapterFiller::new(range_checker.clone(), pointer_max_bits),
+                CallOpcode::CLASS_OFFSET,
+            ),
+            mem_helper.clone(),
+        );
+        inventory.add_executor_chip(call);
 
         inventory.next_air::<Rv32HintStoreAir>()?;
         let hint_store = Rv32HintStoreChip::new(
