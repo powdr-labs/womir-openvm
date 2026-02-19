@@ -26,7 +26,7 @@ use wasmparser::{MemArg, Operator as Op, ValType};
 use womir::{
     interpreter::linker::LabelValue,
     loader::{
-        FunctionAsm, Global, Module,
+        FunctionAsm, FunctionRef, Global, MemoryEntry, Module,
         passes::dag::WasmValue,
         rwm::flattening::Context,
         settings::{
@@ -69,7 +69,7 @@ pub struct LinkedProgram<'a, F: PrimeField32> {
 }
 
 impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
-    pub fn new(module: Module<'a>, functions: Vec<FunctionAsm<Directive<F>>>) -> Self {
+    pub fn new(mut module: Module<'a>, functions: Vec<FunctionAsm<Directive<F>>>) -> Self {
         let (linked_program, mut label_map) = womir::interpreter::linker::link(functions, 1);
 
         for v in label_map.values_mut() {
@@ -94,44 +94,50 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         // We assume that the loop above removes a single `nop` introduced by the linker.
         assert_eq!(linked_instructions.len(), start_offset - 1);
 
-        let memory_image = Default::default();
-        // let memory_image = std::mem::take(&mut module.initial_memory)
-        //     .into_iter()
-        //     .flat_map(|(addr, value)| {
-        //         use womir::loader::MemoryEntry::*;
-        //         let v = match value {
-        //             Value(v) => v,
-        //             FuncAddr(idx) => {
-        //                 let label = func_idx_to_label(idx);
-        //                 label_map[&label].pc
-        //             }
-        //             FuncFrameSize(func_idx) => {
-        //                 let label = func_idx_to_label(func_idx);
-        //                 label_map[&label].frame_size.unwrap()
-        //             }
-        //             NullFuncType => NULL_REF[0],
-        //             NullFuncFrameSize => NULL_REF[1],
-        //             NullFuncAddr => NULL_REF[2],
-        //         };
-        //
-        //         [
-        //             v & 0xff,
-        //             (v >> 8) & 0xff,
-        //             (v >> 16) & 0xff,
-        //             (v >> 24) & 0xff,
-        //         ]
-        //         .into_iter()
-        //         .enumerate()
-        //         .filter_map(move |(i, byte)| {
-        //             const ROM_ID: u32 = 2;
-        //             if byte != 0 {
-        //                 Some(((ROM_ID, addr + i as u32), F::from_canonical_u32(byte)))
-        //             } else {
-        //                 None
-        //             }
-        //         })
-        //     })
-        //     .collect();
+        let memory_image = std::mem::take(&mut module.initial_memory)
+            .into_iter()
+            .flat_map(|(addr, value)| {
+                let v = match value {
+                    MemoryEntry::Value(v) => v,
+                    MemoryEntry::FuncAddr(idx) => {
+                        let label = func_idx_to_label(idx);
+                        label_map[&label].pc
+                    }
+                    MemoryEntry::FuncFrameSize(func_idx) => {
+                        // In RWM mode, frame sizes are not used.
+                        // Return frame_size if available, otherwise 0.
+                        let label = func_idx_to_label(func_idx);
+                        label_map[&label].frame_size.unwrap_or(0)
+                    }
+                    MemoryEntry::NullFuncType => {
+                        NULL_REF[FunctionRef::<OpenVMSettings<F>>::TYPE_ID]
+                    }
+                    MemoryEntry::NullFuncFrameSize => {
+                        NULL_REF[FunctionRef::<OpenVMSettings<F>>::FUNC_FRAME_SIZE]
+                    }
+                    MemoryEntry::NullFuncAddr => {
+                        NULL_REF[FunctionRef::<OpenVMSettings<F>>::FUNC_ADDR]
+                    }
+                };
+
+                [
+                    v & 0xff,
+                    (v >> 8) & 0xff,
+                    (v >> 16) & 0xff,
+                    (v >> 24) & 0xff,
+                ]
+                .into_iter()
+                .enumerate()
+                .filter_map(move |(i, byte)| {
+                    const ROM_ID: u32 = 2;
+                    if byte != 0 {
+                        Some(((ROM_ID, addr + i as u32), byte as u8))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
 
         Self {
             module,
