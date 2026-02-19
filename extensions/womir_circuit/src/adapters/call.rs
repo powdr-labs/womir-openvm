@@ -31,8 +31,8 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 use openvm_circuit::arch::ExecutionBridge;
 
-use crate::execution::ExecutionState;
 use crate::memory_config::FP_AS;
+use crate::{adapters::fp_addr, execution::ExecutionState};
 
 use super::{RV32_REGISTER_NUM_LIMBS, tracing_read, tracing_read_fp};
 
@@ -171,7 +171,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
         // 0. Read current FP from FP_AS
         self.memory_bridge
             .read(
-                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                fp_addr::<AB::F>(),
                 [local.from_state.fp],
                 timestamp_pp(),
                 &local.fp_read_aux,
@@ -306,7 +306,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
         // 5. Write new FP to FP_AS
         self.memory_bridge
             .write(
-                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                fp_addr::<AB::F>(),
                 [new_fp_composed],
                 timestamp_pp(),
                 &local.fp_write_aux,
