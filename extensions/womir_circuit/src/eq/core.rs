@@ -12,7 +12,7 @@ use openvm_circuit_primitives_derive::{AlignedBorrow, AlignedBytesBorrow};
 use openvm_instructions::{LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP};
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
-    p3_air::{AirBuilder, BaseAir},
+    p3_air::BaseAir,
     p3_field::{Field, FieldAlgebra, PrimeField32},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
@@ -34,10 +34,12 @@ pub struct EqCoreCols<T, const NUM_LIMBS: usize> {
     pub opcode_eq_flag: T,
     pub opcode_neq_flag: T,
 
-    /// For proving inequality: at the first position i where b[i] != c[i],
-    /// diff_inv_marker[i] = inverse(b[i] - c[i]). All other positions are 0.
-    /// When b == c, all positions are 0.
-    pub diff_inv_marker: [T; NUM_LIMBS],
+    /// Witness for `sum((b[i] - c[i])^2)`.
+    pub diff_sq_sum: T,
+
+    /// Inverse witness for `sum((b[i] - c[i])^2)`.
+    /// Set to 0 when values are equal; otherwise set to the inverse of the sum.
+    pub sum_sq_inv: T,
 }
 
 // ======================== Core AIR ========================
@@ -87,27 +89,22 @@ where
 
         let b = &cols.b;
         let c = &cols.c;
-        let inv_marker = &cols.diff_inv_marker;
 
         // 1 if claiming values are equal, 0 otherwise.
         // For EQ: cmp_result=1 means equal → cmp_eq=1.
         // For NEQ: cmp_result=0 means equal → cmp_eq=1.
         let cmp_eq =
             cols.cmp_result * cols.opcode_eq_flag + not(cols.cmp_result) * cols.opcode_neq_flag;
-        let mut sum = cmp_eq.clone();
-
-        // Equality proof via multiplicative inverses:
-        // - If b == c: cmp_eq must be 1, all (b[i] - c[i]) are 0, so sum = 1. ✓
-        //   The second constraint cmp_eq * (b[i] - c[i]) = 0 holds since differences are 0.
-        // - If b != c: cmp_eq must be 0, and at some position i where b[i] != c[i],
-        //   inv_marker[i] = inverse(b[i] - c[i]), so (b[i] - c[i]) * inv_marker[i] = 1,
-        //   making sum = 0 + 1 = 1. ✓
-        //   The second constraint trivially holds since cmp_eq = 0.
+        // Over byte limbs, `sum((b[i] - c[i])^2)` is zero iff all limbs are equal.
+        let mut computed_diff_sq_sum = AB::Expr::ZERO;
         for i in 0..NUM_LIMBS {
-            sum += (b[i] - c[i]) * inv_marker[i];
-            builder.assert_zero(cmp_eq.clone() * (b[i] - c[i]));
+            let diff = b[i] - c[i];
+            computed_diff_sq_sum += diff.clone() * diff;
         }
-        builder.when(is_valid.clone()).assert_one(sum);
+        let diff_sq_sum = cols.diff_sq_sum.into();
+        builder.assert_zero(diff_sq_sum.clone() - computed_diff_sq_sum);
+        builder.assert_zero(cmp_eq.clone() * diff_sq_sum.clone());
+        builder.assert_zero(cmp_eq + diff_sq_sum * cols.sum_sq_inv - is_valid.clone());
 
         let expected_opcode = flags
             .iter()
@@ -237,11 +234,10 @@ where
         let core_row: &mut EqCoreCols<F, NUM_LIMBS> = core_row.borrow_mut();
 
         let is_eq = record.local_opcode == EqOpcode::EQ as u8;
-        let (cmp_result, diff_idx, diff_inv_val) =
+        let (cmp_result, diff_sq_sum, sum_sq_inv) =
             run_eq::<F, NUM_LIMBS>(is_eq, &record.b, &record.c);
-
-        core_row.diff_inv_marker = [F::ZERO; NUM_LIMBS];
-        core_row.diff_inv_marker[diff_idx] = diff_inv_val;
+        core_row.diff_sq_sum = diff_sq_sum;
+        core_row.sum_sq_inv = sum_sq_inv;
 
         core_row.opcode_eq_flag = F::from_bool(is_eq);
         core_row.opcode_neq_flag = F::from_bool(!is_eq);
@@ -255,27 +251,29 @@ where
 
 // ======================== Helper ========================
 
-/// Returns (cmp_result, diff_idx, diff_inv_val).
+/// Returns `(cmp_result, diff_sq_sum, sum_sq_inv)`.
 ///
-/// When values are equal: diff_idx = 0, diff_inv_val = 0.
-/// When values differ at position i: diff_idx = i, diff_inv_val = inverse(b[i] - c[i]).
+/// `sum_sq_inv` is 0 when values are equal, otherwise inverse of
+/// `sum((x[i] - y[i])^2)`.
 #[inline(always)]
 fn run_eq<F, const NUM_LIMBS: usize>(
     is_eq: bool,
     x: &[u8; NUM_LIMBS],
     y: &[u8; NUM_LIMBS],
-) -> (bool, usize, F)
+) -> (bool, F, F)
 where
     F: PrimeField32,
 {
+    let mut is_equal = true;
+    let mut sum_sq = F::ZERO;
     for i in 0..NUM_LIMBS {
-        if x[i] != y[i] {
-            return (
-                !is_eq,
-                i,
-                (F::from_canonical_u8(x[i]) - F::from_canonical_u8(y[i])).inverse(),
-            );
-        }
+        let xi = F::from_canonical_u8(x[i]);
+        let yi = F::from_canonical_u8(y[i]);
+        let diff = xi - yi;
+        sum_sq += diff * diff;
+        is_equal &= x[i] == y[i];
     }
-    (is_eq, 0, F::ZERO)
+    let cmp_result = if is_eq { is_equal } else { !is_equal };
+    let sum_sq_inv = if is_equal { F::ZERO } else { sum_sq.inverse() };
+    (cmp_result, sum_sq, sum_sq_inv)
 }
