@@ -16,6 +16,8 @@
   (func (export "shr_u") (param $x i32) (param $y i32) (result i32) (i32.shr_u (local.get $x) (local.get $y)))
   (func (export "rotl") (param $x i32) (param $y i32) (result i32) (i32.rotl (local.get $x) (local.get $y)))
   (func (export "rotr") (param $x i32) (param $y i32) (result i32) (i32.rotr (local.get $x) (local.get $y)))
+  (func (export "extend8_s") (param $x i32) (result i32) (i32.extend8_s (local.get $x)))
+  (func (export "extend16_s") (param $x i32) (result i32) (i32.extend16_s (local.get $x)))
 )
 
 (assert_return (invoke "add" (i32.const 1) (i32.const 1)) (i32.const 2))
@@ -225,3 +227,19 @@
 (assert_return (invoke "rotr" (i32.const 0x769abcdf) (i32.const 0x8000000d)) (i32.const 0xe6fbb4d5))
 (assert_return (invoke "rotr" (i32.const 1) (i32.const 31)) (i32.const 2))
 (assert_return (invoke "rotr" (i32.const 0x80000000) (i32.const 31)) (i32.const 1))
+
+(assert_return (invoke "extend8_s" (i32.const 0)) (i32.const 0))
+(assert_return (invoke "extend8_s" (i32.const 0x7f)) (i32.const 127))
+(assert_return (invoke "extend8_s" (i32.const 0x80)) (i32.const -128))
+(assert_return (invoke "extend8_s" (i32.const 0xff)) (i32.const -1))
+(assert_return (invoke "extend8_s" (i32.const 0x012345_00)) (i32.const 0))
+(assert_return (invoke "extend8_s" (i32.const 0xfedcba_80)) (i32.const -0x80))
+(assert_return (invoke "extend8_s" (i32.const -1)) (i32.const -1))
+
+(assert_return (invoke "extend16_s" (i32.const 0)) (i32.const 0))
+(assert_return (invoke "extend16_s" (i32.const 0x7fff)) (i32.const 32767))
+(assert_return (invoke "extend16_s" (i32.const 0x8000)) (i32.const -32768))
+(assert_return (invoke "extend16_s" (i32.const 0xffff)) (i32.const -1))
+(assert_return (invoke "extend16_s" (i32.const 0x0123_0000)) (i32.const 0))
+(assert_return (invoke "extend16_s" (i32.const 0xfedc_8000)) (i32.const -0x8000))
+(assert_return (invoke "extend16_s" (i32.const -1)) (i32.const -1))
