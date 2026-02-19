@@ -24,7 +24,7 @@ use openvm_rv32im_circuit::BaseAluExecutor as BaseAluExecutorInner;
 use openvm_rv32im_transpiler::BaseAluOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
+use crate::adapters::{BaseAluAdapterExecutor, imm_to_bytes};
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
@@ -73,7 +73,7 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> BaseAluExecutor<NUM_LIMBS
         let c_u32 = c.as_canonical_u32();
         *data = BaseAluPreCompute {
             c: if is_imm {
-                u32::from_le_bytes(imm_to_bytes::<{ RV32_REGISTER_NUM_LIMBS }>(c_u32))
+                u32::from_le_bytes(imm_to_bytes(c_u32))
             } else {
                 c_u32
             },

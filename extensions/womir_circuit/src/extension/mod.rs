@@ -129,7 +129,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
 
         let base_alu_64 = BaseAlu64Executor::new(
-            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS>::default(),
+            BaseAluAdapterExecutor::default(),
             BaseAlu64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(
@@ -143,10 +143,8 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         );
         inventory.add_executor(mul, MulOpcode::iter().map(|x| x.global_opcode()))?;
 
-        let mul_64 = Mul64Executor::new(
-            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS>::default(),
-            Mul64Opcode::CLASS_OFFSET,
-        );
+        let mul_64 =
+            Mul64Executor::new(BaseAluAdapterExecutor::default(), Mul64Opcode::CLASS_OFFSET);
         inventory.add_executor(mul_64, Mul64Opcode::iter().map(|x| x.global_opcode()))?;
         let less_than = Rv32LessThanExecutor::new(
             Rv32BaseAluAdapterExecutor::default(),
@@ -154,15 +152,10 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         );
         inventory.add_executor(less_than, LessThanOpcode::iter().map(|x| x.global_opcode()))?;
 
-        let less_than_64 =
-            LessThan64Executor::new(
-                BaseAluAdapterExecutorDifferentInputsOutputs::<
-                    W64_NUM_LIMBS,
-                    W64_REG_OPS,
-                    W32_REG_OPS,
-                >::default(),
-                LessThan64Opcode::CLASS_OFFSET,
-            );
+        let less_than_64 = LessThan64Executor::new(
+            BaseAluAdapterExecutorDifferentInputsOutputs::default(),
+            LessThan64Opcode::CLASS_OFFSET,
+        );
         inventory.add_executor(
             less_than_64,
             LessThan64Opcode::iter().map(|x| x.global_opcode()),
@@ -175,7 +168,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(divrem, DivRemOpcode::iter().map(|x| x.global_opcode()))?;
 
         let divrem_64 = DivRem64Executor::new(
-            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS>::default(),
+            BaseAluAdapterExecutor::default(),
             DivRem64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(divrem_64, DivRem64Opcode::iter().map(|x| x.global_opcode()))?;
@@ -187,7 +180,7 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_executor(shift, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
 
         let shift_64 = Shift64Executor::new(
-            BaseAluAdapterExecutor::<W64_NUM_LIMBS, W64_REG_OPS>::default(),
+            BaseAluAdapterExecutor::default(),
             Shift64Opcode::CLASS_OFFSET,
         );
         inventory.add_executor(shift_64, Shift64Opcode::iter().map(|x| x.global_opcode()))?;
@@ -468,7 +461,7 @@ where
         inventory.next_air::<BaseAlu64Air>()?;
         let base_alu_64 = BaseAlu64Chip::new(
             BaseAluFiller::new(
-                BaseAluAdapterFiller::<W64_REG_OPS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
                 BaseAlu64Opcode::CLASS_OFFSET,
             ),
@@ -504,7 +497,7 @@ where
         inventory.next_air::<Mul64Air>()?;
         let mul_64 = Mul64Chip::new(
             MultiplicationFiller::new(
-                BaseAluAdapterFiller::<W64_REG_OPS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::new(bitwise_lu.clone()),
                 range_tuple_chip.clone(),
                 Mul64Opcode::CLASS_OFFSET,
             ),
@@ -525,9 +518,7 @@ where
         inventory.next_air::<LessThan64Air>()?;
         let less_than_64 = LessThan64Chip::new(
             LessThanFiller::new(
-                BaseAluAdapterFillerDifferentInputsOutputs::<W64_REG_OPS, W32_REG_OPS>::new(
-                    bitwise_lu.clone(),
-                ),
+                BaseAluAdapterFillerDifferentInputsOutputs::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
                 LessThan64Opcode::CLASS_OFFSET,
             ),
@@ -550,7 +541,7 @@ where
         inventory.next_air::<DivRem64Air>()?;
         let divrem_64 = DivRem64Chip::new(
             DivRemFiller::new(
-                BaseAluAdapterFiller::<W64_REG_OPS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
                 range_tuple_chip.clone(),
                 DivRem64Opcode::CLASS_OFFSET,
@@ -574,7 +565,7 @@ where
         inventory.next_air::<Shift64Air>()?;
         let shift_64 = Shift64Chip::new(
             ShiftFiller::new(
-                BaseAluAdapterFiller::<W64_REG_OPS>::new(bitwise_lu.clone()),
+                BaseAluAdapterFiller::new(bitwise_lu.clone()),
                 bitwise_lu.clone(),
                 range_checker.clone(),
                 Shift64Opcode::CLASS_OFFSET,
