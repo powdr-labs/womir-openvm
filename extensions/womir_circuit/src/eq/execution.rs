@@ -10,7 +10,7 @@ use std::{
     mem::size_of,
 };
 
-use crate::memory_config::FpMemory;
+use crate::{adapters::W32_REG_OPS, memory_config::FpMemory};
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
@@ -31,22 +31,16 @@ use crate::utils::to_u64;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
-pub struct EqExecutor<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>(
+pub struct EqExecutor<const NUM_LIMBS: usize, const NUM_READ_OPS: usize>(
     pub  EqExecutorInner<
-        BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>,
+        BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, W32_REG_OPS>,
         NUM_LIMBS,
     >,
 );
 
-impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
-    EqExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
-{
+impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize> EqExecutor<NUM_LIMBS, NUM_READ_OPS> {
     pub fn new(
-        adapter: BaseAluAdapterExecutorDifferentInputsOutputs<
-            NUM_LIMBS,
-            NUM_READ_OPS,
-            NUM_WRITE_OPS,
-        >,
+        adapter: BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, W32_REG_OPS>,
         offset: usize,
     ) -> Self {
         Self(EqExecutorInner::new(adapter, offset))
@@ -64,9 +58,7 @@ pub(super) struct EqPreCompute {
     b: u32,
 }
 
-impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
-    EqExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
-{
+impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize> EqExecutor<NUM_LIMBS, NUM_READ_OPS> {
     /// Return `(is_imm, is_neq)`.
     #[inline(always)]
     pub(super) fn pre_compute_impl<F: PrimeField32>(
@@ -118,8 +110,8 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
-    InterpreterExecutor<F> for EqExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
+impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize> InterpreterExecutor<F>
+    for EqExecutor<NUM_LIMBS, NUM_READ_OPS>
 where
     F: PrimeField32,
 {
@@ -145,8 +137,8 @@ where
     }
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
-    InterpreterMeteredExecutor<F> for EqExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
+impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize> InterpreterMeteredExecutor<F>
+    for EqExecutor<NUM_LIMBS, NUM_READ_OPS>
 where
     F: PrimeField32,
 {
