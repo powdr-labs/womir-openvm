@@ -148,10 +148,10 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             .when(is_valid.clone() - write_count)
             .assert_zero(local_cols.rd_rs2_ptr);
 
-        // Read fp from FP address space (address space FP_AS, address 0).
+        // Read fp
         self.memory_bridge
             .read(
-                fp_addr::<AB::F>(),
+                fp_addr(local_cols.from_state.fp),
                 [local_cols.from_state.fp],
                 timestamp_pp(),
                 &local_cols.fp_read_aux,

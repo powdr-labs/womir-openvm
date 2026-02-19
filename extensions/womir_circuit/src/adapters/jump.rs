@@ -86,10 +86,10 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAir {
             timestamp + AB::F::from_canonical_usize(timestamp_delta - 1)
         };
 
-        // Read FP from FP_AS address space (address space FP_AS, address 0).
+        // Read FP
         self.memory_bridge
             .read(
-                fp_addr::<AB::F>(),
+                fp_addr(local.from_state.fp),
                 [local.from_state.fp],
                 timestamp_pp(),
                 &local.fp_read_aux,

@@ -127,10 +127,10 @@ impl<
             timestamp + AB::F::from_canonical_usize(timestamp_delta - 1)
         };
 
-        // Read fp from FP address space (address space FP_AS, address 0).
+        // Read fp
         self.memory_bridge
             .read(
-                fp_addr::<AB::F>(),
+                fp_addr(local.from_state.fp),
                 [local.from_state.fp],
                 timestamp_pp(),
                 &local.fp_read_aux,

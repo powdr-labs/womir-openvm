@@ -151,7 +151,7 @@ impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
         // read fp
         self.memory_bridge
             .read(
-                fp_addr::<AB::F>(),
+                fp_addr(local_cols.from_state.fp),
                 [local_cols.from_state.fp],
                 timestamp_pp(),
                 &local_cols.fp_read_aux,

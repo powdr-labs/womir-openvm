@@ -74,10 +74,10 @@ where
             timestamp + AB::F::from_canonical_usize(timestamp_delta - 1)
         };
 
-        // Read fp from FP address space (address space FP_AS, address 0)
+        // Read fp
         self.memory_bridge
             .read(
-                fp_addr::<AB::F>(),
+                fp_addr(cols.from_state.fp),
                 [cols.from_state.fp],
                 timestamp_pp(),
                 &cols.fp_read_aux,
