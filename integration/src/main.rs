@@ -22,8 +22,10 @@ use std::sync::{Mutex, RwLock};
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
-use womir::loader::flattening::WriteOnceAsm;
-use womir::loader::{FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics};
+use womir::loader::rwm::RWMStages;
+use womir::loader::{
+    CommonStages, FunctionAsm, FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics,
+};
 
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
@@ -321,9 +323,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>) {
+fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) {
     let PartiallyParsedProgram { s: _, m, functions } =
-        womir::loader::load_wasm(OpenVMSettings::new(), wasm_bytes).unwrap();
+        womir::loader::load_wasm(OpenVMSettings::<F>::new(), wasm_bytes).unwrap();
 
     let num_functions = functions.len() as u32;
     let tracker = RwLock::new(Some(builtin_functions::Tracker::new(num_functions)));
@@ -334,10 +336,10 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>)
     let jobs_r = Mutex::new(jobs_r);
 
     let functions = std::thread::scope(|scope| {
-        type FunctionInProcessinng<'a> = FunctionProcessingStage<'a, OpenVMSettings<F>>;
+        type FunctionInProcessing<'a> = RWMStages<'a, OpenVMSettings<F>>;
         enum Job<'a> {
-            PatchFunc(u32, FunctionInProcessinng<'a>),
-            FinishFunc(u32, FunctionInProcessinng<'a>),
+            PatchFunc(u32, FunctionInProcessing<'a>),
+            FinishFunc(u32, FunctionInProcessing<'a>),
             LoadBuiltin(BuiltinFunction),
         }
 
@@ -364,12 +366,14 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>)
                             // Advance to BlocklessDag stage
                             let module = module.read().unwrap();
                             let dag = loop {
-                                if let FunctionProcessingStage::BlocklessDag(dag) = &mut func {
+                                if let RWMStages::CommonStages(CommonStages::BlocklessDag(dag)) =
+                                    &mut func
+                                {
                                     break dag;
                                 }
                                 func = func
                                     .advance_stage(
-                                        &OpenVMSettings::new(),
+                                        &OpenVMSettings::with_module(&module),
                                         &module,
                                         func_idx,
                                         label_gen,
@@ -390,10 +394,11 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>)
                             patched_s.send((func_idx, func)).unwrap();
                         }
                         Job::FinishFunc(func_idx, func) => {
+                            let module = module.read().unwrap();
                             let func = func
                                 .advance_all_stages(
-                                    &OpenVMSettings::new(),
-                                    &module.read().unwrap(),
+                                    &OpenVMSettings::with_module(&module),
+                                    &module,
                                     func_idx,
                                     label_gen,
                                     Some(&mut stats),
@@ -417,7 +422,8 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>)
 
         // Send the functions for processing.
         for (idx, func) in functions.into_iter().enumerate() {
-            jobs_s.send(Job::PatchFunc(idx as u32, func)).unwrap();
+            let rwm_func: FunctionInProcessing<'_> = func.into();
+            jobs_s.send(Job::PatchFunc(idx as u32, rwm_func)).unwrap();
         }
 
         // Received the patched functions, update the module, and resend for processing.
@@ -2020,7 +2026,6 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_i32() {
         run_wasm_test("../wasm_tests/i32.wast").unwrap()
     }
@@ -2068,7 +2073,6 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_return() {
         run_wasm_test("../wasm_tests/return.wast").unwrap()
     }
@@ -2107,7 +2111,6 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_fib() {
         run_single_wasm_test("../sample-programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
     }
