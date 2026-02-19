@@ -184,7 +184,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
         self.memory_bridge
             .read(
                 MemoryAddress::new(
-                    has_fp_read.clone(),
+                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
                     local.to_fp_operand + local.from_state.fp,
                 ),
                 to_fp_data,
@@ -199,7 +199,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
         self.memory_bridge
             .read(
                 MemoryAddress::new(
-                    has_pc_read.clone(),
+                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
                     local.to_pc_operand + local.from_state.fp,
                 ),
                 to_pc_data,
@@ -279,7 +279,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
         self.memory_bridge
             .write(
                 MemoryAddress::new(
-                    has_save.clone(),
+                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
                     local.save_fp_ptr + new_fp_composed.clone(),
                 ),
                 save_fp_data,
@@ -294,7 +294,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
         self.memory_bridge
             .write(
                 MemoryAddress::new(
-                    has_save.clone(),
+                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
                     local.save_pc_ptr + new_fp_composed.clone(),
                 ),
                 save_pc_data,
