@@ -984,22 +984,27 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
             // select the 1st input, otherwise select the 2nd input.
             let condition = inputs[2].as_register().unwrap().start;
 
-            // The directives to set the output to either of the alternatives
+            // The directives to set the output to either of the alternatives.
+            // For multi-word register copies, use memmove strategy (reverse order
+            // when dest >= src) to avoid clobbering source words before they're read.
             let [if_non_zero, if_zero] =
                 [&inputs[0], &inputs[1]].map(|alternative| match alternative {
-                    // This input is a register, so we issue register to register copy instructions
-                    WasmOpInput::Register(r) => r
-                        .clone()
-                        .zip(output.clone())
-                        .map(|(src, dest)| {
-                            Directive::Instruction(ib::add_imm(
-                                dest as usize,
-                                src as usize,
-                                AluImm::from(0),
-                            ))
-                        })
-                        .collect_vec(),
-                    // This input is a constant, so we issue const to register instructions
+                    WasmOpInput::Register(r) => {
+                        let mut pairs: Vec<_> = r.clone().zip(output.clone()).collect();
+                        if output.start >= r.start {
+                            pairs.reverse();
+                        }
+                        pairs
+                            .into_iter()
+                            .map(|(src, dest)| {
+                                Directive::Instruction(ib::add_imm(
+                                    dest as usize,
+                                    src as usize,
+                                    AluImm::from(0),
+                                ))
+                            })
+                            .collect_vec()
+                    }
                     WasmOpInput::Constant(value) => const_wasm_value(module, value, output.clone()),
                 });
 
