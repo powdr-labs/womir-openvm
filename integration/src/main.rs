@@ -2037,7 +2037,6 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_address() {
         run_wasm_test("../wasm_tests/address.wast").unwrap()
     }

@@ -1376,9 +1376,11 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                 }
                 2.. => {
                     // read two words
+                    // Load hi word first: if output == base_addr, loading lo first would
+                    // clobber the address before the second load reads it.
                     vec![
-                        Directive::Instruction(ib::loadw(output, base_addr, imm)),
                         Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4)),
+                        Directive::Instruction(ib::loadw(output, base_addr, imm)),
                     ]
                 }
             }
