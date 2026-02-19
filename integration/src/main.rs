@@ -2031,7 +2031,6 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_i64() {
         run_wasm_test("../wasm_tests/i64.wast").unwrap()
     }
