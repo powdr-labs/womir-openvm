@@ -41,7 +41,7 @@ use openvm_circuit::arch::ExecutionBridge;
 use crate::execution::ExecutionState;
 
 use super::{
-    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, W32_REG_OPS, fp, reg_addr, tracing_read,
+    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, W32_REG_OPS, fp_addr, reg_addr, tracing_read,
     tracing_read_fp, tracing_read_imm, tracing_write,
 };
 
@@ -127,10 +127,10 @@ impl<
             timestamp + AB::F::from_canonical_usize(timestamp_delta - 1)
         };
 
-        // Read fp from FP address space (address space FP_AS, address 0).
+        // Read fp
         self.memory_bridge
             .read(
-                fp::<AB::F>(),
+                fp_addr::<AB::F>(),
                 [local.from_state.fp],
                 timestamp_pp(),
                 &local.fp_read_aux,

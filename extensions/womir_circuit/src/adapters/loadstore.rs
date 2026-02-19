@@ -47,7 +47,7 @@ use openvm_circuit::arch::{ExecutionBridge, ExecutionState as OvmExecutionState}
 
 use super::RV32_REGISTER_NUM_LIMBS;
 use super::{
-    RV32_CELL_BITS, fp, memory_read, reg_addr, timed_write, tracing_read, tracing_read_fp,
+    RV32_CELL_BITS, fp_addr, memory_read, reg_addr, timed_write, tracing_read, tracing_read_fp,
 };
 use crate::execution::ExecutionState;
 
@@ -150,10 +150,10 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             .when(is_valid.clone() - write_count)
             .assert_zero(local_cols.rd_rs2_ptr);
 
-        // Read fp from FP address space (address space FP_AS, address 0).
+        // Read fp
         self.memory_bridge
             .read(
-                fp::<AB::F>(),
+                fp_addr::<AB::F>(),
                 [local_cols.from_state.fp],
                 timestamp_pp(),
                 &local_cols.fp_read_aux,

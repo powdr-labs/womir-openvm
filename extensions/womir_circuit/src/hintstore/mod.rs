@@ -36,7 +36,7 @@ use openvm_womir_transpiler::{
 };
 
 use crate::adapters::{
-    fp, mem_addr, read_rv32_register, reg_addr, tracing_read, tracing_read_fp, tracing_write,
+    fp_addr, mem_addr, read_rv32_register, reg_addr, tracing_read, tracing_read_fp, tracing_write,
 };
 use crate::execution::ExecutionState;
 use struct_reflection::{StructReflection, StructReflectionHelper};
@@ -153,7 +153,7 @@ impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
         // read fp
         self.memory_bridge
             .read(
-                fp::<AB::F>(),
+                fp_addr::<AB::F>(),
                 [local_cols.from_state.fp],
                 timestamp_pp(),
                 &local_cols.fp_read_aux,
