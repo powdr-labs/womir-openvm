@@ -2041,13 +2041,11 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_memory_grow() {
         run_wasm_test("../wasm_tests/memory_grow.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_call_indirect() {
         run_wasm_test("../wasm_tests/call_indirect.wast").unwrap()
     }
@@ -2059,13 +2057,11 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_call() {
         run_wasm_test("../wasm_tests/call.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_br_if() {
         run_wasm_test("../wasm_tests/br_if.wast").unwrap()
     }
@@ -2076,13 +2072,11 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_loop() {
         run_wasm_test("../wasm_tests/loop.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_memory_fill() {
         run_wasm_test("../wasm_tests/memory_fill.wast").unwrap()
     }
@@ -2114,7 +2108,6 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_n_first_sums() {
         run_single_wasm_test(
             "../sample-programs/n_first_sum.wasm",
@@ -2126,7 +2119,6 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_call_indirect_wasm() {
         run_single_wasm_test("../sample-programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
         run_single_wasm_test(
