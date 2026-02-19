@@ -77,7 +77,7 @@ where
         // Read fp
         self.memory_bridge
             .read(
-                fp_addr(cols.from_state.fp),
+                fp_addr::<AB::F>(),
                 [cols.from_state.fp],
                 timestamp_pp(),
                 &cols.fp_read_aux,

@@ -130,7 +130,7 @@ impl<
         // Read fp
         self.memory_bridge
             .read(
-                fp_addr(local.from_state.fp),
+                fp_addr::<AB::F>(),
                 [local.from_state.fp],
                 timestamp_pp(),
                 &local.fp_read_aux,

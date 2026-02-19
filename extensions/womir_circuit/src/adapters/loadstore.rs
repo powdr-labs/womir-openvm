@@ -151,7 +151,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
         // Read fp
         self.memory_bridge
             .read(
-                fp_addr(local_cols.from_state.fp),
+                fp_addr::<AB::F>(),
                 [local_cols.from_state.fp],
                 timestamp_pp(),
                 &local_cols.fp_read_aux,
