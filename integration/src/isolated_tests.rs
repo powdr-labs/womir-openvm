@@ -1024,6 +1024,317 @@ mod tests {
         test_spec(spec)
     }
 
+    // ==================== Eq Tests ====================
+
+    #[test]
+    fn test_eq_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] == reg[fp+1])
+        // 42 == 42 = 1
+        let spec = TestSpec {
+            program: vec![wom::eq(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 42)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_eq_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] == reg[fp+1])
+        // 10 == 20 = 0
+        let spec = TestSpec {
+            program: vec![wom::eq(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 10), (11, 20)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_neq_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] != reg[fp+1])
+        // 10 != 20 = 1
+        let spec = TestSpec {
+            program: vec![wom::neq(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 10), (11, 20)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_neq_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] != reg[fp+1])
+        // 42 != 42 = 0
+        let spec = TestSpec {
+            program: vec![wom::neq(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 42)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_eq_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = (reg[fp+0] == 100)
+        // 100 == 100 = 1
+        let spec = TestSpec {
+            program: vec![wom::eq_imm(1, 0, 100_i16)],
+            start_fp: 10,
+            start_registers: vec![(10, 100)],
+            expected_registers: vec![(11, 1)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_neq_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+1] = (reg[fp+0] != 100)
+        // 50 != 100 = 1
+        let spec = TestSpec {
+            program: vec![wom::neq_imm(1, 0, 100_i16)],
+            start_fp: 10,
+            start_registers: vec![(10, 50)],
+            expected_registers: vec![(11, 1)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    // ==================== Eq64 Tests ====================
+
+    #[test]
+    fn test_eq_64_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0000 == 0x0000_0001_0000_0000 = 1
+        let spec = TestSpec {
+            program: vec![wom::eq_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x0000_0001_0000_0000
+                (126, 0),
+                (127, 1), // reg 2 = 0x0000_0001_0000_0000
+            ],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_eq_64_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0000 == 0x0000_0002_0000_0000 = 0
+        let spec = TestSpec {
+            program: vec![wom::eq_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x0000_0001_0000_0000
+                (126, 0),
+                (127, 2), // reg 2 = 0x0000_0002_0000_0000
+            ],
+            expected_registers: vec![(128, 0), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_neq_64_true() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0000 != 0x0000_0002_0000_0000 = 1
+        let spec = TestSpec {
+            program: vec![wom::neq_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x0000_0001_0000_0000
+                (126, 0),
+                (127, 2), // reg 2 = 0x0000_0002_0000_0000
+            ],
+            expected_registers: vec![(128, 1), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_neq_64_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0x0000_0001_0000_0000 != 0x0000_0001_0000_0000 = 0
+        let spec = TestSpec {
+            program: vec![wom::neq_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x0000_0001_0000_0000
+                (126, 0),
+                (127, 1), // reg 2 = 0x0000_0001_0000_0000
+            ],
+            expected_registers: vec![(128, 0), (129, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    // ==================== Eq64 output width tests ====================
+    // WASM comparison instructions produce i32 results, so Eq64 must
+    // write only 1 word (32 bits). These tests pre-fill the high word of the
+    // destination register and verify it is preserved after the comparison.
+
+    #[test]
+    fn test_eq_64_preserves_rd_high_word() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Pre-fill the high word of the destination register (rd=4, high word at fp+5)
+        // with 0xDEAD_BEEF. After the comparison, it should be preserved.
+        //
+        // 0x0000_0001_0000_0000 == 0x0000_0001_0000_0000 = 1
+        let spec = TestSpec {
+            program: vec![wom::eq_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x0000_0001_0000_0000
+                (126, 0),
+                (127, 1),           // reg 2 = 0x0000_0001_0000_0000
+                (129, 0xDEAD_BEEF), // Pre-fill high word of rd
+            ],
+            // Result=1 in low word; high word should remain 0xDEAD_BEEF
+            expected_registers: vec![(128, 1), (129, 0xDEAD_BEEF)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_neq_64_preserves_rd_high_word() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Same idea: pre-fill high word of rd, run neq, verify high word is preserved.
+        //
+        // 0x0000_0001_0000_0000 != 0x0000_0002_0000_0000 = 1
+        let spec = TestSpec {
+            program: vec![wom::neq_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x0000_0001_0000_0000
+                (126, 0),
+                (127, 2),           // reg 2 = 0x0000_0002_0000_0000
+                (129, 0xCAFE_BABE), // Pre-fill high word of rd
+            ],
+            // Result=1 in low word; high word should remain 0xCAFE_BABE
+            expected_registers: vec![(128, 1), (129, 0xCAFE_BABE)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_eq_64_false_preserves_rd_high_word() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Even when the result is 0 (false), the high word should not be touched.
+        //
+        // 0x0000_0001_0000_0000 == 0x0000_0002_0000_0000 = 0
+        let spec = TestSpec {
+            program: vec![wom::eq_64(4, 0, 2)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 0),
+                (125, 1), // reg 0 = 0x0000_0001_0000_0000
+                (126, 0),
+                (127, 2),           // reg 2 = 0x0000_0002_0000_0000
+                (129, 0x1234_5678), // Pre-fill high word of rd
+            ],
+            // Result=0 in low word; high word should remain 0x1234_5678
+            expected_registers: vec![(128, 0), (129, 0x1234_5678)],
+            ..Default::default()
+        };
+
+        test_spec(spec)
+    }
+
+    #[test]
+    fn test_eq_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] == 42)  (64-bit comparison, imm sign-extended)
+        // 42 == 42 → 1
+        let spec = TestSpec {
+            program: vec![wom::eq_imm_64(2, 0, 42_i16)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 42),
+                (125, 0), // reg 0 = 42 (fits in low word)
+            ],
+            expected_registers: vec![(126, 1), (127, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_neq_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // reg[fp+2] = (reg[fp+0] != 42)  (64-bit comparison, imm sign-extended)
+        // 99 != 42 → 1
+        let spec = TestSpec {
+            program: vec![wom::neq_imm_64(2, 0, 42_i16)],
+            start_fp: 124,
+            start_registers: vec![
+                (124, 99),
+                (125, 0), // reg 0 = 99
+            ],
+            expected_registers: vec![(126, 1), (127, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
     // ==================== Shift Tests ====================
 
     #[test]

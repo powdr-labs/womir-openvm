@@ -1,16 +1,16 @@
-//! This module is largely a copy of extensions/rv32im/circuit/src/less_than/execution.rs.
-//! The only differences are:
-//! - OpenVM's `LessThanExecutor` is wrapped to allow for trait implementations.
-//! - In `execute_e12_impl`, we retrieve and add the frame pointer.
+//! Fast execution path for the EQ chip.
 //!
-//! This file could be condensed a lot if more of the OpenVM code was public.
+//! This follows the same pattern as the LessThan execution module:
+//! - `EqExecutor` wraps `EqExecutorInner` for orphan rule compliance
+//! - `InterpreterExecutor` and `InterpreterMeteredExecutor` provide the fast path
+//! - Frame pointer handling is the key difference from OpenVM's RISC-V chips
 
 use std::{
     borrow::{Borrow, BorrowMut},
     mem::size_of,
 };
 
-use crate::memory_config::FpMemory;
+use crate::{adapters::W32_REG_OPS, memory_config::FpMemory};
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
@@ -18,12 +18,12 @@ use openvm_instructions::{
     LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
-    riscv::{RV32_CELL_BITS, RV32_IMM_AS, RV32_REGISTER_AS},
+    riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
 };
-use openvm_rv32im_circuit::LessThanExecutor as LessThanExecutorInner;
-use openvm_rv32im_transpiler::LessThanOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
+use openvm_womir_transpiler::EqOpcode;
 
+use super::core::EqExecutorInner;
 use crate::adapters::{
     BaseAluAdapterExecutorDifferentInputsOutputs, RV32_REGISTER_NUM_LIMBS, imm_to_bytes,
 };
@@ -31,36 +31,25 @@ use crate::utils::to_u64;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
 #[derive(Clone, PreflightExecutor)]
-pub struct LessThanExecutor<
-    const NUM_LIMBS: usize,
-    const NUM_READ_OPS: usize,
-    const NUM_WRITE_OPS: usize,
->(
-    pub  LessThanExecutorInner<
-        BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>,
+pub struct EqExecutor<const NUM_LIMBS: usize, const NUM_READ_OPS: usize>(
+    pub  EqExecutorInner<
+        BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, W32_REG_OPS>,
         NUM_LIMBS,
-        RV32_CELL_BITS,
     >,
 );
 
-impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
-    LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
-{
+impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize> EqExecutor<NUM_LIMBS, NUM_READ_OPS> {
     pub fn new(
-        adapter: BaseAluAdapterExecutorDifferentInputsOutputs<
-            NUM_LIMBS,
-            NUM_READ_OPS,
-            NUM_WRITE_OPS,
-        >,
+        adapter: BaseAluAdapterExecutorDifferentInputsOutputs<NUM_LIMBS, NUM_READ_OPS, W32_REG_OPS>,
         offset: usize,
     ) -> Self {
-        Self(LessThanExecutorInner::new(adapter, offset))
+        Self(EqExecutorInner::new(adapter, offset))
     }
 }
 
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
-pub(super) struct LessThanPreCompute {
+pub(super) struct EqPreCompute {
     /// Second operand value (if immediate) or register index (if register)
     c: u32,
     /// Result register index
@@ -69,16 +58,14 @@ pub(super) struct LessThanPreCompute {
     b: u32,
 }
 
-impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
-    LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
-{
-    /// Return `(is_imm, is_sltu)`.
+impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize> EqExecutor<NUM_LIMBS, NUM_READ_OPS> {
+    /// Return `(is_imm, is_neq)`.
     #[inline(always)]
     pub(super) fn pre_compute_impl<F: PrimeField32>(
         &self,
         pc: u32,
         inst: &Instruction<F>,
-        data: &mut LessThanPreCompute,
+        data: &mut EqPreCompute,
     ) -> Result<(bool, bool), StaticProgramError> {
         let Instruction {
             opcode,
@@ -95,11 +82,11 @@ impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usi
         {
             return Err(StaticProgramError::InvalidInstruction(pc));
         }
-        // LessThan64Opcode has the same variant order as LessThanOpcode
-        let local_opcode = LessThanOpcode::from_usize(opcode.local_opcode_idx(self.0.offset));
+        // Eq64Opcode has the same variant order as EqOpcode
+        let local_opcode = EqOpcode::from_usize(opcode.local_opcode_idx(self.0.offset));
         let is_imm = e_u32 == RV32_IMM_AS;
         let c_u32 = c.as_canonical_u32();
-        *data = LessThanPreCompute {
+        *data = EqPreCompute {
             c: if is_imm {
                 u32::from_le_bytes(imm_to_bytes(c_u32))
             } else {
@@ -108,13 +95,13 @@ impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usi
             a: a.as_canonical_u32(),
             b: b.as_canonical_u32(),
         };
-        Ok((is_imm, local_opcode == LessThanOpcode::SLTU))
+        Ok((is_imm, local_opcode == EqOpcode::NEQ))
     }
 }
 
 macro_rules! dispatch {
-    ($execute_impl:ident, $is_imm:ident, $is_sltu:ident, $num_limbs:expr) => {
-        match ($is_imm, $is_sltu) {
+    ($execute_impl:ident, $is_imm:ident, $is_neq:ident, $num_limbs:expr) => {
+        match ($is_imm, $is_neq) {
             (true, true) => Ok($execute_impl::<_, _, true, true, $num_limbs>),
             (true, false) => Ok($execute_impl::<_, _, true, false, $num_limbs>),
             (false, true) => Ok($execute_impl::<_, _, false, true, $num_limbs>),
@@ -123,14 +110,14 @@ macro_rules! dispatch {
     };
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
-    InterpreterExecutor<F> for LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
+impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize> InterpreterExecutor<F>
+    for EqExecutor<NUM_LIMBS, NUM_READ_OPS>
 where
     F: PrimeField32,
 {
     #[inline(always)]
     fn pre_compute_size(&self) -> usize {
-        size_of::<LessThanPreCompute>()
+        size_of::<EqPreCompute>()
     }
 
     #[cfg(not(feature = "tco"))]
@@ -143,21 +130,21 @@ where
     where
         Ctx: ExecutionCtxTrait,
     {
-        let data: &mut LessThanPreCompute = data.borrow_mut();
-        let (is_imm, is_sltu) = self.pre_compute_impl(pc, inst, data)?;
+        let data: &mut EqPreCompute = data.borrow_mut();
+        let (is_imm, is_neq) = self.pre_compute_impl(pc, inst, data)?;
 
-        dispatch!(execute_e1_handler, is_imm, is_sltu, NUM_LIMBS)
+        dispatch!(execute_e1_handler, is_imm, is_neq, NUM_LIMBS)
     }
 }
 
-impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize>
-    InterpreterMeteredExecutor<F> for LessThanExecutor<NUM_LIMBS, NUM_READ_OPS, NUM_WRITE_OPS>
+impl<F, const NUM_LIMBS: usize, const NUM_READ_OPS: usize> InterpreterMeteredExecutor<F>
+    for EqExecutor<NUM_LIMBS, NUM_READ_OPS>
 where
     F: PrimeField32,
 {
     #[inline(always)]
     fn metered_pre_compute_size(&self) -> usize {
-        size_of::<E2PreCompute<LessThanPreCompute>>()
+        size_of::<E2PreCompute<EqPreCompute>>()
     }
 
     #[cfg(not(feature = "tco"))]
@@ -171,11 +158,11 @@ where
     where
         Ctx: MeteredExecutionCtxTrait,
     {
-        let data: &mut E2PreCompute<LessThanPreCompute> = data.borrow_mut();
+        let data: &mut E2PreCompute<EqPreCompute> = data.borrow_mut();
         data.chip_idx = chip_idx as u32;
-        let (is_imm, is_sltu) = self.pre_compute_impl(pc, inst, &mut data.data)?;
+        let (is_imm, is_neq) = self.pre_compute_impl(pc, inst, &mut data.data)?;
 
-        dispatch!(execute_e2_handler, is_imm, is_sltu, NUM_LIMBS)
+        dispatch!(execute_e2_handler, is_imm, is_neq, NUM_LIMBS)
     }
 }
 
@@ -184,10 +171,10 @@ unsafe fn execute_e12_impl<
     F: PrimeField32,
     CTX: ExecutionCtxTrait,
     const E_IS_IMM: bool,
-    const IS_U32: bool,
+    const IS_NEQ: bool,
     const NUM_LIMBS: usize,
 >(
-    pre_compute: &LessThanPreCompute,
+    pre_compute: &EqPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     const { assert!(NUM_LIMBS == 4 || NUM_LIMBS == 8) };
@@ -206,13 +193,7 @@ unsafe fn execute_e12_impl<
         let rs2 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c);
         to_u64(rs2)
     };
-    let cmp_result = if IS_U32 {
-        a < b
-    } else if NUM_LIMBS == 4 {
-        (a as i32) < (b as i32)
-    } else {
-        (a as i64) < (b as i64)
-    };
+    let cmp_result = if IS_NEQ { a != b } else { a == b };
     // Write only one register-width (4 bytes): comparison results are always i32,
     // even for 64-bit operands.
     let mut rd = [0u8; RV32_REGISTER_NUM_LIMBS];
@@ -228,16 +209,16 @@ unsafe fn execute_e1_impl<
     F: PrimeField32,
     CTX: ExecutionCtxTrait,
     const E_IS_IMM: bool,
-    const IS_U32: bool,
+    const IS_NEQ: bool,
     const NUM_LIMBS: usize,
 >(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     unsafe {
-        let pre_compute: &LessThanPreCompute =
-            std::slice::from_raw_parts(pre_compute, size_of::<LessThanPreCompute>()).borrow();
-        execute_e12_impl::<F, CTX, E_IS_IMM, IS_U32, NUM_LIMBS>(pre_compute, exec_state);
+        let pre_compute: &EqPreCompute =
+            std::slice::from_raw_parts(pre_compute, size_of::<EqPreCompute>()).borrow();
+        execute_e12_impl::<F, CTX, E_IS_IMM, IS_NEQ, NUM_LIMBS>(pre_compute, exec_state);
     }
 }
 
@@ -247,19 +228,19 @@ unsafe fn execute_e2_impl<
     F: PrimeField32,
     CTX: MeteredExecutionCtxTrait,
     const E_IS_IMM: bool,
-    const IS_U32: bool,
+    const IS_NEQ: bool,
     const NUM_LIMBS: usize,
 >(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     unsafe {
-        let pre_compute: &E2PreCompute<LessThanPreCompute> =
-            std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<LessThanPreCompute>>())
+        let pre_compute: &E2PreCompute<EqPreCompute> =
+            std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<EqPreCompute>>())
                 .borrow();
         exec_state
             .ctx
             .on_height_change(pre_compute.chip_idx as usize, 1);
-        execute_e12_impl::<F, CTX, E_IS_IMM, IS_U32, NUM_LIMBS>(&pre_compute.data, exec_state);
+        execute_e12_impl::<F, CTX, E_IS_IMM, IS_NEQ, NUM_LIMBS>(&pre_compute.data, exec_state);
     }
 }

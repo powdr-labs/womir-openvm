@@ -7,3 +7,9 @@ pub(crate) fn sign_extend_u32<const N: usize>(c: u32) -> [u8; N] {
     let le = c.to_le_bytes();
     std::array::from_fn(|i| if i < 4 { le[i] } else { sign_byte })
 }
+
+/// Convert a fixed-size byte array to u64, zero-extending if `N < 8`.
+#[inline(always)]
+pub(crate) fn to_u64<const N: usize>(bytes: [u8; N]) -> u64 {
+    u64::from_le_bytes(std::array::from_fn(|i| if i < N { bytes[i] } else { 0 }))
+}
