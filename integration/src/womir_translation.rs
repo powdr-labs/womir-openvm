@@ -309,69 +309,16 @@ pub enum Directive<F> {
 
 type Ctx<'a, 'b> = Context<'a, 'b>;
 
-/// Module reference wrapper that erases the lifetime.
-/// This avoids lifetime conflicts in the threaded loading pipeline,
-/// where the module is behind a RwLock but the Settings type parameter
-/// needs to work across thread scope boundaries.
-struct ModuleRef(*const ());
-
-impl ModuleRef {
-    /// # Safety
-    /// The caller must ensure the pointed-to Module outlives any use of this reference.
-    unsafe fn as_module<'a>(&self) -> &'a Module<'a> {
-        debug_assert!(!self.0.is_null());
-        unsafe { &*(self.0 as *const Module<'a>) }
-    }
-}
-
-// Safety: ModuleRef is only used as a read-only reference to a Module
-// that outlives all Settings usage (guaranteed by the thread::scope pattern).
-unsafe impl Send for ModuleRef {}
-unsafe impl Sync for ModuleRef {}
-
+#[derive(Debug)]
 pub struct OpenVMSettings<F> {
-    module_ptr: Option<ModuleRef>,
     _phantom: std::marker::PhantomData<F>,
-}
-
-// Debug impl needed because the derive can't handle the raw pointer.
-impl<F> std::fmt::Debug for OpenVMSettings<F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OpenVMSettings")
-            .field("has_module", &self.module_ptr.is_some())
-            .finish()
-    }
 }
 
 impl<F> OpenVMSettings<F> {
     pub fn new() -> Self {
         Self {
-            module_ptr: None,
             _phantom: std::marker::PhantomData,
         }
-    }
-
-    /// Creates settings with a module reference for RWM trait methods.
-    ///
-    /// # Safety contract
-    /// The module must outlive any use of the returned settings.
-    /// This is guaranteed when used within a `std::thread::scope` that
-    /// borrows the module.
-    pub fn with_module(module: &Module) -> Self {
-        Self {
-            module_ptr: Some(ModuleRef(module as *const Module as *const ())),
-            _phantom: std::marker::PhantomData,
-        }
-    }
-
-    fn module<'a>(&self) -> &Module<'a> {
-        let ptr = self
-            .module_ptr
-            .as_ref()
-            .expect("OpenVMSettings: module not set (needed for RWM Settings methods)");
-        // Safety: The module reference is guaranteed to outlive Settings usage
-        // by the thread::scope borrowing pattern.
-        unsafe { ptr.as_module() }
     }
 }
 
@@ -542,7 +489,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
 
     fn emit_imported_call(
         &self,
-        _c: &mut Ctx<'a, '_>,
+        c: &mut Ctx<'a, '_>,
         module: &'a str,
         function: &'a str,
         inputs: &[WasmOpInput],
@@ -562,7 +509,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                 ]
             }
             ("env", "__debug_print") => {
-                let mem_start = self
+                let mem_start = c
                     .module()
                     .linear_memory_start()
                     .expect("no memory allocated");
@@ -581,7 +528,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                 vec![Directive::Instruction(ib::prepare_read())]
             }
             ("env", "__hint_buffer") => {
-                let mem_start = self
+                let mem_start = c
                     .module()
                     .linear_memory_start()
                     .expect("no memory allocated");
@@ -654,7 +601,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
         inputs: &[WasmOpInput],
         output: Option<Range<u32>>,
     ) -> Tree<Directive<F>> {
-        let module = self.module();
+        let module = c.module();
         output
             .as_ref()
             .and_then(|output| {

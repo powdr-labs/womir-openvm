@@ -93,7 +93,7 @@ impl BuiltinFunction {
         let rwm_func: RWMStages<'_, OpenVMSettings<F>> = function.into();
         rwm_func
             .advance_all_stages(
-                &OpenVMSettings::with_module(module),
+                &OpenVMSettings::new(),
                 // It shouldn't make any difference which module we pass here,
                 // because the built-in function should be self-contained.
                 module,

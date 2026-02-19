@@ -373,7 +373,7 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) 
                                 }
                                 func = func
                                     .advance_stage(
-                                        &OpenVMSettings::with_module(&module),
+                                        &OpenVMSettings::new(),
                                         &module,
                                         func_idx,
                                         label_gen,
@@ -397,7 +397,7 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) 
                             let module = module.read().unwrap();
                             let func = func
                                 .advance_all_stages(
-                                    &OpenVMSettings::with_module(&module),
+                                    &OpenVMSettings::new(),
                                     &module,
                                     func_idx,
                                     label_gen,
