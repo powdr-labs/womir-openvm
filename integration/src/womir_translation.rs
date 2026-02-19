@@ -24,17 +24,17 @@ use openvm_womir_transpiler::{
 };
 use wasmparser::{MemArg, Operator as Op, ValType};
 use womir::{
-    linker::LabelValue,
+    interpreter::linker::LabelValue,
     loader::{
-        Global, Module,
-        dag::WasmValue,
-        flattening::{Context, LabelType, Tree, WriteOnceAsm},
-        func_idx_to_label,
+        FunctionAsm, Global, Module,
+        passes::dag::WasmValue,
+        rwm::flattening::Context,
         settings::{
-            ComparisonFunction, JumpCondition, MaybeConstant, ReturnInfosToCopy, Settings,
-            WasmOpInput,
+            ComparisonFunction, JumpCondition, LabelType, MaybeConstant, TrapReason, WasmOpInput,
+            func_idx_to_label,
         },
     },
+    utils::tree::Tree,
 };
 
 /// This is our convention for null function references.
@@ -69,21 +69,8 @@ pub struct LinkedProgram<'a, F: PrimeField32> {
 }
 
 impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
-    pub fn new(module: Module<'a>, functions: Vec<WriteOnceAsm<Directive<F>>>) -> Self {
-        let functions = functions
-            .into_iter()
-            .map(|f| {
-                let directives = f.directives.into_iter().collect();
-                WriteOnceAsm {
-                    directives,
-                    func_idx: f.func_idx,
-                    frame_size: f.frame_size,
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let (linked_program, mut label_map) = womir::linker::link(&functions, 1);
-        drop(functions);
+    pub fn new(module: Module<'a>, functions: Vec<FunctionAsm<Directive<F>>>) -> Self {
+        let (linked_program, mut label_map) = womir::interpreter::linker::link(functions, 1);
 
         for v in label_map.values_mut() {
             v.pc *= riscv::RV32_REGISTER_NUM_LIMBS as u32;
@@ -215,52 +202,72 @@ fn create_startup_code<F>(ctx: &Module, entry_point: &LabelValue) -> Vec<Instruc
 where
     F: PrimeField32,
 {
-    let fn_fp = 1;
-    let zero_reg = 0;
-    let mut code = vec![
-        ib::allocate_frame_imm(fn_fp, entry_point.frame_size.unwrap() as usize),
-        ib::const_32_imm(zero_reg, 0, 0),
-    ];
+    use openvm_instructions::riscv::RV32_REGISTER_NUM_LIMBS as NUM_LIMBS;
 
     let entry_point_func_type = &ctx.get_func_type(entry_point.func_idx.unwrap()).ty;
-
-    // If the entry point function has arguments, we need to fill them with the result from read32
     let params = entry_point_func_type.params();
-    let num_input_words = womir::word_count_types::<OpenVMSettings<F>>(params);
-    // This is a little hacky because we know the initial first allocated frame starts at 2,
-    // so we can just write directly into it by calculating the offset.
-    // address 2: reserved for return address
-    // address 3: reserved for frame pointer
-    // address 4: first argument
-    // address 4 + i: i-th argument
-    // Use a scratch register to hold a pointer to MEM[0] for hint_storew.
-    // hint_storew writes to memory AS (not register AS), so we need a scratch
-    // memory location. MEM[0] serves as scratch, with a register holding 0 as pointer.
-    let mut ptr = 4;
-    let scratch_reg = ptr;
-    ptr += 1;
-    if num_input_words > 0 {
-        code.push(ib::const_32_imm(scratch_reg as usize, 0, 0));
-    }
-    for _ in 0..num_input_words {
-        code.push(ib::prepare_read());
-        code.push(ib::hint_storew(scratch_reg as usize)); // skip length word
-        code.push(ib::hint_storew(scratch_reg as usize)); // write data to MEM[0]
-        code.push(ib::loadw(ptr as usize, scratch_reg as usize, 0)); // load MEM[0] → register
-        ptr += 1;
-    }
-
-    code.push(ib::call(0, 1, entry_point.pc as usize, fn_fp));
-
-    // We can also read the return values directly from the function's frame, which happens
-    // to be right after the arguments.
     let results = entry_point_func_type.results();
-    let num_output_words = womir::word_count_types::<OpenVMSettings<F>>(results);
-    for i in 0..num_output_words {
-        code.push(ib::reveal_imm(ptr as usize, zero_reg, (i * 4) as usize));
-        ptr += 1;
+    let num_input_words = womir::loader::word_count_types::<OpenVMSettings<F>>(params) as usize;
+    let num_output_words = womir::loader::word_count_types::<OpenVMSettings<F>>(results) as usize;
+
+    // Registers used by startup code (relative to initial FP):
+    //   reg 0: zero_reg (holds value 0)
+    //   reg 1: scratch_reg (holds safe memory address for hint_storew)
+    let zero_reg: usize = 0;
+    let scratch_reg: usize = 1;
+
+    // Frame offset for entry function = 2 (startup uses 2 registers)
+    let frame_offset: usize = 2;
+
+    // Callee frame layout (relative to callee's FP = initial_FP + frame_offset * NUM_LIMBS):
+    //   reg 0..num_args: function parameters
+    //   reg 0..num_outputs: function return values (overlapping with params)
+    //   reg max(args,outs): saved_ret_pc
+    //   reg max(args,outs)+1: saved_caller_fp
+    let max_io = num_input_words.max(num_output_words);
+    let save_pc_reg = max_io;
+    let save_fp_reg = max_io + 1;
+
+    // Safe scratch address for hint_storew in memory address space.
+    // This address is near the top of the 512MB memory address space (1 << 29),
+    // high enough that no WASM linear memory will reach it.
+    let safe_addr: u32 = 0x1FFF_FFE0;
+
+    let mut code = vec![
+        // 1. Set zero_reg = 0
+        ib::const_32_imm(zero_reg, 0, 0),
+        // 2. Set scratch_reg = SAFE_ADDR
+        ib::const_32_imm(
+            scratch_reg,
+            (safe_addr & 0xFFFF) as u16,
+            (safe_addr >> 16) as u16,
+        ),
+    ];
+
+    // 3. For each input word, read from hint stream into callee's argument register
+    for i in 0..num_input_words {
+        code.push(ib::prepare_read());
+        code.push(ib::hint_storew(scratch_reg)); // skip length word
+        code.push(ib::hint_storew(scratch_reg)); // write data to MEM[SAFE_ADDR]
+        code.push(ib::loadw(frame_offset + i, scratch_reg, 0)); // load from MEM[SAFE_ADDR] to callee's arg register
     }
 
+    // 4. Call the entry function
+    //    save_pc and save_fp are relative to callee's FP
+    //    fp_offset must be frame_offset * NUM_LIMBS because ib::call does NOT multiply fp_offset
+    code.push(ib::call(
+        save_pc_reg,
+        save_fp_reg,
+        entry_point.pc as usize,
+        frame_offset * NUM_LIMBS,
+    ));
+
+    // 5. Reveal output values
+    for i in 0..num_output_words {
+        code.push(ib::reveal_imm(frame_offset + i, zero_reg, i * 4));
+    }
+
+    // 6. Halt
     code.push(ib::halt());
 
     code
@@ -276,10 +283,6 @@ pub enum Directive<F> {
         id: String,
         frame_size: Option<u32>,
     },
-    AllocateFrameI {
-        target_frame: String,
-        result_ptr: u32,
-    },
     Jump {
         target: String,
     },
@@ -291,15 +294,11 @@ pub enum Directive<F> {
         target: String,
         condition_reg: u32,
     },
-    Call {
+    RwCall {
         target_pc: String,
-        new_frame_ptr: u32,
+        new_frame_offset: u32,
         saved_ret_pc: u32,
         saved_caller_fp: u32,
-    },
-    ConstFuncFrameSize {
-        func_idx: u32,
-        reg_dest: u32,
     },
     ConstFuncAddr {
         func_idx: u32,
@@ -308,23 +307,75 @@ pub enum Directive<F> {
     Instruction(Instruction<F>),
 }
 
-type Ctx<'a, 'b, F> = Context<'a, 'b, OpenVMSettings<F>>;
+type Ctx<'a, 'b> = Context<'a, 'b>;
 
-#[derive(Debug)]
+/// Module reference wrapper that erases the lifetime.
+/// This avoids lifetime conflicts in the threaded loading pipeline,
+/// where the module is behind a RwLock but the Settings type parameter
+/// needs to work across thread scope boundaries.
+struct ModuleRef(*const ());
+
+impl ModuleRef {
+    /// # Safety
+    /// The caller must ensure the pointed-to Module outlives any use of this reference.
+    unsafe fn as_module<'a>(&self) -> &'a Module<'a> {
+        debug_assert!(!self.0.is_null());
+        unsafe { &*(self.0 as *const Module<'a>) }
+    }
+}
+
+// Safety: ModuleRef is only used as a read-only reference to a Module
+// that outlives all Settings usage (guaranteed by the thread::scope pattern).
+unsafe impl Send for ModuleRef {}
+unsafe impl Sync for ModuleRef {}
+
 pub struct OpenVMSettings<F> {
+    module_ptr: Option<ModuleRef>,
     _phantom: std::marker::PhantomData<F>,
+}
+
+// Debug impl needed because the derive can't handle the raw pointer.
+impl<F> std::fmt::Debug for OpenVMSettings<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenVMSettings")
+            .field("has_module", &self.module_ptr.is_some())
+            .finish()
+    }
 }
 
 impl<F> OpenVMSettings<F> {
     pub fn new() -> Self {
         Self {
+            module_ptr: None,
             _phantom: std::marker::PhantomData,
         }
     }
+
+    /// Creates settings with a module reference for RWM trait methods.
+    ///
+    /// # Safety contract
+    /// The module must outlive any use of the returned settings.
+    /// This is guaranteed when used within a `std::thread::scope` that
+    /// borrows the module.
+    pub fn with_module(module: &Module) -> Self {
+        Self {
+            module_ptr: Some(ModuleRef(module as *const Module as *const ())),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    fn module<'a>(&self) -> &Module<'a> {
+        let ptr = self
+            .module_ptr
+            .as_ref()
+            .expect("OpenVMSettings: module not set (needed for RWM Settings methods)");
+        // Safety: The module reference is guaranteed to outlive Settings usage
+        // by the thread::scope borrowing pattern.
+        unsafe { ptr.as_module() }
+    }
 }
 
-#[allow(refining_impl_trait)]
-impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
+impl<F: PrimeField32> womir::loader::settings::Settings for OpenVMSettings<F> {
     type Directive = Directive<F>;
 
     fn bytes_per_word() -> u32 {
@@ -343,7 +394,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         true
     }
 
-    fn get_const_collapse_processor(&self) -> Option<impl Fn(&Op, &[MaybeConstant])> {
+    fn get_const_collapse_processor() -> Option<impl Fn(&Op, &[MaybeConstant])> {
         Some(crate::const_collapse::collapse_const_if_possible)
     }
 
@@ -363,108 +414,35 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         }
     }
 
-    fn use_non_deterministic_function_outputs() -> bool {
-        false
+    fn emit_jump(&self, target: String) -> Directive<F> {
+        Directive::Jump { target }
     }
+}
 
-    fn emit_label(&self, _c: &mut Ctx<F>, name: String, frame_size: Option<u32>) -> Directive<F> {
+#[allow(refining_impl_trait)]
+impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMSettings<F> {
+    fn emit_label(&self, _c: &mut Ctx<'a, '_>, name: String) -> Directive<F> {
         Directive::Label {
             id: name,
-            frame_size,
+            frame_size: None,
         }
     }
 
-    fn emit_trap(
-        &self,
-        _c: &mut Ctx<F>,
-        error_code: womir::loader::flattening::TrapReason,
-    ) -> Directive<F> {
+    fn emit_trap(&self, _c: &mut Ctx<'a, '_>, error_code: TrapReason) -> Directive<F> {
         Directive::Instruction(ib::trap(error_code as u32 as usize))
     }
 
-    fn emit_allocate_label_frame(
-        &self,
-        _c: &mut Ctx<F>,
-        label: String,
-        result_ptr: Range<u32>,
-    ) -> Directive<F> {
-        Directive::AllocateFrameI {
-            target_frame: label,
-            result_ptr: result_ptr.start,
-        }
-    }
-
-    fn emit_allocate_value_frame(
-        &self,
-        _c: &mut Ctx<F>,
-        frame_size_ptr: Range<u32>,
-        result_ptr: Range<u32>,
-    ) -> Directive<F> {
-        Directive::Instruction(ib::allocate_frame_reg(
-            result_ptr.start as usize,
-            frame_size_ptr.start as usize,
-        ))
-    }
-
-    fn emit_copy(
-        &self,
-        _c: &mut Ctx<F>,
-        src_ptr: Range<u32>,
-        dest_ptr: Range<u32>,
-    ) -> Directive<F> {
+    fn emit_copy(&self, _c: &mut Ctx<'a, '_>, src_reg: u32, dest_reg: u32) -> Directive<F> {
         Directive::Instruction(ib::add_imm(
-            dest_ptr.start as usize,
-            src_ptr.start as usize,
+            dest_reg as usize,
+            src_reg as usize,
             AluImm::from(0),
         ))
     }
 
-    fn emit_copy_into_frame(
-        &self,
-        _c: &mut Ctx<F>,
-        src_ptr: Range<u32>,
-        dest_frame_ptr: Range<u32>,
-        dest_offset: Range<u32>,
-    ) -> Directive<F> {
-        Directive::Instruction(ib::copy_into_frame(
-            dest_offset.start as usize,
-            src_ptr.start as usize,
-            dest_frame_ptr.start as usize,
-        ))
-    }
-
-    fn emit_copy_from_frame(
-        &self,
-        _c: &mut Context<'a, '_, Self>,
-        source_frame_ptr: Range<u32>,
-        source_offset: Range<u32>,
-        dest_ptr: Range<u32>,
-    ) -> Directive<F> {
-        Directive::Instruction(ib::copy_from_frame(
-            dest_ptr.start as usize,
-            source_offset.start as usize,
-            source_frame_ptr.start as usize,
-        ))
-    }
-
-    fn emit_jump(&self, label: String) -> Directive<F> {
-        Directive::Jump { target: label }
-    }
-
-    fn emit_jump_into_loop(
-        &self,
-        _c: &mut Ctx<F>,
-        _loop_label: String,
-        _loop_frame_ptr: Range<u32>,
-        _ret_info_to_copy: Option<ReturnInfosToCopy>,
-        _saved_curr_fp_ptr: Option<Range<u32>>,
-    ) -> Vec<Directive<F>> {
-        todo!("Loop frame jumps need redesign: only CALL/RET remain")
-    }
-
     fn emit_conditional_jump(
         &self,
-        _c: &mut Ctx<F>,
+        _c: &mut Ctx<'a, '_>,
         condition_type: JumpCondition,
         label: String,
         condition_ptr: Range<u32>,
@@ -483,13 +461,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_conditional_jump_cmp_immediate(
         &self,
-        c: &mut Ctx<F>,
+        c: &mut Ctx<'a, '_>,
         cmp: ComparisonFunction,
         value_ptr: Range<u32>,
         immediate: u32,
         label: String,
     ) -> Vec<Directive<F>> {
-        let comparison = c.register_gen.allocate_type(ValType::I32);
+        let comparison = c.allocate_tmp_type::<Self>(ValType::I32);
 
         let mut directives = if let Ok(imm_f) = AluImm::try_from(immediate) {
             // If immediate fits into field, we can save one instruction:
@@ -511,7 +489,7 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 | ComparisonFunction::LessThanUnsigned => ib::lt_u,
             };
 
-            let const_value = c.register_gen.allocate_type(ValType::I32);
+            let const_value = c.allocate_tmp_type::<Self>(ValType::I32);
 
             let imm_lo: u16 = (immediate & 0xffff) as u16;
             let imm_hi: u16 = ((immediate >> 16) & 0xffff) as u16;
@@ -546,22 +524,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
         directives
     }
 
-    fn emit_relative_jump(&self, _c: &mut Ctx<F>, offset_ptr: Range<u32>) -> Directive<F> {
+    fn emit_relative_jump(&self, _c: &mut Ctx<'a, '_>, offset_ptr: Range<u32>) -> Directive<F> {
         Directive::Instruction(ib::skip(offset_ptr.start as usize))
-    }
-
-    fn emit_jump_out_of_loop(
-        &self,
-        _c: &mut Ctx<F>,
-        _target_label: String,
-        _target_frame_ptr: Range<u32>,
-    ) -> Directive<F> {
-        todo!("Jump-out-of-loop frame change needs redesign: only CALL/RET remain")
     }
 
     fn emit_return(
         &self,
-        _c: &mut Ctx<F>,
+        _c: &mut Ctx<'a, '_>,
         ret_pc_ptr: Range<u32>,
         caller_fp_ptr: Range<u32>,
     ) -> Directive<F> {
@@ -573,10 +542,10 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_imported_call(
         &self,
-        c: &mut Ctx<F>,
+        _c: &mut Ctx<'a, '_>,
         module: &'a str,
         function: &'a str,
-        inputs: Vec<Range<u32>>,
+        inputs: &[WasmOpInput],
         outputs: Vec<Range<u32>>,
     ) -> Vec<Directive<F>> {
         match (module, function) {
@@ -593,14 +562,14 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 ]
             }
             ("env", "__debug_print") => {
-                let mem_start = c
-                    .program
+                let mem_start = self
+                    .module()
                     .linear_memory_start()
                     .expect("no memory allocated");
 
                 assert!(mem_start < (1 << 16));
-                let mem_ptr = inputs[0].start as usize;
-                let num_bytes = inputs[1].start as usize;
+                let mem_ptr = inputs[0].as_register().unwrap().start as usize;
+                let num_bytes = inputs[1].as_register().unwrap().start as usize;
                 vec![Directive::Instruction(ib::debug_print(
                     mem_ptr,
                     num_bytes,
@@ -612,13 +581,13 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
                 vec![Directive::Instruction(ib::prepare_read())]
             }
             ("env", "__hint_buffer") => {
-                let mem_start = c
-                    .program
+                let mem_start = self
+                    .module()
                     .linear_memory_start()
                     .expect("no memory allocated");
 
-                let mem_ptr = inputs[0].start as usize;
-                let num_words = inputs[1].start as usize;
+                let mem_ptr = inputs[0].as_register().unwrap().start as usize;
+                let num_words = inputs[1].as_register().unwrap().start as usize;
                 let mut directives = vec![];
                 if mem_start > 0 {
                     directives.push(Directive::Instruction(ib::add_imm(
@@ -647,15 +616,15 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_function_call(
         &self,
-        _c: &mut Ctx<F>,
+        _c: &mut Ctx<'a, '_>,
         function_label: String,
-        function_frame_ptr: Range<u32>,
+        function_frame_offset: u32,
         saved_ret_pc_ptr: Range<u32>,
         saved_caller_fp_ptr: Range<u32>,
     ) -> Directive<F> {
-        Directive::Call {
+        Directive::RwCall {
             target_pc: function_label,
-            new_frame_ptr: function_frame_ptr.start,
+            new_frame_offset: function_frame_offset,
             saved_ret_pc: saved_ret_pc_ptr.start,
             saved_caller_fp: saved_caller_fp_ptr.start,
         }
@@ -663,37 +632,39 @@ impl<'a, F: PrimeField32> Settings<'a> for OpenVMSettings<F> {
 
     fn emit_indirect_call(
         &self,
-        _c: &mut Ctx<F>,
+        _c: &mut Ctx<'a, '_>,
         target_pc_ptr: Range<u32>,
-        function_frame_ptr: Range<u32>,
+        function_frame_offset: u32,
         saved_ret_pc_ptr: Range<u32>,
         saved_caller_fp_ptr: Range<u32>,
     ) -> Directive<F> {
+        use openvm_instructions::riscv::RV32_REGISTER_NUM_LIMBS as NUM_LIMBS;
         Directive::Instruction(ib::call_indirect(
             saved_ret_pc_ptr.start as usize,
             saved_caller_fp_ptr.start as usize,
             target_pc_ptr.start as usize,
-            function_frame_ptr.start as usize,
+            function_frame_offset as usize * NUM_LIMBS,
         ))
     }
 
     fn emit_wasm_op(
         &self,
-        c: &mut Ctx<F>,
+        c: &mut Ctx<'a, '_>,
         op: Op<'a>,
-        inputs: Vec<WasmOpInput>,
+        inputs: &[WasmOpInput],
         output: Option<Range<u32>>,
     ) -> Tree<Directive<F>> {
+        let module = self.module();
         output
             .as_ref()
             .and_then(|output| {
-                translate_most_binary_ops(&op, &inputs, output)
-                    .or_else(|| translate_less_than_ops(&op, &inputs, output))
-                    .or_else(|| translate_greater_than_ops(&op, &inputs, output))
+                translate_most_binary_ops(&op, inputs, output)
+                    .or_else(|| translate_less_than_ops(&op, inputs, output))
+                    .or_else(|| translate_greater_than_ops(&op, inputs, output))
                     .map(|instruction| Directive::Instruction(instruction).into())
-                    .or_else(|| translate_complex_ins_with_const(c, &op, &inputs, output))
+                    .or_else(|| translate_complex_ins_with_const(c, module, &op, inputs, output))
             })
-            .unwrap_or_else(|| translate_complex_ins(c, op, inputs, output))
+            .unwrap_or_else(|| translate_complex_ins(c, module, op, inputs, output))
     }
 }
 
@@ -701,16 +672,6 @@ impl<F: PrimeField32> Directive<F> {
     fn into_instruction(self, label_map: &HashMap<String, LabelValue>) -> Option<Instruction<F>> {
         match self {
             Directive::Nop | Directive::Label { .. } => None,
-            Directive::AllocateFrameI {
-                target_frame,
-                result_ptr,
-            } => {
-                let frame_size = label_map.get(&target_frame).unwrap().frame_size.unwrap();
-                Some(ib::allocate_frame_imm(
-                    result_ptr as usize,
-                    frame_size as usize,
-                ))
-            }
             Directive::Jump { target } => {
                 let pc = label_map.get(&target).unwrap().pc;
                 Some(ib::jump(pc as usize))
@@ -729,27 +690,19 @@ impl<F: PrimeField32> Directive<F> {
                 let pc = label_map.get(&target)?.pc;
                 Some(ib::jump_if_zero(condition_reg as usize, pc as usize))
             }
-            Directive::Call {
+            Directive::RwCall {
                 target_pc,
-                new_frame_ptr,
+                new_frame_offset,
                 saved_ret_pc,
                 saved_caller_fp,
             } => {
+                use openvm_instructions::riscv::RV32_REGISTER_NUM_LIMBS as NUM_LIMBS;
                 let pc = label_map.get(&target_pc)?.pc;
                 Some(ib::call(
                     saved_ret_pc as usize,
                     saved_caller_fp as usize,
                     pc as usize,
-                    new_frame_ptr as usize,
-                ))
-            }
-            Directive::ConstFuncFrameSize { func_idx, reg_dest } => {
-                let label = func_idx_to_label(func_idx);
-                let frame_size = label_map.get(&label)?.frame_size.unwrap();
-                Some(ib::const_32_imm(
-                    reg_dest as usize,
-                    frame_size as u16,
-                    (frame_size >> 16) as u16,
+                    new_frame_offset as usize * NUM_LIMBS,
                 ))
             }
             Directive::ConstFuncAddr { func_idx, reg_dest } => {
@@ -960,8 +913,9 @@ fn translate_greater_than_ops<'a, F: PrimeField32>(
 }
 
 /// Translates the complex instructions that supports constant inlining
-fn translate_complex_ins_with_const<F: PrimeField32>(
-    c: &mut Ctx<F>,
+fn translate_complex_ins_with_const<'a, F: PrimeField32>(
+    c: &mut Ctx<'a, '_>,
+    module: &Module<'a>,
     op: &Op,
     inputs: &[WasmOpInput],
     output: &Range<u32>,
@@ -977,7 +931,8 @@ fn translate_complex_ins_with_const<F: PrimeField32>(
         | Op::I32LeU
         | Op::I64LeS
         | Op::I64LeU => {
-            let inverse_result = c.register_gen.allocate_type(ValType::I32).start as usize;
+            let inverse_result =
+                c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
             let output = output.start as usize;
 
             let comp_instruction = match [&inputs[0], &inputs[1]] {
@@ -1092,9 +1047,7 @@ fn translate_complex_ins_with_const<F: PrimeField32>(
                         })
                         .collect_vec(),
                     // This input is a constant, so we issue const to register instructions
-                    WasmOpInput::Constant(value) => {
-                        const_wasm_value(c.program, value, output.clone())
-                    }
+                    WasmOpInput::Constant(value) => const_wasm_value(module, value, output.clone()),
                 });
 
             let non_zero_label = c.new_label(LabelType::Local);
@@ -1133,15 +1086,16 @@ fn translate_complex_ins_with_const<F: PrimeField32>(
     })
 }
 
-fn translate_complex_ins<F: PrimeField32>(
-    c: &mut Ctx<F>,
+fn translate_complex_ins<'a, F: PrimeField32>(
+    c: &mut Ctx<'a, '_>,
+    module: &Module<'a>,
     op: Op,
-    inputs: Vec<WasmOpInput>,
+    inputs: &[WasmOpInput],
     output: Option<Range<u32>>,
 ) -> Tree<Directive<F>> {
     // Handle the remaining operations, whose inputs are all registers
     let inputs = inputs
-        .into_iter()
+        .iter()
         .map(|input| {
             input
                 .as_register()
@@ -1200,7 +1154,7 @@ fn translate_complex_ins<F: PrimeField32>(
             let input = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
-            let tmp = c.register_gen.allocate_type(ValType::I32).start as usize;
+            let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
 
             let shift = match op {
                 Op::I32Extend8S => 24_i16,
@@ -1219,7 +1173,7 @@ fn translate_complex_ins<F: PrimeField32>(
             let input = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
-            let tmp = c.register_gen.allocate_type(ValType::I64).start as usize;
+            let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
 
             let shift = match op {
                 Op::I64Extend8S => 56_i16,
@@ -1241,7 +1195,8 @@ fn translate_complex_ins<F: PrimeField32>(
             let input = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
-            let high_shifted = c.register_gen.allocate_type(ValType::I64).start as usize;
+            let high_shifted =
+                c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
 
             vec![
                 // Copy the 32 bit values to the high 32 bits of the temporary value.
@@ -1269,40 +1224,43 @@ fn translate_complex_ins<F: PrimeField32>(
 
         // Global instructions
         Op::GlobalSet { global_index } => {
-            let Global::Mutable(allocated_var) = &c.program.globals[global_index as usize] else {
+            let Global::Mutable(allocated_var) = &module.globals[global_index as usize] else {
                 unreachable!()
             };
 
             store_to_const_addr(c, allocated_var.address, inputs[0].clone()).into()
         }
         Op::GlobalGet { global_index } => {
-            let global = &c.program.globals[global_index as usize];
+            let global = &module.globals[global_index as usize];
             match global {
                 Global::Mutable(allocated_var) => {
                     load_from_const_addr(c, allocated_var.address, output.unwrap())
                         .0
                         .into()
                 }
-                Global::Immutable(op) => translate_complex_ins(c, op.clone(), Vec::new(), output),
+                Global::Immutable(op) => translate_complex_ins(c, module, op.clone(), &[], output),
             }
         }
 
         Op::I32Load { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
             match memarg.align {
                 0 => {
                     // read four bytes
-                    let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b1_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b2_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b3_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let lo = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let hi = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
                         Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
@@ -1319,9 +1277,10 @@ fn translate_complex_ins<F: PrimeField32>(
                 }
                 1 => {
                     // read two half words
-                    let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let hi_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let hi = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let hi_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let lo = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         Directive::Instruction(ib::loadhu(lo, base_addr, imm)),
                         Directive::Instruction(ib::loadhu(hi, base_addr, imm + 2)),
@@ -1335,16 +1294,17 @@ fn translate_complex_ins<F: PrimeField32>(
         }
 
         Op::I32Load16U { memarg } | Op::I32Load16S { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
             match memarg.align {
                 0 => {
                     // read four bytes
-                    let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b1_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
                         if let Op::I32Load16S { .. } = op {
@@ -1366,46 +1326,52 @@ fn translate_complex_ins<F: PrimeField32>(
             }
         }
         Op::I32Load8U { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
             Directive::Instruction(ib::loadbu(output, base_addr, imm)).into()
         }
         Op::I32Load8S { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
             Directive::Instruction(ib::loadb(output, base_addr, imm)).into()
         }
         Op::I64Load { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
 
             match memarg.align {
                 0 => {
                     // read byte by byte
-                    let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b4 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b5 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b6 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b7 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b5_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b6_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b7_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b4 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b5 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b6 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b7 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b1_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b2_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b3_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b5_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b6_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b7_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
 
-                    let hi0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let hi1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let lo0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let lo1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let hi0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let hi1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let lo0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let lo1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
 
                     vec![
                         // load each byte
@@ -1435,12 +1401,14 @@ fn translate_complex_ins<F: PrimeField32>(
                 }
                 1 => {
                     // read four halfwords
-                    let h0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let h2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let h3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let h1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let h3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let h1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let h2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let h3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let h1_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let h3_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
 
                     vec![
                         Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
@@ -1464,10 +1432,10 @@ fn translate_complex_ins<F: PrimeField32>(
             .into()
         }
         Op::I64Load8U { memarg } | Op::I64Load8S { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
-            let val = c.register_gen.allocate_type(ValType::I64).start as usize;
+            let val = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
 
             vec![
                 // load signed or unsigned byte as i32 hi part
@@ -1484,16 +1452,17 @@ fn translate_complex_ins<F: PrimeField32>(
             .into()
         }
         Op::I64Load16U { memarg } | Op::I64Load16S { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
-            let val = c.register_gen.allocate_type(ValType::I64).start as usize;
+            let val = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
 
             match memarg.align {
                 0 => {
-                    let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b1_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         // load b1 signed/unsigned
                         if let Op::I64Load16S { .. } = op {
@@ -1536,14 +1505,14 @@ fn translate_complex_ins<F: PrimeField32>(
             .into()
         }
         Op::I64Load32U { memarg } | Op::I64Load32S { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
 
             // if signed, we need to place the loaded 32-bit value in a new register
             // bit extend it with shr_s_imm_64, otherwise we can load directly into lo part
             let (val_32, zeroed) = if let Op::I64Load32S { .. } = op {
-                let val = c.register_gen.allocate_type(ValType::I64).start as usize;
+                let val = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
                 // Load the value into the hi word, and zero the lo word for the shr
                 (val + 1, val)
             } else {
@@ -1558,15 +1527,18 @@ fn translate_complex_ins<F: PrimeField32>(
 
             match memarg.align {
                 0 => {
-                    let b0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b2_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b3_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let hi = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let lo = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b1_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b2_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b3_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let hi = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let lo = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     directives.extend([
                         Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
                         Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
@@ -1584,9 +1556,10 @@ fn translate_complex_ins<F: PrimeField32>(
                     ]);
                 }
                 1 => {
-                    let h0 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let h1_shifted = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let h1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let h1_shifted =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     directives.extend([
                         // load h0, h1
                         Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
@@ -1609,16 +1582,16 @@ fn translate_complex_ins<F: PrimeField32>(
             directives.into()
         }
         Op::I32Store { memarg } | Op::I64Store32 { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let value = inputs[1].start as usize;
 
             match memarg.align {
                 0 => {
                     // write byte by byte
-                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         // store byte 0
                         Directive::Instruction(ib::storeb(value, base_addr, imm)),
@@ -1635,7 +1608,7 @@ fn translate_complex_ins<F: PrimeField32>(
                     .into()
                 }
                 1 => {
-                    let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         // store halfword 0
                         Directive::Instruction(ib::storeh(value, base_addr, imm)),
@@ -1649,20 +1622,20 @@ fn translate_complex_ins<F: PrimeField32>(
             }
         }
         Op::I32Store8 { memarg } | Op::I64Store8 { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let value = inputs[1].start as usize;
 
             Directive::Instruction(ib::storeb(value, base_addr, imm)).into()
         }
         Op::I32Store16 { memarg } | Op::I64Store16 { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let value = inputs[1].start as usize;
 
             match memarg.align {
                 0 => {
-                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         // store byte 0
                         Directive::Instruction(ib::storeb(value, base_addr, imm)),
@@ -1676,7 +1649,7 @@ fn translate_complex_ins<F: PrimeField32>(
             }
         }
         Op::I64Store { memarg } => {
-            let imm = mem_offset(memarg, c);
+            let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let value_lo = inputs[1].start as usize;
             let value_hi = (inputs[1].start + 1) as usize;
@@ -1684,12 +1657,12 @@ fn translate_complex_ins<F: PrimeField32>(
             match memarg.align {
                 0 => {
                     // write byte by byte
-                    let b1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b2 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b3 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b5 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b6 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let b7 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b5 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b6 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let b7 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         // store byte 0
                         Directive::Instruction(ib::storeb(value_lo, base_addr, imm)),
@@ -1717,8 +1690,8 @@ fn translate_complex_ins<F: PrimeField32>(
                 }
                 1 => {
                     // write by halfwords
-                    let h1 = c.register_gen.allocate_type(ValType::I32).start as usize;
-                    let h3 = c.register_gen.allocate_type(ValType::I32).start as usize;
+                    let h1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let h3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         // store halfword 0
                         Directive::Instruction(ib::storeh(value_lo, base_addr, imm)),
@@ -1744,23 +1717,23 @@ fn translate_complex_ins<F: PrimeField32>(
 
         Op::MemorySize { mem } => {
             assert_eq!(mem, 0, "Only a single linear memory is supported");
-            load_from_const_addr(c, c.program.memory.unwrap().start, output.unwrap())
+            load_from_const_addr(c, module.memory.unwrap().start, output.unwrap())
                 .0
                 .into()
         }
         Op::MemoryGrow { mem } => {
             assert_eq!(mem, 0, "Only a single linear memory is supported");
-            let header_addr = c.program.memory.unwrap().start;
+            let header_addr = module.memory.unwrap().start;
 
             let output = output.unwrap().start as usize;
 
-            let header_regs = c.register_gen.allocate_type(ValType::I64);
+            let header_regs = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64);
             let size_reg = header_regs.start as usize;
             let max_size_reg = (header_regs.start + 1) as usize;
 
-            let new_size = c.register_gen.allocate_type(ValType::I32).start as usize;
-            let is_gt_max = c.register_gen.allocate_type(ValType::I32).start;
-            let is_lt_curr = c.register_gen.allocate_type(ValType::I32).start;
+            let new_size = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+            let is_gt_max = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start;
+            let is_lt_curr = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start;
 
             let error_label = c.new_label(LabelType::Local);
             let continuation_label = c.new_label(LabelType::Local);
@@ -1828,7 +1801,7 @@ fn translate_complex_ins<F: PrimeField32>(
         } => todo!(),
         Op::TableFill { table: _ } => todo!(),
         Op::TableGet { table } => {
-            emit_table_get(c, table, inputs[0].clone(), output.unwrap()).into()
+            emit_table_get(c, module, table, inputs[0].clone(), output.unwrap()).into()
         }
         Op::TableSet { table: _ } => todo!(),
         Op::TableGrow { table: _ } => todo!(),
@@ -1846,7 +1819,7 @@ fn translate_complex_ins<F: PrimeField32>(
             .into(),
         Op::RefIsNull => todo!(),
         Op::RefFunc { function_index } => {
-            const_function_reference(c.program, function_index, output.unwrap()).into()
+            const_function_reference(module, function_index, output.unwrap()).into()
         }
 
         // Float instructions
@@ -1949,8 +1922,9 @@ fn translate_complex_ins<F: PrimeField32>(
     }
 }
 
-fn emit_table_get<F: PrimeField32>(
-    c: &mut Ctx<F>,
+fn emit_table_get<'a, F: PrimeField32>(
+    c: &mut Ctx<'a, '_>,
+    module: &Module<'a>,
     table_idx: u32,
     entry_idx_ptr: Range<u32>,
     dest_ptr: Range<u32>,
@@ -1958,9 +1932,9 @@ fn emit_table_get<F: PrimeField32>(
     const TABLE_ENTRY_SIZE: i16 = 12;
     const TABLE_SEGMENT_HEADER_SIZE: u32 = 8;
 
-    let table_segment = c.program.tables[table_idx as usize];
+    let table_segment = module.tables[table_idx as usize];
 
-    let mul_result = c.register_gen.allocate_type(ValType::I32).start as usize;
+    let mul_result = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
 
     let base_addr = table_segment.start + TABLE_SEGMENT_HEADER_SIZE;
 
@@ -2077,8 +2051,8 @@ impl<F: PrimeField32> RotOps<F> for I64Rot {
 }
 
 /// Issue the instructions to perform a rotate operation.
-fn translate_rot<F: PrimeField32, R: RotOps<F>>(
-    c: &mut Ctx<F>,
+fn translate_rot<'a, F: PrimeField32, R: RotOps<F>>(
+    c: &mut Ctx<'a, '_>,
     direction: RotDirection,
     inputs: &[WasmOpInput],
     output: &Range<u32>,
@@ -2087,18 +2061,28 @@ fn translate_rot<F: PrimeField32, R: RotOps<F>>(
     let value = inputs[0].as_register().unwrap().start as usize;
     let output = output.start as usize;
 
-    let shift_ref = c.register_gen.allocate_type(R::val_type()).start as usize;
-    let shift_back = c.register_gen.allocate_type(R::val_type()).start as usize;
+    let shift_ref = c
+        .allocate_tmp_type::<OpenVMSettings<F>>(R::val_type())
+        .start as usize;
+    let shift_back = c
+        .allocate_tmp_type::<OpenVMSettings<F>>(R::val_type())
+        .start as usize;
 
     let mut directives = match &inputs[1] {
         WasmOpInput::Register(reg) => {
             let reg = reg.start as usize;
-            let shift_ref_amount = c.register_gen.allocate_type(R::val_type()).start as usize;
+            let shift_ref_amount = c
+                .allocate_tmp_type::<OpenVMSettings<F>>(R::val_type())
+                .start as usize;
             // TODO: if the transformation from rot to this sequence of instructions
             // was done earlier in the pipeline, at DAG level, this const could be
             // optimized away, sometimes.
-            let const_num_bits = c.register_gen.allocate_type(R::val_type()).start as usize;
-            let shift_back_amount = c.register_gen.allocate_type(R::val_type()).start as usize;
+            let const_num_bits = c
+                .allocate_tmp_type::<OpenVMSettings<F>>(R::val_type())
+                .start as usize;
+            let shift_back_amount = c
+                .allocate_tmp_type::<OpenVMSettings<F>>(R::val_type())
+                .start as usize;
 
             let mut directives = R::num_bits_const(const_num_bits);
 
@@ -2173,21 +2157,18 @@ fn const_i16_as_field(value: &WasmValue) -> AluImm {
     c.into()
 }
 
-fn mem_offset<F: PrimeField32>(memarg: MemArg, c: &Ctx<F>) -> u32 {
+fn mem_offset(memarg: MemArg, module: &Module) -> u32 {
     assert_eq!(memarg.memory, 0, "no multiple memories supported");
-    let mem_start = c
-        .program
-        .linear_memory_start()
-        .expect("no memory allocated");
+    let mem_start = module.linear_memory_start().expect("no memory allocated");
     mem_start.wrapping_add(u32::try_from(memarg.offset).expect("offset too large"))
 }
 
-fn load_from_const_addr<F: PrimeField32>(
-    c: &mut Ctx<F>,
+fn load_from_const_addr<'a, F: PrimeField32>(
+    c: &mut Ctx<'a, '_>,
     base_addr: u32,
     output: Range<u32>,
 ) -> (Vec<Directive<F>>, Range<u32>) {
-    let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
+    let base_addr_reg = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32);
     let mut directives = vec![Directive::Instruction(ib::const_32_imm(
         base_addr_reg.start as usize,
         base_addr as u16,
@@ -2205,12 +2186,12 @@ fn load_from_const_addr<F: PrimeField32>(
     (directives, base_addr_reg)
 }
 
-fn store_to_const_addr<F: PrimeField32>(
-    c: &mut Ctx<F>,
+fn store_to_const_addr<'a, F: PrimeField32>(
+    c: &mut Ctx<'a, '_>,
     base_addr: u32,
     input: Range<u32>,
 ) -> Vec<Directive<F>> {
-    let base_addr_reg = c.register_gen.allocate_type(ValType::I32);
+    let base_addr_reg = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32);
     let mut directives = vec![Directive::Instruction(ib::const_32_imm(
         base_addr_reg.start as usize,
         base_addr as u16,
@@ -2228,14 +2209,14 @@ fn store_to_const_addr<F: PrimeField32>(
     directives
 }
 
-impl<F: Clone> womir::linker::Directive for Directive<F> {
+impl<F: Clone> womir::interpreter::linker::Directive for Directive<F> {
     fn nop() -> Directive<F> {
         Directive::Nop
     }
 
-    fn as_label(&self) -> Option<womir::linker::Label<'_>> {
+    fn as_label(&self) -> Option<womir::interpreter::linker::Label<'_>> {
         if let Directive::Label { id, frame_size } = self {
-            Some(womir::linker::Label {
+            Some(womir::interpreter::linker::Label {
                 id,
                 frame_size: *frame_size,
             })
@@ -2261,16 +2242,13 @@ fn const_function_reference<F: PrimeField32>(
             ty.unique_id as u16,
             (ty.unique_id >> 16) as u16,
         )),
-        // Function frame size
-        Directive::ConstFuncFrameSize {
-            func_idx,
-            reg_dest: reg_dest + 1,
-        },
         // Function address
         Directive::ConstFuncAddr {
             func_idx,
-            reg_dest: reg_dest + 2,
+            reg_dest: reg_dest + 1,
         },
+        // Function frame size (unused in RWM, set to 0)
+        Directive::Instruction(ib::const_32_imm((reg_dest + 2) as usize, 0, 0)),
     ]
 }
 
