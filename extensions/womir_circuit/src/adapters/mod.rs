@@ -47,6 +47,16 @@ pub fn fp<F: FieldAlgebra>() -> MemoryAddress<F, F> {
     MemoryAddress::new(F::from_canonical_u32(FP_AS), F::ZERO)
 }
 
+#[inline(always)]
+pub fn reg_addr<F: FieldAlgebra>(ptr: F) -> MemoryAddress<F, F> {
+    MemoryAddress::new(F::from_canonical_u32(RV32_REGISTER_AS), ptr)
+}
+
+#[inline(always)]
+pub fn mem_addr<F: FieldAlgebra>(ptr: F) -> MemoryAddress<F, F> {
+    MemoryAddress::new(F::from_canonical_u32(RV32_MEMORY_AS), ptr)
+}
+
 /// Convert the RISC-V register data (32 bits represented as 4 bytes, where each byte is represented
 /// as a field element) back into its value as u32.
 pub fn compose<F: PrimeField32>(ptr_data: [F; RV32_REGISTER_NUM_LIMBS]) -> u32 {

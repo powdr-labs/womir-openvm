@@ -1,15 +1,14 @@
 use std::borrow::Borrow;
 
-use crate::adapters::fp;
+use crate::adapters::{fp, reg_addr};
 use crate::execution::ExecutionState;
 use openvm_circuit::arch::{ExecutionBridge, ExecutionState as OvmExecutionState};
-use openvm_circuit::system::memory::MemoryAddress;
 use openvm_circuit::system::memory::offline_checker::{
     MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols,
 };
 use openvm_circuit_primitives::{AlignedBorrow, bitwise_op_lookup::BitwiseOperationLookupBus};
 use openvm_instructions::program::DEFAULT_PC_STEP;
-use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_REGISTER_AS};
+use openvm_instructions::riscv::RV32_CELL_BITS;
 use openvm_stark_backend::interaction::InteractionBuilder;
 use openvm_stark_backend::p3_field::FieldAlgebra;
 use openvm_stark_backend::{
@@ -87,10 +86,7 @@ where
         // Write imm_limbs to register at rd_ptr + fp
         self.memory_bridge
             .write(
-                MemoryAddress::new(
-                    AB::F::from_canonical_u32(RV32_REGISTER_AS),
-                    cols.rd_ptr + cols.from_state.fp,
-                ),
+                reg_addr(cols.rd_ptr + cols.from_state.fp),
                 cols.imm_limbs,
                 timestamp_pp(),
                 &cols.write_aux,
