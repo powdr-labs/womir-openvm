@@ -35,9 +35,8 @@ use openvm_womir_transpiler::{
     HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
 };
 
-use crate::adapters::{read_rv32_register, tracing_read, tracing_read_fp, tracing_write};
+use crate::adapters::{fp_addr, read_rv32_register, tracing_read, tracing_read_fp, tracing_write};
 use crate::execution::ExecutionState;
-use crate::memory_config::FP_AS;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 
 mod execution;
@@ -152,7 +151,7 @@ impl<AB: InteractionBuilder> Air<AB> for Rv32HintStoreAir {
         // read fp
         self.memory_bridge
             .read(
-                MemoryAddress::new(AB::F::from_canonical_u32(FP_AS), AB::F::ZERO),
+                fp_addr::<AB::F>(),
                 [local_cols.from_state.fp],
                 timestamp_pp(),
                 &local_cols.fp_read_aux,
