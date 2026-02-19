@@ -41,8 +41,8 @@ use openvm_circuit::arch::ExecutionBridge;
 use crate::execution::ExecutionState;
 
 use super::{
-    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, W32_REG_OPS, fp_addr, tracing_read, tracing_read_fp,
-    tracing_read_imm, tracing_write,
+    RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, W32_REG_OPS, fp_addr, reg_addr, tracing_read,
+    tracing_read_fp, tracing_read_imm, tracing_write,
 };
 
 #[repr(C)]
@@ -166,8 +166,7 @@ impl<
                 std::array::from_fn(|i| ctx.reads[0][offset + i].clone());
             self.memory_bridge
                 .read(
-                    MemoryAddress::new(
-                        AB::F::from_canonical_u32(RV32_REGISTER_AS),
+                    reg_addr(
                         local.rs1_ptr + local.from_state.fp + AB::F::from_canonical_usize(offset),
                     ),
                     chunk,
@@ -207,8 +206,7 @@ impl<
                 std::array::from_fn(|i| ctx.writes[0][offset + i].clone());
             self.memory_bridge
                 .write(
-                    MemoryAddress::new(
-                        AB::F::from_canonical_u32(RV32_REGISTER_AS),
+                    reg_addr(
                         local.rd_ptr + local.from_state.fp + AB::F::from_canonical_usize(offset),
                     ),
                     chunk,
