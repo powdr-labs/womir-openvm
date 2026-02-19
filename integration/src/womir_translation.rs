@@ -294,7 +294,7 @@ pub enum Directive<F> {
         target: String,
         condition_reg: u32,
     },
-    RwCall {
+    Call {
         target_pc: String,
         new_frame_offset: u32,
         saved_ret_pc: u32,
@@ -622,7 +622,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
         saved_ret_pc_ptr: Range<u32>,
         saved_caller_fp_ptr: Range<u32>,
     ) -> Directive<F> {
-        Directive::RwCall {
+        Directive::Call {
             target_pc: function_label,
             new_frame_offset: function_frame_offset,
             saved_ret_pc: saved_ret_pc_ptr.start,
@@ -690,7 +690,7 @@ impl<F: PrimeField32> Directive<F> {
                 let pc = label_map.get(&target)?.pc;
                 Some(ib::jump_if_zero(condition_reg as usize, pc as usize))
             }
-            Directive::RwCall {
+            Directive::Call {
                 target_pc,
                 new_frame_offset,
                 saved_ret_pc,
