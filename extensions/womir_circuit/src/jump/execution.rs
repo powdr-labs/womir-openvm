@@ -86,10 +86,12 @@ where
                 *state.pc = imm.as_canonical_u32();
             }
             JumpOpcode::SKIP => {
-                // PC += reg_value * DEFAULT_PC_STEP
+                // PC += (reg_value + 1) * DEFAULT_PC_STEP
+                // The +1 accounts for the natural PC increment that womir's interpreter
+                // applies after JumpOffset. Without it, offset=0 would loop forever.
                 *state.pc = state
                     .pc
-                    .wrapping_add(reg_value.wrapping_mul(DEFAULT_PC_STEP));
+                    .wrapping_add(reg_value.wrapping_add(1).wrapping_mul(DEFAULT_PC_STEP));
             }
             JumpOpcode::JUMP_IF => {
                 if reg_value != 0 {
@@ -239,7 +241,7 @@ unsafe fn execute_e12_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const OPCODE
     let new_pc = match OPCODE {
         x if x == JumpOpcode::JUMP as u8 => pre_compute.imm,
         x if x == JumpOpcode::SKIP as u8 => {
-            pc.wrapping_add(reg_value.wrapping_mul(DEFAULT_PC_STEP))
+            pc.wrapping_add(reg_value.wrapping_add(1).wrapping_mul(DEFAULT_PC_STEP))
         }
         x if x == JumpOpcode::JUMP_IF as u8 => {
             if reg_value != 0 {
