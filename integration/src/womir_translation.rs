@@ -545,9 +545,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                 // Use a temporary register for the adjusted pointer to avoid
                 // clobbering the input register (which may be a live WASM local).
                 let effective_ptr = if mem_start > 0 {
-                    let tmp = c
-                        .allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32)
-                        .start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     directives.push(Directive::Instruction(ib::add_imm(
                         tmp,
                         mem_ptr,
