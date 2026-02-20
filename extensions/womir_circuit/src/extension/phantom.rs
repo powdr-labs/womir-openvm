@@ -56,7 +56,7 @@ impl<F: Field> PhantomSubExecutor<F> for HintInputSubEx {
 }
 
 /// PrintStr: Reads a string from memory and prints it.
-/// a = mem_ptr register offset, b = num_bytes register offset, c_hi = mem_start
+/// a = mem_ptr register offset, b = num_bytes register offset, c_upper = mem_start
 pub struct PrintStrSubEx;
 
 impl<F: PrimeField32> PhantomSubExecutor<F> for PrintStrSubEx {
