@@ -2024,6 +2024,140 @@ mod wast_tests {
         Ok(())
     }
 
+    /// Run a WASM program through all execution stages: execution, metered,
+    /// preflight, and mock proof (constraint verification).
+    /// Supports multi-segment programs.
+    fn run_wasm_all_stages(
+        module: &mut LinkedProgram<F>,
+        function: &str,
+        args: &[u32],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use openvm_circuit::arch::{
+            VirtualMachine, VmCircuitConfig, VmExecutor, VmState, debug_proving_ctx,
+        };
+        use openvm_sdk::config::DEFAULT_APP_LOG_BLOWUP;
+        use openvm_stark_sdk::{
+            config::{FriParameters, baby_bear_poseidon2::BabyBearPoseidon2Engine},
+            engine::{StarkEngine, StarkFriEngine},
+            openvm_stark_backend::prover::hal::DeviceDataTransporter,
+        };
+        use womir_circuit::WomirCpuBuilder;
+
+        let exe = module.program_with_entry_point(function);
+        let vm_config = WomirConfig::default();
+
+        let make_stdin = || {
+            let mut stdin = StdIn::default();
+            for &arg in args {
+                stdin.write(&arg);
+            }
+            stdin
+        };
+
+        let make_state = |stdin: StdIn| {
+            VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin)
+        };
+
+        let engine = || {
+            let fri_params =
+                FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+            BabyBearPoseidon2Engine::new(fri_params)
+        };
+
+        // Stage 1: Raw execution
+        println!("  Stage 1: execution");
+        {
+            let vm = VmExecutor::new(vm_config.clone()).unwrap();
+            let instance = vm.instance(&exe).unwrap();
+            instance.execute(make_stdin(), None)?;
+        }
+
+        // Stage 2: Metered execution
+        println!("  Stage 2: metered execution");
+        let segments = {
+            let (vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
+                engine(),
+                WomirCpuBuilder,
+                vm_config.clone(),
+            )?;
+            let metered_ctx = vm.build_metered_ctx(&exe);
+            let metered_instance = vm.metered_interpreter(&exe)?;
+            let (segments, _) = metered_instance
+                .execute_metered_from_state(make_state(make_stdin()), metered_ctx)?;
+            println!("    {} segment(s)", segments.len());
+            segments
+        };
+
+        // Stage 3: Preflight (all segments)
+        println!("  Stage 3: preflight");
+        {
+            let (vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
+                engine(),
+                WomirCpuBuilder,
+                vm_config.clone(),
+            )?;
+            let mut preflight_interpreter = vm.preflight_interpreter(&exe)?;
+            let mut state = make_state(make_stdin());
+            for (i, segment) in segments.iter().enumerate() {
+                println!("    segment {i}");
+                let output = vm.execute_preflight(
+                    &mut preflight_interpreter,
+                    state,
+                    Some(segment.num_insns),
+                    &segment.trace_heights,
+                )?;
+                state = output.to_state;
+            }
+        }
+
+        // Stage 4: Mock proof (constraint verification, all segments)
+        println!("  Stage 4: mock proof");
+        {
+            let eng = engine();
+            let circuit = vm_config
+                .create_airs()
+                .expect("failed to create AIR inventory");
+            let pk = circuit.keygen(&eng);
+            let d_pk = eng.device().transport_pk_to_device(&pk);
+            let mut vm = VirtualMachine::<_, WomirCpuBuilder>::new(
+                eng,
+                WomirCpuBuilder,
+                vm_config.clone(),
+                d_pk,
+            )?;
+
+            let metered_ctx = vm.build_metered_ctx(&exe);
+            let metered_instance = vm.metered_interpreter(&exe)?;
+            let (segments, _) = metered_instance
+                .execute_metered_from_state(make_state(make_stdin()), metered_ctx)?;
+
+            let cached_program_trace = vm.commit_program_on_device(&exe.program);
+            vm.load_program(cached_program_trace);
+
+            let mut preflight_interpreter = vm.preflight_interpreter(&exe)?;
+            let mut state = make_state(make_stdin());
+            for (i, segment) in segments.iter().enumerate() {
+                println!("    segment {i}");
+                vm.transport_init_memory_to_device(&state.memory);
+                let preflight_output = vm.execute_preflight(
+                    &mut preflight_interpreter,
+                    state,
+                    Some(segment.num_insns),
+                    &segment.trace_heights,
+                )?;
+                state = preflight_output.to_state;
+
+                let ctx = vm.generate_proving_ctx(
+                    preflight_output.system_records,
+                    preflight_output.record_arenas,
+                )?;
+                debug_proving_ctx(&vm, &pk, &ctx);
+            }
+        }
+
+        Ok(())
+    }
+
     #[test]
     fn test_i32() {
         run_wasm_test("../wasm_tests/i32.wast").unwrap()
@@ -2193,6 +2327,22 @@ mod wast_tests {
     #[should_panic]
     fn test_keccak_rust_womir_3_wrong() {
         keccak_rust_womir(3, 54);
+    }
+
+    #[test]
+    fn test_keccak_rust_womir_prove() {
+        let path = format!(
+            "{}/../sample-programs/keccak_with_inputs",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        build_wasm(&PathBuf::from(&path));
+        let wasm_path =
+            format!("{path}/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm");
+        let wasm_bytes = std::fs::read(&wasm_path).expect("Failed to read WASM file");
+        let (module, functions) = load_wasm(&wasm_bytes);
+        let mut module = LinkedProgram::new(module, functions);
+        // keccak([0; 32]) = [0x29, ...], 0x29 = 41
+        run_wasm_all_stages(&mut module, "main", &[0, 0, 1, 41]).unwrap();
     }
 
     #[test]
