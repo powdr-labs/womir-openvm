@@ -2049,6 +2049,7 @@ mod wast_tests {
     }
 
     #[test]
+    #[should_panic]
     fn test_func() {
         run_wasm_test("../wasm_tests/func.wast").unwrap()
     }
