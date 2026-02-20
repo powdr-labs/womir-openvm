@@ -542,14 +542,25 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                 let mem_ptr = inputs[0].as_register().unwrap().start as usize;
                 let num_words = inputs[1].as_register().unwrap().start as usize;
                 let mut directives = vec![];
-                if mem_start > 0 {
+                // Use a temporary register for the adjusted pointer to avoid
+                // clobbering the input register (which may be a live WASM local).
+                let effective_ptr = if mem_start > 0 {
+                    let tmp = c
+                        .allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32)
+                        .start as usize;
                     directives.push(Directive::Instruction(ib::add_imm(
-                        mem_ptr,
+                        tmp,
                         mem_ptr,
                         AluImm::try_from(mem_start).unwrap(),
                     )));
-                }
-                directives.push(Directive::Instruction(ib::hint_buffer(num_words, mem_ptr)));
+                    tmp
+                } else {
+                    mem_ptr
+                };
+                directives.push(Directive::Instruction(ib::hint_buffer(
+                    num_words,
+                    effective_ptr,
+                )));
                 directives
             }
             ("env", "abort") => {

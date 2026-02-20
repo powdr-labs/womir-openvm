@@ -56,7 +56,7 @@ impl<F: Field> PhantomSubExecutor<F> for HintInputSubEx {
 }
 
 /// PrintStr: Reads a string from memory and prints it.
-/// a = mem_ptr register offset, b = num_bytes register offset
+/// a = mem_ptr register offset, b = num_bytes register offset, c_hi = mem_start
 pub struct PrintStrSubEx;
 
 impl<F: PrimeField32> PhantomSubExecutor<F> for PrintStrSubEx {
@@ -68,12 +68,13 @@ impl<F: PrimeField32> PhantomSubExecutor<F> for PrintStrSubEx {
         _: PhantomDiscriminant,
         a: u32,
         b: u32,
-        _: u16,
+        c_upper: u16,
     ) -> eyre::Result<()> {
+        let mem_start = c_upper as u32;
         let rd = read_register::<F>(memory, a);
         let rs1 = read_register::<F>(memory, b);
         let bytes = (0..rs1)
-            .map(|i| memory_read::<1>(memory, RV32_MEMORY_AS, rd + i)[0])
+            .map(|i| memory_read::<1>(memory, RV32_MEMORY_AS, mem_start + rd + i)[0])
             .collect::<Vec<u8>>();
         let peeked_str = String::from_utf8(bytes)?;
         print!("{peeked_str}");

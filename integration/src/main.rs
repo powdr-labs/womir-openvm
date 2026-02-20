@@ -2196,7 +2196,6 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_keccak_rust_read_vec() {
         run_womir_guest("read_vec", "main", &[0, 0], &[0xffaabbcc, 0xeedd0066], &[])
     }
