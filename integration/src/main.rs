@@ -2149,16 +2149,50 @@ mod wast_tests {
         run_single_wasm_test("../sample-programs/keeper_js.wasm", "run", &[0, 0], &[]).unwrap();
     }
 
-    #[test]
-    fn test_keccak_rust_womir() {
+    fn keccak_rust_womir(iterations: u32, expected_first_byte: u32) {
         run_womir_guest(
             "keccak_with_inputs",
             "main",
             &[0, 0],
-            // keccak^2([0; 32]) = [0x51, ...], 0x51 = 81
-            &[2, 81],
+            &[iterations, expected_first_byte],
             &[],
         )
+    }
+
+    #[test]
+    fn test_keccak_rust_womir_1() {
+        // keccak([0; 32]) = [0x29, ...], 0x29 = 41
+        keccak_rust_womir(1, 41);
+    }
+
+    #[test]
+    fn test_keccak_rust_womir_2() {
+        // keccak^2([0; 32]) = [0x51, ...], 0x51 = 81
+        keccak_rust_womir(2, 81);
+    }
+
+    #[test]
+    fn test_keccak_rust_womir_3() {
+        // keccak^3([0; 32]) = [0x35, ...], 0x35 = 53
+        keccak_rust_womir(3, 53);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_keccak_rust_womir_1_wrong() {
+        keccak_rust_womir(1, 42);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_keccak_rust_womir_2_wrong() {
+        keccak_rust_womir(2, 82);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_keccak_rust_womir_3_wrong() {
+        keccak_rust_womir(3, 54);
     }
 
     #[test]
