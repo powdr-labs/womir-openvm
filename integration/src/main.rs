@@ -1987,54 +1987,20 @@ mod wast_tests {
         let (module, functions) = load_wasm(&wasm_bytes);
         let mut module = LinkedProgram::new(module, functions);
 
-        run_wasm_test_function(&mut module, function, args, expected)
+        run_wasm_test_function(&mut module, function, args, expected, true)
     }
 
+    /// Run a WASM program through execution with output verification.
+    /// When `prove` is true, also runs metered execution, preflight, and mock
+    /// proof (all stages). Supports multi-segment programs.
     fn run_wasm_test_function(
         module: &mut LinkedProgram<F>,
         function: &str,
         args: &[u32],
         expected: &[u32],
+        prove: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        setup_tracing_with_log_level(Level::WARN);
-        println!("Running WASM test with {function}({args:?}): expected {expected:?}");
-
-        let vm_config = WomirConfig::default();
-        // Prepare input
-        let mut stdin = StdIn::default();
-        for &arg in args {
-            stdin.write(&arg);
-        }
-
-        let output = module.execute(vm_config, function, stdin)?;
-
-        // Verify output
-        if !expected.is_empty() {
-            // Read only as many bytes as expected by the test.
-            let output: Vec<u32> = output[..expected.len() * 4]
-                .chunks(4)
-                .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
-                .collect();
-            assert_eq!(
-                output, expected,
-                "Test failed for {function}({args:?}): expected {expected:?}, got {output:?}"
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Run a WASM program through all execution stages: execution, metered,
-    /// preflight, and mock proof (constraint verification).
-    /// Supports multi-segment programs.
-    fn run_wasm_all_stages(
-        module: &mut LinkedProgram<F>,
-        function: &str,
-        args: &[u32],
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        use openvm_circuit::arch::{
-            VirtualMachine, VmCircuitConfig, VmExecutor, VmState, debug_proving_ctx,
-        };
+        use openvm_circuit::arch::{VirtualMachine, VmCircuitConfig, VmState, debug_proving_ctx};
         use openvm_sdk::config::DEFAULT_APP_LOG_BLOWUP;
         use openvm_stark_sdk::{
             config::{FriParameters, baby_bear_poseidon2::BabyBearPoseidon2Engine},
@@ -2043,6 +2009,10 @@ mod wast_tests {
         };
         use womir_circuit::WomirCpuBuilder;
 
+        setup_tracing_with_log_level(Level::WARN);
+        println!("Running WASM test with {function}({args:?}): expected {expected:?}");
+
+        // Capture the exe before module.execute() mutates memory_image.
         let exe = module.program_with_entry_point(function);
         let vm_config = WomirConfig::default();
 
@@ -2064,12 +2034,23 @@ mod wast_tests {
             BabyBearPoseidon2Engine::new(fri_params)
         };
 
-        // Stage 1: Raw execution
+        // Stage 1: Execution (also updates module.memory_image for wast test reuse)
         println!("  Stage 1: execution");
-        {
-            let vm = VmExecutor::new(vm_config.clone()).unwrap();
-            let instance = vm.instance(&exe).unwrap();
-            instance.execute(make_stdin(), None)?;
+        let output = module.execute(vm_config.clone(), function, make_stdin())?;
+
+        if !expected.is_empty() {
+            let output: Vec<u32> = output[..expected.len() * 4]
+                .chunks(4)
+                .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+                .collect();
+            assert_eq!(
+                output, expected,
+                "Test failed for {function}({args:?}): expected {expected:?}, got {output:?}"
+            );
+        }
+
+        if !prove {
+            return Ok(());
         }
 
         // Stage 2: Metered execution
@@ -2227,7 +2208,7 @@ mod wast_tests {
             let mut module = LinkedProgram::new(module, functions);
 
             for (function, args, expected) in cases {
-                run_wasm_test_function(&mut module, function, args, expected)?;
+                run_wasm_test_function(&mut module, function, args, expected, false)?;
             }
         }
 
@@ -2327,22 +2308,6 @@ mod wast_tests {
     #[should_panic]
     fn test_keccak_rust_womir_3_wrong() {
         keccak_rust_womir(3, 54);
-    }
-
-    #[test]
-    fn test_keccak_rust_womir_prove() {
-        let path = format!(
-            "{}/../sample-programs/keccak_with_inputs",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        build_wasm(&PathBuf::from(&path));
-        let wasm_path =
-            format!("{path}/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm");
-        let wasm_bytes = std::fs::read(&wasm_path).expect("Failed to read WASM file");
-        let (module, functions) = load_wasm(&wasm_bytes);
-        let mut module = LinkedProgram::new(module, functions);
-        // keccak([0; 32]) = [0x29, ...], 0x29 = 41
-        run_wasm_all_stages(&mut module, "main", &[0, 0, 1, 41]).unwrap();
     }
 
     #[test]
