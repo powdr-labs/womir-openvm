@@ -1801,7 +1801,42 @@ mod wast_tests {
     use std::fs;
     use std::path::Path;
     use std::process::Command;
+    use std::sync::OnceLock;
     use tracing::Level;
+
+    use openvm_circuit::arch::VmCircuitConfig;
+    use openvm_sdk::config::DEFAULT_APP_LOG_BLOWUP;
+    use openvm_stark_sdk::{
+        config::{
+            FriParameters,
+            baby_bear_poseidon2::{BabyBearPoseidon2Config, BabyBearPoseidon2Engine},
+        },
+        engine::{StarkEngine, StarkFriEngine},
+        openvm_stark_backend::{
+            keygen::types::MultiStarkProvingKey, prover::hal::DeviceDataTransporter,
+        },
+    };
+
+    type SC = BabyBearPoseidon2Config;
+
+    static VM_PROVING_KEY: OnceLock<MultiStarkProvingKey<SC>> = OnceLock::new();
+
+    fn default_engine() -> BabyBearPoseidon2Engine {
+        let fri_params =
+            FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+        BabyBearPoseidon2Engine::new(fri_params)
+    }
+
+    fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
+        VM_PROVING_KEY.get_or_init(|| {
+            let config = WomirConfig::default();
+            let engine = default_engine();
+            let circuit = config
+                .create_airs()
+                .expect("failed to create AIR inventory for test keygen");
+            circuit.keygen(&engine)
+        })
+    }
 
     type TestCase = (String, Vec<u32>, Vec<u32>);
     type TestModule = (String, u32, Vec<TestCase>);
@@ -2000,13 +2035,7 @@ mod wast_tests {
         expected: &[u32],
         prove: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        use openvm_circuit::arch::{VirtualMachine, VmCircuitConfig, VmState, debug_proving_ctx};
-        use openvm_sdk::config::DEFAULT_APP_LOG_BLOWUP;
-        use openvm_stark_sdk::{
-            config::{FriParameters, baby_bear_poseidon2::BabyBearPoseidon2Engine},
-            engine::{StarkEngine, StarkFriEngine},
-            openvm_stark_backend::prover::hal::DeviceDataTransporter,
-        };
+        use openvm_circuit::arch::{VirtualMachine, VmState, debug_proving_ctx};
         use womir_circuit::WomirCpuBuilder;
 
         setup_tracing_with_log_level(Level::WARN);
@@ -2026,12 +2055,6 @@ mod wast_tests {
 
         let make_state = |stdin: StdIn| {
             VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin)
-        };
-
-        let engine = || {
-            let fri_params =
-                FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
-            BabyBearPoseidon2Engine::new(fri_params)
         };
 
         // Stage 1: Execution (also updates module.memory_image for wast test reuse)
@@ -2056,10 +2079,14 @@ mod wast_tests {
         // Stage 2: Metered execution
         println!("  Stage 2: metered execution");
         let segments = {
-            let (vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
-                engine(),
+            let engine = default_engine();
+            let pk = vm_proving_key();
+            let d_pk = engine.device().transport_pk_to_device(pk);
+            let vm = VirtualMachine::<_, WomirCpuBuilder>::new(
+                engine,
                 WomirCpuBuilder,
                 vm_config.clone(),
+                d_pk,
             )?;
             let metered_ctx = vm.build_metered_ctx(&exe);
             let metered_instance = vm.metered_interpreter(&exe)?;
@@ -2072,10 +2099,14 @@ mod wast_tests {
         // Stage 3: Preflight (all segments)
         println!("  Stage 3: preflight");
         {
-            let (vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
-                engine(),
+            let engine = default_engine();
+            let pk = vm_proving_key();
+            let d_pk = engine.device().transport_pk_to_device(pk);
+            let vm = VirtualMachine::<_, WomirCpuBuilder>::new(
+                engine,
                 WomirCpuBuilder,
                 vm_config.clone(),
+                d_pk,
             )?;
             let mut preflight_interpreter = vm.preflight_interpreter(&exe)?;
             let mut state = make_state(make_stdin());
@@ -2094,14 +2125,11 @@ mod wast_tests {
         // Stage 4: Mock proof (constraint verification, all segments)
         println!("  Stage 4: mock proof");
         {
-            let eng = engine();
-            let circuit = vm_config
-                .create_airs()
-                .expect("failed to create AIR inventory");
-            let pk = circuit.keygen(&eng);
-            let d_pk = eng.device().transport_pk_to_device(&pk);
+            let engine = default_engine();
+            let pk = vm_proving_key();
+            let d_pk = engine.device().transport_pk_to_device(pk);
             let mut vm = VirtualMachine::<_, WomirCpuBuilder>::new(
-                eng,
+                engine,
                 WomirCpuBuilder,
                 vm_config.clone(),
                 d_pk,
@@ -2132,7 +2160,7 @@ mod wast_tests {
                     preflight_output.system_records,
                     preflight_output.record_arenas,
                 )?;
-                debug_proving_ctx(&vm, &pk, &ctx);
+                debug_proving_ctx(&vm, pk, &ctx);
             }
         }
 
