@@ -75,8 +75,8 @@ pub struct Rv32LoadStoreAdapterCols<T> {
     /// Will write to rd when Load and read from rs2 when Store
     pub rd_rs2_ptr: T,
     pub read_data_aux: MemoryReadAuxCols<T>,
-    pub imm: T,
-    pub imm_sign: T,
+    pub imm_lo: T,
+    pub imm_hi: T,
     /// mem_ptr is the intermediate memory pointer limbs, needed to check the correct addition
     pub mem_ptr_limbs: [T; 2],
     pub mem_as: T,
@@ -177,16 +177,11 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
             + local_cols.rs1_data[3] * AB::F::from_canonical_u32(1 << RV32_CELL_BITS);
 
         let inv = AB::F::from_canonical_u32(1 << (RV32_CELL_BITS * 2)).inverse();
-        let carry = (limbs_01 + local_cols.imm - local_cols.mem_ptr_limbs[0]) * inv;
+        let carry = (limbs_01 + local_cols.imm_lo - local_cols.mem_ptr_limbs[0]) * inv;
 
         builder.when(is_valid.clone()).assert_bool(carry.clone());
 
-        builder
-            .when(is_valid.clone())
-            .assert_bool(local_cols.imm_sign);
-        let imm_extend_limb =
-            local_cols.imm_sign * AB::F::from_canonical_u32((1 << (RV32_CELL_BITS * 2)) - 1);
-        let carry = (limbs_23 + imm_extend_limb + carry - local_cols.mem_ptr_limbs[1]) * inv;
+        let carry = (limbs_23 + local_cols.imm_hi + carry - local_cols.mem_ptr_limbs[1]) * inv;
         builder.when(is_valid.clone()).assert_bool(carry.clone());
 
         // preventing mem_ptr overflow
@@ -277,11 +272,11 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for Rv32LoadStoreAdapterAir {
                 [
                     local_cols.rd_rs2_ptr.into(),
                     local_cols.rs1_ptr.into(),
-                    local_cols.imm.into(),
+                    local_cols.imm_lo.into(),
                     AB::Expr::from_canonical_u32(RV32_REGISTER_AS),
                     local_cols.mem_as.into(),
                     local_cols.needs_write.into(),
-                    local_cols.imm_sign.into(),
+                    local_cols.imm_hi.into(),
                 ],
                 local_cols.from_state.into(),
                 OvmExecutionState {
@@ -312,8 +307,8 @@ pub struct Rv32LoadStoreAdapterRecord {
 
     pub rd_rs2_ptr: u32,
     pub read_data_aux: MemoryReadAuxRecord,
-    pub imm: u16,
-    pub imm_sign: bool,
+    pub imm_lo: u16,
+    pub imm_hi: u16,
 
     pub mem_as: u8,
 
@@ -415,9 +410,9 @@ where
             &mut record.rs1_aux_record.prev_timestamp,
         ));
 
-        record.imm = c.as_canonical_u32() as u16;
-        record.imm_sign = g.is_one();
-        let imm_extended = record.imm as u32 + record.imm_sign as u32 * 0xffff0000;
+        record.imm_lo = c.as_canonical_u32() as u16;
+        record.imm_hi = g.as_canonical_u32() as u16;
+        let imm_extended = record.imm_lo as u32 | (record.imm_hi as u32) << 16;
 
         let ptr_val = record.rs1_val.wrapping_add(imm_extended);
         let shift_amount = ptr_val & 3;
@@ -503,7 +498,7 @@ where
 
             record.write_prev_timestamp = match local_opcode {
                 STOREW | STOREH | STOREB => {
-                    let imm_extended = record.imm as u32 + record.imm_sign as u32 * 0xffff0000;
+                    let imm_extended = record.imm_lo as u32 | (record.imm_hi as u32) << 16;
                     let ptr = record.rs1_val.wrapping_add(imm_extended) & !3;
 
                     if record.mem_as == 4 {
@@ -563,7 +558,7 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for Rv32LoadStoreAdapterFiller {
         adapter_row.mem_as = F::from_canonical_u8(record.mem_as);
         let ptr = record
             .rs1_val
-            .wrapping_add(record.imm as u32 + record.imm_sign as u32 * 0xffff0000);
+            .wrapping_add(record.imm_lo as u32 | (record.imm_hi as u32) << 16);
 
         let ptr_limbs = [ptr & 0xffff, ptr >> 16];
         self.range_checker_chip
@@ -572,8 +567,8 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for Rv32LoadStoreAdapterFiller {
             .add_count(ptr_limbs[1], self.pointer_max_bits - 16);
         adapter_row.mem_ptr_limbs = ptr_limbs.map(F::from_canonical_u32);
 
-        adapter_row.imm_sign = F::from_bool(record.imm_sign);
-        adapter_row.imm = F::from_canonical_u16(record.imm);
+        adapter_row.imm_hi = F::from_canonical_u16(record.imm_hi);
+        adapter_row.imm_lo = F::from_canonical_u16(record.imm_lo);
 
         mem_helper.fill(
             record.read_data_aux.prev_timestamp,

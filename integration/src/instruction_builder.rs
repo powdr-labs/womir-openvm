@@ -513,6 +513,7 @@ pub fn call_indirect<F: PrimeField32>(
 
 /// ALLOCATE_FRAME_I instruction: Allocate frame from immediate size and return pointer
 /// target_reg receives the allocated pointer, amount_imm is the amount to allocate
+#[allow(dead_code)]
 pub fn allocate_frame_imm<F: PrimeField32>(target_reg: usize, amount_imm: usize) -> Instruction<F> {
     Instruction::new(
         AllocateFrameOpcode::ALLOCATE_FRAME.global_opcode(),
@@ -528,6 +529,7 @@ pub fn allocate_frame_imm<F: PrimeField32>(target_reg: usize, amount_imm: usize)
 
 /// ALLOCATE_FRAME_V instruction: Allocate frame from register and return pointer
 /// target_reg receives the allocated pointer, amount_reg is the register containing the amount to allocate
+#[allow(dead_code)]
 pub fn allocate_frame_reg<F: PrimeField32>(target_reg: usize, amount_reg: usize) -> Instruction<F> {
     Instruction::new(
         AllocateFrameOpcode::ALLOCATE_FRAME.global_opcode(),
@@ -544,6 +546,7 @@ pub fn allocate_frame_reg<F: PrimeField32>(target_reg: usize, amount_reg: usize)
 /// COPY_INTO_FRAME instruction: Copy value into frame-relative address
 /// dest_fp is the frame pointer, src_value is the value to copy, dest_offset is the offset
 /// Writes src_value content to [dest_fp[dest_offset]]
+#[allow(dead_code)]
 pub fn copy_into_frame<F: PrimeField32>(
     target_reg: usize,
     src_reg: usize,
@@ -565,6 +568,7 @@ pub fn copy_into_frame<F: PrimeField32>(
 /// COPY_FROM_FRAME instruction: Copy value from frame-relative address.
 /// src_fp is the frame pointer, src_value is the value to copy.
 /// Writes [src_fp + src_value] content to [fp + target_reg].
+#[allow(dead_code)]
 pub fn copy_from_frame<F: PrimeField32>(
     target_reg: usize,
     src_reg: usize,

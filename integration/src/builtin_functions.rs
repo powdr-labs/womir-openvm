@@ -7,9 +7,9 @@ use itertools::Itertools;
 use openvm_stark_backend::p3_field::PrimeField32;
 use wasmparser::{Operator, ValType};
 use womir::loader::{
-    Module,
-    blockless_dag::{BlocklessDag, Operation},
-    flattening::WriteOnceAsm,
+    FunctionAsm, FunctionProcessingStage, Module,
+    passes::blockless_dag::{BlocklessDag, Operation},
+    rwm::RWMStages,
 };
 
 use crate::womir_translation::{Directive, OpenVMSettings};
@@ -82,14 +82,16 @@ impl BuiltinFunction {
         self,
         module: &Module,
         label_gen: &AtomicU32,
-    ) -> WriteOnceAsm<Directive<F>> {
+    ) -> FunctionAsm<Directive<F>> {
         // Load the built-in function module.
         let program =
-            womir::loader::load_wasm(OpenVMSettings::new(), self.definition.wasm_bytes).unwrap();
+            womir::loader::load_wasm(OpenVMSettings::<F>::new(), self.definition.wasm_bytes)
+                .unwrap();
 
         // Compile the built-in function.
         let function = program.functions.into_iter().exactly_one().unwrap();
-        function
+        let rwm_func: RWMStages<'_, OpenVMSettings<F>> = function.into();
+        rwm_func
             .advance_all_stages(
                 &OpenVMSettings::new(),
                 // It shouldn't make any difference which module we pass here,

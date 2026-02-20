@@ -83,9 +83,9 @@ impl<const NUM_CELLS: usize> LoadStoreExecutor<NUM_CELLS> {
             _ => unreachable!("LoadStoreExecutor should not handle LOADB/LOADH opcodes"),
         }
 
-        let imm = c.as_canonical_u32();
-        let imm_sign = g.as_canonical_u32();
-        let imm_extended = imm + imm_sign * 0xffff0000;
+        let imm_lo = c.as_canonical_u32();
+        let imm_hi = g.as_canonical_u32();
+        let imm_extended = imm_lo | (imm_hi << 16);
         let is_native_store = e_u32 == NATIVE_AS;
 
         *data = LoadStorePreCompute {

@@ -22,8 +22,10 @@ use std::sync::{Mutex, RwLock};
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
-use womir::loader::flattening::WriteOnceAsm;
-use womir::loader::{FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics};
+use womir::loader::rwm::RWMStages;
+use womir::loader::{
+    CommonStages, FunctionAsm, FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics,
+};
 
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
@@ -321,9 +323,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>) {
+fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) {
     let PartiallyParsedProgram { s: _, m, functions } =
-        womir::loader::load_wasm(OpenVMSettings::new(), wasm_bytes).unwrap();
+        womir::loader::load_wasm(OpenVMSettings::<F>::new(), wasm_bytes).unwrap();
 
     let num_functions = functions.len() as u32;
     let tracker = RwLock::new(Some(builtin_functions::Tracker::new(num_functions)));
@@ -334,10 +336,10 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>)
     let jobs_r = Mutex::new(jobs_r);
 
     let functions = std::thread::scope(|scope| {
-        type FunctionInProcessinng<'a> = FunctionProcessingStage<'a, OpenVMSettings<F>>;
+        type FunctionInProcessing<'a> = RWMStages<'a, OpenVMSettings<F>>;
         enum Job<'a> {
-            PatchFunc(u32, FunctionInProcessinng<'a>),
-            FinishFunc(u32, FunctionInProcessinng<'a>),
+            PatchFunc(u32, FunctionInProcessing<'a>),
+            FinishFunc(u32, FunctionInProcessing<'a>),
             LoadBuiltin(BuiltinFunction),
         }
 
@@ -364,7 +366,9 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>)
                             // Advance to BlocklessDag stage
                             let module = module.read().unwrap();
                             let dag = loop {
-                                if let FunctionProcessingStage::BlocklessDag(dag) = &mut func {
+                                if let RWMStages::CommonStages(CommonStages::BlocklessDag(dag)) =
+                                    &mut func
+                                {
                                     break dag;
                                 }
                                 func = func
@@ -390,10 +394,11 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>)
                             patched_s.send((func_idx, func)).unwrap();
                         }
                         Job::FinishFunc(func_idx, func) => {
+                            let module = module.read().unwrap();
                             let func = func
                                 .advance_all_stages(
                                     &OpenVMSettings::new(),
-                                    &module.read().unwrap(),
+                                    &module,
                                     func_idx,
                                     label_gen,
                                     Some(&mut stats),
@@ -417,7 +422,8 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<WriteOnceAsm<Directive<F>>>)
 
         // Send the functions for processing.
         for (idx, func) in functions.into_iter().enumerate() {
-            jobs_s.send(Job::PatchFunc(idx as u32, func)).unwrap();
+            let rwm_func: FunctionInProcessing<'_> = func.into();
+            jobs_s.send(Job::PatchFunc(idx as u32, rwm_func)).unwrap();
         }
 
         // Received the patched functions, update the module, and resend for processing.
@@ -1795,7 +1801,42 @@ mod wast_tests {
     use std::fs;
     use std::path::Path;
     use std::process::Command;
+    use std::sync::OnceLock;
     use tracing::Level;
+
+    use openvm_circuit::arch::VmCircuitConfig;
+    use openvm_sdk::config::DEFAULT_APP_LOG_BLOWUP;
+    use openvm_stark_sdk::{
+        config::{
+            FriParameters,
+            baby_bear_poseidon2::{BabyBearPoseidon2Config, BabyBearPoseidon2Engine},
+        },
+        engine::{StarkEngine, StarkFriEngine},
+        openvm_stark_backend::{
+            keygen::types::MultiStarkProvingKey, prover::hal::DeviceDataTransporter,
+        },
+    };
+
+    type SC = BabyBearPoseidon2Config;
+
+    static VM_PROVING_KEY: OnceLock<MultiStarkProvingKey<SC>> = OnceLock::new();
+
+    fn default_engine() -> BabyBearPoseidon2Engine {
+        let fri_params =
+            FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+        BabyBearPoseidon2Engine::new(fri_params)
+    }
+
+    fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
+        VM_PROVING_KEY.get_or_init(|| {
+            let config = WomirConfig::default();
+            let engine = default_engine();
+            let circuit = config
+                .create_airs()
+                .expect("failed to create AIR inventory for test keygen");
+            circuit.keygen(&engine)
+        })
+    }
 
     type TestCase = (String, Vec<u32>, Vec<u32>);
     type TestModule = (String, u32, Vec<TestCase>);
@@ -1981,30 +2022,46 @@ mod wast_tests {
         let (module, functions) = load_wasm(&wasm_bytes);
         let mut module = LinkedProgram::new(module, functions);
 
-        run_wasm_test_function(&mut module, function, args, expected)
+        run_wasm_test_function(&mut module, function, args, expected, true)
     }
 
+    /// Run a WASM program through execution with output verification.
+    /// When `prove` is true, also runs metered execution, preflight, and mock
+    /// proof (all stages). Supports multi-segment programs.
     fn run_wasm_test_function(
         module: &mut LinkedProgram<F>,
         function: &str,
         args: &[u32],
         expected: &[u32],
+        prove: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        use openvm_circuit::arch::{VirtualMachine, VmState, debug_proving_ctx};
+        use womir_circuit::WomirCpuBuilder;
+
         setup_tracing_with_log_level(Level::WARN);
         println!("Running WASM test with {function}({args:?}): expected {expected:?}");
 
+        // Capture the exe before module.execute() mutates memory_image.
+        let exe = module.program_with_entry_point(function);
         let vm_config = WomirConfig::default();
-        // Prepare input
-        let mut stdin = StdIn::default();
-        for &arg in args {
-            stdin.write(&arg);
-        }
 
-        let output = module.execute(vm_config, function, stdin)?;
+        let make_stdin = || {
+            let mut stdin = StdIn::default();
+            for &arg in args {
+                stdin.write(&arg);
+            }
+            stdin
+        };
 
-        // Verify output
+        let make_state = |stdin: StdIn| {
+            VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin)
+        };
+
+        // Stage 1: Execution (also updates module.memory_image for wast test reuse)
+        println!("  Stage 1: execution");
+        let output = module.execute(vm_config.clone(), function, make_stdin())?;
+
         if !expected.is_empty() {
-            // Read only as many bytes as expected by the test.
             let output: Vec<u32> = output[..expected.len() * 4]
                 .chunks(4)
                 .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
@@ -2015,71 +2072,152 @@ mod wast_tests {
             );
         }
 
+        if !prove {
+            return Ok(());
+        }
+
+        // Stage 2: Metered execution
+        println!("  Stage 2: metered execution");
+        let segments = {
+            let engine = default_engine();
+            let pk = vm_proving_key();
+            let d_pk = engine.device().transport_pk_to_device(pk);
+            let vm = VirtualMachine::<_, WomirCpuBuilder>::new(
+                engine,
+                WomirCpuBuilder,
+                vm_config.clone(),
+                d_pk,
+            )?;
+            let metered_ctx = vm.build_metered_ctx(&exe);
+            let metered_instance = vm.metered_interpreter(&exe)?;
+            let (segments, _) = metered_instance
+                .execute_metered_from_state(make_state(make_stdin()), metered_ctx)?;
+            println!("    {} segment(s)", segments.len());
+            segments
+        };
+
+        // Stage 3: Preflight (all segments)
+        println!("  Stage 3: preflight");
+        {
+            let engine = default_engine();
+            let pk = vm_proving_key();
+            let d_pk = engine.device().transport_pk_to_device(pk);
+            let vm = VirtualMachine::<_, WomirCpuBuilder>::new(
+                engine,
+                WomirCpuBuilder,
+                vm_config.clone(),
+                d_pk,
+            )?;
+            let mut preflight_interpreter = vm.preflight_interpreter(&exe)?;
+            let mut state = make_state(make_stdin());
+            for (i, segment) in segments.iter().enumerate() {
+                println!("    segment {i}");
+                let output = vm.execute_preflight(
+                    &mut preflight_interpreter,
+                    state,
+                    Some(segment.num_insns),
+                    &segment.trace_heights,
+                )?;
+                state = output.to_state;
+            }
+        }
+
+        // Stage 4: Mock proof (constraint verification, all segments)
+        println!("  Stage 4: mock proof");
+        {
+            let engine = default_engine();
+            let pk = vm_proving_key();
+            let d_pk = engine.device().transport_pk_to_device(pk);
+            let mut vm = VirtualMachine::<_, WomirCpuBuilder>::new(
+                engine,
+                WomirCpuBuilder,
+                vm_config.clone(),
+                d_pk,
+            )?;
+
+            let metered_ctx = vm.build_metered_ctx(&exe);
+            let metered_instance = vm.metered_interpreter(&exe)?;
+            let (segments, _) = metered_instance
+                .execute_metered_from_state(make_state(make_stdin()), metered_ctx)?;
+
+            let cached_program_trace = vm.commit_program_on_device(&exe.program);
+            vm.load_program(cached_program_trace);
+
+            let mut preflight_interpreter = vm.preflight_interpreter(&exe)?;
+            let mut state = make_state(make_stdin());
+            for (i, segment) in segments.iter().enumerate() {
+                println!("    segment {i}");
+                vm.transport_init_memory_to_device(&state.memory);
+                let preflight_output = vm.execute_preflight(
+                    &mut preflight_interpreter,
+                    state,
+                    Some(segment.num_insns),
+                    &segment.trace_heights,
+                )?;
+                state = preflight_output.to_state;
+
+                let ctx = vm.generate_proving_ctx(
+                    preflight_output.system_records,
+                    preflight_output.record_arenas,
+                )?;
+                debug_proving_ctx(&vm, pk, &ctx);
+            }
+        }
+
         Ok(())
     }
 
     #[test]
-    #[should_panic]
     fn test_i32() {
         run_wasm_test("../wasm_tests/i32.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_i64() {
         run_wasm_test("../wasm_tests/i64.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_address() {
         run_wasm_test("../wasm_tests/address.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_memory_grow() {
         run_wasm_test("../wasm_tests/memory_grow.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_call_indirect() {
         run_wasm_test("../wasm_tests/call_indirect.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_func() {
         run_wasm_test("../wasm_tests/func.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_call() {
         run_wasm_test("../wasm_tests/call.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_br_if() {
         run_wasm_test("../wasm_tests/br_if.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_return() {
         run_wasm_test("../wasm_tests/return.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_loop() {
         run_wasm_test("../wasm_tests/loop.wast").unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_memory_fill() {
         run_wasm_test("../wasm_tests/memory_fill.wast").unwrap()
     }
@@ -2098,7 +2236,7 @@ mod wast_tests {
             let mut module = LinkedProgram::new(module, functions);
 
             for (function, args, expected) in cases {
-                run_wasm_test_function(&mut module, function, args, expected)?;
+                run_wasm_test_function(&mut module, function, args, expected, false)?;
             }
         }
 
@@ -2106,13 +2244,11 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_fib() {
         run_single_wasm_test("../sample-programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_n_first_sums() {
         run_single_wasm_test(
             "../sample-programs/n_first_sum.wasm",
@@ -2124,7 +2260,6 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_call_indirect_wasm() {
         run_single_wasm_test("../sample-programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
         run_single_wasm_test(
@@ -2144,13 +2279,11 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_keccak() {
         run_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_keeper_js() {
         // This is program is a stripped down version of geth, compiled for Go's js target.
         // Source: https://github.com/ethereum/go-ethereum/tree/master/cmd/keeper
@@ -2159,21 +2292,53 @@ mod wast_tests {
         run_single_wasm_test("../sample-programs/keeper_js.wasm", "run", &[0, 0], &[]).unwrap();
     }
 
-    #[test]
-    #[should_panic]
-    fn test_keccak_rust_womir() {
+    fn keccak_rust_womir(iterations: u32, expected_first_byte: u32) {
         run_womir_guest(
             "keccak_with_inputs",
             "main",
             &[0, 0],
-            // keccak([0; 32]) = [41, ...]
-            &[1, 41],
+            &[iterations, expected_first_byte],
             &[],
         )
     }
 
     #[test]
+    fn test_keccak_rust_womir_1() {
+        // keccak([0; 32]) = [0x29, ...], 0x29 = 41
+        keccak_rust_womir(1, 41);
+    }
+
+    #[test]
+    fn test_keccak_rust_womir_2() {
+        // keccak^2([0; 32]) = [0x51, ...], 0x51 = 81
+        keccak_rust_womir(2, 81);
+    }
+
+    #[test]
+    fn test_keccak_rust_womir_3() {
+        // keccak^3([0; 32]) = [0x35, ...], 0x35 = 53
+        keccak_rust_womir(3, 53);
+    }
+
+    #[test]
     #[should_panic]
+    fn test_keccak_rust_womir_1_wrong() {
+        keccak_rust_womir(1, 42);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_keccak_rust_womir_2_wrong() {
+        keccak_rust_womir(2, 82);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_keccak_rust_womir_3_wrong() {
+        keccak_rust_womir(3, 54);
+    }
+
+    #[test]
     fn test_keccak_rust_read_vec() {
         run_womir_guest("read_vec", "main", &[0, 0], &[0xffaabbcc, 0xeedd0066], &[])
     }
