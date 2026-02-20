@@ -2195,7 +2195,7 @@ mod tests {
                 wom::halt(), // Should be skipped!
             ],
             start_fp: 10,
-            start_registers: vec![(12, 2)],
+            start_registers: vec![(12, 1)],
             expected_pc: Some(8),
             ..Default::default()
         };

@@ -736,7 +736,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_skip() {
         let instructions = vec![
             wom::const_32_imm(0, 0, 0),
