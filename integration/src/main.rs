@@ -2136,13 +2136,11 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_keccak() {
         run_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
     }
 
     #[test]
-    #[should_panic]
     fn test_keeper_js() {
         // This is program is a stripped down version of geth, compiled for Go's js target.
         // Source: https://github.com/ethereum/go-ethereum/tree/master/cmd/keeper
@@ -2152,7 +2150,6 @@ mod wast_tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_keccak_rust_womir() {
         run_womir_guest(
             "keccak_with_inputs",
