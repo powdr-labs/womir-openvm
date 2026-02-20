@@ -171,17 +171,19 @@ where
 
         // Compute to_pc (all terms are degree 2):
         //   Base:       do_absolute_jump * imm + (1 - do_absolute_jump) * (from_pc + pc_step)
-        //   SKIP corr:  opcode_skip_flag * (rs_composed - 1) * pc_step
+        //   SKIP corr:  opcode_skip_flag * rs_composed * pc_step
         //
         // Non-SKIP: base gives correct result; SKIP correction is zero.
         // SKIP (do_absolute_jump=0): base gives from_pc + pc_step;
-        //   correction adds (rs_composed - 1) * pc_step → from_pc + rs_composed * pc_step.
+        //   correction adds rs_composed * pc_step → from_pc + (rs_composed + 1) * pc_step.
+        // The +1 accounts for the natural PC increment that womir's interpreter
+        // applies after JumpOffset. Without it, offset=0 would loop forever.
         let default_pc_step = AB::Expr::from_canonical_u32(DEFAULT_PC_STEP);
 
         let to_pc = cols.do_absolute_jump * cols.imm
             + not::<AB::Expr>(cols.do_absolute_jump.into()) * (from_pc + default_pc_step.clone())
-            // If opcode_skip_flag=1, apply the SKIP correction: + (rs_composed - 1) * pc_step.
-            + cols.opcode_skip_flag * (rs_composed - AB::Expr::ONE) * default_pc_step;
+            // If opcode_skip_flag=1, apply the SKIP correction: + rs_composed * pc_step.
+            + cols.opcode_skip_flag * rs_composed * default_pc_step;
 
         AdapterAirContext {
             to_pc: Some(to_pc),
