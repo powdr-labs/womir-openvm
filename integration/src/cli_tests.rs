@@ -16,6 +16,21 @@ fn sample_program(name: &str) -> PathBuf {
         .join(name)
 }
 
+/// Build a WASM crate if its output doesn't already exist.
+fn build_wasm(crate_dir: &PathBuf) {
+    let output = Command::new("cargo")
+        .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
+        .current_dir(crate_dir)
+        .output()
+        .expect("Failed to run cargo build for WASM crate");
+    assert!(
+        output.status.success(),
+        "cargo build failed for {}:\n{}",
+        crate_dir.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn test_cli_print_fib() {
     let output = cargo_bin()
@@ -78,6 +93,7 @@ fn test_cli_run_keccak() {
     // keccak([0; 32]) = [0x29, ...], 0x29 = 41.
     // The WASM program internally asserts the first byte matches, so a successful
     // exit means the output is correct.
+    build_wasm(&sample_program("keccak_with_inputs"));
     let wasm = sample_program(
         "keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm",
     );
@@ -106,6 +122,7 @@ fn test_cli_run_keccak() {
 
 #[test]
 fn test_cli_run_keccak_wrong_output_fails() {
+    build_wasm(&sample_program("keccak_with_inputs"));
     let wasm = sample_program(
         "keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm",
     );
