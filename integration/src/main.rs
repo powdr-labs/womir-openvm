@@ -1,8 +1,11 @@
 mod builtin_functions;
+#[cfg(test)]
+mod cli_tests;
 mod const_collapse;
 mod instruction_builder;
 #[cfg(test)]
 mod isolated_tests;
+mod proving;
 #[cfg(test)]
 mod test_stages;
 #[cfg(test)]
@@ -14,11 +17,11 @@ mod womir_translation;
 use std::fs;
 
 use clap::{Parser, Subcommand};
-use derive_more::From;
 use eyre::Result;
 use itertools::Itertools;
 use metrics_tracing_context::{MetricsLayer, TracingContextLayer};
 use metrics_util::{debugging::DebuggingRecorder, layers::Layer};
+use openvm_circuit::arch::VmState;
 use openvm_sdk::StdIn;
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
 use std::path::PathBuf;
@@ -36,81 +39,10 @@ use womir::loader::{
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
-// use openvm_womir_circuit::{self, WomirI, WomirIExecutor, WomirIPeriphery};
-
 use crate::builtin_functions::BuiltinFunction;
 use crate::womir_translation::{Directive, LinkedProgram, OpenVMSettings};
 
 use womir_circuit::WomirConfig;
-
-// #[derive(Serialize, Deserialize, Clone)]
-// pub struct SpecializedConfig {
-//     pub sdk_config: SdkVmConfig,
-//     wom: WomirI<F>,
-// }
-//
-// impl SpecializedConfig {
-//     fn new(sdk_config: SdkVmConfig) -> Self {
-//         Self {
-//             sdk_config,
-//             wom: WomirI::default(),
-//         }
-//     }
-// }
-//
-// impl InitFileGenerator for SpecializedConfig {
-//     fn generate_init_file_contents(&self) -> Option<String> {
-//         self.sdk_config.generate_init_file_contents()
-//     }
-//
-//     fn write_to_init_file(
-//         &self,
-//         manifest_dir: &Path,
-//         init_file_name: Option<&str>,
-//     ) -> eyre::Result<()> {
-//         self.sdk_config
-//             .write_to_init_file(manifest_dir, init_file_name)
-//     }
-// }
-//
-// #[allow(clippy::large_enum_variant)]
-// #[derive(ChipUsageGetter, InstructionExecutor, Chip, From, AnyEnum)]
-// pub enum SpecializedExecutor<F: PrimeField32> {
-//     #[any_enum]
-//     SdkExecutor(SdkVmConfigExecutor<F>),
-//     #[any_enum]
-//     WomExecutor(WomirIExecutor<F>),
-// }
-//
-// #[derive(From, ChipUsageGetter, Chip, AnyEnum)]
-// pub enum SpecializedPeriphery<F: PrimeField32> {
-//     #[any_enum]
-//     SdkPeriphery(SdkVmConfigPeriphery<F>),
-//     #[any_enum]
-//     WomPeriphery(WomirIPeriphery<F>),
-// }
-//
-// impl VmConfig<F> for SpecializedConfig {
-//     type Executor = SpecializedExecutor<F>;
-//     type Periphery = SpecializedPeriphery<F>;
-//
-//     fn system(&self) -> &SystemConfig {
-//         VmConfig::system(&self.sdk_config)
-//     }
-//
-//     fn system_mut(&mut self) -> &mut SystemConfig {
-//         VmConfig::system_mut(&mut self.sdk_config)
-//     }
-//
-//     fn create_chip_complex(
-//         &self,
-//     ) -> Result<VmChipComplex<F, Self::Executor, Self::Periphery>, VmInventoryError> {
-//         let chip = self.sdk_config.create_chip_complex()?;
-//         let chip = chip.extend(&self.wom)?;
-//
-//         Ok(chip)
-//     }
-// }
 
 #[derive(Parser)]
 struct CliArgs {
@@ -118,10 +50,10 @@ struct CliArgs {
     command: Commands,
 }
 
-#[derive(Subcommand, Clone)]
+#[derive(Subcommand)]
 enum Commands {
-    /// Just prints the program WOM listing
-    PrintWom {
+    /// Just prints the program's OpenVM instructions
+    Print {
         /// Path to the WASM program
         program: String,
     },
@@ -131,7 +63,7 @@ enum Commands {
         program: String,
         /// Function name
         function: String,
-        /// Arguments to pass to the function
+        /// Arguments (u32 values)
         #[arg(long)]
         args: Vec<String>,
         /// Files to be read as bytes.
@@ -164,29 +96,14 @@ enum Commands {
     },
 }
 
-impl Commands {
-    fn get_program_path(&self) -> &str {
-        match self {
-            Commands::PrintWom { program } => program,
-            Commands::Run { program, .. } => program,
-            Commands::Prove { program, .. } => program,
-            Commands::ProveRiscv { program, .. } => program,
-        }
-    }
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_tracing_with_log_level(Level::INFO);
 
     // Parse command line arguments
     let cli_args = CliArgs::parse();
-    let cmd = cli_args.command.clone();
-    let program_path = cmd.get_program_path();
-
     match cli_args.command {
-        Commands::PrintWom { .. } => {
-            // Load the module
-            let wasm_bytes = std::fs::read(program_path).expect("Failed to read WASM file");
+        Commands::Print { program } => {
+            let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let (_module, functions) = load_wasm(&wasm_bytes);
 
             for func in &functions {
@@ -197,13 +114,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Commands::Run {
+            program,
             function,
             args,
             binary_input_files,
-            ..
         } => {
-            // Load the module
-            let wasm_bytes = std::fs::read(program_path).expect("Failed to read WASM file");
+            let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let (module, functions) = load_wasm(&wasm_bytes);
 
             // Create and execute program
@@ -223,105 +139,87 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("output: {output:?}");
         }
-        Commands::Prove { function, .. } => {
-            // Load the module
-            let wasm_bytes = std::fs::read(program_path).expect("Failed to read WASM file");
+        Commands::Prove {
+            program,
+            function,
+            args,
+            metrics,
+        } => {
+            let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let (module, functions) = load_wasm(&wasm_bytes);
-
-            // Create program
             let linked_program = LinkedProgram::new(module, functions);
-            let _exe = linked_program.program_with_entry_point(&function);
+            let exe = linked_program.program_with_entry_point(&function);
+            let vm_config = WomirConfig::default();
 
-            // let prove = || -> Result<()> {
-            //     // Create VM configuration
-            //     let vm_config = SdkVmConfig::builder()
-            //         .system(Default::default())
-            //         .io(Default::default())
-            //         .build();
-            //     let vm_config = SpecializedConfig::new(vm_config);
+            let args: Vec<u32> = args.iter().map(|s| s.parse::<u32>().unwrap()).collect();
+            let make_state = || {
+                let mut stdin = StdIn::default();
+                for &arg in &args {
+                    stdin.write(&arg);
+                }
+                VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin)
+            };
 
-            // let sdk = Sdk::new();
-            //
-            // // Set app configuration
-            // let app_fri_params = FriParameters::standard_with_100_bits_conjectured_security(
-            //     DEFAULT_APP_LOG_BLOWUP,
-            // );
-            // let app_config = AppConfig::new(app_fri_params, vm_config.clone());
-            //
-            // // Commit the exe
-            // let app_committed_exe = sdk.commit_app_exe(app_fri_params, exe.clone())?;
-            //
-            // // Generate an AppProvingKey
-            // let app_pk = Arc::new(sdk.app_keygen(app_config)?);
-            //
-            // // Setup input
-            // let mut stdin = StdIn::default();
-            // for arg in args {
-            //     let val = arg.parse::<u32>().unwrap();
-            //     stdin.write(&val);
-            // }
-            //
-            // // Generate a proof
-            // tracing::info!("Generating app proof...");
-            // let start = std::time::Instant::now();
-            // let app_proof = sdk.generate_app_proof(
-            //     app_pk.clone(),
-            //     app_committed_exe.clone(),
-            //     stdin.clone(),
-            // )?;
-            // tracing::info!("App proof took {:?}", start.elapsed());
-            //
-            // tracing::info!(
-            //     "Public values: {:?}",
-            //     app_proof.user_public_values.public_values
-            // );
-
-            //     Ok(())
-            // };
-            // if let Some(metrics_path) = metrics {
-            //     run_with_metric_collection_to_file(
-            //         std::fs::File::create(metrics_path).expect("Failed to create metrics file"),
-            //         prove,
-            //     )?;
-            // } else {
-            //     prove()?
-            // }
-        }
-        Commands::ProveRiscv { metrics, .. } => {
             let prove = || -> Result<()> {
-                // let compiled_program = powdr_openvm::compile_guest(
-                //     &program,
-                //     Default::default(),
-                //     powdr_autoprecompiles::PowdrConfig::new(
-                //         0,
-                //         0,
-                //         powdr_openvm::DegreeBound {
-                //             identities: 3,
-                //             bus_interactions: 2,
-                //         },
-                //     ),
-                //     Default::default(),
-                //     Default::default(),
-                // )
-                // .unwrap();
-
-                // let mut stdin = StdIn::default();
-                // for arg in args {
-                //     let val = arg.parse::<u32>().unwrap();
-                //     stdin.write(&val);
-                // }
-
-                // powdr_openvm::prove(&compiled_program, false, false, stdin, None).unwrap();
-
+                proving::mock_prove(&exe, make_state).map_err(|e| eyre::eyre!("{e}"))?;
+                println!("Mock proof verified successfully.");
                 Ok(())
             };
+
             if let Some(metrics_path) = metrics {
                 run_with_metric_collection_to_file(
                     std::fs::File::create(metrics_path).expect("Failed to create metrics file"),
                     prove,
                 )?;
             } else {
-                prove()?
+                prove()?;
+            }
+        }
+        Commands::ProveRiscv {
+            program,
+            args,
+            metrics,
+        } => {
+            let prove = || -> Result<()> {
+                // Resolve to absolute so compile_openvm finds the right crate
+                let program_abs =
+                    std::fs::canonicalize(&program).expect("Failed to resolve program path");
+                let program_str = program_abs.to_str().unwrap();
+
+                let original = powdr_openvm::compile_openvm(
+                    program_str,
+                    powdr_openvm::GuestOptions::default(),
+                )
+                .map_err(|e| eyre::eyre!("{e}"))?;
+
+                let config = powdr_openvm::default_powdr_openvm_config(0, 0);
+                let compiled = powdr_openvm::compile_exe(
+                    original,
+                    config,
+                    powdr_openvm::PgoConfig::None,
+                    powdr_autoprecompiles::empirical_constraints::EmpiricalConstraints::default(),
+                )
+                .map_err(|e| eyre::eyre!("{e}"))?;
+
+                let mut stdin = StdIn::default();
+                for arg in &args {
+                    let val = arg.parse::<u32>().unwrap();
+                    stdin.write(&val);
+                }
+
+                powdr_openvm::prove(&compiled, true, false, stdin, None)
+                    .map_err(|e| eyre::eyre!("{e}"))?;
+                println!("RISC-V proof verified successfully.");
+                Ok(())
+            };
+
+            if let Some(metrics_path) = metrics {
+                run_with_metric_collection_to_file(
+                    std::fs::File::create(metrics_path).expect("Failed to create metrics file"),
+                    prove,
+                )?;
+            } else {
+                prove()?;
             }
         }
     }
