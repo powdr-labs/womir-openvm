@@ -5,6 +5,7 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+womir-guest-io = { path = "../../guest-io" }
 
 [profile.release-with-debug]
 inherits = "release"
