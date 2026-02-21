@@ -4,7 +4,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace]
-members = ["integration", "extensions/transpiler", "extensions/womir_circuit"]
+members = ["integration", "extensions/transpiler", "extensions/womir_circuit", "guest-io"]
 resolver = "2"
 
 [workspace.dependencies]
