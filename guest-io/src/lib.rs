@@ -25,7 +25,8 @@ unsafe extern "C" {
 /// and read the data word.
 pub fn read_u32() -> u32 {
     __hint_input();
-    let _len = read_word(); // skip length word
+    let len = read_word();
+    assert_eq!(len, 4, "read_u32: expected 4-byte hint item");
     read_word()
 }
 
@@ -34,7 +35,7 @@ pub fn read_u32() -> u32 {
 /// Reads a length-prefixed byte blob (one hint item) and deserializes
 /// it with `postcard`.
 pub fn read<T: DeserializeOwned>() -> T {
-    let bytes = read_vec();
+    let bytes = read_bytes();
     postcard::from_bytes(&bytes).expect("deserialization failed")
 }
 
@@ -42,7 +43,7 @@ pub fn read<T: DeserializeOwned>() -> T {
 ///
 /// Each hint stream item has format `[byte_len, ...data_words]`.
 /// This reads the length word, then reads that many bytes of data.
-pub fn read_vec() -> Vec<u8> {
+pub fn read_bytes() -> Vec<u8> {
     __hint_input();
     let len = read_word();
     read_vec_by_len(len as usize)
