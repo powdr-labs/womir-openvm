@@ -72,3 +72,61 @@ fn test_cli_run_n_first_sum() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn test_cli_run_keccak() {
+    // keccak([0; 32]) = [0x29, ...], 0x29 = 41.
+    // The WASM program internally asserts the first byte matches, so a successful
+    // exit means the output is correct.
+    let wasm = sample_program(
+        "keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm",
+    );
+    let output = cargo_bin()
+        .args([
+            "run",
+            wasm.to_str().unwrap(),
+            "main",
+            "--args",
+            "0",
+            "--args",
+            "0",
+            "--args",
+            "1",
+            "--args",
+            "41",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn test_cli_run_keccak_wrong_output_fails() {
+    let wasm = sample_program(
+        "keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm",
+    );
+    let output = cargo_bin()
+        .args([
+            "run",
+            wasm.to_str().unwrap(),
+            "main",
+            "--args",
+            "0",
+            "--args",
+            "0",
+            "--args",
+            "1",
+            "--args",
+            "42",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "Expected failure with wrong expected byte, but process succeeded"
+    );
+}

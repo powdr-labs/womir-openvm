@@ -25,7 +25,7 @@ cargo build --manifest-path sample-programs/keccak_with_inputs/Cargo.toml \
     --target wasm32-unknown-unknown --release
 cargo run -r -- run \
     sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm \
-    main --args 0 --args 0 --args 1 --args 42
+    main --args 0 --args 0 --args 1 --args 41
 ```
 
 ### Mock proof (constraint verification)
