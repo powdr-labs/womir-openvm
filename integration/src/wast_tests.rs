@@ -184,6 +184,14 @@ fn parse_val(s: &str) -> Result<u32, Box<dyn std::error::Error>> {
     }
 }
 
+fn stdin_from_u32_args(args: &[u32]) -> StdIn {
+    let mut stdin = StdIn::default();
+    for &arg in args {
+        stdin.write(&arg);
+    }
+    stdin
+}
+
 fn run_single_wasm_test(
     module_path: &str,
     function: &str,
@@ -194,41 +202,39 @@ fn run_single_wasm_test(
     let (module, functions) = load_wasm(&wasm_bytes);
     let mut module = LinkedProgram::new(module, functions);
 
-    run_wasm_test_function(&mut module, function, args, expected, true)
+    let stdin = stdin_from_u32_args(args);
+    run_wasm_test_with_stdin(&mut module, function, stdin, expected, true)
 }
 
 /// Run a WASM program through execution with output verification.
 /// When `prove` is true, also runs metered execution, preflight, and mock
 /// proof (all stages). Supports multi-segment programs.
-fn run_wasm_test_function(
+fn run_wasm_test_with_stdin(
     module: &mut LinkedProgram<F>,
     function: &str,
-    args: &[u32],
+    stdin: StdIn,
     expected: &[u32],
     prove: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     setup_tracing_with_log_level(Level::WARN);
-    println!("Running WASM test with {function}({args:?}): expected {expected:?}");
+    println!("Running WASM test with {function}: expected {expected:?}");
 
     // Capture the exe before module.execute() mutates memory_image.
     let exe = module.program_with_entry_point(function);
     let vm_config = WomirConfig::default();
 
     let make_state = || {
-        let mut stdin = StdIn::default();
-        for &arg in args {
-            stdin.write(&arg);
-        }
-        VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin)
+        VmState::initial(
+            &vm_config.system,
+            &exe.init_memory,
+            exe.pc_start,
+            stdin.clone(),
+        )
     };
 
     // Stage 1: Execution (also updates module.memory_image for wast test reuse)
     println!("  Stage 1: execution");
-    let mut stdin = StdIn::default();
-    for &arg in args {
-        stdin.write(&arg);
-    }
-    let output = module.execute(vm_config.clone(), function, stdin)?;
+    let output = module.execute(vm_config.clone(), function, stdin.clone())?;
 
     if !expected.is_empty() {
         let output: Vec<u32> = output[..expected.len() * 4]
@@ -237,7 +243,7 @@ fn run_wasm_test_function(
             .collect();
         assert_eq!(
             output, expected,
-            "Test failed for {function}({args:?}): expected {expected:?}, got {output:?}"
+            "Test failed for {function}: expected {expected:?}, got {output:?}"
         );
     }
 
@@ -330,7 +336,8 @@ fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut module = LinkedProgram::new(module, functions);
 
         for (function, args, expected) in cases {
-            run_wasm_test_function(&mut module, function, args, expected, false)?;
+            let stdin = stdin_from_u32_args(args);
+            run_wasm_test_with_stdin(&mut module, function, stdin, expected, false)?;
         }
     }
 
@@ -439,12 +446,39 @@ fn test_keccak_rust_read_vec() {
 
 #[test]
 fn test_read_serde() {
-    // The guest deserializes a Quad { a: u8, b: u8, c: u8, d: u8 } from postcard bytes.
-    // postcard serialization of Quad { a: 1, b: 2, c: 3, d: 4 } = [1, 2, 3, 4].
-    // As a u32 (LE): 0x04030201.
-    // StdIn::write(&0x04030201u32) creates hint item [4, 0x04030201].
-    // Guest's read_vec() reads len=4 then 4 bytes → [1, 2, 3, 4].
-    run_womir_guest("read_serde", "main", &[0, 0], &[0x04030201], &[])
+    // Serialize SampleData { label: "hello", value: 1_000_000 } with postcard
+    // on the host, pass raw bytes via write_bytes, and let the guest deserialize.
+    // postcard uses varint encoding for u64 and length-prefixed strings,
+    // so the wire format differs from the raw field layout.
+    #[derive(serde::Serialize)]
+    struct SampleData {
+        label: String,
+        value: u64,
+    }
+
+    let data = SampleData {
+        label: "hello".to_string(),
+        value: 1_000_000,
+    };
+    let bytes = postcard::to_allocvec(&data).unwrap();
+
+    let case = "read_serde";
+    let path = format!("{}/../sample-programs/{case}", env!("CARGO_MANIFEST_DIR"));
+    build_wasm(&PathBuf::from(&path));
+    let wasm_path = format!("{path}/target/wasm32-unknown-unknown/release/{case}.wasm");
+
+    let wasm_bytes = std::fs::read(&wasm_path).expect("Failed to read WASM file");
+    let (module, functions) = load_wasm(&wasm_bytes);
+    let mut module = LinkedProgram::new(module, functions);
+
+    let mut stdin = StdIn::default();
+    // func_inputs (consumed by WASM entry point setup)
+    stdin.write(&0u32);
+    stdin.write(&0u32);
+    // serialized struct as raw bytes
+    stdin.write_bytes(&bytes);
+
+    run_wasm_test_with_stdin(&mut module, "main", stdin, &[], true).unwrap();
 }
 
 #[test]

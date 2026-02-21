@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 womir-guest-io = { path = "../../guest-io" }
-serde = { version = "1.0", default-features = false, features = ["derive"] }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 
 [profile.release-with-debug]
