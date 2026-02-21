@@ -4,11 +4,13 @@ mod instruction_builder;
 #[cfg(test)]
 mod isolated_tests;
 #[cfg(test)]
+mod riscv_tests;
+#[cfg(test)]
 mod test_stages;
 #[cfg(test)]
 mod vm_tests;
 #[cfg(test)]
-mod wast_tests;
+mod wasm_tests;
 mod womir_translation;
 
 use std::fs;

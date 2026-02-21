@@ -184,16 +184,19 @@ fn parse_val(s: &str) -> Result<u32, Box<dyn std::error::Error>> {
     }
 }
 
-fn run_single_wasm_test(
+fn load_wasm_module(wasm_bytes: &[u8]) -> LinkedProgram<'_, F> {
+    let (module, functions) = load_wasm(wasm_bytes);
+    LinkedProgram::new(module, functions)
+}
+
+fn run_and_prove_single_wasm_test(
     module_path: &str,
     function: &str,
     args: &[u32],
     expected: &[u32],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let wasm_bytes = std::fs::read(module_path).expect("Failed to read WASM file");
-    let (module, functions) = load_wasm(&wasm_bytes);
-    let mut module = LinkedProgram::new(module, functions);
-
+    let mut module = load_wasm_module(&wasm_bytes);
     run_wasm_test_function(&mut module, function, args, expected, true)
 }
 
@@ -326,8 +329,7 @@ fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Load the module to be executed multiple times.
         println!("Loading test module: {module_path}");
         let wasm_bytes = std::fs::read(full_module_path).expect("Failed to read WASM file");
-        let (module, functions) = load_wasm(&wasm_bytes);
-        let mut module = LinkedProgram::new(module, functions);
+        let mut module = load_wasm_module(&wasm_bytes);
 
         for (function, args, expected) in cases {
             run_wasm_test_function(&mut module, function, args, expected, false)?;
@@ -339,12 +341,12 @@ fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_fib() {
-    run_single_wasm_test("../sample-programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
+    run_and_prove_single_wasm_test("../sample-programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
 }
 
 #[test]
 fn test_n_first_sums() {
-    run_single_wasm_test(
+    run_and_prove_single_wasm_test(
         "../sample-programs/n_first_sum.wasm",
         "n_first_sum",
         &[42, 0],
@@ -355,15 +357,16 @@ fn test_n_first_sums() {
 
 #[test]
 fn test_call_indirect_wasm() {
-    run_single_wasm_test("../sample-programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
-    run_single_wasm_test(
+    run_and_prove_single_wasm_test("../sample-programs/call_indirect.wasm", "test", &[], &[1])
+        .unwrap();
+    run_and_prove_single_wasm_test(
         "../sample-programs/call_indirect.wasm",
         "call_op",
         &[0, 10, 20],
         &[30],
     )
     .unwrap();
-    run_single_wasm_test(
+    run_and_prove_single_wasm_test(
         "../sample-programs/call_indirect.wasm",
         "call_op",
         &[1, 10, 3],
@@ -374,7 +377,7 @@ fn test_call_indirect_wasm() {
 
 #[test]
 fn test_keccak() {
-    run_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
+    run_and_prove_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
 }
 
 #[test]
@@ -383,7 +386,8 @@ fn test_keeper_js() {
     // Source: https://github.com/ethereum/go-ethereum/tree/master/cmd/keeper
     // Compile command:
     //   GOOS=js GOARCH=wasm go -gcflags=all=-d=softfloat build -tags "example" -o keeper.wasm
-    run_single_wasm_test("../sample-programs/keeper_js.wasm", "run", &[0, 0], &[]).unwrap();
+    run_and_prove_single_wasm_test("../sample-programs/keeper_js.wasm", "run", &[0, 0], &[])
+        .unwrap();
 }
 
 fn keccak_rust_womir(iterations: u32, expected_first_byte: u32) {
@@ -437,16 +441,6 @@ fn test_keccak_rust_read_vec() {
     run_womir_guest("read_vec", "main", &[0, 0], &[0xffaabbcc, 0xeedd0066], &[])
 }
 
-#[test]
-fn test_keccak_rust_openvm() {
-    let path = format!(
-        "{}/../sample-programs/keccak_with_inputs",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    // TODO the outputs are not checked yet because powdr-openvm does not return the outputs.
-    run_openvm_guest(&path, &[1], &[41]).unwrap();
-}
-
 fn run_womir_guest(
     case: &str,
     main_function: &str,
@@ -462,7 +456,7 @@ fn run_womir_guest(
         .chain(data_inputs)
         .copied()
         .collect::<Vec<_>>();
-    run_single_wasm_test(&wasm_path, main_function, &args, outputs).unwrap()
+    run_and_prove_single_wasm_test(&wasm_path, main_function, &args, outputs).unwrap()
 }
 
 fn build_wasm(path: &PathBuf) {
@@ -483,40 +477,4 @@ fn build_wasm(path: &PathBuf) {
     }
 
     assert!(output.status.success(), "cargo build failed for {path:?}",);
-}
-
-// We use powdr-openvm to run OpenVM RISC-V so we don't have to deal with
-// SdkConfig stuff and have access to autoprecompiles.
-fn run_openvm_guest(
-    _guest: &str,
-    _args: &[u32],
-    _expected: &[u32],
-) -> Result<(), Box<dyn std::error::Error>> {
-    // setup_tracing_with_log_level(Level::WARN);
-    // println!("Running OpenVM test {guest} with ({args:?}): expected {expected:?}");
-    //
-    // let compiled_program = powdr_openvm::compile_guest(
-    //     guest,
-    //     Default::default(),
-    //     powdr_autoprecompiles::PowdrConfig::new(
-    //         0,
-    //         0,
-    //         powdr_openvm::DegreeBound {
-    //             identities: 3,
-    //             bus_interactions: 2,
-    //         },
-    //     ),
-    //     Default::default(),
-    //     Default::default(),
-    // )
-    // .unwrap();
-    //
-    // let mut stdin = StdIn::default();
-    // for arg in args {
-    //     stdin.write(arg);
-    // }
-    //
-    // powdr_openvm::execute(compiled_program, stdin).unwrap();
-    //
-    Ok(())
 }
