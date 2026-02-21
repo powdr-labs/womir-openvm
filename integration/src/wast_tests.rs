@@ -438,6 +438,16 @@ fn test_keccak_rust_read_vec() {
 }
 
 #[test]
+fn test_read_serde() {
+    // The guest deserializes a Quad { a: u8, b: u8, c: u8, d: u8 } from postcard bytes.
+    // postcard serialization of Quad { a: 1, b: 2, c: 3, d: 4 } = [1, 2, 3, 4].
+    // As a u32 (LE): 0x04030201.
+    // StdIn::write(&0x04030201u32) creates hint item [4, 0x04030201].
+    // Guest's read_vec() reads len=4 then 4 bytes → [1, 2, 3, 4].
+    run_womir_guest("read_serde", "main", &[0, 0], &[0x04030201], &[])
+}
+
+#[test]
 fn test_keccak_rust_openvm() {
     let path = format!(
         "{}/../sample-programs/keccak_with_inputs",
