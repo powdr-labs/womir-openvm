@@ -10,6 +10,9 @@ tiny-keccak = { version = "2.0.2", features = ["keccak"] }
 [target.'cfg(target_os = "zkvm")'.dependencies]
 openvm = { git = "https://github.com/powdr-labs/openvm.git", rev = "62c5d26" }
 
+[target.'cfg(not(target_os = "zkvm"))'.dependencies]
+womir-guest-io = { path = "../../guest-io" }
+
 [profile.release-with-debug]
 inherits = "release"
 debug = true

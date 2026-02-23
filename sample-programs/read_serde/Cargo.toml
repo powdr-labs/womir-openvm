@@ -1,11 +1,13 @@
 [workspace]
 [package]
-name = "read_vec"
+name = "read_serde"
 version = "0.0.0"
 edition = "2021"
 
 [dependencies]
 womir-guest-io = { path = "../../guest-io" }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 
 [profile.release-with-debug]
 inherits = "release"
