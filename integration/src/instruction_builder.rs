@@ -422,7 +422,7 @@ pub fn const_32_imm<F: PrimeField32>(
         F::from_canonical_usize(imm_hi as usize),                             // c: imm high 16b
         F::ZERO,                                                              // d: (not used)
         F::ZERO,                                                              // e: (not used)
-        F::ONE,                                                               // f: enabled
+        F::ONE,                                                               // f: (not used)
         F::ZERO,                                                              // g: (not used)
     )
 }
@@ -611,7 +611,7 @@ pub fn jump<F: PrimeField32>(to_pc_imm: usize) -> Instruction<F> {
         F::ZERO,                            // c: (not used)
         F::ZERO,                            // d: (not used)
         F::ZERO,                            // e: (not used)
-        F::ONE,                             // f: enabled
+        F::ONE,                             // f
         F::ZERO,                            // g: imm sign
     )
 }
@@ -626,7 +626,7 @@ pub fn skip<F: PrimeField32>(offset_reg: usize) -> Instruction<F> {
         F::ZERO,                                                              // c: (not used)
         F::ZERO,                                                              // d: (not used)
         F::ZERO,                                                              // e: (not used)
-        F::ONE,                                                               // f: enabled
+        F::ONE,                                                               // f
         F::ZERO,                                                              // g: imm sign
     )
 }
@@ -640,7 +640,7 @@ pub fn jump_if<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> Instr
         F::ZERO,                            // c: (not used)
         F::ZERO,                            // d: (not used)
         F::ZERO,                            // e: (not used)
-        F::ONE,                             // f: enabled
+        F::ONE,                             // f
         F::ZERO,                            // g: imm sign
     )
 }
@@ -654,7 +654,7 @@ pub fn jump_if_zero<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> 
         F::ZERO,                            // c: (not used)
         F::ZERO,                            // d: (not used)
         F::ZERO,                            // e: (not used)
-        F::ONE,                             // f: enabled
+        F::ONE,                             // f
         F::ZERO,                            // g: imm sign
     )
 }
@@ -672,7 +672,7 @@ pub fn loadw<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F>
         F::from_canonical_u32(imm & 0xFFFF),                          // c: imm (lower 16 bits)
         F::ONE,                                                       // d: register address space
         F::from_canonical_usize(2), // e: memory address space (2 for word)
-        F::ONE,                     // f: enabled
+        F::ONE,                     // f
         F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
@@ -686,7 +686,7 @@ pub fn storew<F: PrimeField32>(value: usize, base_address: usize, imm: u32) -> I
         F::from_canonical_u32(imm & 0xFFFF), // c: imm (lower 16 bits)
         F::ONE,                              // d: register address space
         F::from_canonical_usize(2),          // e: memory address space (2 for word)
-        F::ONE,                              // f: enabled
+        F::ONE,                              // f
         F::from_canonical_u32(imm >> 16),    // g: imm (higher 16 bits)
     )
 }
@@ -700,7 +700,7 @@ pub fn loadb<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F>
         F::from_canonical_u32(imm & 0xFFFF),                          // c: imm (lower 16 bits)
         F::ONE,                                                       // d: register address space
         F::from_canonical_usize(2), // e: memory address space (2 for byte)
-        F::ONE,                     // f: enabled
+        F::ONE,                     // f
         F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
@@ -714,7 +714,7 @@ pub fn loadbu<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F
         F::from_canonical_u32(imm & 0xFFFF),                          // c: imm (lower 16 bits)
         F::ONE,                                                       // d: register address space
         F::from_canonical_usize(2), // e: memory address space (2 for byte)
-        F::ONE,                     // f: enabled
+        F::ONE,                     // f
         F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
@@ -729,7 +729,7 @@ pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F>
         F::from_canonical_u32(imm & 0xFFFF),                          // c: imm (lower 16 bits)
         F::ONE,                                                       // d: register address space
         F::from_canonical_usize(2), // e: memory address space (2 for halfword)
-        F::ONE,                     // f: enabled
+        F::ONE,                     // f
         F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
@@ -743,7 +743,7 @@ pub fn loadhu<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F
         F::from_canonical_u32(imm & 0xFFFF),                          // c: imm (lower 16 bits)
         F::ONE,                                                       // d: register address space
         F::from_canonical_usize(2), // e: memory address space (2 for halfword)
-        F::ONE,                     // f: enabled
+        F::ONE,                     // f
         F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
@@ -757,7 +757,7 @@ pub fn storeb<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<
         F::from_canonical_u32(imm & 0xFFFF),                           // c: imm (lower 16 bits)
         F::ONE,                                                        // d: register address space
         F::from_canonical_usize(2), // e: memory address space (2 for byte)
-        F::ONE,                     // f: enabled
+        F::ONE,                     // f
         F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
@@ -771,7 +771,7 @@ pub fn storeh<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<
         F::from_canonical_u32(imm & 0xFFFF),                           // c: imm (lower 16 bits)
         F::ONE,                                                        // d: register address space
         F::from_canonical_usize(2), // e: memory address space (2 for halfword)
-        F::ONE,                     // f: enabled
+        F::ONE,                     // f
         F::from_canonical_u32(imm >> 16), // g: imm (higher 16 bits)
     )
 }
