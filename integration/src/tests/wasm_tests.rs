@@ -1,3 +1,4 @@
+use crate::proving::mock_prove;
 use crate::*;
 use openvm_circuit::arch::VmState;
 use openvm_sdk::StdIn;
@@ -259,7 +260,7 @@ fn run_wasm_test_function(
 
     // Mock proof
     println!("  Mock proof");
-    helpers::test_prove(&exe, make_state)?;
+    mock_prove(&exe, make_state)?;
 
     Ok(())
 }
