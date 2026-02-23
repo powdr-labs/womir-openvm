@@ -1,5 +1,5 @@
-use super::*;
 use crate::womir_translation::ERROR_CODE_OFFSET;
+use crate::*;
 use instruction_builder as wom;
 use openvm_circuit::{
     arch::{ExecutionError, VmExecutor},
@@ -129,7 +129,6 @@ fn run_vm_test_proof(
 #[test]
 fn test_basic_add() -> Result<(), Box<dyn std::error::Error>> {
     let instructions = vec![
-        // TODO uncomment when const32 is implemented
         wom::const_32_imm(0, 0, 0),
         wom::add_imm(8, 0, 666_i16),
         wom::add_imm(9, 0, 1_i16),
@@ -144,8 +143,7 @@ fn test_basic_add() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_basic_add_proof() -> Result<(), Box<dyn std::error::Error>> {
     let instructions = vec![
-        // TODO uncomment when const32 is implemented
-        //wom::const_32_imm(0, 0, 0),
+        wom::const_32_imm(0, 0, 0),
         wom::add_imm(8, 0, 666_i16),
         wom::add_imm(9, 0, 1_i16),
         wom::add(10, 8, 9),
@@ -159,8 +157,7 @@ fn test_basic_add_proof() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_basic_wom_operations() -> Result<(), Box<dyn std::error::Error>> {
     let instructions = vec![
-        // TODO uncomment when const32 is implemented
-        // wom::const_32_imm(0, 0, 0),
+        wom::const_32_imm(0, 0, 0),
         wom::add_imm(8, 0, 666_i16),
         wom::add_imm(9, 0, 1_i16),
         wom::add(10, 8, 9),

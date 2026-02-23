@@ -1,0 +1,137 @@
+//! Shared test helpers (metered execution, preflight, mock proof) with a
+//! single cached proving key.
+
+use std::sync::OnceLock;
+
+use openvm_circuit::arch::{
+    VirtualMachine, VmCircuitConfig, VmState, debug_proving_ctx, execution_mode::Segment,
+};
+use openvm_instructions::exe::VmExe;
+use openvm_sdk::config::DEFAULT_APP_LOG_BLOWUP;
+use openvm_stark_sdk::{
+    config::{
+        FriParameters,
+        baby_bear_poseidon2::{BabyBearPoseidon2Config, BabyBearPoseidon2Engine},
+    },
+    engine::{StarkEngine, StarkFriEngine},
+    openvm_stark_backend::{
+        keygen::types::MultiStarkProvingKey, prover::hal::DeviceDataTransporter,
+    },
+};
+use womir_circuit::{WomirConfig, WomirCpuBuilder};
+
+pub type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
+type SC = BabyBearPoseidon2Config;
+
+static VM_PROVING_KEY: OnceLock<MultiStarkProvingKey<SC>> = OnceLock::new();
+
+pub fn default_engine() -> BabyBearPoseidon2Engine {
+    let fri_params =
+        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+    BabyBearPoseidon2Engine::new(fri_params)
+}
+
+pub fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
+    VM_PROVING_KEY.get_or_init(|| {
+        let config = WomirConfig::default();
+        let engine = default_engine();
+        let circuit = config
+            .create_airs()
+            .expect("failed to create AIR inventory for test keygen");
+        circuit.keygen(&engine)
+    })
+}
+
+/// Metered execution. Returns (segments, final_state).
+pub fn test_metered_execution(
+    exe: &VmExe<F>,
+    make_state: impl Fn() -> VmState<F>,
+) -> Result<(Vec<Segment>, VmState<F>), Box<dyn std::error::Error>> {
+    let engine = default_engine();
+    let pk = vm_proving_key();
+    let d_pk = engine.device().transport_pk_to_device(pk);
+    let vm_config = WomirConfig::default();
+    let vm = VirtualMachine::<_, WomirCpuBuilder>::new(engine, WomirCpuBuilder, vm_config, d_pk)?;
+
+    let metered_ctx = vm.build_metered_ctx(exe);
+    let metered_instance = vm.metered_interpreter(exe)?;
+    let (segments, final_state) =
+        metered_instance.execute_metered_from_state(make_state(), metered_ctx)?;
+
+    Ok((segments, final_state))
+}
+
+/// Preflight (all segments). Returns the final state after the last segment.
+pub fn test_preflight(
+    exe: &VmExe<F>,
+    make_state: impl Fn() -> VmState<F>,
+) -> Result<VmState<F>, Box<dyn std::error::Error>> {
+    let engine = default_engine();
+    let pk = vm_proving_key();
+    let d_pk = engine.device().transport_pk_to_device(pk);
+    let vm_config = WomirConfig::default();
+    let vm = VirtualMachine::<_, WomirCpuBuilder>::new(engine, WomirCpuBuilder, vm_config, d_pk)?;
+
+    // Run metered execution to discover segments.
+    let metered_ctx = vm.build_metered_ctx(exe);
+    let metered_instance = vm.metered_interpreter(exe)?;
+    let (segments, _) = metered_instance.execute_metered_from_state(make_state(), metered_ctx)?;
+
+    // Preflight each segment.
+    let mut preflight_interpreter = vm.preflight_interpreter(exe)?;
+    let mut state = make_state();
+    for segment in &segments {
+        let output = vm.execute_preflight(
+            &mut preflight_interpreter,
+            state,
+            Some(segment.num_insns),
+            &segment.trace_heights,
+        )?;
+        state = output.to_state;
+    }
+
+    Ok(state)
+}
+
+/// Mock proof with constraint verification (all segments).
+pub fn test_prove(
+    exe: &VmExe<F>,
+    make_state: impl Fn() -> VmState<F>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let engine = default_engine();
+    let pk = vm_proving_key();
+    let d_pk = engine.device().transport_pk_to_device(pk);
+    let vm_config = WomirConfig::default();
+    let mut vm =
+        VirtualMachine::<_, WomirCpuBuilder>::new(engine, WomirCpuBuilder, vm_config, d_pk)?;
+
+    // Run metered execution to discover segments.
+    let metered_ctx = vm.build_metered_ctx(exe);
+    let metered_instance = vm.metered_interpreter(exe)?;
+    let (segments, _) = metered_instance.execute_metered_from_state(make_state(), metered_ctx)?;
+
+    let cached_program_trace = vm.commit_program_on_device(&exe.program);
+    vm.load_program(cached_program_trace);
+
+    // Preflight + constraint verification per segment.
+    let mut preflight_interpreter = vm.preflight_interpreter(exe)?;
+    let mut state = make_state();
+    for segment in &segments {
+        vm.transport_init_memory_to_device(&state.memory);
+        let preflight_output = vm.execute_preflight(
+            &mut preflight_interpreter,
+            state,
+            Some(segment.num_insns),
+            &segment.trace_heights,
+        )?;
+        state = preflight_output.to_state;
+
+        let ctx = vm.generate_proving_ctx(
+            preflight_output.system_records,
+            preflight_output.record_arenas,
+        )?;
+        debug_proving_ctx(&vm, pk, &ctx);
+    }
+
+    Ok(())
+}

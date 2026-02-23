@@ -1,4 +1,4 @@
-use super::*;
+use crate::*;
 use openvm_circuit::arch::VmState;
 use openvm_sdk::StdIn;
 use serde::Deserialize;
@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::Command;
 use tracing::Level;
 
-use crate::test_stages;
+use super::helpers;
 
 type TestCase = (String, Vec<u32>, Vec<u32>);
 type TestModule = (String, u32, Vec<TestCase>);
@@ -184,57 +184,54 @@ fn parse_val(s: &str) -> Result<u32, Box<dyn std::error::Error>> {
     }
 }
 
-fn stdin_from_u32_args(args: &[u32]) -> StdIn {
-    let mut stdin = StdIn::default();
-    for &arg in args {
-        stdin.write(&arg);
-    }
-    stdin
+fn load_wasm_module(wasm_bytes: &[u8]) -> LinkedProgram<'_, F> {
+    let (module, functions) = load_wasm(wasm_bytes);
+    LinkedProgram::new(module, functions)
 }
 
-fn run_single_wasm_test(
+fn run_and_prove_single_wasm_test(
     module_path: &str,
     function: &str,
     args: &[u32],
     expected: &[u32],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let wasm_bytes = std::fs::read(module_path).expect("Failed to read WASM file");
-    let (module, functions) = load_wasm(&wasm_bytes);
-    let mut module = LinkedProgram::new(module, functions);
-
-    let stdin = stdin_from_u32_args(args);
-    run_wasm_test_with_stdin(&mut module, function, stdin, expected, true)
+    let mut module = load_wasm_module(&wasm_bytes);
+    run_wasm_test_function(&mut module, function, args, expected, true)
 }
 
 /// Run a WASM program through execution with output verification.
 /// When `prove` is true, also runs metered execution, preflight, and mock
 /// proof (all stages). Supports multi-segment programs.
-fn run_wasm_test_with_stdin(
+fn run_wasm_test_function(
     module: &mut LinkedProgram<F>,
     function: &str,
-    stdin: StdIn,
+    args: &[u32],
     expected: &[u32],
     prove: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     setup_tracing_with_log_level(Level::WARN);
-    println!("Running WASM test with {function}: expected {expected:?}");
+    println!("Running WASM test with {function}({args:?}): expected {expected:?}");
 
     // Capture the exe before module.execute() mutates memory_image.
     let exe = module.program_with_entry_point(function);
     let vm_config = WomirConfig::default();
 
     let make_state = || {
-        VmState::initial(
-            &vm_config.system,
-            &exe.init_memory,
-            exe.pc_start,
-            stdin.clone(),
-        )
+        let mut stdin = StdIn::default();
+        for &arg in args {
+            stdin.write(&arg);
+        }
+        VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin)
     };
 
-    // Stage 1: Execution (also updates module.memory_image for wast test reuse)
-    println!("  Stage 1: execution");
-    let output = module.execute(vm_config.clone(), function, stdin.clone())?;
+    // Execution (also updates module.memory_image for wast test reuse)
+    println!("  Execution");
+    let mut stdin = StdIn::default();
+    for &arg in args {
+        stdin.write(&arg);
+    }
+    let output = module.execute(vm_config.clone(), function, stdin)?;
 
     if !expected.is_empty() {
         let output: Vec<u32> = output[..expected.len() * 4]
@@ -243,7 +240,7 @@ fn run_wasm_test_with_stdin(
             .collect();
         assert_eq!(
             output, expected,
-            "Test failed for {function}: expected {expected:?}, got {output:?}"
+            "Test failed for {function}({args:?}): expected {expected:?}, got {output:?}"
         );
     }
 
@@ -251,18 +248,18 @@ fn run_wasm_test_with_stdin(
         return Ok(());
     }
 
-    // Stage 2: Metered execution
-    println!("  Stage 2: metered execution");
-    let (segments, _) = test_stages::test_metered_execution(&exe, make_state)?;
+    // Metered execution
+    println!("  Metered execution");
+    let (segments, _) = helpers::test_metered_execution(&exe, make_state)?;
     println!("    {} segment(s)", segments.len());
 
-    // Stage 3: Preflight
-    println!("  Stage 3: preflight");
-    test_stages::test_preflight(&exe, make_state)?;
+    // Preflight
+    println!("  Preflight");
+    helpers::test_preflight(&exe, make_state)?;
 
-    // Stage 4: Mock proof
-    println!("  Stage 4: mock proof");
-    test_stages::test_prove(&exe, make_state)?;
+    // Mock proof
+    println!("  Mock proof");
+    helpers::test_prove(&exe, make_state)?;
 
     Ok(())
 }
@@ -332,12 +329,10 @@ fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Load the module to be executed multiple times.
         println!("Loading test module: {module_path}");
         let wasm_bytes = std::fs::read(full_module_path).expect("Failed to read WASM file");
-        let (module, functions) = load_wasm(&wasm_bytes);
-        let mut module = LinkedProgram::new(module, functions);
+        let mut module = load_wasm_module(&wasm_bytes);
 
         for (function, args, expected) in cases {
-            let stdin = stdin_from_u32_args(args);
-            run_wasm_test_with_stdin(&mut module, function, stdin, expected, false)?;
+            run_wasm_test_function(&mut module, function, args, expected, false)?;
         }
     }
 
@@ -346,12 +341,12 @@ fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_fib() {
-    run_single_wasm_test("../sample-programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
+    run_and_prove_single_wasm_test("../sample-programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
 }
 
 #[test]
 fn test_n_first_sums() {
-    run_single_wasm_test(
+    run_and_prove_single_wasm_test(
         "../sample-programs/n_first_sum.wasm",
         "n_first_sum",
         &[42, 0],
@@ -362,15 +357,16 @@ fn test_n_first_sums() {
 
 #[test]
 fn test_call_indirect_wasm() {
-    run_single_wasm_test("../sample-programs/call_indirect.wasm", "test", &[], &[1]).unwrap();
-    run_single_wasm_test(
+    run_and_prove_single_wasm_test("../sample-programs/call_indirect.wasm", "test", &[], &[1])
+        .unwrap();
+    run_and_prove_single_wasm_test(
         "../sample-programs/call_indirect.wasm",
         "call_op",
         &[0, 10, 20],
         &[30],
     )
     .unwrap();
-    run_single_wasm_test(
+    run_and_prove_single_wasm_test(
         "../sample-programs/call_indirect.wasm",
         "call_op",
         &[1, 10, 3],
@@ -381,7 +377,7 @@ fn test_call_indirect_wasm() {
 
 #[test]
 fn test_keccak() {
-    run_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
+    run_and_prove_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
 }
 
 #[test]
@@ -390,7 +386,8 @@ fn test_keeper_js() {
     // Source: https://github.com/ethereum/go-ethereum/tree/master/cmd/keeper
     // Compile command:
     //   GOOS=js GOARCH=wasm go -gcflags=all=-d=softfloat build -tags "example" -o keeper.wasm
-    run_single_wasm_test("../sample-programs/keeper_js.wasm", "run", &[0, 0], &[]).unwrap();
+    run_and_prove_single_wasm_test("../sample-programs/keeper_js.wasm", "run", &[0, 0], &[])
+        .unwrap();
 }
 
 fn keccak_rust_womir(iterations: u32, expected_first_byte: u32) {
@@ -468,27 +465,42 @@ fn test_read_serde() {
     let wasm_path = format!("{path}/target/wasm32-unknown-unknown/release/{case}.wasm");
 
     let wasm_bytes = std::fs::read(&wasm_path).expect("Failed to read WASM file");
-    let (module, functions) = load_wasm(&wasm_bytes);
-    let mut module = LinkedProgram::new(module, functions);
+    let mut module = load_wasm_module(&wasm_bytes);
 
-    let mut stdin = StdIn::default();
-    // func_inputs (consumed by WASM entry point setup)
-    stdin.write(&0u32);
-    stdin.write(&0u32);
-    // serialized struct as raw bytes
-    stdin.write_bytes(&bytes);
+    let function = "main";
+    let exe = module.program_with_entry_point(function);
+    let vm_config = WomirConfig::default();
 
-    run_wasm_test_with_stdin(&mut module, "main", stdin, &[], true).unwrap();
-}
+    let make_stdin = || {
+        let mut stdin = StdIn::default();
+        // func_inputs (consumed by WASM entry point setup)
+        stdin.write(&0u32);
+        stdin.write(&0u32);
+        // serialized struct as raw bytes
+        stdin.write_bytes(&bytes);
+        stdin
+    };
 
-#[test]
-fn test_keccak_rust_openvm() {
-    let path = format!(
-        "{}/../sample-programs/keccak_with_inputs",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    // TODO the outputs are not checked yet because powdr-openvm does not return the outputs.
-    run_openvm_guest(&path, &[1], &[41]).unwrap();
+    let make_state = || {
+        VmState::initial(
+            &vm_config.system,
+            &exe.init_memory,
+            exe.pc_start,
+            make_stdin(),
+        )
+    };
+
+    // Execution
+    module
+        .execute(vm_config.clone(), function, make_stdin())
+        .unwrap();
+
+    // Metered execution
+    helpers::test_metered_execution(&exe, make_state).unwrap();
+    // Preflight
+    helpers::test_preflight(&exe, make_state).unwrap();
+    // Mock proof
+    helpers::test_prove(&exe, make_state).unwrap();
 }
 
 fn run_womir_guest(
@@ -506,7 +518,7 @@ fn run_womir_guest(
         .chain(data_inputs)
         .copied()
         .collect::<Vec<_>>();
-    run_single_wasm_test(&wasm_path, main_function, &args, outputs).unwrap()
+    run_and_prove_single_wasm_test(&wasm_path, main_function, &args, outputs).unwrap()
 }
 
 fn build_wasm(path: &PathBuf) {
@@ -527,40 +539,4 @@ fn build_wasm(path: &PathBuf) {
     }
 
     assert!(output.status.success(), "cargo build failed for {path:?}",);
-}
-
-// We use powdr-openvm to run OpenVM RISC-V so we don't have to deal with
-// SdkConfig stuff and have access to autoprecompiles.
-fn run_openvm_guest(
-    _guest: &str,
-    _args: &[u32],
-    _expected: &[u32],
-) -> Result<(), Box<dyn std::error::Error>> {
-    // setup_tracing_with_log_level(Level::WARN);
-    // println!("Running OpenVM test {guest} with ({args:?}): expected {expected:?}");
-    //
-    // let compiled_program = powdr_openvm::compile_guest(
-    //     guest,
-    //     Default::default(),
-    //     powdr_autoprecompiles::PowdrConfig::new(
-    //         0,
-    //         0,
-    //         powdr_openvm::DegreeBound {
-    //             identities: 3,
-    //             bus_interactions: 2,
-    //         },
-    //     ),
-    //     Default::default(),
-    //     Default::default(),
-    // )
-    // .unwrap();
-    //
-    // let mut stdin = StdIn::default();
-    // for arg in args {
-    //     stdin.write(arg);
-    // }
-    //
-    // powdr_openvm::execute(compiled_program, stdin).unwrap();
-    //
-    Ok(())
 }
