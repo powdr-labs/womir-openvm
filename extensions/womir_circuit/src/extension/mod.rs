@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::tracegen::CallFiller;
 use derive_more::derive::From;
 use openvm_circuit::{
     arch::{
