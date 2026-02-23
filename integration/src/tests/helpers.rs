@@ -8,7 +8,7 @@ use openvm_stark_sdk::{
 };
 use womir_circuit::{WomirConfig, WomirCpuBuilder};
 
-use crate::proving::{self, F, default_engine, vm_proving_key};
+use crate::proving::{F, default_engine, vm_proving_key};
 
 /// Metered execution. Returns (segments, final_state).
 pub fn test_metered_execution(
@@ -59,13 +59,4 @@ pub fn test_preflight(
     }
 
     Ok(state)
-}
-
-/// Mock proof with constraint verification (all segments).
-/// Delegates to `crate::proving::mock_prove`.
-pub fn test_prove(
-    exe: &VmExe<F>,
-    make_state: impl Fn() -> VmState<F>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    proving::mock_prove(exe, make_state)
 }

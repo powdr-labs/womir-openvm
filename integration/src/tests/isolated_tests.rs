@@ -21,7 +21,7 @@ use openvm_sdk::StdIn;
 use womir_circuit::{WomirConfig, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory};
 
 use super::helpers;
-use crate::instruction_builder as wom;
+use crate::{instruction_builder as wom, proving::mock_prove};
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -209,7 +209,7 @@ pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>>
 pub fn test_prove(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-    helpers::test_prove(&exe, || build_initial_state(spec, &exe, &vm_config))
+    mock_prove(&exe, || build_initial_state(spec, &exe, &vm_config))
 }
 
 fn test_spec(mut spec: TestSpec) {
