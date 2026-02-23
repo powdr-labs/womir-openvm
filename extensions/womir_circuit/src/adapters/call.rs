@@ -169,7 +169,10 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
         let has_pc_read = ctx.instruction.has_pc_read.clone();
         let has_save = ctx.instruction.has_save.clone();
         // has_fp_read = !has_save (RET reads FP from register; CALL/CALL_INDIRECT use immediate)
-        let has_fp_read = is_valid.clone() * (AB::Expr::ONE - has_save.clone());
+        let has_fp_read = is_valid.clone() - has_save.clone();
+        builder
+            .when(AB::Expr::ONE - is_valid.clone())
+            .assert_zero(has_fp_read.clone());
 
         // 0. Read current FP from FP_AS
         self.memory_bridge
