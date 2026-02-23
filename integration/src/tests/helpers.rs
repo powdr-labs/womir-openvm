@@ -1,5 +1,5 @@
-//! Test-only stages: metered execution and preflight.
-//! For mock proof, use `crate::proving::mock_prove` directly.
+//! Test-only helpers: metered execution and preflight.
+//! For mock proof, delegates to `crate::proving::mock_prove`.
 
 use openvm_circuit::arch::{VirtualMachine, VmState, execution_mode::Segment};
 use openvm_instructions::exe::VmExe;
@@ -10,7 +10,7 @@ use womir_circuit::{WomirConfig, WomirCpuBuilder};
 
 use crate::proving::{self, F, default_engine, vm_proving_key};
 
-/// Stage 2: Metered execution. Returns (segments, final_state).
+/// Metered execution. Returns (segments, final_state).
 pub fn test_metered_execution(
     exe: &VmExe<F>,
     make_state: impl Fn() -> VmState<F>,
@@ -29,7 +29,7 @@ pub fn test_metered_execution(
     Ok((segments, final_state))
 }
 
-/// Stage 3: Preflight (all segments). Returns the final state after the last segment.
+/// Preflight (all segments). Returns the final state after the last segment.
 pub fn test_preflight(
     exe: &VmExe<F>,
     make_state: impl Fn() -> VmState<F>,
@@ -61,7 +61,7 @@ pub fn test_preflight(
     Ok(state)
 }
 
-/// Stage 4: Mock proof with constraint verification (all segments).
+/// Mock proof with constraint verification (all segments).
 /// Delegates to `crate::proving::mock_prove`.
 pub fn test_prove(
     exe: &VmExe<F>,

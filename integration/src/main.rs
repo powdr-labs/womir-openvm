@@ -1,17 +1,9 @@
 mod builtin_functions;
-#[cfg(test)]
-mod cli_tests;
 mod const_collapse;
 mod instruction_builder;
-#[cfg(test)]
-mod isolated_tests;
 mod proving;
 #[cfg(test)]
-mod test_stages;
-#[cfg(test)]
-mod vm_tests;
-#[cfg(test)]
-mod wast_tests;
+mod tests;
 mod womir_translation;
 
 use std::fs;
