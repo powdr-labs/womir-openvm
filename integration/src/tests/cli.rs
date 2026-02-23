@@ -64,7 +64,11 @@ fn test_cli_run_fib() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("output:"));
+    // fib(10) = 55
+    assert!(
+        stdout.contains("output: [55,"),
+        "expected fib(10) = 55, got: {stdout}"
+    );
 }
 
 #[test]
