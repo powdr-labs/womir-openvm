@@ -1,9 +1,9 @@
 use openvm_instructions::{LocalOpcode, SystemOpcode, VmOpcode, instruction::Instruction, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_womir_transpiler::{
-    AllocateFrameOpcode, BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes,
-    CopyIntoFrameOpcode, Eq64Opcode, EqOpcode, HintStoreOpcode, JumpOpcode, LessThan64Opcode,
-    LessThanOpcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, Eq64Opcode, EqOpcode,
+    HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, MulOpcode, Phantom,
+    Shift64Opcode, ShiftOpcode,
 };
 
 use openvm_rv32im_transpiler::Rv32LoadStoreOpcode as LoadStoreOpcode;
@@ -34,6 +34,10 @@ impl TryFrom<u32> for AluImm {
     }
 }
 
+/// Build an R-type instruction (register-register-register).
+/// Used by ALU, shift, comparison, and equality instructions.
+/// All register indices are scaled by RV32_REGISTER_NUM_LIMBS (4 bytes per register).
+/// d=1 and e=1 indicate both operands are read from register address space.
 pub fn instr_r<F: PrimeField32>(
     opcode: usize,
     rd: usize,
@@ -42,16 +46,19 @@ pub fn instr_r<F: PrimeField32>(
 ) -> Instruction<F> {
     Instruction::new(
         VmOpcode::from_usize(opcode),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs2),
-        F::ONE,
-        F::ONE,
-        F::ZERO,
-        F::ZERO,
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: destination register
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: source register 1
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs2), // c: source register 2
+        F::ONE,                                                       // d: write AS (register)
+        F::ONE,                                                       // e: read AS (register)
+        F::ZERO,                                                      // f: (not used)
+        F::ZERO,                                                      // g: (not used)
     )
 }
 
+/// Build an I-type instruction (register-register-immediate).
+/// Used by ALU, shift, comparison, and equality instructions with an immediate operand.
+/// d=1 selects register AS for the destination, e=0 signals immediate mode for the operand.
 pub fn instr_i<F: PrimeField32>(
     opcode: usize,
     rd: usize,
@@ -61,80 +68,103 @@ pub fn instr_i<F: PrimeField32>(
     let imm: AluImm = imm.into();
     Instruction::new(
         VmOpcode::from_usize(opcode),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1),
-        F::from_canonical_u32(imm.0),
-        F::ONE,
-        F::ZERO,
-        F::ZERO,
-        F::ZERO,
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rd), // a: destination register
+        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * rs1), // b: source register 1
+        F::from_canonical_u32(imm.0),                                 // c: AluImm-encoded imm
+        F::ONE,                                                       // d: write AS (register)
+        F::ZERO,                                                      // e: read AS (0=immediate)
+        F::ZERO,                                                      // f: (not used)
+        F::ZERO,                                                      // g: (not used)
     )
 }
 
+// ---- 32-bit Arithmetic (BaseAluOpcode) ----
+
+/// rd = rs1 + rs2 (wrapping, 32-bit)
 pub fn add<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(BaseAluOpcode::ADD.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 + imm (wrapping, 32-bit)
 #[allow(dead_code)]
 pub fn add_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(BaseAluOpcode::ADD.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+/// rd = rs1 - rs2 (wrapping, 32-bit)
 pub fn sub<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(BaseAluOpcode::SUB.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+// ---- Multiplication ----
+
+/// rd = (rs1 * rs2)[31:0] (low 32 bits)
 #[cfg(test)]
 pub fn mul<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(MulOpcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = (rs1 * imm)[31:0] (low 32 bits)
 pub fn mul_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(MulOpcode::MUL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+/// rd = (rs1 * rs2)[63:0] (low 64 bits)
 #[cfg(test)]
 pub fn mul_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::Mul64Opcode;
     instr_r(Mul64Opcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = (rs1 * imm)[63:0] (low 64 bits)
 #[cfg(test)]
 pub fn mul_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
     use openvm_womir_transpiler::Mul64Opcode;
     instr_i(Mul64Opcode::MUL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+// ---- Division / Remainder (32-bit) ----
+// Precondition: The WOMIR translator guards against division by zero before
+// emitting these instructions. The circuit does not check for it.
+
+/// rd = rs1 /s rs2 (signed division, 32-bit)
 #[cfg(test)]
 pub fn div<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::DivRemOpcode;
     instr_r(DivRemOpcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 /u rs2 (unsigned division, 32-bit)
 #[cfg(test)]
 pub fn divu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::DivRemOpcode;
     instr_r(DivRemOpcode::DIVU.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 %s rs2 (signed remainder, 32-bit)
 #[cfg(test)]
 pub fn rems<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::DivRemOpcode;
     instr_r(DivRemOpcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 %u rs2 (unsigned remainder, 32-bit)
 #[cfg(test)]
 pub fn remu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::DivRemOpcode;
     instr_r(DivRemOpcode::REMU.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+// ---- Division / Remainder (64-bit) ----
+
+/// rd = rs1 /s rs2 (signed division, 64-bit)
 #[cfg(test)]
 pub fn div_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::DivRem64Opcode;
     instr_r(DivRem64Opcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 /u rs2 (unsigned division, 64-bit)
 #[cfg(test)]
 pub fn divu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::DivRem64Opcode;
@@ -146,12 +176,14 @@ pub fn divu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instructio
     )
 }
 
+/// rd = rs1 %s rs2 (signed remainder, 64-bit)
 #[cfg(test)]
 pub fn rems_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::DivRem64Opcode;
     instr_r(DivRem64Opcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 %u rs2 (unsigned remainder, 64-bit)
 #[cfg(test)]
 pub fn remu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     use openvm_womir_transpiler::DivRem64Opcode;
@@ -163,48 +195,63 @@ pub fn remu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instructio
     )
 }
 
+/// rd = rs1 ^ rs2 (32-bit)
 #[cfg(test)]
 pub fn xor<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(BaseAluOpcode::XOR.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 | rs2 (32-bit)
 pub fn or<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(BaseAluOpcode::OR.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 & rs2 (32-bit)
 #[cfg(test)]
 pub fn and<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(BaseAluOpcode::AND.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 & imm (32-bit)
 pub fn and_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(BaseAluOpcode::AND.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+// ---- Shifts (32-bit) ----
+
+/// rd = rs1 << rs2 (32-bit)
 pub fn shl<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(ShiftOpcode::SLL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 << imm (32-bit)
 pub fn shl_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(ShiftOpcode::SLL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+/// rd = rs1 >>u rs2 (logical shift right, 32-bit)
 pub fn shr_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(ShiftOpcode::SRL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 >>u imm (logical shift right, 32-bit)
 pub fn shr_u_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(ShiftOpcode::SRL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+/// rd = rs1 >>s imm (arithmetic shift right, 32-bit)
 pub fn shr_s_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(ShiftOpcode::SRA.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+// ---- Shifts (64-bit) ----
+
+/// rd = rs1 << rs2 (64-bit)
 pub fn shl_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(Shift64Opcode::SLL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 << imm (64-bit)
 pub fn shl_imm_64<F: PrimeField32>(
     rd: usize,
     rs1: usize,
@@ -213,10 +260,12 @@ pub fn shl_imm_64<F: PrimeField32>(
     instr_i(Shift64Opcode::SLL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+/// rd = rs1 >>u rs2 (logical shift right, 64-bit)
 pub fn shr_u_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(Shift64Opcode::SRL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 >>s imm (arithmetic shift right, 64-bit)
 pub fn shr_s_imm_64<F: PrimeField32>(
     rd: usize,
     rs1: usize,
@@ -225,6 +274,7 @@ pub fn shr_s_imm_64<F: PrimeField32>(
     instr_i(Shift64Opcode::SRA.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+/// rd = rs1 >>u imm (logical shift right, 64-bit)
 pub fn shr_u_imm_64<F: PrimeField32>(
     rd: usize,
     rs1: usize,
@@ -233,6 +283,9 @@ pub fn shr_u_imm_64<F: PrimeField32>(
     instr_i(Shift64Opcode::SRL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+// ---- Comparisons (32-bit) ----
+
+/// rd = (rs1 <u rs2) ? 1 : 0 (unsigned, 32-bit)
 pub fn lt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(
         LessThanOpcode::SLTU.global_opcode().as_usize(),
@@ -242,6 +295,7 @@ pub fn lt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F
     )
 }
 
+/// rd = (rs1 <u imm) ? 1 : 0 (unsigned, 32-bit)
 pub fn lt_u_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(
         LessThanOpcode::SLTU.global_opcode().as_usize(),
@@ -251,20 +305,24 @@ pub fn lt_u_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) 
     )
 }
 
+/// rd = (rs1 <s rs2) ? 1 : 0 (signed, 32-bit)
 pub fn lt_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(LessThanOpcode::SLT.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = (rs1 >u rs2) ? 1 : 0 — emitted as lt_u with swapped operands
 pub fn gt_u<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    // lt_u, but swapped
     lt_u(rd, rs2, rs1)
 }
 
+/// rd = (rs1 >s rs2) ? 1 : 0 — emitted as lt_s with swapped operands
 pub fn gt_s<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    // lt_s, but swapped
     lt_s(rd, rs2, rs1)
 }
 
+// ---- Comparisons (64-bit) ----
+
+/// rd = (rs1 <u rs2) ? 1 : 0 (unsigned, 64-bit)
 pub fn lt_u_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(
         LessThan64Opcode::SLTU.global_opcode().as_usize(),
@@ -274,6 +332,7 @@ pub fn lt_u_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instructio
     )
 }
 
+/// rd = (rs1 <s rs2) ? 1 : 0 (signed, 64-bit)
 pub fn lt_s_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(
         LessThan64Opcode::SLT.global_opcode().as_usize(),
@@ -283,47 +342,59 @@ pub fn lt_s_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instructio
     )
 }
 
+/// rd = (rs1 >u rs2) ? 1 : 0 — emitted as lt_u_64 with swapped operands
 pub fn gt_u_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    // lt_u, but swapped
     lt_u_64(rd, rs2, rs1)
 }
 
+/// rd = (rs1 >s rs2) ? 1 : 0 — emitted as lt_s_64 with swapped operands
 pub fn gt_s_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    // lt_s, but swapped
     lt_s_64(rd, rs2, rs1)
 }
 
+// ---- Equality (32-bit) ----
+
+/// rd = (rs1 == rs2) ? 1 : 0 (32-bit)
 pub fn eq<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(EqOpcode::EQ.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = (rs1 == imm) ? 1 : 0 (32-bit)
 pub fn eq_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(EqOpcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+/// rd = (rs1 != rs2) ? 1 : 0 (32-bit)
 #[cfg(test)]
 pub fn neq<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(EqOpcode::NEQ.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = (rs1 != imm) ? 1 : 0 (32-bit)
 pub fn neq_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(EqOpcode::NEQ.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+// ---- Equality (64-bit) ----
+
+/// rd = (rs1 == rs2) ? 1 : 0 (64-bit)
 #[cfg(test)]
 pub fn eq_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = (rs1 == imm) ? 1 : 0 (64-bit)
 pub fn eq_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(Eq64Opcode::EQ.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+/// rd = (rs1 != rs2) ? 1 : 0 (64-bit)
 #[cfg(test)]
 pub fn neq_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(Eq64Opcode::NEQ.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = (rs1 != imm) ? 1 : 0 (64-bit)
 #[cfg(test)]
 pub fn neq_imm_64<F: PrimeField32>(
     rd: usize,
@@ -333,6 +404,10 @@ pub fn neq_imm_64<F: PrimeField32>(
     instr_i(Eq64Opcode::NEQ.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+// ---- Constant Loading ----
+
+/// CONST32: Load a 32-bit immediate into a register.
+/// The immediate is split into two 16-bit halves: target_reg = (imm_hi << 16) | imm_lo.
 pub fn const_32_imm<F: PrimeField32>(
     target_reg: usize,
     imm_lo: u16,
@@ -341,17 +416,18 @@ pub fn const_32_imm<F: PrimeField32>(
     Instruction::new(
         ConstOpcodes::CONST32.global_opcode(),
         F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
-        F::from_canonical_usize(imm_lo as usize),                             // b: low 16 bits
-        // of the immediate
-        F::from_canonical_usize(imm_hi as usize), // c: high 16 bits
-        // of the immediate
-        F::ZERO, // d: (not used)
-        F::ZERO, // e: (not used)
-        F::ONE,  // f: enabled
-        F::ZERO, // g: (not used)
+        F::from_canonical_usize(imm_lo as usize),                             // b: imm low 16b
+        F::from_canonical_usize(imm_hi as usize),                             // c: imm high 16b
+        F::ZERO,                                                              // d: (not used)
+        F::ZERO,                                                              // e: (not used)
+        F::ONE,                                                               // f: enabled
+        F::ZERO,                                                              // g: (not used)
     )
 }
 
+// ---- 64-bit Arithmetic (BaseAlu64Opcode) ----
+
+/// rd = rs1 + rs2 (wrapping, 64-bit)
 #[cfg(test)]
 pub fn add_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(
@@ -362,6 +438,7 @@ pub fn add_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction
     )
 }
 
+/// rd = rs1 + imm (wrapping, 64-bit)
 #[cfg(test)]
 pub fn add_imm_64<F: PrimeField32>(
     rd: usize,
@@ -376,6 +453,7 @@ pub fn add_imm_64<F: PrimeField32>(
     )
 }
 
+/// rd = rs1 - rs2 (wrapping, 64-bit)
 pub fn sub_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(
         BaseAlu64Opcode::SUB.global_opcode().as_usize(),
@@ -385,6 +463,7 @@ pub fn sub_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction
     )
 }
 
+/// rd = rs1 - imm (wrapping, 64-bit)
 #[cfg(test)]
 pub fn sub_imm_64<F: PrimeField32>(
     rd: usize,
@@ -399,6 +478,7 @@ pub fn sub_imm_64<F: PrimeField32>(
     )
 }
 
+/// rd = rs1 ^ rs2 (64-bit)
 #[cfg(test)]
 pub fn xor_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(
@@ -409,6 +489,7 @@ pub fn xor_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction
     )
 }
 
+/// rd = rs1 ^ imm (64-bit)
 #[cfg(test)]
 pub fn xor_imm_64<F: PrimeField32>(
     rd: usize,
@@ -423,15 +504,18 @@ pub fn xor_imm_64<F: PrimeField32>(
     )
 }
 
+/// rd = rs1 | rs2 (64-bit)
 pub fn or_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(BaseAlu64Opcode::OR.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
+/// rd = rs1 | imm (64-bit)
 #[cfg(test)]
 pub fn or_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     instr_i(BaseAlu64Opcode::OR.global_opcode().as_usize(), rd, rs1, imm)
 }
 
+/// rd = rs1 & rs2 (64-bit)
 #[cfg(test)]
 pub fn and_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
     instr_r(
@@ -442,6 +526,7 @@ pub fn and_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction
     )
 }
 
+/// rd = rs1 & imm (64-bit)
 pub fn and_imm_64<F: PrimeField32>(
     rd: usize,
     rs1: usize,
@@ -455,8 +540,10 @@ pub fn and_imm_64<F: PrimeField32>(
     )
 }
 
-/// RET instruction: Return (restore PC and FP from registers)
-/// Sets PC and FP from registers (absolute FP value)
+// ---- Call / Return ----
+
+/// RET: Restore PC and FP from registers previously saved by CALL/CALL_INDIRECT.
+/// Reads the saved PC and absolute FP from registers relative to the current FP.
 pub fn ret<F: PrimeField32>(to_pc_reg: usize, to_fp_reg: usize) -> Instruction<F> {
     Instruction::new(
         CallOpcode::RET.global_opcode(),
@@ -511,83 +598,9 @@ pub fn call_indirect<F: PrimeField32>(
     )
 }
 
-/// ALLOCATE_FRAME_I instruction: Allocate frame from immediate size and return pointer
-/// target_reg receives the allocated pointer, amount_imm is the amount to allocate
-#[allow(dead_code)]
-pub fn allocate_frame_imm<F: PrimeField32>(target_reg: usize, amount_imm: usize) -> Instruction<F> {
-    Instruction::new(
-        AllocateFrameOpcode::ALLOCATE_FRAME.global_opcode(),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
-        F::from_canonical_usize(amount_imm),                                  // b: amount_imm
-        F::ZERO,                                                              // c: amount_reg
-        F::ZERO, // d: whether to use the amount immediate (ZERO) or register (ONE)
-        F::ZERO, // e: (not used)
-        F::ONE,  // f: enabled
-        F::ZERO, // g: imm sign
-    )
-}
+// ---- Jumps ----
 
-/// ALLOCATE_FRAME_V instruction: Allocate frame from register and return pointer
-/// target_reg receives the allocated pointer, amount_reg is the register containing the amount to allocate
-#[allow(dead_code)]
-pub fn allocate_frame_reg<F: PrimeField32>(target_reg: usize, amount_reg: usize) -> Instruction<F> {
-    Instruction::new(
-        AllocateFrameOpcode::ALLOCATE_FRAME.global_opcode(),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
-        F::ZERO,                                                              // b: amount_imm
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * amount_reg), // c: amount_reg
-        F::ONE,  // d: whether to use the amount immediate (ZERO) or register (ONE)
-        F::ZERO, // e: (not used)
-        F::ONE,  // f: enabled
-        F::ZERO, // g: imm sign
-    )
-}
-
-/// COPY_INTO_FRAME instruction: Copy value into frame-relative address
-/// dest_fp is the frame pointer, src_value is the value to copy, dest_offset is the offset
-/// Writes src_value content to [dest_fp[dest_offset]]
-#[allow(dead_code)]
-pub fn copy_into_frame<F: PrimeField32>(
-    target_reg: usize,
-    src_reg: usize,
-    target_fp: usize,
-) -> Instruction<F> {
-    Instruction::new(
-        CopyIntoFrameOpcode::COPY_INTO_FRAME.global_opcode(),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * src_reg),    // b: register
-        // containing value to copy
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_fp), // c: future fp to be used as reference for target_reg
-        F::ZERO,                                                             // d: (not used)
-        F::ZERO,                                                             // e: (not used)
-        F::ONE,                                                              // f: enabled
-        F::ZERO,                                                             // g: (not used)
-    )
-}
-
-/// COPY_FROM_FRAME instruction: Copy value from frame-relative address.
-/// src_fp is the frame pointer, src_value is the value to copy.
-/// Writes [src_fp + src_value] content to [fp + target_reg].
-#[allow(dead_code)]
-pub fn copy_from_frame<F: PrimeField32>(
-    target_reg: usize,
-    src_reg: usize,
-    src_fp: usize,
-) -> Instruction<F> {
-    Instruction::new(
-        CopyIntoFrameOpcode::COPY_FROM_FRAME.global_opcode(),
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * target_reg), // a: target_reg
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * src_reg),    // b: register
-        // containing value to copy
-        F::from_canonical_usize(riscv::RV32_REGISTER_NUM_LIMBS * src_fp), // c: other future fp to be used as reference for src_reg
-        F::ZERO,                                                          // d: (not used)
-        F::ZERO,                                                          // e: (not used)
-        F::ONE,                                                           // f: enabled
-        F::ZERO,                                                          // g: (not used)
-    )
-}
-
-/// JUMP instruction: Unconditional jump to immediate PC
+/// JUMP: Unconditional jump to immediate PC.
 pub fn jump<F: PrimeField32>(to_pc_imm: usize) -> Instruction<F> {
     Instruction::new(
         JumpOpcode::JUMP.global_opcode(),
@@ -601,7 +614,8 @@ pub fn jump<F: PrimeField32>(to_pc_imm: usize) -> Instruction<F> {
     )
 }
 
-/// SKIP instruction: Unconditional relative jump to current PC + offset
+/// SKIP: Relative jump by register offset. PC += (offset + 1) * DEFAULT_PC_STEP.
+/// The +1 accounts for WOMIR's natural PC increment (offset=0 would otherwise loop forever).
 pub fn skip<F: PrimeField32>(offset_reg: usize) -> Instruction<F> {
     Instruction::new(
         JumpOpcode::SKIP.global_opcode(),
@@ -615,7 +629,7 @@ pub fn skip<F: PrimeField32>(offset_reg: usize) -> Instruction<F> {
     )
 }
 
-/// JUMP_IF instruction: Conditional jump to immediate PC if condition != 0
+/// JUMP_IF: Jump to immediate PC if condition register is non-zero.
 pub fn jump_if<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> Instruction<F> {
     Instruction::new(
         JumpOpcode::JUMP_IF.global_opcode(),
@@ -629,7 +643,7 @@ pub fn jump_if<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> Instr
     )
 }
 
-/// JUMP_IF_ZERO instruction: Conditional jump to immediate PC if condition == 0
+/// JUMP_IF_ZERO: Jump to immediate PC if condition register is zero.
 pub fn jump_if_zero<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> Instruction<F> {
     Instruction::new(
         JumpOpcode::JUMP_IF_ZERO.global_opcode(),
@@ -643,8 +657,11 @@ pub fn jump_if_zero<F: PrimeField32>(condition_reg: usize, to_pc_imm: usize) -> 
     )
 }
 
-/// LOADW instruction: Load word from memory
-/// rd = MEM[rs1 + imm]
+// ---- Memory Load/Store ----
+// All load/store instructions use base register + immediate offset addressing.
+// The immediate is split: lower 16 bits in field c, upper 16 bits in field g.
+
+/// LOADW: rd = MEM32[rs1 + imm]
 pub fn loadw<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::LOADW.global_opcode(),
@@ -658,8 +675,7 @@ pub fn loadw<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F>
     )
 }
 
-/// STOREW instruction: Store word to memory
-/// MEM[rs1 + imm] = rs2
+/// STOREW: MEM32[rs1 + imm] = rs2
 pub fn storew<F: PrimeField32>(value: usize, base_address: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::STOREW.global_opcode(),
@@ -673,8 +689,7 @@ pub fn storew<F: PrimeField32>(value: usize, base_address: usize, imm: u32) -> I
     )
 }
 
-/// LOADB: load byte from memory
-/// rd = MEM[rs1 + imm] (sign-extended)
+/// LOADB: rd = sign_extend(MEM8[rs1 + imm])
 pub fn loadb<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::LOADB.global_opcode(),
@@ -688,8 +703,7 @@ pub fn loadb<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F>
     )
 }
 
-/// LOADBU instruction: Load byte unsigned from memory
-/// rd = MEM[rs1 + imm] (zero-extended)
+/// LOADBU: rd = zero_extend(MEM8[rs1 + imm])
 pub fn loadbu<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::LOADBU.global_opcode(),
@@ -703,8 +717,7 @@ pub fn loadbu<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F
     )
 }
 
-/// LOADH: load halfword from memory
-/// rd = MEM[rs1 + imm] (sign-extended)
+/// LOADH: rd = sign_extend(MEM16[rs1 + imm])
 #[allow(unused)]
 pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
@@ -719,8 +732,7 @@ pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F>
     )
 }
 
-/// LOADHU instruction: Load halfword unsigned from memory
-/// rd = MEM[rs1 + imm] (zero-extended)
+/// LOADHU: rd = zero_extend(MEM16[rs1 + imm])
 pub fn loadhu<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::LOADHU.global_opcode(),
@@ -734,8 +746,7 @@ pub fn loadhu<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F
     )
 }
 
-/// STOREB instruction: Store byte to memory
-/// MEM[rs1 + imm] = rs2 (lowest byte)
+/// STOREB: MEM8[rs1 + imm] = rs2[7:0]
 pub fn storeb<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::STOREB.global_opcode(),
@@ -749,8 +760,7 @@ pub fn storeb<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<
     )
 }
 
-/// STOREH instruction: Store halfword to memory
-/// MEM[rs1 + imm] = rs2 (lowest halfword)
+/// STOREH: MEM16[rs1 + imm] = rs2[15:0]
 pub fn storeh<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::STOREH.global_opcode(),
@@ -764,6 +774,10 @@ pub fn storeh<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<
     )
 }
 
+// ---- Public Output ----
+
+/// Reveal: Write register value to public output area (PUBLIC_VALUES_AS = 3).
+/// Uses STOREW with memory AS overridden to the public values address space.
 #[allow(dead_code)]
 pub fn reveal<F: PrimeField32>(rs1_data: usize, rd_index: usize) -> Instruction<F> {
     Instruction::new(
@@ -778,6 +792,7 @@ pub fn reveal<F: PrimeField32>(rs1_data: usize, rd_index: usize) -> Instruction<
     )
 }
 
+/// Reveal with immediate output index offset.
 #[allow(dead_code)]
 pub fn reveal_imm<F: PrimeField32>(
     data_reg: usize,
@@ -796,6 +811,10 @@ pub fn reveal_imm<F: PrimeField32>(
     )
 }
 
+// ---- System Instructions ----
+
+/// TRAP: Terminate with exit code = ERROR_CODE_OFFSET (100) + error_code.
+/// Used for WebAssembly traps (unreachable, out-of-bounds, etc.).
 pub fn trap<F: PrimeField32>(error_code: usize) -> Instruction<F> {
     Instruction::new(
         SystemOpcode::TERMINATE.global_opcode(),
@@ -809,6 +828,7 @@ pub fn trap<F: PrimeField32>(error_code: usize) -> Instruction<F> {
     )
 }
 
+/// ABORT: Terminate with exit code = ERROR_ABORT_CODE (200).
 pub fn abort<F: PrimeField32>() -> Instruction<F> {
     Instruction::new(
         SystemOpcode::TERMINATE.global_opcode(),
@@ -822,6 +842,7 @@ pub fn abort<F: PrimeField32>() -> Instruction<F> {
     )
 }
 
+/// HALT: Normal program termination (exit code = 0).
 #[allow(dead_code)]
 pub fn halt<F: PrimeField32>() -> Instruction<F> {
     Instruction::new(
@@ -836,6 +857,9 @@ pub fn halt<F: PrimeField32>() -> Instruction<F> {
     )
 }
 
+// ---- Phantom / Hint Instructions ----
+
+/// HintInput phantom: Pop next input vector, prepend its 4-byte LE length, push onto hint stream.
 pub fn prepare_read<F: PrimeField32>() -> Instruction<F> {
     Instruction::new(
         SystemOpcode::PHANTOM.global_opcode(),
@@ -849,6 +873,7 @@ pub fn prepare_read<F: PrimeField32>() -> Instruction<F> {
     )
 }
 
+/// PrintStr phantom: Read string from memory at [mem_ptr_reg + mem_imm] and print to stdout.
 pub fn debug_print<F: PrimeField32>(
     mem_ptr_reg: usize,
     amount_reg: usize,
