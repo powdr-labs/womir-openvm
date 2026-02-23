@@ -1,19 +1,14 @@
-//! Isolated stage testing infrastructure for WOMIR instructions.
+//! Isolated testing infrastructure for WOMIR instructions.
 //!
 //! This module provides a framework for testing WOMIR instructions
-//! through isolated execution stages:
+//! through isolated execution:
 //! - Raw execution (InterpretedInstance::execute_from_state)
 //! - Metered execution (InterpretedInstance::execute_metered_from_state)
 //! - Preflight (VirtualMachine::execute_preflight)
 //! - Proof generation (VirtualMachine::prove)
 
-use std::sync::OnceLock;
-
 use openvm_circuit::{
-    arch::{
-        VirtualMachine, VmCircuitConfig, VmExecutor, VmState, debug_proving_ctx,
-        execution_mode::Segment,
-    },
+    arch::{VmExecutor, VmState},
     system::memory::online::GuestMemory,
 };
 use openvm_instructions::{
@@ -22,27 +17,13 @@ use openvm_instructions::{
     program::{DEFAULT_PC_STEP, Program},
     riscv::RV32_REGISTER_AS,
 };
-use openvm_sdk::{StdIn, config::DEFAULT_APP_LOG_BLOWUP};
-use openvm_stark_sdk::{
-    config::{
-        FriParameters,
-        baby_bear_poseidon2::{BabyBearPoseidon2Config, BabyBearPoseidon2Engine},
-    },
-    engine::{StarkEngine, StarkFriEngine},
-    openvm_stark_backend::{
-        keygen::types::MultiStarkProvingKey, prover::hal::DeviceDataTransporter,
-    },
-};
-use womir_circuit::{
-    WomirConfig, WomirCpuBuilder, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory,
-};
+use openvm_sdk::StdIn;
+use womir_circuit::{WomirConfig, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory};
 
+use super::helpers;
 use crate::instruction_builder as wom;
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
-type SC = BabyBearPoseidon2Config;
-
-static VM_PROVING_KEY: OnceLock<MultiStarkProvingKey<SC>> = OnceLock::new();
 
 /// Memory address space for RAM (heap memory).
 const RV32_MEMORY_AS: u32 = openvm_instructions::riscv::RV32_MEMORY_AS;
@@ -188,24 +169,7 @@ fn verify_state(
     Ok(())
 }
 
-fn default_engine() -> BabyBearPoseidon2Engine {
-    let fri_params =
-        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
-    BabyBearPoseidon2Engine::new(fri_params)
-}
-
-fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
-    VM_PROVING_KEY.get_or_init(|| {
-        let config = WomirConfig::default();
-        let engine = default_engine();
-        let circuit = config
-            .create_airs()
-            .expect("failed to create AIR inventory for test keygen");
-        circuit.keygen(&engine)
-    })
-}
-
-/// Test Stage 1: Raw Execution using InterpretedInstance::execute_from_state
+/// Raw execution using InterpretedInstance::execute_from_state.
 pub fn test_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
@@ -218,114 +182,34 @@ pub fn test_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>>
     verify_state(spec, &final_state)
 }
 
-/// Test Stage 2: Metered Execution using InterpretedInstance::execute_metered_from_state
+/// Metered execution using InterpretedInstance::execute_metered_from_state.
 pub fn test_metered_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-    let (vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
-        default_engine(),
-        WomirCpuBuilder,
-        vm_config.clone(),
-    )?;
-
-    let metered_ctx = vm.build_metered_ctx(&exe);
-    let metered_instance = vm.metered_interpreter(&exe)?;
-    let from_state = build_initial_state(spec, &exe, &vm_config);
     let (segments, final_state) =
-        metered_instance.execute_metered_from_state(from_state, metered_ctx)?;
+        helpers::test_metered_execution(&exe, || build_initial_state(spec, &exe, &vm_config))?;
 
     assert_eq!(segments.len(), 1, "expected a single segment");
     verify_state(spec, &final_state)
 }
 
-/// Test Stage 3: Preflight using VirtualMachine::execute_preflight
+/// Preflight using VirtualMachine::execute_preflight.
 pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-    let (vm, _pk) = VirtualMachine::<_, WomirCpuBuilder>::new_with_keygen(
-        default_engine(),
-        WomirCpuBuilder,
-        vm_config.clone(),
-    )?;
+    let final_state =
+        helpers::test_preflight(&exe, || build_initial_state(spec, &exe, &vm_config))?;
 
-    // Run metered execution to get segment info
-    let metered_ctx = vm.build_metered_ctx(&exe);
-    let metered_instance = vm.metered_interpreter(&exe)?;
-    let from_state = build_initial_state(spec, &exe, &vm_config);
-    let (segments, _) = metered_instance.execute_metered_from_state(from_state, metered_ctx)?;
-    assert_eq!(segments.len(), 1, "Expected a single segment.");
-    let Segment {
-        num_insns,
-        trace_heights,
-        ..
-    } = &segments[0];
-
-    // Run preflight
-    let mut preflight_interpreter = vm.preflight_interpreter(&exe)?;
-    let preflight_from_state = build_initial_state(spec, &exe, &vm_config);
-    let preflight_output = vm.execute_preflight(
-        &mut preflight_interpreter,
-        preflight_from_state,
-        Some(*num_insns),
-        trace_heights,
-    )?;
-
-    verify_state(spec, &preflight_output.to_state)
+    verify_state(spec, &final_state)
 }
 
-/// Test Stage 4: Mock proving with constraint verification using debug_proving_ctx.
+/// Mock proving with constraint verification using debug_proving_ctx.
 /// This generates traces and verifies all constraints are satisfied without
 /// generating actual cryptographic proofs.
 pub fn test_prove(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-    let engine = default_engine();
-    let pk = vm_proving_key();
-    let d_pk = engine.device().transport_pk_to_device(pk);
-    let mut vm = VirtualMachine::<_, WomirCpuBuilder>::new(
-        engine,
-        WomirCpuBuilder,
-        vm_config.clone(),
-        d_pk,
-    )?;
-
-    // Run metered execution to get segment info
-    let metered_ctx = vm.build_metered_ctx(&exe);
-    let metered_instance = vm.metered_interpreter(&exe)?;
-    let from_state = build_initial_state(spec, &exe, &vm_config);
-    let (segments, _) = metered_instance.execute_metered_from_state(from_state, metered_ctx)?;
-    assert_eq!(segments.len(), 1, "Expected a single segment.");
-    let Segment {
-        num_insns,
-        trace_heights,
-        ..
-    } = &segments[0];
-
-    // Load program trace (required before preflight)
-    let cached_program_trace = vm.commit_program_on_device(&exe.program);
-    vm.load_program(cached_program_trace);
-
-    // Run preflight to generate traces
-    let mut preflight_interpreter = vm.preflight_interpreter(&exe)?;
-    let preflight_from_state = build_initial_state(spec, &exe, &vm_config);
-    vm.transport_init_memory_to_device(&preflight_from_state.memory);
-    let preflight_output = vm.execute_preflight(
-        &mut preflight_interpreter,
-        preflight_from_state,
-        Some(*num_insns),
-        trace_heights,
-    )?;
-
-    // Generate proving context with traces
-    let ctx = vm.generate_proving_ctx(
-        preflight_output.system_records,
-        preflight_output.record_arenas,
-    )?;
-
-    // Verify all constraints using mock prover
-    debug_proving_ctx(&vm, pk, &ctx);
-
-    Ok(())
+    helpers::test_prove(&exe, || build_initial_state(spec, &exe, &vm_config))
 }
 
 fn test_spec(mut spec: TestSpec) {
