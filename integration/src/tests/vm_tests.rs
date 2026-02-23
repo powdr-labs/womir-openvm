@@ -1,5 +1,5 @@
-use super::*;
 use crate::womir_translation::ERROR_CODE_OFFSET;
+use crate::*;
 use instruction_builder as wom;
 use openvm_circuit::{
     arch::{ExecutionError, VmExecutor},

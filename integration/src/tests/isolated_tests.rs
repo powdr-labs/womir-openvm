@@ -1,7 +1,7 @@
-//! Isolated stage testing infrastructure for WOMIR instructions.
+//! Isolated testing infrastructure for WOMIR instructions.
 //!
 //! This module provides a framework for testing WOMIR instructions
-//! through isolated execution stages:
+//! through isolated execution:
 //! - Raw execution (InterpretedInstance::execute_from_state)
 //! - Metered execution (InterpretedInstance::execute_metered_from_state)
 //! - Preflight (VirtualMachine::execute_preflight)
@@ -20,8 +20,8 @@ use openvm_instructions::{
 use openvm_sdk::StdIn;
 use womir_circuit::{WomirConfig, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory};
 
+use super::helpers;
 use crate::instruction_builder as wom;
-use crate::test_stages;
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -169,7 +169,7 @@ fn verify_state(
     Ok(())
 }
 
-/// Test Stage 1: Raw Execution using InterpretedInstance::execute_from_state
+/// Raw execution using InterpretedInstance::execute_from_state.
 pub fn test_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
@@ -182,34 +182,34 @@ pub fn test_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>>
     verify_state(spec, &final_state)
 }
 
-/// Test Stage 2: Metered Execution using InterpretedInstance::execute_metered_from_state
+/// Metered execution using InterpretedInstance::execute_metered_from_state.
 pub fn test_metered_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
     let (segments, final_state) =
-        test_stages::test_metered_execution(&exe, || build_initial_state(spec, &exe, &vm_config))?;
+        helpers::test_metered_execution(&exe, || build_initial_state(spec, &exe, &vm_config))?;
 
     assert_eq!(segments.len(), 1, "expected a single segment");
     verify_state(spec, &final_state)
 }
 
-/// Test Stage 3: Preflight using VirtualMachine::execute_preflight
+/// Preflight using VirtualMachine::execute_preflight.
 pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
     let final_state =
-        test_stages::test_preflight(&exe, || build_initial_state(spec, &exe, &vm_config))?;
+        helpers::test_preflight(&exe, || build_initial_state(spec, &exe, &vm_config))?;
 
     verify_state(spec, &final_state)
 }
 
-/// Test Stage 4: Mock proving with constraint verification using debug_proving_ctx.
+/// Mock proving with constraint verification using debug_proving_ctx.
 /// This generates traces and verifies all constraints are satisfied without
 /// generating actual cryptographic proofs.
 pub fn test_prove(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-    test_stages::test_prove(&exe, || build_initial_state(spec, &exe, &vm_config))
+    helpers::test_prove(&exe, || build_initial_state(spec, &exe, &vm_config))
 }
 
 fn test_spec(mut spec: TestSpec) {

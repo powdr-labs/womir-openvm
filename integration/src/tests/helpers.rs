@@ -1,4 +1,4 @@
-//! Shared test stages 2–4 (metered execution, preflight, mock proof) with a
+//! Shared test helpers (metered execution, preflight, mock proof) with a
 //! single cached proving key.
 
 use std::sync::OnceLock;
@@ -42,7 +42,7 @@ pub fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
     })
 }
 
-/// Stage 2: Metered execution. Returns (segments, final_state).
+/// Metered execution. Returns (segments, final_state).
 pub fn test_metered_execution(
     exe: &VmExe<F>,
     make_state: impl Fn() -> VmState<F>,
@@ -61,7 +61,7 @@ pub fn test_metered_execution(
     Ok((segments, final_state))
 }
 
-/// Stage 3: Preflight (all segments). Returns the final state after the last segment.
+/// Preflight (all segments). Returns the final state after the last segment.
 pub fn test_preflight(
     exe: &VmExe<F>,
     make_state: impl Fn() -> VmState<F>,
@@ -93,7 +93,7 @@ pub fn test_preflight(
     Ok(state)
 }
 
-/// Stage 4: Mock proof with constraint verification (all segments).
+/// Mock proof with constraint verification (all segments).
 pub fn test_prove(
     exe: &VmExe<F>,
     make_state: impl Fn() -> VmState<F>,

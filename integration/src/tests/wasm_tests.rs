@@ -1,4 +1,4 @@
-use super::*;
+use crate::*;
 use openvm_circuit::arch::VmState;
 use openvm_sdk::StdIn;
 use serde::Deserialize;
@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::Command;
 use tracing::Level;
 
-use crate::test_stages;
+use super::helpers;
 
 type TestCase = (String, Vec<u32>, Vec<u32>);
 type TestModule = (String, u32, Vec<TestCase>);
@@ -225,8 +225,8 @@ fn run_wasm_test_function(
         VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin)
     };
 
-    // Stage 1: Execution (also updates module.memory_image for wast test reuse)
-    println!("  Stage 1: execution");
+    // Execution (also updates module.memory_image for wast test reuse)
+    println!("  Execution");
     let mut stdin = StdIn::default();
     for &arg in args {
         stdin.write(&arg);
@@ -248,18 +248,18 @@ fn run_wasm_test_function(
         return Ok(());
     }
 
-    // Stage 2: Metered execution
-    println!("  Stage 2: metered execution");
-    let (segments, _) = test_stages::test_metered_execution(&exe, make_state)?;
+    // Metered execution
+    println!("  Metered execution");
+    let (segments, _) = helpers::test_metered_execution(&exe, make_state)?;
     println!("    {} segment(s)", segments.len());
 
-    // Stage 3: Preflight
-    println!("  Stage 3: preflight");
-    test_stages::test_preflight(&exe, make_state)?;
+    // Preflight
+    println!("  Preflight");
+    helpers::test_preflight(&exe, make_state)?;
 
-    // Stage 4: Mock proof
-    println!("  Stage 4: mock proof");
-    test_stages::test_prove(&exe, make_state)?;
+    // Mock proof
+    println!("  Mock proof");
+    helpers::test_prove(&exe, make_state)?;
 
     Ok(())
 }
