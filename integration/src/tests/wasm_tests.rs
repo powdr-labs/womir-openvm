@@ -195,10 +195,11 @@ fn run_and_prove_single_wasm_test(
     function: &str,
     args: &[u32],
     expected: &[u32],
+    byte_inputs: &[&[u8]],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let wasm_bytes = std::fs::read(module_path).expect("Failed to read WASM file");
     let mut module = load_wasm_module(&wasm_bytes);
-    run_wasm_test_function(&mut module, function, args, expected, true)
+    run_wasm_test_function(&mut module, function, args, expected, true, byte_inputs)
 }
 
 /// Run a WASM program through execution with output verification.
@@ -210,6 +211,7 @@ fn run_wasm_test_function(
     args: &[u32],
     expected: &[u32],
     prove: bool,
+    byte_inputs: &[&[u8]],
 ) -> Result<(), Box<dyn std::error::Error>> {
     setup_tracing_with_log_level(Level::WARN);
     println!("Running WASM test with {function}({args:?}): expected {expected:?}");
@@ -218,21 +220,29 @@ fn run_wasm_test_function(
     let exe = module.program_with_entry_point(function);
     let vm_config = WomirConfig::default();
 
-    let make_state = || {
+    let make_stdin = || {
         let mut stdin = StdIn::default();
         for &arg in args {
             stdin.write(&arg);
         }
-        VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin)
+        for bytes in byte_inputs {
+            stdin.write_bytes(bytes);
+        }
+        stdin
+    };
+
+    let make_state = || {
+        VmState::initial(
+            &vm_config.system,
+            &exe.init_memory,
+            exe.pc_start,
+            make_stdin(),
+        )
     };
 
     // Execution (also updates module.memory_image for wast test reuse)
     println!("  Execution");
-    let mut stdin = StdIn::default();
-    for &arg in args {
-        stdin.write(&arg);
-    }
-    let output = module.execute(vm_config.clone(), function, stdin)?;
+    let output = module.execute(vm_config.clone(), function, make_stdin())?;
 
     if !expected.is_empty() {
         let output: Vec<u32> = output[..expected.len() * 4]
@@ -333,7 +343,7 @@ fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut module = load_wasm_module(&wasm_bytes);
 
         for (function, args, expected) in cases {
-            run_wasm_test_function(&mut module, function, args, expected, false)?;
+            run_wasm_test_function(&mut module, function, args, expected, false, &[])?;
         }
     }
 
@@ -342,7 +352,8 @@ fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_fib() {
-    run_and_prove_single_wasm_test("../sample-programs/fib_loop.wasm", "fib", &[10], &[55]).unwrap()
+    run_and_prove_single_wasm_test("../sample-programs/fib_loop.wasm", "fib", &[10], &[55], &[])
+        .unwrap()
 }
 
 #[test]
@@ -352,19 +363,27 @@ fn test_n_first_sums() {
         "n_first_sum",
         &[42, 0],
         &[903, 0],
+        &[],
     )
     .unwrap()
 }
 
 #[test]
 fn test_call_indirect_wasm() {
-    run_and_prove_single_wasm_test("../sample-programs/call_indirect.wasm", "test", &[], &[1])
-        .unwrap();
+    run_and_prove_single_wasm_test(
+        "../sample-programs/call_indirect.wasm",
+        "test",
+        &[],
+        &[1],
+        &[],
+    )
+    .unwrap();
     run_and_prove_single_wasm_test(
         "../sample-programs/call_indirect.wasm",
         "call_op",
         &[0, 10, 20],
         &[30],
+        &[],
     )
     .unwrap();
     run_and_prove_single_wasm_test(
@@ -372,13 +391,15 @@ fn test_call_indirect_wasm() {
         "call_op",
         &[1, 10, 3],
         &[7],
+        &[],
     )
     .unwrap();
 }
 
 #[test]
 fn test_keccak() {
-    run_and_prove_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[]).unwrap()
+    run_and_prove_single_wasm_test("../sample-programs/keccak.wasm", "main", &[0, 0], &[], &[])
+        .unwrap()
 }
 
 #[test]
@@ -387,8 +408,14 @@ fn test_keeper_js() {
     // Source: https://github.com/ethereum/go-ethereum/tree/master/cmd/keeper
     // Compile command:
     //   GOOS=js GOARCH=wasm go -gcflags=all=-d=softfloat build -tags "example" -o keeper.wasm
-    run_and_prove_single_wasm_test("../sample-programs/keeper_js.wasm", "run", &[0, 0], &[])
-        .unwrap();
+    run_and_prove_single_wasm_test(
+        "../sample-programs/keeper_js.wasm",
+        "run",
+        &[0, 0],
+        &[],
+        &[],
+    )
+    .unwrap();
 }
 
 fn keccak_rust_womir(iterations: u32, expected_first_byte: u32) {
@@ -397,6 +424,7 @@ fn keccak_rust_womir(iterations: u32, expected_first_byte: u32) {
         "main",
         &[0, 0],
         &[iterations, expected_first_byte],
+        &[],
         &[],
     )
 }
@@ -439,7 +467,14 @@ fn test_keccak_rust_womir_3_wrong() {
 
 #[test]
 fn test_keccak_rust_read_vec() {
-    run_womir_guest("read_vec", "main", &[0, 0], &[0xffaabbcc, 0xeedd0066], &[])
+    run_womir_guest(
+        "read_vec",
+        "main",
+        &[0, 0],
+        &[0xffaabbcc, 0xeedd0066],
+        &[],
+        &[],
+    )
 }
 
 #[test]
@@ -460,48 +495,7 @@ fn test_read_serde() {
     };
     let bytes = postcard::to_allocvec(&data).unwrap();
 
-    let case = "read_serde";
-    let path = format!("{}/../sample-programs/{case}", env!("CARGO_MANIFEST_DIR"));
-    build_wasm(&PathBuf::from(&path));
-    let wasm_path = format!("{path}/target/wasm32-unknown-unknown/release/{case}.wasm");
-
-    let wasm_bytes = std::fs::read(&wasm_path).expect("Failed to read WASM file");
-    let mut module = load_wasm_module(&wasm_bytes);
-
-    let function = "main";
-    let exe = module.program_with_entry_point(function);
-    let vm_config = WomirConfig::default();
-
-    let make_stdin = || {
-        let mut stdin = StdIn::default();
-        // func_inputs (consumed by WASM entry point setup)
-        stdin.write(&0u32);
-        stdin.write(&0u32);
-        // serialized struct as raw bytes
-        stdin.write_bytes(&bytes);
-        stdin
-    };
-
-    let make_state = || {
-        VmState::initial(
-            &vm_config.system,
-            &exe.init_memory,
-            exe.pc_start,
-            make_stdin(),
-        )
-    };
-
-    // Execution
-    module
-        .execute(vm_config.clone(), function, make_stdin())
-        .unwrap();
-
-    // Metered execution
-    helpers::test_metered_execution(&exe, make_state).unwrap();
-    // Preflight
-    helpers::test_preflight(&exe, make_state).unwrap();
-    // Mock proof
-    helpers::test_prove(&exe, make_state).unwrap();
+    run_womir_guest("read_serde", "main", &[0, 0], &[], &[], &[&bytes])
 }
 
 fn run_womir_guest(
@@ -510,6 +504,7 @@ fn run_womir_guest(
     func_inputs: &[u32],
     data_inputs: &[u32],
     outputs: &[u32],
+    byte_inputs: &[&[u8]],
 ) {
     let path = format!("{}/../sample-programs/{case}", env!("CARGO_MANIFEST_DIR"));
     build_wasm(&PathBuf::from(&path));
@@ -519,7 +514,7 @@ fn run_womir_guest(
         .chain(data_inputs)
         .copied()
         .collect::<Vec<_>>();
-    run_and_prove_single_wasm_test(&wasm_path, main_function, &args, outputs).unwrap()
+    run_and_prove_single_wasm_test(&wasm_path, main_function, &args, outputs, byte_inputs).unwrap()
 }
 
 fn build_wasm(path: &PathBuf) {
