@@ -1,11 +1,7 @@
 use openvm_sdk::StdIn;
 
 /// Compile and execute an OpenVM RISC-V guest program via powdr-openvm.
-fn run_openvm_guest(
-    guest: &str,
-    args: &[u32],
-    _expected: &[u32],
-) -> Result<(), Box<dyn std::error::Error>> {
+fn run_openvm_guest(guest: &str, args: &[u32]) -> Result<(), Box<dyn std::error::Error>> {
     crate::setup_tracing_with_log_level(tracing::Level::WARN);
 
     let guest_abs = std::fs::canonicalize(guest)?;
@@ -38,5 +34,6 @@ fn test_keccak_rust_openvm() {
         "{}/../sample-programs/keccak_with_inputs",
         env!("CARGO_MANIFEST_DIR")
     );
-    run_openvm_guest(&path, &[1], &[41]).unwrap();
+    // TODO When the function above does check the outputs, pass expectation &[41].
+    run_openvm_guest(&path, &[1]).unwrap();
 }
