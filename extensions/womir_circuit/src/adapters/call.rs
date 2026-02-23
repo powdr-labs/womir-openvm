@@ -57,7 +57,7 @@ pub struct CallAdapterCols<T> {
     pub to_fp_operand: T,
     /// Operand b: pointer to register where old FP is saved
     pub save_fp_ptr: T,
-    /// Operand a: pointer to register where old PC+1 is saved
+    /// Operand a: pointer to register where old PC + DEFAULT_PC_STEP is saved
     pub save_pc_ptr: T,
     /// Operand c: merged PC operand (immediate PC for CALL, register pointer for RET/CALL_INDIRECT)
     pub to_pc_operand: T,
@@ -71,9 +71,9 @@ pub struct CallAdapterCols<T> {
     /// FP_AS write: prev_data is 1 field element (native32 cell type)
     pub fp_write_aux: MemoryWriteAuxCols<T, 1>,
 
-    /// 2×16-bit decomposition of to_fp_operand (used for CALL/CALL_INDIRECT carry chain)
+    /// Decomposition of to_fp_operand (used for CALL/CALL_INDIRECT), for range-checking
     pub offset_limbs: [T; 2],
-    /// 2×16-bit limbs of new_fp = fp + to_fp_operand (used for CALL/CALL_INDIRECT carry chain)
+    /// Decomposition of new_fp = fp + to_fp_operand (used for CALL/CALL_INDIRECT), for range-checking
     pub new_fp_limbs: [T; 2],
 }
 
@@ -169,7 +169,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
         let has_pc_read = ctx.instruction.has_pc_read.clone();
         let has_save = ctx.instruction.has_save.clone();
         // has_fp_read = !has_save (RET reads FP from register; CALL/CALL_INDIRECT use immediate)
-        let has_fp_read = is_valid.clone() - has_save.clone();
+        let has_fp_read = is_valid.clone() * (AB::Expr::ONE - has_save.clone());
 
         // 0. Read current FP from FP_AS
         self.memory_bridge
@@ -182,24 +182,20 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
             .eval(builder, is_valid.clone());
 
         // 1. Read to_fp_reg (conditional on has_fp_read - only RET reads absolute FP from register)
-        let to_fp_data: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
-            std::array::from_fn(|i| ctx.reads.fp_data[i].clone());
         self.memory_bridge
             .read(
                 reg_addr(local.to_fp_operand + local.from_state.fp),
-                to_fp_data,
+                ctx.reads.fp_data.clone(),
                 timestamp_pp(),
                 &local.to_fp_read_aux,
             )
             .eval(builder, has_fp_read.clone());
 
         // 2. Read to_pc_reg (conditional on has_pc_read)
-        let to_pc_data: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
-            std::array::from_fn(|i| ctx.reads.pc_data[i].clone());
         self.memory_bridge
             .read(
                 reg_addr(local.to_pc_operand + local.from_state.fp),
-                to_pc_data,
+                ctx.reads.pc_data.clone(),
                 timestamp_pp(),
                 &local.to_pc_read_aux,
             )
@@ -208,14 +204,15 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
         // Compute new FP:
         // For RET (has_fp_read=1): new_fp = compose(reads[0]) (absolute FP from register)
         // For CALL/CALL_INDIRECT (has_save=1): new_fp = compose(new_fp_limbs) (carry-chain checked)
-        let to_fp_from_reg = ctx
-            .reads
-            .fp_data
-            .iter()
-            .enumerate()
-            .fold(AB::Expr::ZERO, |acc, (i, limb)| {
-                acc + limb.clone() * AB::Expr::from_canonical_u32(1u32 << (i * 8))
-            });
+        let to_fp_from_reg =
+            ctx.reads
+                .fp_data
+                .iter()
+                .enumerate()
+                .fold(AB::Expr::ZERO, |acc, (i, limb)| {
+                    // TODO: This can overflow
+                    acc + limb.clone() * AB::Expr::from_canonical_u32(1u32 << (i * 8))
+                });
         let new_fp_from_limbs =
             local.new_fp_limbs[0] + local.new_fp_limbs[1] * AB::F::from_canonical_u32(1 << 16);
         let new_fp_composed =
@@ -232,6 +229,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
             });
         builder
             .when(is_valid.clone())
+            // TODO: Then it can be the same expression
             .assert_eq(old_fp_composed, local.from_state.fp);
 
         // Carry-chain constraints for fp + offset addition (conditioned on has_save)
@@ -271,24 +269,20 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
 
         // 3. Write save_fp (conditional on has_save)
         // All saves are relative to the NEW frame pointer
-        let save_fp_data: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
-            std::array::from_fn(|i| ctx.writes.fp_data[i].clone());
         self.memory_bridge
             .write(
                 reg_addr(local.save_fp_ptr + new_fp_composed.clone()),
-                save_fp_data,
+                ctx.writes.fp_data.clone(),
                 timestamp_pp(),
                 &local.save_fp_write_aux,
             )
             .eval(builder, has_save.clone());
 
         // 4. Write save_pc (conditional on has_save)
-        let save_pc_data: [AB::Expr; RV32_REGISTER_NUM_LIMBS] =
-            std::array::from_fn(|i| ctx.writes.pc_data[i].clone());
         self.memory_bridge
             .write(
                 reg_addr(local.save_pc_ptr + new_fp_composed.clone()),
-                save_pc_data,
+                ctx.writes.pc_data.clone(),
                 timestamp_pp(),
                 &local.save_pc_write_aux,
             )
