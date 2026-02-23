@@ -2,6 +2,8 @@
 
 This document describes the instruction set implemented by WOMIR-OpenVM. Each instruction is documented with its encoding, semantics, and any relevant preconditions.
 
+WOMIR-OpenVM reuses common parts of [OpenVM](https://github.com/openvm-org/openvm/)'s RISC-V implementation. Many of the architecture choices, constants, address spaces, and chip implementations are taken from OpenVM's RV32IM extension.
+
 See `extensions/transpiler/src/instructions.rs` for opcode definitions and `integration/src/instruction_builder.rs` for encoding helpers.
 
 ## Execution Model
@@ -10,9 +12,13 @@ Registers are **frame-pointer-relative**: every register access uses `FP + offse
 
 All 32-bit values are stored as 4 little-endian bytes (RV32_REGISTER_NUM_LIMBS = 4). 64-bit values use 8 bytes.
 
+**64-bit register layout:** 64-bit instructions still take two register indices (rs1, rs2) in the encoding. The 64-bit value is composed of two consecutive 32-bit registers: `[rs1]` holds the low 32-bit limb, and `[rs1+1]` holds the high 32-bit limb. Same for rs2 and rd. Not all 64-bit instructions produce 64-bit output — comparison and equality operations output only 32 bits (1 or 0) to rd.
+
 The program counter advances by `DEFAULT_PC_STEP` (4) after each instruction unless the instruction modifies it.
 
 ### Address Spaces
+
+Address spaces 1, 2, and 3 are the same as in OpenVM's RISC-V implementation. Address space 5 is added by WOMIR-OpenVM for frame pointer storage.
 
 | AS | Constant | Purpose |
 |----|----------|---------|
@@ -36,8 +42,6 @@ Used by ALU, shift, comparison, and equality instructions.
 | c | `RV32_REGISTER_NUM_LIMBS * rs2` |
 | d | 1 (register AS) |
 | e | 1 (register AS) |
-| f | 0 |
-| g | 0 |
 
 #### I-type (register-register-immediate)
 
@@ -50,8 +54,6 @@ Used by ALU/shift/comparison instructions with an immediate operand.
 | c | `AluImm`-encoded 16-bit signed immediate (low 16 bits = value, byte 2 = sign extension, byte 3 = 0) |
 | d | 1 (register AS) |
 | e | 0 (signals immediate mode) |
-| f | 0 |
-| g | 0 |
 
 ---
 
@@ -92,7 +94,7 @@ Opcodes from `BaseAlu64Opcode`, offset `0x2200`. Same variant names and order as
 
 32-bit opcodes from `DivRemOpcode` (re-exported from OpenVM RV32IM), offset `0x0100`. 64-bit opcodes from `DivRem64Opcode`, offset `0x2254`.
 
-**Precondition:** Division by zero is handled by the WOMIR translator, which emits a trap before the division instruction if the divisor is zero. The circuit does **not** check for division by zero.
+**Division by zero:** The circuit constraints follow the RISC-V specification for division by zero, which differs from WebAssembly semantics. The WOMIR translator guards against this by emitting a trap before the division instruction when the divisor may be zero. See [#24](https://github.com/powdr-labs/womir-openvm/issues/24) for details.
 
 | Instruction | Opcode | Format | Semantics |
 |-------------|--------|--------|-----------|
@@ -122,14 +124,16 @@ Opcodes from `BaseAlu64Opcode`, offset `0x2200`. Same variant names and order as
 
 32-bit opcodes from `LessThanOpcode` (re-exported from OpenVM RV32IM), offset `0x0100`. 64-bit opcodes from `LessThan64Opcode`, offset `0x2208`.
 
+The 64-bit comparison operations take 64-bit inputs but always output a 32-bit result (1 or 0) to rd.
+
 | Instruction | Opcode | Format | Semantics |
 |-------------|--------|--------|-----------|
 | `lt_s` | `LessThanOpcode::SLT` | R | `rd = (rs1 <s rs2) ? 1 : 0` (signed) |
 | `lt_u` | `LessThanOpcode::SLTU` | R / I | `rd = (rs1 <u rs2) ? 1 : 0` (unsigned) |
 | `gt_s` | (SLT swapped) | R | `rd = (rs1 >s rs2) ? 1 : 0` — emitted as `lt_s(rd, rs2, rs1)` |
 | `gt_u` | (SLTU swapped) | R | `rd = (rs1 >u rs2) ? 1 : 0` — emitted as `lt_u(rd, rs2, rs1)` |
-| `lt_s_64` | `LessThan64Opcode::SLT` | R | `rd = (rs1 <s rs2) ? 1 : 0` (signed, 64-bit) |
-| `lt_u_64` | `LessThan64Opcode::SLTU` | R | `rd = (rs1 <u rs2) ? 1 : 0` (unsigned, 64-bit) |
+| `lt_s_64` | `LessThan64Opcode::SLT` | R | `rd = (rs1 <s rs2) ? 1 : 0` (signed, 64-bit inputs, 32-bit output) |
+| `lt_u_64` | `LessThan64Opcode::SLTU` | R | `rd = (rs1 <u rs2) ? 1 : 0` (unsigned, 64-bit inputs, 32-bit output) |
 | `gt_s_64` | (SLT swapped) | R | `rd = (rs1 >s rs2) ? 1 : 0` — emitted as `lt_s_64(rd, rs2, rs1)` |
 | `gt_u_64` | (SLTU swapped) | R | `rd = (rs1 >u rs2) ? 1 : 0` — emitted as `lt_u_64(rd, rs2, rs1)` |
 
@@ -139,12 +143,14 @@ Opcodes from `BaseAlu64Opcode`, offset `0x2200`. Same variant names and order as
 
 32-bit opcodes from `EqOpcode`, offset `0x120c`. 64-bit opcodes from `Eq64Opcode`, offset `0x220c`.
 
+The 64-bit equality operations take 64-bit inputs but always output a 32-bit result (1 or 0) to rd.
+
 | Instruction | Opcode | Format | Semantics |
 |-------------|--------|--------|-----------|
 | `eq` | `EqOpcode::EQ` | R / I | `rd = (rs1 == rs2) ? 1 : 0` |
 | `neq` | `EqOpcode::NEQ` | R / I | `rd = (rs1 != rs2) ? 1 : 0` |
-| `eq_64` | `Eq64Opcode::EQ` | R / I | `rd = (rs1 == rs2) ? 1 : 0` (64-bit) |
-| `neq_64` | `Eq64Opcode::NEQ` | R / I | `rd = (rs1 != rs2) ? 1 : 0` (64-bit) |
+| `eq_64` | `Eq64Opcode::EQ` | R / I | `rd = (rs1 == rs2) ? 1 : 0` (64-bit inputs, 32-bit output) |
+| `neq_64` | `Eq64Opcode::NEQ` | R / I | `rd = (rs1 != rs2) ? 1 : 0` (64-bit inputs, 32-bit output) |
 
 ---
 
@@ -161,12 +167,10 @@ Loads a 32-bit immediate into a register.
 | a | `RV32_REGISTER_NUM_LIMBS * target_reg` |
 | b | `imm_lo` (lower 16 bits of immediate) |
 | c | `imm_hi` (upper 16 bits of immediate) |
-| d | 0 |
-| e | 0 |
-| f | 1 (enabled) |
-| g | 0 |
 
 **Semantics:** Writes `(imm_hi << 16) | imm_lo` as 4 little-endian bytes to the target register.
+
+**Note:** The immediate is split into two 16-bit halves due to the instruction encoding's field size. If the instruction were extended to use 4 bytes for the immediate, the ZK constraints could be simplified.
 
 ---
 
@@ -190,7 +194,6 @@ Return to a saved PC and restore the frame pointer.
 | d | `RV32_REGISTER_NUM_LIMBS * to_fp_reg` (register offset holding saved FP, relative to current FP) |
 | e | 1 (PC read from register AS) |
 | f | 1 (FP read from register AS) |
-| g | 0 |
 
 **Semantics:**
 1. Read current FP from FP_AS.
@@ -205,13 +208,12 @@ Call a function at an immediate PC address.
 
 | Field | Value |
 |-------|-------|
-| a | `RV32_REGISTER_NUM_LIMBS * save_pc` (where to save return PC, relative to **new** FP) |
-| b | `RV32_REGISTER_NUM_LIMBS * save_fp` (where to save old FP, relative to **new** FP) |
+| a | `RV32_REGISTER_NUM_LIMBS * save_pc` (where to save return PC (current PC + 4), relative to **new** FP) |
+| b | `RV32_REGISTER_NUM_LIMBS * save_fp` (where to save the current FP, relative to **new** FP) |
 | c | `to_pc_imm` (immediate target PC) |
 | d | `fp_offset` (added to current FP to compute new FP) |
 | e | 0 (PC from immediate) |
 | f | 0 (FP from immediate offset) |
-| g | 0 |
 
 **Semantics:**
 1. Read current FP from FP_AS.
@@ -227,13 +229,12 @@ Call a function at a PC address read from a register.
 
 | Field | Value |
 |-------|-------|
-| a | `RV32_REGISTER_NUM_LIMBS * save_pc` (where to save return PC, relative to **new** FP) |
-| b | `RV32_REGISTER_NUM_LIMBS * save_fp` (where to save old FP, relative to **new** FP) |
+| a | `RV32_REGISTER_NUM_LIMBS * save_pc` (where to save return PC (current PC + 4), relative to **new** FP) |
+| b | `RV32_REGISTER_NUM_LIMBS * save_fp` (where to save the current FP, relative to **new** FP) |
 | c | `RV32_REGISTER_NUM_LIMBS * to_pc_reg` (register holding target PC, relative to current FP) |
 | d | `fp_offset` (added to current FP to compute new FP) |
 | e | 1 (PC from register) |
 | f | 0 (FP from immediate offset) |
-| g | 0 |
 
 **Semantics:** Same as `CALL`, except the target PC is read from register `[FP + c]` instead of being an immediate.
 
@@ -248,12 +249,6 @@ Unconditional jump to an immediate PC.
 | Field | Value |
 |-------|-------|
 | a | `to_pc_imm` |
-| b | 0 |
-| c | 0 |
-| d | 0 |
-| e | 0 |
-| f | 1 (enabled) |
-| g | 0 |
 
 **Semantics:** Set PC = a.
 
@@ -263,13 +258,7 @@ Unconditional relative jump by a register-specified offset.
 
 | Field | Value |
 |-------|-------|
-| a | 0 |
 | b | `RV32_REGISTER_NUM_LIMBS * offset_reg` |
-| c | 0 |
-| d | 0 |
-| e | 0 |
-| f | 1 (enabled) |
-| g | 0 |
 
 **Semantics:** Read offset from register `[FP + b]`. Set `PC += (offset + 1) * DEFAULT_PC_STEP`. The `+1` accounts for WOMIR's natural PC increment — without it, offset 0 would loop forever.
 
@@ -281,11 +270,6 @@ Conditional jump to an immediate PC if condition register is non-zero.
 |-------|-------|
 | a | `to_pc_imm` |
 | b | `RV32_REGISTER_NUM_LIMBS * condition_reg` |
-| c | 0 |
-| d | 0 |
-| e | 0 |
-| f | 1 (enabled) |
-| g | 0 |
 
 **Semantics:** Read condition from register `[FP + b]`. If non-zero, set PC = a. Otherwise, PC += DEFAULT_PC_STEP.
 
@@ -297,11 +281,6 @@ Conditional jump to an immediate PC if condition register is zero.
 |-------|-------|
 | a | `to_pc_imm` |
 | b | `RV32_REGISTER_NUM_LIMBS * condition_reg` |
-| c | 0 |
-| d | 0 |
-| e | 0 |
-| f | 1 (enabled) |
-| g | 0 |
 
 **Semantics:** Read condition from register `[FP + b]`. If zero, set PC = a. Otherwise, PC += DEFAULT_PC_STEP.
 
@@ -309,7 +288,7 @@ Conditional jump to an immediate PC if condition register is zero.
 
 ## Memory Instructions
 
-Opcodes from `Rv32LoadStoreOpcode` (re-exported from OpenVM RV32IM as `LoadStoreOpcode`).
+Opcodes from `Rv32LoadStoreOpcode` (re-exported from OpenVM RV32IM as `LoadStoreOpcode`). Copied from OpenVM to keep the same behavior.
 
 All load/store instructions use a base register + immediate offset addressing mode. The immediate is split across fields c (lower 16 bits) and g (upper 16 bits).
 
@@ -322,7 +301,6 @@ All load/store instructions use a base register + immediate offset addressing mo
 | c | `imm & 0xFFFF` (lower 16 bits of offset) |
 | d | 1 (register AS) |
 | e | 2 (memory AS) |
-| f | 1 (enabled) |
 | g | `imm >> 16` (upper 16 bits of offset) |
 
 ### Load Instructions
@@ -345,7 +323,7 @@ All load/store instructions use a base register + immediate offset addressing mo
 
 ### Reveal (Public Output)
 
-`reveal` uses `STOREW` with memory AS = 3 (`PUBLIC_VALUES_AS`) to write a register value into the public output area.
+`reveal` uses `STOREW` with memory AS = 3 (`PUBLIC_VALUES_AS`) to write a register value into the public output area. Copied from OpenVM to keep the same behavior.
 
 | Field | Value |
 |-------|-------|
@@ -354,8 +332,6 @@ All load/store instructions use a base register + immediate offset addressing mo
 | c | 0 (or immediate index) |
 | d | 1 (register AS) |
 | e | 3 (public values AS) |
-| f | 1 (enabled) |
-| g | 0 |
 
 ---
 
@@ -363,7 +339,7 @@ All load/store instructions use a base register + immediate offset addressing mo
 
 ### Phantom Instructions
 
-Phantom instructions modify the hint stream without producing circuit trace rows. Opcodes are encoded as discriminants in field c of a `PHANTOM` system opcode.
+Phantom instructions modify the hint stream without producing circuit trace rows. Opcodes are encoded as discriminants in field c of a `PHANTOM` system opcode. Copied from OpenVM and modified to take the FP into account when reading registers.
 
 | Instruction | Phantom Discriminant | Semantics |
 |-------------|---------------------|-----------|
@@ -374,7 +350,7 @@ Phantom instructions modify the hint stream without producing circuit trace rows
 
 ### HintStore Instructions
 
-Opcodes from `HintStoreOpcode`, offset `0x1260`. These consume data from the hint stream and write it to memory.
+Opcodes from `HintStoreOpcode`, offset `0x1260`. These consume data from the hint stream and write it to memory. Copied from OpenVM and modified to take the FP into account when reading registers.
 
 #### HINT_STOREW
 
@@ -387,8 +363,6 @@ Read one word (4 bytes) from the hint stream and write to memory.
 | c | 0 |
 | d | `RV32_REGISTER_AS` |
 | e | `RV32_MEMORY_AS` |
-| f | (from_isize default) |
-| g | (from_isize default) |
 
 **Semantics:** Pop 4 bytes from hint stream. Read memory pointer from register `[FP + b]`. Write 4 bytes to `MEM[mem_ptr]`.
 
@@ -403,8 +377,6 @@ Read multiple words from the hint stream and write to consecutive memory address
 | c | 0 |
 | d | `RV32_REGISTER_AS` |
 | e | `RV32_MEMORY_AS` |
-| f | (from_isize default) |
-| g | (from_isize default) |
 
 **Precondition:** `num_words > 0` (debug-asserted). The hint stream must contain at least `4 * num_words` bytes; otherwise an `ExecutionError::HintOutOfBounds` is raised.
 

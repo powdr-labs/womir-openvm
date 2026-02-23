@@ -124,8 +124,10 @@ pub fn mul_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instru
 }
 
 // ---- Division / Remainder (32-bit) ----
-// Precondition: The WOMIR translator guards against division by zero before
-// emitting these instructions. The circuit does not check for it.
+// The circuit constraints follow the RISC-V spec for division by zero, which
+// differs from WebAssembly semantics. The WOMIR translator guards against this
+// by emitting a trap before the division when the divisor may be zero.
+// See https://github.com/powdr-labs/womir-openvm/issues/24
 
 /// rd = rs1 /s rs2 (signed division, 32-bit)
 #[cfg(test)]
