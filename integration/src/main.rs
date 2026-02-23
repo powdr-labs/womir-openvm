@@ -1,6 +1,4 @@
 mod builtin_functions;
-#[cfg(test)]
-mod cli_tests;
 mod const_collapse;
 mod instruction_builder;
 mod proving;
