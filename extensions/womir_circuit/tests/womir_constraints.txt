@@ -2390,6 +2390,7 @@ is_call * (is_call - 1) = 0
 is_call_indirect * (is_call_indirect - 1) = 0
 (0 + is_ret + is_call + is_call_indirect) * (0 + is_ret + is_call + is_call_indirect - 1) = 0
 (0 + is_ret + is_call + is_call_indirect) * (0 + return_pc_data__0 * 1 + return_pc_data__1 * 256 + return_pc_data__2 * 65536 + return_pc_data__3 * 16777216 - (from_state__pc + 4)) = 0
+(1 - (0 + is_ret + is_call + is_call_indirect)) * (0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) = 0
 (0 + is_ret + is_call + is_call_indirect) * (from_state__timestamp + 0 - fp_read_aux__base__prev_timestamp - 1 - (0 + fp_read_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + fp_read_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 (0 + is_ret + is_call + is_call_indirect - (is_call + is_call_indirect)) * (from_state__timestamp + 1 - to_fp_read_aux__base__prev_timestamp - 1 - (0 + to_fp_read_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + to_fp_read_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 (is_ret + is_call_indirect) * (from_state__timestamp + 2 - to_pc_read_aux__base__prev_timestamp - 1 - (0 + to_pc_read_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + to_pc_read_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0

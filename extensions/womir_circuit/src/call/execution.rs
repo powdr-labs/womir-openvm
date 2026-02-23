@@ -205,6 +205,7 @@ unsafe fn execute_call_impl<F: PrimeField32, CTX: ExecutionCtxTrait>(
     pre: &CallPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
+    // TODO: Instead of dispatching at runtime, we should do it at compile-time!
     let opcode = CallOpcode::from_repr(pre.opcode as usize).unwrap();
     let fp = exec_state.memory.fp::<F>();
 
