@@ -217,10 +217,10 @@ where
     let num_output_words = womir::loader::word_count_types::<OpenVMSettings<F>>(results) as usize;
 
     // Registers used by startup code (relative to initial FP):
-    //   reg 0: zero_reg (holds value 0)
-    //   reg 1: scratch_reg (holds safe memory address for hint_storew)
+    //   reg 0: zero_reg (holds value 0, also used as pointer to mem[0])
+    //   reg 1: save_mem0_reg (holds saved value of mem[0] during hint reads)
     let zero_reg: usize = 0;
-    let scratch_reg: usize = 1;
+    let save_mem0_reg: usize = 1;
 
     // Frame offset for entry function = 2 (startup uses 2 registers)
     let frame_offset: usize = 2;
@@ -234,31 +234,30 @@ where
     let save_pc_reg = max_io;
     let save_fp_reg = max_io + 1;
 
-    // Safe scratch address for hint_storew in memory address space.
-    // This address is near the top of the 512MB memory address space (1 << 29),
-    // high enough that no WASM linear memory will reach it.
-    let safe_addr: u32 = 0x1FFF_FFE0;
-
     let mut code = vec![
         // 1. Set zero_reg = 0
         ib::const_32_imm(zero_reg, 0, 0),
-        // 2. Set scratch_reg = SAFE_ADDR
-        ib::const_32_imm(
-            scratch_reg,
-            (safe_addr & 0xFFFF) as u16,
-            (safe_addr >> 16) as u16,
-        ),
     ];
 
-    // 3. For each input word, read from hint stream into callee's argument register
-    for i in 0..num_input_words {
-        code.push(ib::prepare_read());
-        code.push(ib::hint_storew(scratch_reg)); // skip length word
-        code.push(ib::hint_storew(scratch_reg)); // write data to MEM[SAFE_ADDR]
-        code.push(ib::loadw(frame_offset + i, scratch_reg, 0)); // load from MEM[SAFE_ADDR] to callee's arg register
+    // 2. Read inputs using mem[0] as scratch space.
+    //    Save mem[0] first, then use it for hint_storew, then restore it.
+    if num_input_words > 0 {
+        // Save mem[0] into save_mem0_reg
+        code.push(ib::loadw(save_mem0_reg, zero_reg, 0));
+
+        // For each input word, read from hint stream via mem[0]
+        for i in 0..num_input_words {
+            code.push(ib::prepare_read());
+            code.push(ib::hint_storew(zero_reg)); // skip length word -> MEM[0]
+            code.push(ib::hint_storew(zero_reg)); // write data -> MEM[0]
+            code.push(ib::loadw(frame_offset + i, zero_reg, 0)); // load from MEM[0] into callee's arg register
+        }
+
+        // Restore mem[0]
+        code.push(ib::storew(save_mem0_reg, zero_reg, 0));
     }
 
-    // 4. Call the entry function
+    // 3. Call the entry function
     //    save_pc and save_fp are relative to callee's FP
     //    fp_offset must be frame_offset * NUM_LIMBS because ib::call does NOT multiply fp_offset
     code.push(ib::call(
@@ -268,12 +267,12 @@ where
         frame_offset * NUM_LIMBS,
     ));
 
-    // 5. Reveal output values
+    // 4. Reveal output values
     for i in 0..num_output_words {
         code.push(ib::reveal_imm(frame_offset + i, zero_reg, i * 4));
     }
 
-    // 6. Halt
+    // 5. Halt
     code.push(ib::halt());
 
     code
