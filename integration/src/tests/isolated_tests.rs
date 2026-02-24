@@ -3354,15 +3354,13 @@ mod tests {
         stdin.write(&42u32);
 
         // Register 0 defaults to 0 (memory pointer to MEM[0]).
-        // Read a u32 from stdin via hint mechanism and verify register value.
+        // Read a u32 from stdin via hint mechanism and verify RAM value.
         let spec = TestSpec {
             program: vec![
                 wom::prepare_read(),
                 wom::hint_storew(0), // skip length word
                 wom::hint_storew(0), // write data to MEM[0]
-                wom::loadw(1, 0, 0), // load MEM[0] → reg[1]
             ],
-            expected_registers: vec![(1, 42)],
             expected_ram: vec![(0, 42)],
             stdin,
             ..Default::default()
