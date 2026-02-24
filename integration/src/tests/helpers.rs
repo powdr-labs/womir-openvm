@@ -13,7 +13,7 @@ use crate::proving::{F, default_engine, vm_proving_key};
 /// Metered execution. Returns (segments, final_state).
 pub fn test_metered_execution(
     exe: &VmExe<F>,
-    make_state: impl Fn() -> VmState<F>,
+    initial_state: VmState<F>,
 ) -> Result<(Vec<Segment>, VmState<F>), Box<dyn std::error::Error>> {
     let engine = default_engine();
     let pk = vm_proving_key();
@@ -24,7 +24,7 @@ pub fn test_metered_execution(
     let metered_ctx = vm.build_metered_ctx(exe);
     let metered_instance = vm.metered_interpreter(exe)?;
     let (segments, final_state) =
-        metered_instance.execute_metered_from_state(make_state(), metered_ctx)?;
+        metered_instance.execute_metered_from_state(initial_state, metered_ctx)?;
 
     Ok((segments, final_state))
 }
@@ -32,7 +32,7 @@ pub fn test_metered_execution(
 /// Preflight (all segments). Returns the final state after the last segment.
 pub fn test_preflight(
     exe: &VmExe<F>,
-    make_state: impl Fn() -> VmState<F>,
+    initial_state: VmState<F>,
 ) -> Result<VmState<F>, Box<dyn std::error::Error>> {
     let engine = default_engine();
     let pk = vm_proving_key();
@@ -43,11 +43,12 @@ pub fn test_preflight(
     // Run metered execution to discover segments.
     let metered_ctx = vm.build_metered_ctx(exe);
     let metered_instance = vm.metered_interpreter(exe)?;
-    let (segments, _) = metered_instance.execute_metered_from_state(make_state(), metered_ctx)?;
+    let (segments, _) =
+        metered_instance.execute_metered_from_state(initial_state.clone(), metered_ctx)?;
 
     // Preflight each segment.
     let mut preflight_interpreter = vm.preflight_interpreter(exe)?;
-    let mut state = make_state();
+    let mut state = initial_state;
     for segment in &segments {
         let output = vm.execute_preflight(
             &mut preflight_interpreter,

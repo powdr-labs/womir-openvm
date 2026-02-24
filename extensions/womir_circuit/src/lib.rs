@@ -117,7 +117,7 @@ impl WomirConfig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct WomirCpuBuilder;
 
 impl<E, SC> VmBuilder<E> for WomirCpuBuilder

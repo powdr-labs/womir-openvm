@@ -6185,6 +6185,7 @@ dependencies = [
  "openvm-circuit-primitives",
  "openvm-circuit-primitives-derive",
  "openvm-instructions",
+ "openvm-native-circuit",
  "openvm-rv32im-transpiler",
  "openvm-sdk",
  "openvm-stark-backend",
