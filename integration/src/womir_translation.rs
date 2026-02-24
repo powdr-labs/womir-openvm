@@ -500,25 +500,11 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
         inputs: &[WasmOpInput],
         outputs: Vec<Range<u32>>,
     ) -> Vec<Directive<F>> {
+        assert!(
+            outputs.is_empty(),
+            "imported functions should not need outputs"
+        );
         match (module, function) {
-            ("env", "read_u32") => {
-                // hint_storew writes to memory AS, so we use MEM[0] as scratch space.
-                // Save MEM[0] first, do the hint reads, then restore it.
-                let output = outputs[0].start as usize;
-                let zero_ptr =
-                    c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                let save_mem0 =
-                    c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                vec![
-                    Directive::Instruction(ib::const_32_imm(zero_ptr, 0, 0)),
-                    Directive::Instruction(ib::loadw(save_mem0, zero_ptr, 0)), // save MEM[0]
-                    Directive::Instruction(ib::prepare_read()),
-                    Directive::Instruction(ib::hint_storew(zero_ptr)), // skip length -> MEM[0]
-                    Directive::Instruction(ib::hint_storew(zero_ptr)), // write data -> MEM[0]
-                    Directive::Instruction(ib::loadw(output, zero_ptr, 0)), // load result into dest
-                    Directive::Instruction(ib::storew(save_mem0, zero_ptr, 0)), // restore MEM[0]
-                ]
-            }
             ("env", "__debug_print") => {
                 let mem_start = c
                     .module()
