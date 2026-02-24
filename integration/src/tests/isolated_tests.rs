@@ -2249,7 +2249,7 @@ mod tests {
     fn test_mul_large_numbers() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // 65537 * 65521 = 4294049777 (wrapping u32)
+        // 65537 * 65521 = 4294049777
         let spec = TestSpec {
             program: vec![wom::mul(2, 0, 1)],
             start_fp: 10,
