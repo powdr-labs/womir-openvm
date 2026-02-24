@@ -21,7 +21,7 @@ use openvm_sdk::StdIn;
 use womir_circuit::{WomirConfig, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory};
 
 use super::helpers;
-use crate::{instruction_builder as wom, proving::mock_prove};
+use crate::{instruction_builder::*, proving::mock_prove};
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -218,7 +218,7 @@ pub fn test_prove(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
 
 fn test_spec(mut spec: TestSpec) {
     // Append halt instruction:
-    spec.program.push(wom::halt());
+    spec.program.push(halt());
 
     // Test all stages and collect errors
     let mut is_error = false;
@@ -309,7 +309,7 @@ mod tests {
         setup_tracing_with_log_level(Level::WARN);
 
         let spec = TestSpec {
-            program: vec![wom::add_imm(1, 0, 100_i16)],
+            program: vec![add_imm(1, 0, 100_i16)],
             start_fp: 124,
             expected_registers: vec![(125, 100)],
             ..Default::default()
@@ -325,7 +325,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] + reg[fp+1]
         // 30 + 12 = 42
         let spec = TestSpec {
-            program: vec![wom::add(2, 0, 1)],
+            program: vec![add(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 30), (11, 12)],
             expected_registers: vec![(12, 42)],
@@ -342,7 +342,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] + reg[fp+1]
         // 0xFF + 1 = 0x100 (carry into second byte)
         let spec = TestSpec {
-            program: vec![wom::add(2, 0, 1)],
+            program: vec![add(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0xFF), (11, 1)],
             expected_registers: vec![(12, 0x100)],
@@ -359,7 +359,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] + reg[fp+1]
         // 0xFFFFFFFF + 1 = 0 (wrapping overflow)
         let spec = TestSpec {
-            program: vec![wom::add(2, 0, 1)],
+            program: vec![add(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0xFFFFFFFF), (11, 1)],
             expected_registers: vec![(12, 0)],
@@ -376,7 +376,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] - reg[fp+1]
         // 100 - 42 = 58
         let spec = TestSpec {
-            program: vec![wom::sub(2, 0, 1)],
+            program: vec![sub(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 100), (11, 42)],
             expected_registers: vec![(12, 58)],
@@ -393,7 +393,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] - reg[fp+1]
         // 10 - 20 = -10 (wraps to 0xFFFFFFF6)
         let spec = TestSpec {
-            program: vec![wom::sub(2, 0, 1)],
+            program: vec![sub(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 10), (11, 20)],
             expected_registers: vec![(12, 0xFFFFFFF6)], // -10 as u32
@@ -410,7 +410,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] - reg[fp+1]
         // 0 - 1 = 0xFFFFFFFF (wrapping underflow)
         let spec = TestSpec {
-            program: vec![wom::sub(2, 0, 1)],
+            program: vec![sub(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0), (11, 1)],
             expected_registers: vec![(12, 0xFFFFFFFF)],
@@ -427,7 +427,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] ^ reg[fp+1]
         // 0b1010 ^ 0b1100 = 0b0110
         let spec = TestSpec {
-            program: vec![wom::xor(2, 0, 1)],
+            program: vec![xor(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0b1010), (11, 0b1100)],
             expected_registers: vec![(12, 0b0110)],
@@ -444,7 +444,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] | reg[fp+1]
         // 0b1010 | 0b1100 = 0b1110
         let spec = TestSpec {
-            program: vec![wom::or(2, 0, 1)],
+            program: vec![or(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0b1010), (11, 0b1100)],
             expected_registers: vec![(12, 0b1110)],
@@ -461,7 +461,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] & reg[fp+1]
         // 0b1010 & 0b1100 = 0b1000
         let spec = TestSpec {
-            program: vec![wom::and(2, 0, 1)],
+            program: vec![and(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0b1010), (11, 0b1100)],
             expected_registers: vec![(12, 0b1000)],
@@ -478,7 +478,7 @@ mod tests {
         // reg[fp+1] = reg[fp+0] & 0xFF
         // 0x1234 & 0xFF = 0x34
         let spec = TestSpec {
-            program: vec![wom::and_imm(1, 0, 0xFF_i16)],
+            program: vec![and_imm(1, 0, 0xFF_i16)],
             start_fp: 10,
             start_registers: vec![(10, 0x1234)],
             expected_registers: vec![(11, 0x34)],
@@ -497,7 +497,7 @@ mod tests {
         // reg[fp+1] = MEM[reg[fp+0] + 0]
         // Load 0xDEADBEEF from address 100
         let spec = TestSpec {
-            program: vec![wom::loadw(1, 0, 0)],
+            program: vec![loadw(1, 0, 0)],
             start_fp: 10,
             start_registers: vec![(10, 100)], // base address = 100
             start_ram: vec![(100, 0xDEADBEEF)],
@@ -515,7 +515,7 @@ mod tests {
         // reg[fp+1] = MEM[reg[fp+0] + 8]
         // Load from address 100 + 8 = 108
         let spec = TestSpec {
-            program: vec![wom::loadw(1, 0, 8)],
+            program: vec![loadw(1, 0, 8)],
             start_fp: 10,
             start_registers: vec![(10, 100)],
             start_ram: vec![(108, 0x12345678)],
@@ -533,7 +533,7 @@ mod tests {
         // MEM[reg[fp+1] + 0] = reg[fp+0]
         // Store 0xCAFEBABE at address 200
         let spec = TestSpec {
-            program: vec![wom::storew(0, 1, 0)],
+            program: vec![storew(0, 1, 0)],
             start_fp: 10,
             start_registers: vec![(10, 0xCAFEBABE), (11, 200)],
             expected_ram: vec![(200, 0xCAFEBABE)],
@@ -550,7 +550,7 @@ mod tests {
         // MEM[reg[fp+1] + 4] = reg[fp+0]
         // Store at address 200 + 4 = 204
         let spec = TestSpec {
-            program: vec![wom::storew(0, 1, 4)],
+            program: vec![storew(0, 1, 4)],
             start_fp: 10,
             start_registers: vec![(10, 0x11223344), (11, 200)],
             expected_ram: vec![(204, 0x11223344)],
@@ -567,7 +567,7 @@ mod tests {
         // reg[fp+1] = MEM[reg[fp+0] + 0] (zero-extended byte)
         // Load byte 0xAB, should remain 0x000000AB
         let spec = TestSpec {
-            program: vec![wom::loadbu(1, 0, 0)],
+            program: vec![loadbu(1, 0, 0)],
             start_fp: 10,
             start_registers: vec![(10, 100)],
             start_ram: vec![(100, 0xFFFFFFAB)], // Only lowest byte matters
@@ -585,7 +585,7 @@ mod tests {
         // reg[fp+1] = MEM[reg[fp+0] + 0] (zero-extended halfword)
         // Load halfword 0xABCD, should remain 0x0000ABCD
         let spec = TestSpec {
-            program: vec![wom::loadhu(1, 0, 0)],
+            program: vec![loadhu(1, 0, 0)],
             start_fp: 10,
             start_registers: vec![(10, 100)],
             start_ram: vec![(100, 0xFFFFABCD)], // Only lowest 2 bytes matter
@@ -603,7 +603,7 @@ mod tests {
         // MEM[reg[fp+1] + 0] = reg[fp+0] (lowest byte only)
         // Store byte 0x42 at address 200
         let spec = TestSpec {
-            program: vec![wom::storeb(0, 1, 0)],
+            program: vec![storeb(0, 1, 0)],
             start_fp: 10,
             start_registers: vec![(10, 0x12345642), (11, 200)],
             start_ram: vec![(200, 0xFFFFFFFF)], // Prefill with ones
@@ -621,7 +621,7 @@ mod tests {
         // MEM[reg[fp+1] + 0] = reg[fp+0] (lowest halfword only)
         // Store halfword 0xBEEF at address 200
         let spec = TestSpec {
-            program: vec![wom::storeh(0, 1, 0)],
+            program: vec![storeh(0, 1, 0)],
             start_fp: 10,
             start_registers: vec![(10, 0x1234BEEF), (11, 200)],
             start_ram: vec![(200, 0xFFFFFFFF)], // Prefill with ones
@@ -639,7 +639,7 @@ mod tests {
         // reg[fp+1] = MEM[reg[fp+0] + 0] (sign-extended byte)
         // Load byte 0x7F (positive), should remain 0x0000007F
         let spec = TestSpec {
-            program: vec![wom::loadb(1, 0, 0)],
+            program: vec![loadb(1, 0, 0)],
             start_fp: 10,
             start_registers: vec![(10, 100)],
             start_ram: vec![(100, 0x0000007F)],
@@ -657,7 +657,7 @@ mod tests {
         // reg[fp+1] = MEM[reg[fp+0] + 0] (sign-extended byte)
         // Load byte 0x80 (negative), should become 0xFFFFFF80
         let spec = TestSpec {
-            program: vec![wom::loadb(1, 0, 0)],
+            program: vec![loadb(1, 0, 0)],
             start_fp: 10,
             start_registers: vec![(10, 100)],
             start_ram: vec![(100, 0x00000080)],
@@ -675,7 +675,7 @@ mod tests {
         // reg[fp+1] = MEM[reg[fp+0] + 0] (sign-extended halfword)
         // Load halfword 0x7FFF (positive), should remain 0x00007FFF
         let spec = TestSpec {
-            program: vec![wom::loadh(1, 0, 0)],
+            program: vec![loadh(1, 0, 0)],
             start_fp: 10,
             start_registers: vec![(10, 100)],
             start_ram: vec![(100, 0x00007FFF)],
@@ -693,7 +693,7 @@ mod tests {
         // reg[fp+1] = MEM[reg[fp+0] + 0] (sign-extended halfword)
         // Load halfword 0x8000 (negative), should become 0xFFFF8000
         let spec = TestSpec {
-            program: vec![wom::loadh(1, 0, 0)],
+            program: vec![loadh(1, 0, 0)],
             start_fp: 10,
             start_registers: vec![(10, 100)],
             start_ram: vec![(100, 0x00008000)],
@@ -711,11 +711,11 @@ mod tests {
         // Store byte at two offsets, load them back and add
         let spec = TestSpec {
             program: vec![
-                wom::storeb(0, 1, 0), // MEM[500+0] = lowest byte of reg[0] = 0x34
-                wom::storeb(0, 1, 1), // MEM[500+1] = lowest byte of reg[0] = 0x34
-                wom::loadbu(2, 1, 0), // reg[2] = 0x34
-                wom::loadbu(3, 1, 1), // reg[3] = 0x34
-                wom::add(4, 2, 3),    // reg[4] = 0x34 + 0x34 = 104
+                storeb(0, 1, 0), // MEM[500+0] = lowest byte of reg[0] = 0x34
+                storeb(0, 1, 1), // MEM[500+1] = lowest byte of reg[0] = 0x34
+                loadbu(2, 1, 0), // reg[2] = 0x34
+                loadbu(3, 1, 1), // reg[3] = 0x34
+                add(4, 2, 3),    // reg[4] = 0x34 + 0x34 = 104
             ],
             start_fp: 10,
             start_registers: vec![(10, 0x1234), (11, 500)],
@@ -733,11 +733,11 @@ mod tests {
         // Store halfwords at two offsets, load them back and add
         let spec = TestSpec {
             program: vec![
-                wom::storeh(0, 2, 0), // MEM[600+0] = 0x1111
-                wom::storeh(1, 2, 2), // MEM[600+2] = 0x2222
-                wom::loadhu(3, 2, 0), // reg[3] = 0x1111
-                wom::loadhu(4, 2, 2), // reg[4] = 0x2222
-                wom::add(5, 3, 4),    // reg[5] = 0x1111 + 0x2222 = 13107
+                storeh(0, 2, 0), // MEM[600+0] = 0x1111
+                storeh(1, 2, 2), // MEM[600+2] = 0x2222
+                loadhu(3, 2, 0), // reg[3] = 0x1111
+                loadhu(4, 2, 2), // reg[4] = 0x2222
+                add(5, 3, 4),    // reg[5] = 0x1111 + 0x2222 = 13107
             ],
             start_fp: 10,
             start_registers: vec![(10, 0x1111), (11, 0x2222), (12, 600)],
@@ -756,7 +756,7 @@ mod tests {
         // reg[fp+2] = (reg[fp+0] < reg[fp+1]) unsigned
         // 10 < 20 = 1
         let spec = TestSpec {
-            program: vec![wom::lt_u(2, 0, 1)],
+            program: vec![lt_u(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 10), (11, 20)],
             expected_registers: vec![(12, 1)],
@@ -773,7 +773,7 @@ mod tests {
         // reg[fp+2] = (reg[fp+0] < reg[fp+1]) unsigned
         // 20 < 10 = 0
         let spec = TestSpec {
-            program: vec![wom::lt_u(2, 0, 1)],
+            program: vec![lt_u(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 20), (11, 10)],
             expected_registers: vec![(12, 0)],
@@ -790,7 +790,7 @@ mod tests {
         // reg[fp+2] = (reg[fp+0] < reg[fp+1]) unsigned
         // 42 < 42 = 0
         let spec = TestSpec {
-            program: vec![wom::lt_u(2, 0, 1)],
+            program: vec![lt_u(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 42)],
             expected_registers: vec![(12, 0)],
@@ -807,7 +807,7 @@ mod tests {
         // reg[fp+2] = (reg[fp+0] < reg[fp+1]) signed
         // -1 (0xFFFFFFFF) < 1 = 1 (signed)
         let spec = TestSpec {
-            program: vec![wom::lt_s(2, 0, 1)],
+            program: vec![lt_s(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0xFFFFFFFF), (11, 1)],
             expected_registers: vec![(12, 1)],
@@ -824,7 +824,7 @@ mod tests {
         // reg[fp+1] = (reg[fp+0] < 100) unsigned
         // 50 < 100 = 1
         let spec = TestSpec {
-            program: vec![wom::lt_u_imm(1, 0, 100_i16)],
+            program: vec![lt_u_imm(1, 0, 100_i16)],
             start_fp: 10,
             start_registers: vec![(10, 50)],
             expected_registers: vec![(11, 1)],
@@ -839,7 +839,7 @@ mod tests {
         setup_tracing_with_log_level(Level::WARN);
 
         let spec = TestSpec {
-            program: vec![wom::gt_u(2, 0, 1)],
+            program: vec![gt_u(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 20), (11, 10)],
             expected_registers: vec![(12, 1)],
@@ -854,7 +854,7 @@ mod tests {
         setup_tracing_with_log_level(Level::WARN);
 
         let spec = TestSpec {
-            program: vec![wom::gt_s(2, 0, 1)],
+            program: vec![gt_s(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 1), (11, 0xFFFF_FFFF)],
             expected_registers: vec![(12, 1)],
@@ -870,7 +870,7 @@ mod tests {
 
         // 50 < 100 = 1 (signed, both positive)
         let spec = TestSpec {
-            program: vec![wom::lt_s(2, 0, 1)],
+            program: vec![lt_s(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 50), (11, 100)],
             expected_registers: vec![(12, 1)],
@@ -885,7 +885,7 @@ mod tests {
 
         // -2 < -4 = 0 (signed, -2 is greater than -4)
         let spec = TestSpec {
-            program: vec![wom::lt_s(2, 0, 1)],
+            program: vec![lt_s(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-2_i32) as u32), (11, (-4_i32) as u32)],
             expected_registers: vec![(12, 0)],
@@ -900,7 +900,7 @@ mod tests {
 
         // 100 > 200 = 0 (unsigned)
         let spec = TestSpec {
-            program: vec![wom::gt_u(2, 0, 1)],
+            program: vec![gt_u(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 100), (11, 200)],
             expected_registers: vec![(12, 0)],
@@ -915,7 +915,7 @@ mod tests {
 
         // 150 > 150 = 0 (unsigned)
         let spec = TestSpec {
-            program: vec![wom::gt_u(2, 0, 1)],
+            program: vec![gt_u(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 150), (11, 150)],
             expected_registers: vec![(12, 0)],
@@ -930,7 +930,7 @@ mod tests {
 
         // 100 > 50 = 1 (signed)
         let spec = TestSpec {
-            program: vec![wom::gt_s(2, 0, 1)],
+            program: vec![gt_s(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 100), (11, 50)],
             expected_registers: vec![(12, 1)],
@@ -945,7 +945,7 @@ mod tests {
 
         // -2 > -4 = 1 (signed)
         let spec = TestSpec {
-            program: vec![wom::gt_s(2, 0, 1)],
+            program: vec![gt_s(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-2_i32) as u32), (11, (-4_i32) as u32)],
             expected_registers: vec![(12, 1)],
@@ -961,8 +961,8 @@ mod tests {
         // (10 < 20) = 1, (20 < 30) = 1
         let spec = TestSpec {
             program: vec![
-                wom::lt_u(3, 0, 1), // reg[3] = (10 < 20) = 1
-                wom::lt_u(4, 1, 2), // reg[4] = (20 < 30) = 1
+                lt_u(3, 0, 1), // reg[3] = (10 < 20) = 1
+                lt_u(4, 1, 2), // reg[4] = (20 < 30) = 1
             ],
             start_fp: 10,
             start_registers: vec![(10, 10), (11, 20), (12, 30)],
@@ -979,8 +979,8 @@ mod tests {
         // max u32 > 0 (unsigned), max positive i32 > 0 (signed)
         let spec = TestSpec {
             program: vec![
-                wom::gt_u(2, 0, 1), // reg[2] = (0xFFFFFFFF > 0) unsigned = 1
-                wom::gt_s(5, 3, 4), // reg[5] = (0x7FFFFFFF > 0) signed = 1
+                gt_u(2, 0, 1), // reg[2] = (0xFFFFFFFF > 0) unsigned = 1
+                gt_s(5, 3, 4), // reg[5] = (0x7FFFFFFF > 0) signed = 1
             ],
             start_fp: 10,
             start_registers: vec![
@@ -1002,9 +1002,9 @@ mod tests {
         // gt_u(a, b) == lt_u(b, a): xor should be 0
         let spec = TestSpec {
             program: vec![
-                wom::gt_u(2, 0, 1), // reg[2] = (25 > 10) = 1
-                wom::lt_u(3, 1, 0), // reg[3] = (10 < 25) = 1
-                wom::xor(4, 2, 3),  // reg[4] = 0
+                gt_u(2, 0, 1), // reg[2] = (25 > 10) = 1
+                lt_u(3, 1, 0), // reg[3] = (10 < 25) = 1
+                xor(4, 2, 3),  // reg[4] = 0
             ],
             start_fp: 10,
             start_registers: vec![(10, 25), (11, 10)],
@@ -1024,9 +1024,9 @@ mod tests {
         // difference = 1
         let spec = TestSpec {
             program: vec![
-                wom::gt_u(2, 0, 1), // reg[2] = (0xFFFFFFFE > 2) unsigned = 1
-                wom::gt_s(3, 0, 1), // reg[3] = (-2 > 2) signed = 0
-                wom::sub(4, 2, 3),  // reg[4] = 1 - 0 = 1
+                gt_u(2, 0, 1), // reg[2] = (0xFFFFFFFE > 2) unsigned = 1
+                gt_s(3, 0, 1), // reg[3] = (-2 > 2) signed = 0
+                sub(4, 2, 3),  // reg[4] = 1 - 0 = 1
             ],
             start_fp: 10,
             start_registers: vec![(10, 0xFFFFFFFE), (11, 2)],
@@ -1043,7 +1043,7 @@ mod tests {
 
         // 0x0000_0001_0000_0000 < 0x0000_0002_0000_0000 = 1 (unsigned)
         let spec = TestSpec {
-            program: vec![wom::lt_u_64(4, 0, 2)],
+            program: vec![lt_u_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1064,7 +1064,7 @@ mod tests {
 
         // 0x0000_0002_0000_0000 < 0x0000_0001_0000_0000 = 0 (unsigned)
         let spec = TestSpec {
-            program: vec![wom::lt_u_64(4, 0, 2)],
+            program: vec![lt_u_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1085,7 +1085,7 @@ mod tests {
 
         // -1 (0xFFFF_FFFF_FFFF_FFFF) < 1 (0x0000_0000_0000_0001) = 1 (signed)
         let spec = TestSpec {
-            program: vec![wom::lt_s_64(4, 0, 2)],
+            program: vec![lt_s_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_FFFF),
@@ -1105,7 +1105,7 @@ mod tests {
         setup_tracing_with_log_level(Level::WARN);
 
         let spec = TestSpec {
-            program: vec![wom::gt_u_64(4, 0, 2)],
+            program: vec![gt_u_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![(124, 0), (125, 2), (126, 0), (127, 1)],
             expected_registers: vec![(128, 1), (129, 0)],
@@ -1120,7 +1120,7 @@ mod tests {
         setup_tracing_with_log_level(Level::WARN);
 
         let spec = TestSpec {
-            program: vec![wom::gt_s_64(4, 0, 2)],
+            program: vec![gt_s_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![(124, 1), (125, 0), (126, 0xFFFF_FFFF), (127, 0xFFFF_FFFF)],
             expected_registers: vec![(128, 1), (129, 0)],
@@ -1145,7 +1145,7 @@ mod tests {
         //
         // 0x0000_0001_0000_0000 < 0x0000_0002_0000_0000 = 1 (unsigned)
         let spec = TestSpec {
-            program: vec![wom::lt_u_64(4, 0, 2)],
+            program: vec![lt_u_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1171,7 +1171,7 @@ mod tests {
         //
         // -1 (0xFFFF_FFFF_FFFF_FFFF) < 1 (0x0000_0000_0000_0001) = 1 (signed)
         let spec = TestSpec {
-            program: vec![wom::lt_s_64(4, 0, 2)],
+            program: vec![lt_s_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_FFFF),
@@ -1196,7 +1196,7 @@ mod tests {
         //
         // 0x0000_0002_0000_0000 < 0x0000_0001_0000_0000 = 0 (unsigned)
         let spec = TestSpec {
-            program: vec![wom::lt_u_64(4, 0, 2)],
+            program: vec![lt_u_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1222,7 +1222,7 @@ mod tests {
         // reg[fp+2] = (reg[fp+0] == reg[fp+1])
         // 42 == 42 = 1
         let spec = TestSpec {
-            program: vec![wom::eq(2, 0, 1)],
+            program: vec![eq(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 42)],
             expected_registers: vec![(12, 1)],
@@ -1239,7 +1239,7 @@ mod tests {
         // reg[fp+2] = (reg[fp+0] == reg[fp+1])
         // 10 == 20 = 0
         let spec = TestSpec {
-            program: vec![wom::eq(2, 0, 1)],
+            program: vec![eq(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 10), (11, 20)],
             expected_registers: vec![(12, 0)],
@@ -1256,7 +1256,7 @@ mod tests {
         // reg[fp+2] = (reg[fp+0] != reg[fp+1])
         // 10 != 20 = 1
         let spec = TestSpec {
-            program: vec![wom::neq(2, 0, 1)],
+            program: vec![neq(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 10), (11, 20)],
             expected_registers: vec![(12, 1)],
@@ -1273,7 +1273,7 @@ mod tests {
         // reg[fp+2] = (reg[fp+0] != reg[fp+1])
         // 42 != 42 = 0
         let spec = TestSpec {
-            program: vec![wom::neq(2, 0, 1)],
+            program: vec![neq(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 42)],
             expected_registers: vec![(12, 0)],
@@ -1290,7 +1290,7 @@ mod tests {
         // reg[fp+1] = (reg[fp+0] == 100)
         // 100 == 100 = 1
         let spec = TestSpec {
-            program: vec![wom::eq_imm(1, 0, 100_i16)],
+            program: vec![eq_imm(1, 0, 100_i16)],
             start_fp: 10,
             start_registers: vec![(10, 100)],
             expected_registers: vec![(11, 1)],
@@ -1307,7 +1307,7 @@ mod tests {
         // reg[fp+1] = (reg[fp+0] != 100)
         // 50 != 100 = 1
         let spec = TestSpec {
-            program: vec![wom::neq_imm(1, 0, 100_i16)],
+            program: vec![neq_imm(1, 0, 100_i16)],
             start_fp: 10,
             start_registers: vec![(10, 50)],
             expected_registers: vec![(11, 1)],
@@ -1325,7 +1325,7 @@ mod tests {
 
         // 0x0000_0001_0000_0000 == 0x0000_0001_0000_0000 = 1
         let spec = TestSpec {
-            program: vec![wom::eq_64(4, 0, 2)],
+            program: vec![eq_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1346,7 +1346,7 @@ mod tests {
 
         // 0x0000_0001_0000_0000 == 0x0000_0002_0000_0000 = 0
         let spec = TestSpec {
-            program: vec![wom::eq_64(4, 0, 2)],
+            program: vec![eq_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1367,7 +1367,7 @@ mod tests {
 
         // 0x0000_0001_0000_0000 != 0x0000_0002_0000_0000 = 1
         let spec = TestSpec {
-            program: vec![wom::neq_64(4, 0, 2)],
+            program: vec![neq_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1388,7 +1388,7 @@ mod tests {
 
         // 0x0000_0001_0000_0000 != 0x0000_0001_0000_0000 = 0
         let spec = TestSpec {
-            program: vec![wom::neq_64(4, 0, 2)],
+            program: vec![neq_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1417,7 +1417,7 @@ mod tests {
         //
         // 0x0000_0001_0000_0000 == 0x0000_0001_0000_0000 = 1
         let spec = TestSpec {
-            program: vec![wom::eq_64(4, 0, 2)],
+            program: vec![eq_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1442,7 +1442,7 @@ mod tests {
         //
         // 0x0000_0001_0000_0000 != 0x0000_0002_0000_0000 = 1
         let spec = TestSpec {
-            program: vec![wom::neq_64(4, 0, 2)],
+            program: vec![neq_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1467,7 +1467,7 @@ mod tests {
         //
         // 0x0000_0001_0000_0000 == 0x0000_0002_0000_0000 = 0
         let spec = TestSpec {
-            program: vec![wom::eq_64(4, 0, 2)],
+            program: vec![eq_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1491,7 +1491,7 @@ mod tests {
         // reg[fp+2] = (reg[fp+0] == 42)  (64-bit comparison, imm sign-extended)
         // 42 == 42 → 1
         let spec = TestSpec {
-            program: vec![wom::eq_imm_64(2, 0, 42_i16)],
+            program: vec![eq_imm_64(2, 0, 42_i16)],
             start_fp: 124,
             start_registers: vec![
                 (124, 42),
@@ -1511,7 +1511,7 @@ mod tests {
         // reg[fp+2] = (reg[fp+0] != 42)  (64-bit comparison, imm sign-extended)
         // 99 != 42 → 1
         let spec = TestSpec {
-            program: vec![wom::neq_imm_64(2, 0, 42_i16)],
+            program: vec![neq_imm_64(2, 0, 42_i16)],
             start_fp: 124,
             start_registers: vec![
                 (124, 99),
@@ -1533,7 +1533,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] << reg[fp+1]
         // 0x01 << 4 = 0x10
         let spec = TestSpec {
-            program: vec![wom::shl(2, 0, 1)],
+            program: vec![shl(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0x01), (11, 4)],
             expected_registers: vec![(12, 0x10)],
@@ -1550,7 +1550,7 @@ mod tests {
         // reg[fp+1] = reg[fp+0] << 8
         // 0xFF << 8 = 0xFF00
         let spec = TestSpec {
-            program: vec![wom::shl_imm(1, 0, 8_i16)],
+            program: vec![shl_imm(1, 0, 8_i16)],
             start_fp: 10,
             start_registers: vec![(10, 0xFF)],
             expected_registers: vec![(11, 0xFF00)],
@@ -1567,7 +1567,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] >> reg[fp+1] (logical)
         // 0x80000000 >> 4 = 0x08000000
         let spec = TestSpec {
-            program: vec![wom::shr_u(2, 0, 1)],
+            program: vec![shr_u(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0x80000000), (11, 4)],
             expected_registers: vec![(12, 0x08000000)],
@@ -1582,7 +1582,7 @@ mod tests {
         setup_tracing_with_log_level(Level::WARN);
 
         let spec = TestSpec {
-            program: vec![wom::shr_u_imm(1, 0, 4_i16)],
+            program: vec![shr_u_imm(1, 0, 4_i16)],
             start_fp: 10,
             start_registers: vec![(10, 0x8000_0000)],
             expected_registers: vec![(11, 0x0800_0000)],
@@ -1599,7 +1599,7 @@ mod tests {
         // reg[fp+1] = reg[fp+0] >> 4 (arithmetic)
         // 0x80000000 >> 4 = 0xF8000000 (sign-extended)
         let spec = TestSpec {
-            program: vec![wom::shr_s_imm(1, 0, 4_i16)],
+            program: vec![shr_s_imm(1, 0, 4_i16)],
             start_fp: 10,
             start_registers: vec![(10, 0x80000000)],
             expected_registers: vec![(11, 0xF8000000)],
@@ -1616,7 +1616,7 @@ mod tests {
         // reg[fp+1] = reg[fp+0] >> 8 (arithmetic, positive value)
         // 0x7FFF0000 >> 8 = 0x007FFF00 (no sign extension since MSB is 0)
         let spec = TestSpec {
-            program: vec![wom::shr_s_imm(1, 0, 8_i16)],
+            program: vec![shr_s_imm(1, 0, 8_i16)],
             start_fp: 10,
             start_registers: vec![(10, 0x7FFF0000)],
             expected_registers: vec![(11, 0x007FFF00)],
@@ -1633,7 +1633,7 @@ mod tests {
         // Shift by 31 bits
         // 0x01 << 31 = 0x80000000
         let spec = TestSpec {
-            program: vec![wom::shl(2, 0, 1)],
+            program: vec![shl(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0x01), (11, 31)],
             expected_registers: vec![(12, 0x80000000)],
@@ -1651,7 +1651,7 @@ mod tests {
 
         // 0x0000_0001_0000_0000 << 4 = 0x0000_0010_0000_0000
         let spec = TestSpec {
-            program: vec![wom::shl_64(4, 0, 2)],
+            program: vec![shl_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1671,7 +1671,7 @@ mod tests {
         setup_tracing_with_log_level(Level::WARN);
 
         let spec = TestSpec {
-            program: vec![wom::shl_imm_64(2, 0, 8_i16)],
+            program: vec![shl_imm_64(2, 0, 8_i16)],
             start_fp: 124,
             start_registers: vec![(124, 0), (125, 1)],
             expected_registers: vec![(126, 0), (127, 0x0000_0100)],
@@ -1687,7 +1687,7 @@ mod tests {
 
         // 0x8000_0000_0000_0000 >> 4 = 0x0800_0000_0000_0000
         let spec = TestSpec {
-            program: vec![wom::shr_u_64(4, 0, 2)],
+            program: vec![shr_u_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1707,7 +1707,7 @@ mod tests {
         setup_tracing_with_log_level(Level::WARN);
 
         let spec = TestSpec {
-            program: vec![wom::shr_u_imm_64(2, 0, 8_i16)],
+            program: vec![shr_u_imm_64(2, 0, 8_i16)],
             start_fp: 124,
             start_registers: vec![(124, 0), (125, 0x8000_0000)],
             expected_registers: vec![(126, 0), (127, 0x0080_0000)],
@@ -1723,7 +1723,7 @@ mod tests {
 
         // 0x8000_0000_0000_0000 >> 4 (arithmetic) = 0xF800_0000_0000_0000
         let spec = TestSpec {
-            program: vec![wom::shr_s_imm_64(2, 0, 4_i16)],
+            program: vec![shr_s_imm_64(2, 0, 4_i16)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1743,7 +1743,7 @@ mod tests {
         // 0x7FFF_0000_0000_0000 >> 8 (arithmetic) = 0x007F_FF00_0000_0000
         // No sign extension since MSB is 0
         let spec = TestSpec {
-            program: vec![wom::shr_s_imm_64(2, 0, 8_i16)],
+            program: vec![shr_s_imm_64(2, 0, 8_i16)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -1764,7 +1764,7 @@ mod tests {
 
         // 0x0000_ffff_0000_0001 + 0x80 = 0x0000_ffff_0000_0081
         let spec = TestSpec {
-            program: vec![wom::add_imm_64(2, 0, 0x80_i16)],
+            program: vec![add_imm_64(2, 0, 0x80_i16)],
             start_fp: 124,
             start_registers: vec![(124, 1), (125, 0xffff)],
             expected_registers: vec![(126, 0x81), (127, 0xffff)],
@@ -1781,7 +1781,7 @@ mod tests {
         // 0x0000_0001_FFFF_FF00 + 0x0100 = 0x0000_0002_0000_0000
         // Low limb overflows, carry propagates to high limb
         let spec = TestSpec {
-            program: vec![wom::add_imm_64(2, 0, 0x0100_i16)],
+            program: vec![add_imm_64(2, 0, 0x0100_i16)],
             start_fp: 124,
             start_registers: vec![(124, 0xFFFF_FF00), (125, 0x0000_0001)],
             expected_registers: vec![(126, 0x0000_0000), (127, 0x0000_0002)],
@@ -1797,7 +1797,7 @@ mod tests {
 
         // 0xFFFF_FFFF_FFFF_FFFF + 1 = 0 (wraps around)
         let spec = TestSpec {
-            program: vec![wom::add_imm_64(2, 0, 1_i16)],
+            program: vec![add_imm_64(2, 0, 1_i16)],
             start_fp: 124,
             start_registers: vec![(124, 0xFFFF_FFFF), (125, 0xFFFF_FFFF)],
             expected_registers: vec![(126, 0), (127, 0)],
@@ -1813,7 +1813,7 @@ mod tests {
 
         // 0x0000_0001_0000_0003 + 0x0000_0002_0000_0004 = 0x0000_0003_0000_0007
         let spec = TestSpec {
-            program: vec![wom::add_64(4, 0, 2)],
+            program: vec![add_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 3),
@@ -1834,7 +1834,7 @@ mod tests {
 
         // 0x0000_0001_8000_0000 + 0x0000_0001_8000_0000 = 0x0000_0003_0000_0000
         let spec = TestSpec {
-            program: vec![wom::add_64(4, 0, 2)],
+            program: vec![add_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0x8000_0000),
@@ -1855,7 +1855,7 @@ mod tests {
 
         // 0xFFFF_FFFF_FFFF_FFFE + 0x0000_0000_0000_0003 = 0x0000_0000_0000_0001
         let spec = TestSpec {
-            program: vec![wom::add_64(4, 0, 2)],
+            program: vec![add_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_FFFE),
@@ -1878,7 +1878,7 @@ mod tests {
 
         // 0x0000_0003_0000_0007 - 0x0000_0001_0000_0003 = 0x0000_0002_0000_0004
         let spec = TestSpec {
-            program: vec![wom::sub_64(4, 0, 2)],
+            program: vec![sub_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 7),
@@ -1900,7 +1900,7 @@ mod tests {
         // 0x0000_0003_0000_0000 - 0x0000_0001_0000_0001 = 0x0000_0001_FFFF_FFFF
         // Low limb borrows from high limb
         let spec = TestSpec {
-            program: vec![wom::sub_64(4, 0, 2)],
+            program: vec![sub_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0x0000_0000),
@@ -1921,7 +1921,7 @@ mod tests {
 
         // 0x0000_0000_0000_0001 - 0x0000_0000_0000_0003 = 0xFFFF_FFFF_FFFF_FFFE (wraps)
         let spec = TestSpec {
-            program: vec![wom::sub_64(4, 0, 2)],
+            program: vec![sub_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 1),
@@ -1943,7 +1943,7 @@ mod tests {
         // 0x0000_0002_0000_0000 - 1 = 0x0000_0001_FFFF_FFFF
         // Low borrow propagates to high limb
         let spec = TestSpec {
-            program: vec![wom::sub_imm_64(2, 0, 1_i16)],
+            program: vec![sub_imm_64(2, 0, 1_i16)],
             start_fp: 124,
             start_registers: vec![(124, 0x0000_0000), (125, 2)],
             expected_registers: vec![(126, 0xFFFF_FFFF), (127, 1)],
@@ -1961,7 +1961,7 @@ mod tests {
 
         // 0xDEAD_BEEF_CAFE_BABE ^ 0xFFFF_FFFF_0000_0000 = 0x2152_4110_CAFE_BABE
         let spec = TestSpec {
-            program: vec![wom::xor_64(4, 0, 2)],
+            program: vec![xor_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xCAFE_BABE),
@@ -1982,7 +1982,7 @@ mod tests {
 
         // 0x0000_0001_0000_00FF ^ 0xFF (sign-extended to 0x0000_0000_0000_00FF) = 0x0000_0001_0000_0000
         let spec = TestSpec {
-            program: vec![wom::xor_imm_64(2, 0, 0xFF_i16)],
+            program: vec![xor_imm_64(2, 0, 0xFF_i16)],
             start_fp: 124,
             start_registers: vec![(124, 0x0000_00FF), (125, 1)],
             expected_registers: vec![(126, 0x0000_0000), (127, 1)],
@@ -2000,7 +2000,7 @@ mod tests {
 
         // 0x00FF_00FF_00FF_00FF | 0xFF00_FF00_FF00_FF00 = 0xFFFF_FFFF_FFFF_FFFF
         let spec = TestSpec {
-            program: vec![wom::or_64(4, 0, 2)],
+            program: vec![or_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0x00FF_00FF),
@@ -2021,7 +2021,7 @@ mod tests {
 
         // 0x0000_0001_0000_0000 | 0x0F (sign-extended to 0x0000_0000_0000_000F) = 0x0000_0001_0000_000F
         let spec = TestSpec {
-            program: vec![wom::or_imm_64(2, 0, 0x0F_i16)],
+            program: vec![or_imm_64(2, 0, 0x0F_i16)],
             start_fp: 124,
             start_registers: vec![(124, 0x0000_0000), (125, 1)],
             expected_registers: vec![(126, 0x0000_000F), (127, 1)],
@@ -2039,7 +2039,7 @@ mod tests {
 
         // 0xFFFF_0000_FFFF_0000 & 0x0F0F_0F0F_0F0F_0F0F = 0x0F0F_0000_0F0F_0000
         let spec = TestSpec {
-            program: vec![wom::and_64(4, 0, 2)],
+            program: vec![and_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_0000),
@@ -2060,7 +2060,7 @@ mod tests {
 
         // 0xDEAD_BEEF_CAFE_BABE & 0xFF (sign-extended to 0x0000_0000_0000_00FF) = 0x0000_0000_0000_00BE
         let spec = TestSpec {
-            program: vec![wom::and_imm_64(2, 0, 0xFF_i16)],
+            program: vec![and_imm_64(2, 0, 0xFF_i16)],
             start_fp: 124,
             start_registers: vec![(124, 0xCAFE_BABE), (125, 0xDEAD_BEEF)],
             expected_registers: vec![(126, 0x0000_00BE), (127, 0x0000_0000)],
@@ -2079,7 +2079,7 @@ mod tests {
         // reg[fp+2] = reg[fp+0] * reg[fp+1]
         // 7 * 6 = 42
         let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
+            program: vec![mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 7), (11, 6)],
             expected_registers: vec![(12, 42)],
@@ -2096,7 +2096,7 @@ mod tests {
         // reg[fp+1] = reg[fp+0] * 10
         // 42 * 10 = 420
         let spec = TestSpec {
-            program: vec![wom::mul_imm(1, 0, 10_i16)],
+            program: vec![mul_imm(1, 0, 10_i16)],
             start_fp: 10,
             start_registers: vec![(10, 42)],
             expected_registers: vec![(11, 420)],
@@ -2112,7 +2112,7 @@ mod tests {
 
         // 0x10000 * 0x10000 = 0x1_0000_0000, wraps to 0
         let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
+            program: vec![mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0x10000), (11, 0x10000)],
             expected_registers: vec![(12, 0)],
@@ -2128,7 +2128,7 @@ mod tests {
 
         // 0x0000_0000_0000_0007 * 0x0000_0000_0000_0006 = 0x0000_0000_0000_002A
         let spec = TestSpec {
-            program: vec![wom::mul_64(4, 0, 2)],
+            program: vec![mul_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 7),
@@ -2149,7 +2149,7 @@ mod tests {
 
         // 0x0000_0001_0000_0000 * 0x0000_0000_0000_0003 = 0x0000_0003_0000_0000
         let spec = TestSpec {
-            program: vec![wom::mul_64(4, 0, 2)],
+            program: vec![mul_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -2170,7 +2170,7 @@ mod tests {
 
         // 0x0000_0001_0000_0001 * 0x0000_0001_0000_0001 = wraps to 0x0000_0002_0000_0001
         let spec = TestSpec {
-            program: vec![wom::mul_64(4, 0, 2)],
+            program: vec![mul_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 1),
@@ -2191,7 +2191,7 @@ mod tests {
 
         // 0x0000_0000_0000_000A * 3 = 0x0000_0000_0000_001E
         let spec = TestSpec {
-            program: vec![wom::mul_imm_64(2, 0, 3_i16.into())],
+            program: vec![mul_imm_64(2, 0, 3_i16.into())],
             start_fp: 124,
             start_registers: vec![(124, 0xa), (125, 0)],
             expected_registers: vec![(126, 0x1e), (127, 0)],
@@ -2207,7 +2207,7 @@ mod tests {
 
         // 12345 * 0 = 0
         let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
+            program: vec![mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 12345), (11, 0)],
             expected_registers: vec![(12, 0)],
@@ -2222,7 +2222,7 @@ mod tests {
 
         // 999 * 1 = 999
         let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
+            program: vec![mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 999), (11, 1)],
             expected_registers: vec![(12, 999)],
@@ -2237,7 +2237,7 @@ mod tests {
 
         // 65537 * 65521 = 4294049777
         let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
+            program: vec![mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 65537), (11, 65521)],
             expected_registers: vec![(12, 4294049777u32)],
@@ -2252,7 +2252,7 @@ mod tests {
 
         // 0xFFFFFFFF * 1 = 0xFFFFFFFF
         let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
+            program: vec![mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0xFFFFFFFF), (11, 1)],
             expected_registers: vec![(12, 0xFFFFFFFF)],
@@ -2267,7 +2267,7 @@ mod tests {
 
         // (-5) * 3 = -15
         let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
+            program: vec![mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-5_i32) as u32), (11, 3)],
             expected_registers: vec![(12, (-15_i32) as u32)],
@@ -2282,7 +2282,7 @@ mod tests {
 
         // 4 * (-6) = -24
         let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
+            program: vec![mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 4), (11, (-6_i32) as u32)],
             expected_registers: vec![(12, (-24_i32) as u32)],
@@ -2297,7 +2297,7 @@ mod tests {
 
         // (-7) * (-3) = 21
         let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
+            program: vec![mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-7_i32) as u32), (11, (-3_i32) as u32)],
             expected_registers: vec![(12, 21)],
@@ -2312,7 +2312,7 @@ mod tests {
 
         // 42 * (-1) = -42
         let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
+            program: vec![mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, (-1_i32) as u32)],
             expected_registers: vec![(12, (-42_i32) as u32)],
@@ -2327,7 +2327,7 @@ mod tests {
 
         // INT32_MIN * (-1) = INT32_MIN (0x80000000) due to overflow
         let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
+            program: vec![mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0x80000000), (11, (-1_i32) as u32)],
             expected_registers: vec![(12, 0x80000000)],
@@ -2343,9 +2343,9 @@ mod tests {
         // Verify a*b == b*a: (13*17) - (17*13) = 0
         let spec = TestSpec {
             program: vec![
-                wom::mul(2, 0, 1), // reg[2] = 13 * 17
-                wom::mul(3, 1, 0), // reg[3] = 17 * 13
-                wom::sub(4, 2, 3), // reg[4] = 0
+                mul(2, 0, 1), // reg[2] = 13 * 17
+                mul(3, 1, 0), // reg[3] = 17 * 13
+                sub(4, 2, 3), // reg[4] = 0
             ],
             start_fp: 10,
             start_registers: vec![(10, 13), (11, 17)],
@@ -2362,8 +2362,8 @@ mod tests {
         // 2 * 3 = 6, 6 * 5 = 30
         let spec = TestSpec {
             program: vec![
-                wom::mul(3, 0, 1), // reg[3] = 2 * 3 = 6
-                wom::mul(4, 3, 2), // reg[4] = 6 * 5 = 30
+                mul(3, 0, 1), // reg[3] = 2 * 3 = 6
+                mul(4, 3, 2), // reg[4] = 6 * 5 = 30
             ],
             start_fp: 10,
             start_registers: vec![(10, 2), (11, 3), (12, 5)],
@@ -2381,8 +2381,8 @@ mod tests {
 
         let spec = TestSpec {
             program: vec![
-                wom::jump(8),
-                wom::halt(), // Should be skipped!
+                jump(8),
+                halt(), // Should be skipped!
             ],
             expected_pc: Some(8),
             ..Default::default()
@@ -2397,8 +2397,8 @@ mod tests {
 
         let spec = TestSpec {
             program: vec![
-                wom::jump_if(2, 8),
-                wom::halt(), // Should be skipped!
+                jump_if(2, 8),
+                halt(), // Should be skipped!
             ],
             start_fp: 10,
             start_registers: vec![(12, 5)], // Should jump
@@ -2414,7 +2414,7 @@ mod tests {
         setup_tracing_with_log_level(Level::WARN);
 
         let spec = TestSpec {
-            program: vec![wom::jump_if(2, 8)],
+            program: vec![jump_if(2, 8)],
             start_fp: 10,
             start_registers: vec![(12, 0)], // Should not jump
             expected_pc: Some(4),
@@ -2430,8 +2430,8 @@ mod tests {
 
         let spec = TestSpec {
             program: vec![
-                wom::jump_if_zero(2, 8),
-                wom::halt(), // Should be skipped!
+                jump_if_zero(2, 8),
+                halt(), // Should be skipped!
             ],
             start_fp: 10,
             start_registers: vec![(12, 0)], // Should jump
@@ -2447,7 +2447,7 @@ mod tests {
         setup_tracing_with_log_level(Level::WARN);
 
         let spec = TestSpec {
-            program: vec![wom::jump_if_zero(2, 2)],
+            program: vec![jump_if_zero(2, 2)],
             start_fp: 10,
             start_registers: vec![(12, 5)], // Should not jump
             expected_pc: Some(4),
@@ -2463,8 +2463,8 @@ mod tests {
 
         let spec = TestSpec {
             program: vec![
-                wom::skip(2),
-                wom::halt(), // Should be skipped!
+                skip(2),
+                halt(), // Should be skipped!
             ],
             start_fp: 10,
             start_registers: vec![(12, 1)],
@@ -2483,7 +2483,7 @@ mod tests {
 
         // reg[fp+1] = 42
         let spec = TestSpec {
-            program: vec![wom::const_32_imm(1, 42, 0)],
+            program: vec![const_32_imm(1, 42, 0)],
             start_fp: 10,
             expected_registers: vec![(11, 42)],
             ..Default::default()
@@ -2499,7 +2499,7 @@ mod tests {
         // reg[fp+1] = 0xDEADBEEF
         // imm_lo = 0xBEEF, imm_hi = 0xDEAD
         let spec = TestSpec {
-            program: vec![wom::const_32_imm(1, 0xBEEF, 0xDEAD)],
+            program: vec![const_32_imm(1, 0xBEEF, 0xDEAD)],
             start_fp: 10,
             expected_registers: vec![(11, 0xDEADBEEF)],
             ..Default::default()
@@ -2514,7 +2514,7 @@ mod tests {
 
         // reg[fp+1] = 0
         let spec = TestSpec {
-            program: vec![wom::const_32_imm(1, 0, 0)],
+            program: vec![const_32_imm(1, 0, 0)],
             start_fp: 10,
             start_registers: vec![(11, 0x12345678)], // Should be overwritten
             expected_registers: vec![(11, 0)],
@@ -2530,7 +2530,7 @@ mod tests {
 
         // reg[fp+1] = 0xFFFFFFFF
         let spec = TestSpec {
-            program: vec![wom::const_32_imm(1, 0xFFFF, 0xFFFF)],
+            program: vec![const_32_imm(1, 0xFFFF, 0xFFFF)],
             start_fp: 10,
             expected_registers: vec![(11, 0xFFFFFFFF)],
             ..Default::default()
@@ -2547,7 +2547,7 @@ mod tests {
 
         // 42 / 7 = 6
         let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
+            program: vec![div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 7)],
             expected_registers: vec![(12, 6)],
@@ -2563,7 +2563,7 @@ mod tests {
 
         // -42 / 7 = -6
         let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
+            program: vec![div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-42_i32) as u32), (11, 7)],
             expected_registers: vec![(12, (-6_i32) as u32)],
@@ -2579,7 +2579,7 @@ mod tests {
 
         // 42 / 0 = 0xFFFFFFFF (RISC-V spec)
         let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
+            program: vec![div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 0)],
             expected_registers: vec![(12, 0xFFFFFFFF)],
@@ -2595,7 +2595,7 @@ mod tests {
 
         // 100 / 7 = 14
         let spec = TestSpec {
-            program: vec![wom::divu(2, 0, 1)],
+            program: vec![divu(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 100), (11, 7)],
             expected_registers: vec![(12, 14)],
@@ -2611,7 +2611,7 @@ mod tests {
 
         // 42 / 0 = 0xFFFFFFFF (RISC-V spec)
         let spec = TestSpec {
-            program: vec![wom::divu(2, 0, 1)],
+            program: vec![divu(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 0)],
             expected_registers: vec![(12, 0xFFFF_FFFF)],
@@ -2628,7 +2628,7 @@ mod tests {
         // 42 % 7 = 0
         // 43 % 7 = 1
         let spec = TestSpec {
-            program: vec![wom::rems(2, 0, 1), wom::rems(5, 3, 4)],
+            program: vec![rems(2, 0, 1), rems(5, 3, 4)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 7), (13, 43), (14, 7)],
             expected_registers: vec![(12, 0), (15, 1)],
@@ -2644,7 +2644,7 @@ mod tests {
 
         // -43 % 7 = -1 (remainder has sign of dividend)
         let spec = TestSpec {
-            program: vec![wom::rems(2, 0, 1)],
+            program: vec![rems(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-43_i32) as u32), (11, 7)],
             expected_registers: vec![(12, (-1_i32) as u32)],
@@ -2660,7 +2660,7 @@ mod tests {
 
         // 42 % 0 = 42 (RISC-V spec: returns dividend)
         let spec = TestSpec {
-            program: vec![wom::rems(2, 0, 1)],
+            program: vec![rems(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 0)],
             expected_registers: vec![(12, 42)],
@@ -2676,7 +2676,7 @@ mod tests {
 
         // 100 % 7 = 2
         let spec = TestSpec {
-            program: vec![wom::remu(2, 0, 1)],
+            program: vec![remu(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 100), (11, 7)],
             expected_registers: vec![(12, 2)],
@@ -2692,7 +2692,7 @@ mod tests {
 
         // 42 % 0 = 42 (RISC-V spec: returns dividend)
         let spec = TestSpec {
-            program: vec![wom::remu(2, 0, 1)],
+            program: vec![remu(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 0)],
             expected_registers: vec![(12, 42)],
@@ -2708,7 +2708,7 @@ mod tests {
 
         // 999 / 1 = 999
         let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
+            program: vec![div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 999), (11, 1)],
             expected_registers: vec![(12, 999)],
@@ -2723,7 +2723,7 @@ mod tests {
 
         // 42 / 42 = 1
         let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
+            program: vec![div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, 42)],
             expected_registers: vec![(12, 1)],
@@ -2738,7 +2738,7 @@ mod tests {
 
         // 17 / 5 = 3 (integer division, truncated)
         let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
+            program: vec![div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 17), (11, 5)],
             expected_registers: vec![(12, 3)],
@@ -2753,7 +2753,7 @@ mod tests {
 
         // 0 / 100 = 0
         let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
+            program: vec![div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 0), (11, 100)],
             expected_registers: vec![(12, 0)],
@@ -2768,7 +2768,7 @@ mod tests {
 
         // 65536000 / 256 = 256000
         let spec = TestSpec {
-            program: vec![wom::divu(2, 0, 1)],
+            program: vec![divu(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 65536000), (11, 256)],
             expected_registers: vec![(12, 256000)],
@@ -2783,7 +2783,7 @@ mod tests {
 
         // 128 / 8 = 16
         let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
+            program: vec![div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 128), (11, 8)],
             expected_registers: vec![(12, 16)],
@@ -2798,7 +2798,7 @@ mod tests {
 
         // (-20) / (-5) = 4
         let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
+            program: vec![div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-20_i32) as u32), (11, (-5_i32) as u32)],
             expected_registers: vec![(12, 4)],
@@ -2814,8 +2814,8 @@ mod tests {
         // 120 / 2 = 60, 60 / 3 = 20
         let spec = TestSpec {
             program: vec![
-                wom::div(3, 0, 1), // reg[3] = 120 / 2 = 60
-                wom::div(4, 3, 2), // reg[4] = 60 / 3 = 20
+                div(3, 0, 1), // reg[3] = 120 / 2 = 60
+                div(4, 3, 2), // reg[4] = 60 / 3 = 20
             ],
             start_fp: 10,
             start_registers: vec![(10, 120), (11, 2), (12, 3)],
@@ -2832,8 +2832,8 @@ mod tests {
         // (100 / 7) * 7 = 14 * 7 = 98 (not 100 due to integer truncation)
         let spec = TestSpec {
             program: vec![
-                wom::div(2, 0, 1), // reg[2] = 100 / 7 = 14
-                wom::mul(3, 2, 1), // reg[3] = 14 * 7 = 98
+                div(2, 0, 1), // reg[2] = 100 / 7 = 14
+                mul(3, 2, 1), // reg[3] = 14 * 7 = 98
             ],
             start_fp: 10,
             start_registers: vec![(10, 100), (11, 7)],
@@ -2851,7 +2851,7 @@ mod tests {
 
         // 0x0000_0000_0000_002A / 0x0000_0000_0000_0007 = 0x0000_0000_0000_0006
         let spec = TestSpec {
-            program: vec![wom::div_64(4, 0, 2)],
+            program: vec![div_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 42),
@@ -2872,7 +2872,7 @@ mod tests {
 
         // 0x0000_0001_0000_0000 / 0x0000_0000_0000_0002 = 0x0000_0000_8000_0000
         let spec = TestSpec {
-            program: vec![wom::div_64(4, 0, 2)],
+            program: vec![div_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -2893,7 +2893,7 @@ mod tests {
 
         // 0xFFFF_FFFF_FFFF_FFFF / 0x0000_0000_0000_0002 = 0x7FFF_FFFF_FFFF_FFFF
         let spec = TestSpec {
-            program: vec![wom::divu_64(4, 0, 2)],
+            program: vec![divu_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_FFFF),
@@ -2914,7 +2914,7 @@ mod tests {
 
         // 64-bit signed divide by zero returns -1 (all ones)
         let spec = TestSpec {
-            program: vec![wom::div_64(4, 0, 2)],
+            program: vec![div_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 42),
@@ -2935,7 +2935,7 @@ mod tests {
 
         // 64-bit unsigned divide by zero returns all ones
         let spec = TestSpec {
-            program: vec![wom::divu_64(4, 0, 2)],
+            program: vec![divu_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 42),
@@ -2956,7 +2956,7 @@ mod tests {
 
         // 4294967297 % 3 = 2
         let spec = TestSpec {
-            program: vec![wom::remu_64(4, 0, 2)],
+            program: vec![remu_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 1),
@@ -2977,7 +2977,7 @@ mod tests {
 
         // 64-bit unsigned remainder by zero returns dividend
         let spec = TestSpec {
-            program: vec![wom::remu_64(4, 0, 2)],
+            program: vec![remu_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 1),
@@ -3000,7 +3000,7 @@ mod tests {
         // -43 as i64 = 0xFFFF_FFFF_FFFF_FFD5
         // -1 as i64 = 0xFFFF_FFFF_FFFF_FFFF
         let spec = TestSpec {
-            program: vec![wom::rems_64(4, 0, 2)],
+            program: vec![rems_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_FFD5),
@@ -3021,7 +3021,7 @@ mod tests {
 
         // 64-bit signed remainder by zero returns dividend
         let spec = TestSpec {
-            program: vec![wom::rems_64(4, 0, 2)],
+            program: vec![rems_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0xFFFF_FFD5),
@@ -3042,7 +3042,7 @@ mod tests {
 
         // i32::MIN / -1 = i32::MIN (RISC-V signed overflow returns dividend)
         let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
+            program: vec![div(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, i32::MIN as u32), (11, (-1_i32) as u32)],
             expected_registers: vec![(12, i32::MIN as u32)],
@@ -3058,7 +3058,7 @@ mod tests {
 
         // i32::MIN % -1 = 0 (RISC-V signed overflow returns zero)
         let spec = TestSpec {
-            program: vec![wom::rems(2, 0, 1)],
+            program: vec![rems(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, i32::MIN as u32), (11, (-1_i32) as u32)],
             expected_registers: vec![(12, 0)],
@@ -3076,7 +3076,7 @@ mod tests {
         // This produces carries up to 4079 in the range tuple checker,
         // requiring sizes[1] >= 4096 (the 64-bit default).
         let spec = TestSpec {
-            program: vec![wom::div_64(4, 0, 2)],
+            program: vec![div_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 1),
@@ -3097,7 +3097,7 @@ mod tests {
 
         // i64::MIN / -1 = i64::MIN (RISC-V signed overflow returns dividend)
         let spec = TestSpec {
-            program: vec![wom::div_64(4, 0, 2)],
+            program: vec![div_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -3118,7 +3118,7 @@ mod tests {
 
         // i64::MIN % -1 = 0 (RISC-V signed overflow returns zero)
         let spec = TestSpec {
-            program: vec![wom::rems_64(4, 0, 2)],
+            program: vec![rems_64(4, 0, 2)],
             start_fp: 124,
             start_registers: vec![
                 (124, 0),
@@ -3141,7 +3141,7 @@ mod tests {
 
         // 32-bit writes 0x42 to reg fp+0, then 64-bit reads reg pair fp+0:fp+1
         let spec = TestSpec {
-            program: vec![wom::add_imm(0, 0, 0x42_i16), wom::add_imm_64(2, 0, 0_i16)],
+            program: vec![add_imm(0, 0, 0x42_i16), add_imm_64(2, 0, 0_i16)],
             start_fp: 10,
             expected_registers: vec![(10, 0x42), (12, 0x42), (13, 0)],
             ..Default::default()
@@ -3155,7 +3155,7 @@ mod tests {
 
         // 64-bit writes 0x42 to reg pair fp+0:fp+1, then 32-bit reads reg fp+0
         let spec = TestSpec {
-            program: vec![wom::add_imm_64(0, 0, 0x42_i16), wom::add_imm(2, 0, 0_i16)],
+            program: vec![add_imm_64(0, 0, 0x42_i16), add_imm(2, 0, 0_i16)],
             start_fp: 10,
             expected_registers: vec![(10, 0x42), (11, 0), (12, 0x42)],
             ..Default::default()
@@ -3197,10 +3197,10 @@ mod tests {
         // Verifies: FP restored, post-return instruction operates in the caller frame.
         let spec = TestSpec {
             program: vec![
-                wom::ret(10, 11), // PC=0: return to PC=8, FP=reg[11]
-                wom::halt(),      // PC=4: skipped
-                wom::add_imm(0, 5, 1_i16), // PC=8: caller[0] = caller[5] + 1
-                                  // PC=12: halt (appended by test_spec)
+                ret(10, 11), // PC=0: return to PC=8, FP=reg[11]
+                halt(),      // PC=4: skipped
+                add_imm(0, 5, 1_i16), // PC=8: caller[0] = caller[5] + 1
+                             // PC=12: halt (appended by test_spec)
             ],
             start_fp: 50,
             start_registers: vec![
@@ -3236,11 +3236,11 @@ mod tests {
         // Verifies: saved PC/FP and post-call computation in the new frame.
         let spec = TestSpec {
             program: vec![
-                wom::call(10, 11, 12, 120), // PC=0: call to PC=12, FP offset=120
-                wom::halt(),                // PC=4: skipped (return would land here)
-                wom::halt(),                // PC=8: skipped
-                wom::add_imm(0, 3, 7_i16),  // PC=12: new_frame[0] = new_frame[3]+7
-                                            // PC=16: halt (appended by test_spec)
+                call(10, 11, 12, 120), // PC=0: call to PC=12, FP offset=120
+                halt(),                // PC=4: skipped (return would land here)
+                halt(),                // PC=8: skipped
+                add_imm(0, 3, 7_i16),  // PC=12: new_frame[0] = new_frame[3]+7
+                                       // PC=16: halt (appended by test_spec)
             ],
             start_fp: 20,
             start_registers: vec![
@@ -3276,11 +3276,11 @@ mod tests {
         // Verifies: saved PC/FP and post-call computation, with PC from register.
         let spec = TestSpec {
             program: vec![
-                wom::call_indirect(10, 11, 12, 120), // PC=0: call indirect, FP offset=120
-                wom::halt(),                         // PC=4: skipped
-                wom::halt(),                         // PC=8: skipped
-                wom::add_imm(0, 3, 7_i16),           // PC=12: new_frame[0] = new_frame[3]+7
-                                                     // PC=16: halt (appended by test_spec)
+                call_indirect(10, 11, 12, 120), // PC=0: call indirect, FP offset=120
+                halt(),                         // PC=4: skipped
+                halt(),                         // PC=8: skipped
+                add_imm(0, 3, 7_i16),           // PC=12: new_frame[0] = new_frame[3]+7
+                                                // PC=16: halt (appended by test_spec)
             ],
             start_fp: 20,
             start_registers: vec![
@@ -3322,12 +3322,12 @@ mod tests {
         // Verifies: round-trip call/return, computation in both frames persists.
         let spec = TestSpec {
             program: vec![
-                wom::call(10, 11, 16, 120), // PC=0: call to PC=16, FP offset=120
-                wom::add_imm(0, 5, 1_i16),  // PC=4: caller[0] = caller[5]+1 (after return)
-                wom::halt(),                // PC=8: halt after return
-                wom::halt(),                // PC=12: padding
-                wom::add_imm(3, 3, 42_i16), // PC=16: callee[3] = 0 + 42
-                wom::ret(10, 11),           // PC=20: return to caller
+                call(10, 11, 16, 120), // PC=0: call to PC=16, FP offset=120
+                add_imm(0, 5, 1_i16),  // PC=4: caller[0] = caller[5]+1 (after return)
+                halt(),                // PC=8: halt after return
+                halt(),                // PC=12: padding
+                add_imm(3, 3, 42_i16), // PC=16: callee[3] = 0 + 42
+                ret(10, 11),           // PC=20: return to caller
             ],
             start_fp: 20,
             start_registers: vec![
@@ -3358,9 +3358,9 @@ mod tests {
         // Read a u32 from stdin via hint mechanism and verify RAM value.
         let spec = TestSpec {
             program: vec![
-                wom::prepare_read(),
-                wom::hint_storew(0), // skip length word
-                wom::hint_storew(0), // write data to MEM[0]
+                prepare_read(),
+                hint_storew(0), // skip length word
+                hint_storew(0), // write data to MEM[0]
             ],
             expected_ram: vec![(0, 42)],
             stdin,
@@ -3383,26 +3383,26 @@ mod tests {
         let scratch = 5;
         let spec = TestSpec {
             program: vec![
-                wom::const_32_imm(0, 0, 0),       // PC=0
-                wom::const_32_imm(scratch, 0, 0), // PC=4: scratch = 0
-                wom::prepare_read(),              // PC=8
-                wom::hint_storew(scratch),        // PC=12: skip length
-                wom::hint_storew(scratch),        // PC=16: write data to MEM[0]
-                wom::loadw(8, scratch, 0),        // PC=20: r8 = MEM[0]
-                wom::add_imm(6, 0, 100_i16),      // PC=24: r6 = 100
-                wom::storew(8, 6, 0),             // PC=28: MEM[100] = r8
-                wom::call(10, 11, 40, 200),       // PC=32: call to PC=40, FP += 200
-                wom::halt(),                      // PC=36: padding
+                const_32_imm(0, 0, 0),       // PC=0
+                const_32_imm(scratch, 0, 0), // PC=4: scratch = 0
+                prepare_read(),              // PC=8
+                hint_storew(scratch),        // PC=12: skip length
+                hint_storew(scratch),        // PC=16: write data to MEM[0]
+                loadw(8, scratch, 0),        // PC=20: r8 = MEM[0]
+                add_imm(6, 0, 100_i16),      // PC=24: r6 = 100
+                storew(8, 6, 0),             // PC=28: MEM[100] = r8
+                call(10, 11, 40, 200),       // PC=32: call to PC=40, FP += 200
+                halt(),                      // PC=36: padding
                 // === New frame (PC=40), raw FP = start_fp*4+200, logical FP = start_fp+50 ===
-                wom::const_32_imm(0, 0, 0),       // PC=40
-                wom::const_32_imm(scratch, 0, 0), // PC=44: scratch = 0
-                wom::add_imm(6, 0, 100_i16),      // PC=48: r6 = 100
-                wom::loadw(2, 6, 0),              // PC=52: r2 = MEM[100]
-                wom::prepare_read(),              // PC=56
-                wom::hint_storew(scratch),        // PC=60: skip length
-                wom::hint_storew(scratch),        // PC=64: write data to MEM[0]
-                wom::loadw(3, scratch, 0),        // PC=68: r3 = MEM[0]
-                wom::xor(4, 2, 3),                // PC=72: r4 = r2 ^ r3
+                const_32_imm(0, 0, 0),       // PC=40
+                const_32_imm(scratch, 0, 0), // PC=44: scratch = 0
+                add_imm(6, 0, 100_i16),      // PC=48: r6 = 100
+                loadw(2, 6, 0),              // PC=52: r2 = MEM[100]
+                prepare_read(),              // PC=56
+                hint_storew(scratch),        // PC=60: skip length
+                hint_storew(scratch),        // PC=64: write data to MEM[0]
+                loadw(3, scratch, 0),        // PC=68: r3 = MEM[0]
+                xor(4, 2, 3),                // PC=72: r4 = r2 ^ r3
             ],
             expected_fp: Some(50),
             expected_registers: vec![(54, 170 ^ 204)],
@@ -3423,7 +3423,7 @@ mod tests {
 
         setup_tracing_with_log_level(Level::WARN);
 
-        let instructions: Vec<Instruction<F>> = vec![wom::trap(42), wom::halt()];
+        let instructions: Vec<Instruction<F>> = vec![trap(42), halt()];
         let program = Program::from_instructions(&instructions);
         let exe = VmExe::new(program);
         let vm_config = WomirConfig::default();
