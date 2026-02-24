@@ -28,13 +28,13 @@ pub fn collect_womir_basic_blocks(
 /// Dynamic targets (SKIP, CALL_INDIRECT, RET) cannot be determined statically.
 ///
 /// Instruction operand encoding (from instruction_builder.rs):
-/// - JUMP:         a = to_pc_imm (absolute PC target)
-/// - JUMP_IF:      a = to_pc_imm, b = condition_reg
-/// - JUMP_IF_ZERO: a = to_pc_imm, b = condition_reg
-/// - CALL:         c = to_pc_imm (immediate PC target)
-/// - SKIP:         b = offset register (dynamic, not extractable)
+/// - JUMP:          a = to_pc_imm (absolute PC target)
+/// - JUMP_IF:       a = to_pc_imm, b = condition_reg
+/// - JUMP_IF_ZERO:  a = to_pc_imm, b = condition_reg
+/// - CALL:          c = to_pc_imm (immediate PC target)
+/// - SKIP:          b = offset register (dynamic, not extractable)
 /// - CALL_INDIRECT: c = to_pc register (dynamic, not extractable)
-/// - RET:          c/d = registers (dynamic, not extractable)
+/// - RET:           c/d = registers (dynamic, not extractable)
 pub(super) fn extract_jump_targets<F: PrimeField32>(program: &Prog<'_, F>) -> BTreeSet<u64> {
     let mut targets = BTreeSet::new();
 

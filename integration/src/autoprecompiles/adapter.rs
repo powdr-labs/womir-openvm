@@ -4,8 +4,6 @@ use std::iter::once;
 use std::sync::Arc;
 
 use derive_more::From;
-use openvm_circuit::arch::VmState;
-use openvm_circuit::system::memory::online::GuestMemory;
 use openvm_instructions::instruction::Instruction as OpenVmInstruction;
 use openvm_instructions::program::{DEFAULT_PC_STEP, Program as OpenVmProgram};
 use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
@@ -102,35 +100,30 @@ impl<F: PrimeField32> Program<Instr<F>> for Prog<'_, F> {
 
 // ---- Execution state ----
 
-/// Register address type for WOMIR execution state.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WomirRegisterAddress(pub u8);
-
-/// Wraps the OpenVM execution state for WOMIR.
+/// Dummy implementation of `ExecutionState`. This is needed in the context
+/// of optimistic precompiles, which are not supported yet, so this code should
+/// never be called.
 #[derive(From)]
-pub struct WomirExecutionState<'a, T>(pub &'a VmState<T, GuestMemory>);
+pub struct WomirExecutionState {}
 
-impl<T: PrimeField32> ExecutionState for WomirExecutionState<'_, T> {
-    type RegisterAddress = WomirRegisterAddress;
-    type Value = u32;
+impl ExecutionState for WomirExecutionState {
+    type RegisterAddress = ();
+    type Value = ();
 
     fn pc(&self) -> Self::Value {
-        self.0.pc()
+        unimplemented!()
     }
 
     fn reg(&self, _addr: &Self::RegisterAddress) -> Self::Value {
-        // TODO: Handle FP-relative register addressing.
-        // WOMIR registers are addressed relative to the frame pointer.
-        // Need to read FP from execution state and compute the actual memory address.
-        todo!("FP-relative register read")
+        unimplemented!()
     }
 
-    fn value_limb(value: Self::Value, limb_index: usize) -> Self::Value {
-        value >> (limb_index * 8) & 0xff
+    fn value_limb(_value: Self::Value, _limb_index: usize) -> Self::Value {
+        unimplemented!()
     }
 
     fn global_clk(&self) -> usize {
-        unimplemented!("WOMIR does not expose a global clock")
+        unimplemented!()
     }
 }
 
@@ -161,7 +154,7 @@ impl<'a> Adapter for WomirApcAdapter<'a> {
     type CustomBusTypes = OpenVmBusType;
     type ApcStats = WomirApcStats;
     type AirId = String;
-    type ExecutionState = WomirExecutionState<'a, BabyBear>;
+    type ExecutionState = WomirExecutionState;
 
     fn into_field(e: Self::PowdrField) -> Self::Field {
         BabyBear::from_canonical_u32(e.to_integer().try_into_u32().unwrap())
