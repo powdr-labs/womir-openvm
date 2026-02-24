@@ -2819,7 +2819,7 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
-    // ==================== Additional Mul Tests (from vm_tests) ====================
+    // ==================== Additional Mul Tests ====================
 
     #[test]
     fn test_mul_zero() {
@@ -3008,7 +3008,7 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
-    // ==================== Additional DivRem Tests (from vm_tests) ====================
+    // ==================== Additional DivRem Tests ====================
 
     #[test]
     fn test_div_by_one() {
@@ -3151,7 +3151,7 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
-    // ==================== Additional Comparison Tests (from vm_tests) ====================
+    // ==================== Additional Comparison Tests ====================
 
     #[test]
     fn test_lt_s_positive() {
@@ -3327,7 +3327,7 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
-    // ==================== Additional LoadStore Tests (from vm_tests) ====================
+    // ==================== Additional LoadStore Tests ====================
 
     #[test]
     fn test_storeb_with_offset_roundtrip() {
@@ -3371,7 +3371,7 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
-    // ==================== Hint/Stdin Tests (from vm_tests) ====================
+    // ==================== Hint/Stdin Tests ====================
 
     #[test]
     fn test_input_hint() {
@@ -3439,7 +3439,7 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
-    // ==================== Non-TestSpec Tests (from vm_tests) ====================
+    // ==================== Non-TestSpec Tests ====================
     // These tests require special infrastructure (error handling)
     // that doesn't fit the TestSpec framework.
 
