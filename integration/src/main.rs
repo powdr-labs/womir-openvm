@@ -183,14 +183,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let stdin = make_stdin(&args);
             let vm_config = WomirConfig::default();
 
-            let make_state = VmState::initial(
+            let initial_state = VmState::initial(
                 &vm_config.system,
                 &exe.init_memory,
                 exe.pc_start,
                 stdin.clone(),
             );
 
-            proving::mock_prove(&exe, make_state).map_err(|e| eyre::eyre!("{e}"))?;
+            proving::mock_prove(&exe, initial_state).map_err(|e| eyre::eyre!("{e}"))?;
             println!("Mock proof verified successfully.");
         }
         Commands::ProveRiscv {
