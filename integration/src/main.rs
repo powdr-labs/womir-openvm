@@ -151,7 +151,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             args,
             metrics,
         } => {
-            let (exe, stdin) = load_wasm_exe_with_stdin(&program, &function, &args);
+            let exe = load_wasm_exe(&program, &function);
+            let stdin = make_stdin(&args);
 
             let prove = || -> Result<()> {
                 proving::prove(&exe, stdin).map_err(|e| eyre::eyre!("{e}"))?;
@@ -173,7 +174,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             function,
             args,
         } => {
-            let (exe, stdin) = load_wasm_exe_with_stdin(&program, &function, &args);
+            let exe = load_wasm_exe(&program, &function);
+            let stdin = make_stdin(&args);
             let vm_config = WomirConfig::default();
 
             let make_state = VmState::initial(
@@ -240,19 +242,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 use openvm_instructions::exe::VmExe;
 
-fn load_wasm_exe_with_stdin(program: &str, function: &str, args: &[String]) -> (VmExe<F>, StdIn) {
+fn load_wasm_exe(program: &str, function: &str) -> VmExe<F> {
     let wasm_bytes = std::fs::read(program).expect("Failed to read WASM file");
     let (module, functions) = load_wasm(&wasm_bytes);
     let linked_program = LinkedProgram::new(module, functions);
-    let exe = linked_program.program_with_entry_point(function);
+    linked_program.program_with_entry_point(function)
+}
 
+fn make_stdin(args: &[String]) -> StdIn {
     let mut stdin = StdIn::default();
     for arg in args {
         let val = arg.parse::<u32>().unwrap();
         stdin.write(&val);
     }
-
-    (exe, stdin)
+    stdin
 }
 
 fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) {
