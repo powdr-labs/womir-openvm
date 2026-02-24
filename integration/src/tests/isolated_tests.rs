@@ -210,7 +210,7 @@ pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>>
 pub fn test_prove(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-    mock_prove(&exe, || build_initial_state(spec, &exe, &vm_config))
+    mock_prove(&exe, build_initial_state(spec, &exe, &vm_config))
 }
 
 fn test_spec(mut spec: TestSpec) {

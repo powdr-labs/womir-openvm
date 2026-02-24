@@ -73,6 +73,9 @@ enum Commands {
         /// Arguments (u32 values)
         #[arg(long)]
         args: Vec<String>,
+        /// Also run aggregation (inner recursion) after the app proof
+        #[arg(long, default_value_t = false)]
+        recursion: bool,
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
@@ -150,13 +153,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             function,
             args,
+            recursion,
             metrics,
         } => {
             let exe = load_wasm_exe(&program, &function);
             let stdin = make_stdin(&args);
 
             let prove = || -> Result<()> {
-                proving::prove(&exe, stdin).map_err(|e| eyre::eyre!("{e}"))?;
+                proving::prove(&exe, stdin, recursion).map_err(|e| eyre::eyre!("{e}"))?;
                 println!("Proof verified successfully.");
                 Ok(())
             };

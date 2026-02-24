@@ -270,7 +270,7 @@ fn run_wasm_test_function(
 
     // Mock proof
     println!("  Mock proof");
-    mock_prove(&exe, make_state)?;
+    mock_prove(&exe, make_state())?;
 
     Ok(())
 }
