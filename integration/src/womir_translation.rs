@@ -1349,11 +1349,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                         Directive::Instruction(ib::loadw(lo_tmp, base_addr, imm)),
                         Directive::Instruction(ib::loadw(hi_tmp, base_addr, imm + 4)),
                         Directive::Instruction(ib::add_imm(output, lo_tmp, AluImm::from(0))),
-                        Directive::Instruction(ib::add_imm(
-                            output + 1,
-                            hi_tmp,
-                            AluImm::from(0),
-                        )),
+                        Directive::Instruction(ib::add_imm(output + 1, hi_tmp, AluImm::from(0))),
                     ]
                 }
             }
@@ -1493,11 +1489,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                 )));
             } else {
                 // Unsigned: zero the high word.
-                directives.push(Directive::Instruction(ib::const_32_imm(
-                    output + 1,
-                    0,
-                    0,
-                )));
+                directives.push(Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)));
             }
 
             directives.into()
