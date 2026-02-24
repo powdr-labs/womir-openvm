@@ -94,6 +94,7 @@ fn build_initial_state(spec: &TestSpec, exe: &VmExe<F>, vm_config: &WomirConfig)
         exe.pc_start,
         StdIn::default(),
     );
+    state.metrics.debug_infos = exe.program.debug_infos();
 
     // Set initial registers
     for &(reg, value) in &spec.start_registers {
