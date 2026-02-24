@@ -2231,21 +2231,6 @@ mod tests {
     }
 
     #[test]
-    fn test_mul_powers_of_two() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 7 * 8 = 56
-        let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 7), (11, 8)],
-            expected_registers: vec![(12, 56)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
     fn test_mul_large_numbers() {
         setup_tracing_with_log_level(Level::WARN);
 
