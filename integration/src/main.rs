@@ -80,6 +80,9 @@ enum Commands {
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
+        /// Number of autoprecompiles to generate (0 = disabled)
+        #[arg(long, default_value_t = 0)]
+        autoprecompiles: u64,
     },
     /// Mock-proves execution of a function from the WASM program with the given arguments
     /// (constraint verification only, no cryptographic proof)
@@ -91,6 +94,9 @@ enum Commands {
         /// Arguments (u32 values)
         #[arg(long)]
         args: Vec<String>,
+        /// Number of autoprecompiles to generate (0 = disabled)
+        #[arg(long, default_value_t = 0)]
+        autoprecompiles: u64,
     },
     /// Proves execution of a function from the RISC-V program with the given arguments.
     /// Even though not the main goal of this crate, this is useful for benchmarking against
@@ -156,8 +162,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             args,
             recursion,
             metrics,
+            autoprecompiles: num_apcs,
         } => {
             let exe = load_wasm_exe(&program, &function);
+            if num_apcs > 0 {
+                autoprecompiles::run_autoprecompiles(&exe, num_apcs);
+            }
             let stdin = make_stdin(&args);
 
             let prove = || -> Result<()> {
@@ -179,8 +189,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             function,
             args,
+            autoprecompiles: num_apcs,
         } => {
             let exe = load_wasm_exe(&program, &function);
+            if num_apcs > 0 {
+                autoprecompiles::run_autoprecompiles(&exe, num_apcs);
+            }
             let stdin = make_stdin(&args);
             let vm_config = WomirConfig::default();
 

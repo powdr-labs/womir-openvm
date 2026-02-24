@@ -35,7 +35,7 @@ pub fn collect_womir_basic_blocks(
 /// - SKIP:         b = offset register (dynamic, not extractable)
 /// - CALL_INDIRECT: c = to_pc register (dynamic, not extractable)
 /// - RET:          c/d = registers (dynamic, not extractable)
-fn extract_jump_targets<F: PrimeField32>(program: &Prog<'_, F>) -> BTreeSet<u64> {
+pub(super) fn extract_jump_targets<F: PrimeField32>(program: &Prog<'_, F>) -> BTreeSet<u64> {
     let mut targets = BTreeSet::new();
 
     let jump_opcode = JumpOpcode::JUMP.global_opcode();
