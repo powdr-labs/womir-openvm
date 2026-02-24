@@ -116,7 +116,7 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for JumpAdapterAir {
                     AB::Expr::ZERO,
                     AB::Expr::ZERO,
                     AB::Expr::ZERO,
-                    AB::Expr::ONE,  // f: enabled
+                    AB::Expr::ONE,  // f
                     AB::Expr::ZERO, // g: imm sign
                 ],
                 local.from_state.into(),

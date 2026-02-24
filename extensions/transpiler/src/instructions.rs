@@ -256,51 +256,6 @@ pub enum HintStoreOpcode {
     Serialize,
     Deserialize,
 )]
-#[opcode_offset = 0x1265]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum AllocateFrameOpcode {
-    ALLOCATE_FRAME, // allocate frame and return pointer
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
-#[opcode_offset = 0x126A]
-#[repr(usize)]
-#[allow(non_camel_case_types)]
-pub enum CopyIntoFrameOpcode {
-    COPY_INTO_FRAME, // copy value into frame-relative address
-    COPY_FROM_FRAME, // copy value from another frame into the current frame
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumCount,
-    EnumIter,
-    FromRepr,
-    LocalOpcode,
-    Serialize,
-    Deserialize,
-)]
 #[opcode_offset = 0x127A]
 #[repr(usize)]
 #[allow(non_camel_case_types)]
