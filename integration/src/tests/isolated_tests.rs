@@ -719,6 +719,7 @@ mod tests {
             start_fp: 10,
             start_registers: vec![(10, 0x1234), (11, 500)],
             expected_registers: vec![(14, 104)],
+            expected_ram: vec![(500, 0x00003434)],
             ..Default::default()
         };
         test_spec_for_all_register_bases(spec)
@@ -740,6 +741,7 @@ mod tests {
             start_fp: 10,
             start_registers: vec![(10, 0x1111), (11, 0x2222), (12, 600)],
             expected_registers: vec![(15, 13107)],
+            expected_ram: vec![(600, 0x22221111)],
             ..Default::default()
         };
         test_spec_for_all_register_bases(spec)
@@ -955,16 +957,15 @@ mod tests {
     fn test_lt_comparison_chain() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // (10 < 20) && (20 < 30): both true, AND = 1
+        // (10 < 20) = 1, (20 < 30) = 1
         let spec = TestSpec {
             program: vec![
                 wom::lt_u(3, 0, 1), // reg[3] = (10 < 20) = 1
                 wom::lt_u(4, 1, 2), // reg[4] = (20 < 30) = 1
-                wom::and(5, 3, 4),  // reg[5] = 1 & 1 = 1
             ],
             start_fp: 10,
             start_registers: vec![(10, 10), (11, 20), (12, 30)],
-            expected_registers: vec![(15, 1)],
+            expected_registers: vec![(13, 1), (14, 1)],
             ..Default::default()
         };
         test_spec_for_all_register_bases(spec)
@@ -974,12 +975,11 @@ mod tests {
     fn test_gt_edge_cases() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // max u32 > 0 (unsigned), max positive i32 > 0 (signed), combine
+        // max u32 > 0 (unsigned), max positive i32 > 0 (signed)
         let spec = TestSpec {
             program: vec![
                 wom::gt_u(2, 0, 1), // reg[2] = (0xFFFFFFFF > 0) unsigned = 1
                 wom::gt_s(5, 3, 4), // reg[5] = (0x7FFFFFFF > 0) signed = 1
-                wom::and(6, 2, 5),  // reg[6] = 1 & 1 = 1
             ],
             start_fp: 10,
             start_registers: vec![
@@ -988,7 +988,7 @@ mod tests {
                 (13, 0x7FFFFFFF), // max positive i32
                 (14, 0),
             ],
-            expected_registers: vec![(16, 1)],
+            expected_registers: vec![(12, 1), (15, 1)],
             ..Default::default()
         };
         test_spec_for_all_register_bases(spec)
@@ -2264,12 +2264,12 @@ mod tests {
     fn test_mul_negative_positive() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // (-5) * 3 = -15 = 0xFFFFFFF1
+        // (-5) * 3 = -15
         let spec = TestSpec {
             program: vec![wom::mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, (-5_i32) as u32), (11, 3)],
-            expected_registers: vec![(12, 0xFFFFFFF1)],
+            expected_registers: vec![(12, (-15_i32) as u32)],
             ..Default::default()
         };
         test_spec_for_all_register_bases(spec)
@@ -2279,12 +2279,12 @@ mod tests {
     fn test_mul_positive_negative() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // 4 * (-6) = -24 = 0xFFFFFFE8
+        // 4 * (-6) = -24
         let spec = TestSpec {
             program: vec![wom::mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 4), (11, (-6_i32) as u32)],
-            expected_registers: vec![(12, 0xFFFFFFE8)],
+            expected_registers: vec![(12, (-24_i32) as u32)],
             ..Default::default()
         };
         test_spec_for_all_register_bases(spec)
@@ -2309,12 +2309,12 @@ mod tests {
     fn test_mul_negative_one() {
         setup_tracing_with_log_level(Level::WARN);
 
-        // 42 * (-1) = -42 = 0xFFFFFFD6
+        // 42 * (-1) = -42
         let spec = TestSpec {
             program: vec![wom::mul(2, 0, 1)],
             start_fp: 10,
             start_registers: vec![(10, 42), (11, (-1_i32) as u32)],
-            expected_registers: vec![(12, 0xFFFFFFD6)],
+            expected_registers: vec![(12, (-42_i32) as u32)],
             ..Default::default()
         };
         test_spec_for_all_register_bases(spec)
@@ -3363,6 +3363,7 @@ mod tests {
                 wom::loadw(1, 0, 0), // load MEM[0] → reg[1]
             ],
             expected_registers: vec![(1, 42)],
+            expected_ram: vec![(0, 42)],
             stdin,
             ..Default::default()
         };
@@ -3406,6 +3407,7 @@ mod tests {
             ],
             expected_fp: Some(50),
             expected_registers: vec![(54, 170 ^ 204)],
+            expected_ram: vec![(0, 204), (100, 170)],
             stdin,
             ..Default::default()
         };
