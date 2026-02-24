@@ -84,9 +84,6 @@ enum Commands {
         function: String,
         /// Arguments to pass to the function
         args: Vec<String>,
-        /// Path to output metrics JSON file
-        #[arg(long)]
-        metrics: Option<PathBuf>,
     },
     /// Proves execution of a function from the RISC-V program with the given arguments.
     /// Even though not the main goal of this crate, this is useful for benchmarking against
@@ -151,18 +148,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             args,
             metrics,
         } => {
-            let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
-            let (module, functions) = load_wasm(&wasm_bytes);
-            let linked_program = LinkedProgram::new(module, functions);
-            let exe = linked_program.program_with_entry_point(&function);
-
-            let args: Vec<u32> = args.iter().map(|s| s.parse::<u32>().unwrap()).collect();
+            let (exe, stdin) = load_wasm_exe_with_stdin(&program, &function, &args);
 
             let prove = || -> Result<()> {
-                let mut stdin = StdIn::default();
-                for &arg in &args {
-                    stdin.write(&arg);
-                }
                 proving::prove(&exe, stdin).map_err(|e| eyre::eyre!("{e}"))?;
                 println!("Proof verified successfully.");
                 Ok(())
@@ -181,12 +169,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             function,
             args,
-            metrics,
         } => {
-            let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
-            let (module, functions) = load_wasm(&wasm_bytes);
-            let linked_program = LinkedProgram::new(module, functions);
-            let exe = linked_program.program_with_entry_point(&function);
+            let (exe, _) = load_wasm_exe_with_stdin(&program, &function, &args);
             let vm_config = WomirConfig::default();
 
             let args: Vec<u32> = args.iter().map(|s| s.parse::<u32>().unwrap()).collect();
@@ -198,20 +182,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin)
             };
 
-            let prove = || -> Result<()> {
-                proving::mock_prove(&exe, make_state).map_err(|e| eyre::eyre!("{e}"))?;
-                println!("Mock proof verified successfully.");
-                Ok(())
-            };
-
-            if let Some(metrics_path) = metrics {
-                run_with_metric_collection_to_file(
-                    std::fs::File::create(metrics_path).expect("Failed to create metrics file"),
-                    prove,
-                )?;
-            } else {
-                prove()?;
-            }
+            proving::mock_prove(&exe, make_state).map_err(|e| eyre::eyre!("{e}"))?;
+            println!("Mock proof verified successfully.");
         }
         Commands::ProveRiscv {
             program,
@@ -263,6 +235,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+use openvm_instructions::exe::VmExe;
+
+fn load_wasm_exe_with_stdin(program: &str, function: &str, args: &[String]) -> (VmExe<F>, StdIn) {
+    let wasm_bytes = std::fs::read(program).expect("Failed to read WASM file");
+    let (module, functions) = load_wasm(&wasm_bytes);
+    let linked_program = LinkedProgram::new(module, functions);
+    let exe = linked_program.program_with_entry_point(function);
+
+    let mut stdin = StdIn::default();
+    for arg in args {
+        let val = arg.parse::<u32>().unwrap();
+        stdin.write(&val);
+    }
+
+    (exe, stdin)
 }
 
 fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) {
