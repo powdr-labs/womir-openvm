@@ -17,7 +17,6 @@ pub struct AluImm(u32);
 impl From<i16> for AluImm {
     fn from(value: i16) -> Self {
         // ALU adapter expects an i16 sign-extended to 24 bits (top byte zeroed).
-        // The adapter then copies byte 2 into byte 3 for full 32-bit sign extension.
         let value = value as i32 as u32 & 0xff_ff_ff;
         AluImm(value)
     }
