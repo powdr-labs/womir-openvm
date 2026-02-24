@@ -14,6 +14,7 @@ use itertools::Itertools;
 use metrics_tracing_context::{MetricsLayer, TracingContextLayer};
 use metrics_util::{debugging::DebuggingRecorder, layers::Layer};
 use openvm_circuit::arch::VmState;
+use openvm_instructions::exe::VmExe;
 use openvm_sdk::StdIn;
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
 use std::path::PathBuf;
@@ -239,8 +240,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-use openvm_instructions::exe::VmExe;
 
 fn load_wasm_exe(program: &str, function: &str) -> VmExe<F> {
     let wasm_bytes = std::fs::read(program).expect("Failed to read WASM file");
