@@ -57,6 +57,9 @@ pub struct TestSpec {
     /// When rebasing, these values are shifted by `delta * RV32_REGISTER_NUM_LIMBS`.
     /// Indices are in the original (pre-rebase) namespace.
     pub fp_value_registers: Vec<usize>,
+
+    /// Optional stdin data for hint tests.
+    pub stdin: StdIn,
 }
 
 /// Read a register value from memory.
@@ -92,7 +95,7 @@ fn build_initial_state(spec: &TestSpec, exe: &VmExe<F>, vm_config: &WomirConfig)
         &vm_config.system,
         &exe.init_memory,
         exe.pc_start,
-        StdIn::default(),
+        spec.stdin.clone(),
     );
 
     // Set initial registers
@@ -3368,8 +3371,76 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
+    // ==================== Hint/Stdin Tests (from vm_tests) ====================
+
+    #[test]
+    fn test_input_hint() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let mut stdin = StdIn::default();
+        stdin.write(&42u32);
+
+        // Register 0 defaults to 0 (memory pointer to MEM[0]).
+        // Read a u32 from stdin via hint mechanism and verify register value.
+        let spec = TestSpec {
+            program: vec![
+                wom::prepare_read(),
+                wom::hint_storew(0), // skip length word
+                wom::hint_storew(0), // write data to MEM[0]
+                wom::loadw(1, 0, 0), // load MEM[0] → reg[1]
+            ],
+            expected_registers: vec![(1, 42)],
+            stdin,
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_input_hint_with_frame_jump_and_xor() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        let mut stdin = StdIn::default();
+        stdin.write(&170u32);
+        stdin.write(&204u32);
+
+        // Read two values from stdin across a frame change (CALL) and XOR them.
+        // Frame 1 (FP=0): read first value, store to MEM[100], call
+        // Frame 2 (FP=50): load from MEM[100], read second value, XOR
+        let scratch = 5;
+        let spec = TestSpec {
+            program: vec![
+                wom::const_32_imm(0, 0, 0),       // PC=0
+                wom::const_32_imm(scratch, 0, 0), // PC=4: scratch = 0
+                wom::prepare_read(),              // PC=8
+                wom::hint_storew(scratch),        // PC=12: skip length
+                wom::hint_storew(scratch),        // PC=16: write data to MEM[0]
+                wom::loadw(8, scratch, 0),        // PC=20: r8 = MEM[0]
+                wom::add_imm(6, 0, 100_i16),      // PC=24: r6 = 100
+                wom::storew(8, 6, 0),             // PC=28: MEM[100] = r8
+                wom::call(10, 11, 40, 200),       // PC=32: call to PC=40, FP += 200
+                wom::halt(),                      // PC=36: padding
+                // === New frame (PC=40), raw FP = start_fp*4+200, logical FP = start_fp+50 ===
+                wom::const_32_imm(0, 0, 0),       // PC=40
+                wom::const_32_imm(scratch, 0, 0), // PC=44: scratch = 0
+                wom::add_imm(6, 0, 100_i16),      // PC=48: r6 = 100
+                wom::loadw(2, 6, 0),              // PC=52: r2 = MEM[100]
+                wom::prepare_read(),              // PC=56
+                wom::hint_storew(scratch),        // PC=60: skip length
+                wom::hint_storew(scratch),        // PC=64: write data to MEM[0]
+                wom::loadw(3, scratch, 0),        // PC=68: r3 = MEM[0]
+                wom::xor(4, 2, 3),                // PC=72: r4 = r2 ^ r3
+            ],
+            expected_fp: Some(50),
+            expected_registers: vec![(54, 170 ^ 204)],
+            stdin,
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
     // ==================== Non-TestSpec Tests (from vm_tests) ====================
-    // These tests require special infrastructure (error handling, stdin)
+    // These tests require special infrastructure (error handling)
     // that doesn't fit the TestSpec framework.
 
     #[test]
@@ -3391,81 +3462,5 @@ mod tests {
             Err(other) => panic!("Expected FailedWithExitCode, got: {other:?}"),
             Ok(_) => panic!("Expected execution error, but succeeded"),
         }
-    }
-
-    #[test]
-    fn test_input_hint() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // Register 0 defaults to 0 (memory pointer to MEM[0]).
-        // Read a u32 from stdin via hint mechanism and verify register value.
-        let instructions: Vec<Instruction<F>> = vec![
-            wom::prepare_read(),
-            wom::hint_storew(0), // skip length word
-            wom::hint_storew(0), // write data to MEM[0]
-            wom::loadw(1, 0, 0), // load MEM[0] → reg[1]
-            wom::halt(),
-        ];
-        let program = Program::from_instructions(&instructions);
-        let exe = VmExe::new(program);
-        let vm_config = WomirConfig::default();
-        let vm = VmExecutor::new(vm_config).unwrap();
-        let instance = vm.instance(&exe).unwrap();
-
-        let mut stdin = StdIn::default();
-        stdin.write(&42u32);
-
-        let final_state = instance.execute(stdin, None).unwrap();
-        let result = read_register(&final_state.memory, 1);
-        assert_eq!(result, 42);
-    }
-
-    #[test]
-    fn test_input_hint_with_frame_jump_and_xor() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // Read two values from stdin across a frame change (CALL) and XOR them.
-        // Frame 1 (FP=0): read first value, store to MEM[100], call
-        // Frame 2 (FP=50): load from MEM[100], read second value, XOR
-        let scratch = 5;
-        let instructions: Vec<Instruction<F>> = vec![
-            wom::const_32_imm(0, 0, 0),       // PC=0
-            wom::const_32_imm(scratch, 0, 0), // PC=4: scratch = 0
-            wom::prepare_read(),              // PC=8
-            wom::hint_storew(scratch),        // PC=12: skip length
-            wom::hint_storew(scratch),        // PC=16: write data to MEM[0]
-            wom::loadw(8, scratch, 0),        // PC=20: r8 = MEM[0]
-            wom::add_imm(6, 0, 100_i16),      // PC=24: r6 = 100
-            wom::storew(8, 6, 0),             // PC=28: MEM[100] = r8
-            wom::call(10, 11, 40, 200),       // PC=32: call to PC=40, FP += 200
-            wom::halt(),                      // PC=36: padding
-            // === New frame (PC=40), raw FP = 200, logical FP = 50 ===
-            wom::const_32_imm(0, 0, 0),       // PC=40
-            wom::const_32_imm(scratch, 0, 0), // PC=44: scratch = 0
-            wom::add_imm(6, 0, 100_i16),      // PC=48: r6 = 100
-            wom::loadw(2, 6, 0),              // PC=52: r2 = MEM[100]
-            wom::prepare_read(),              // PC=56
-            wom::hint_storew(scratch),        // PC=60: skip length
-            wom::hint_storew(scratch),        // PC=64: write data to MEM[0]
-            wom::loadw(3, scratch, 0),        // PC=68: r3 = MEM[0]
-            wom::xor(4, 2, 3),                // PC=72: r4 = r2 ^ r3
-            wom::halt(),                      // PC=76
-        ];
-
-        let program = Program::from_instructions(&instructions);
-        let exe = VmExe::new(program);
-        let vm_config = WomirConfig::default();
-        let vm = VmExecutor::new(vm_config).unwrap();
-        let instance = vm.instance(&exe).unwrap();
-
-        let mut stdin = StdIn::default();
-        stdin.write(&170u32);
-        stdin.write(&204u32);
-
-        let final_state = instance.execute(stdin, None).unwrap();
-        // After call: raw FP = 200, logical FP = 200 / RV32_REGISTER_NUM_LIMBS = 50
-        // reg[4] in new frame is at absolute index 50 + 4 = 54
-        let result = read_register(&final_state.memory, 54);
-        assert_eq!(result, 170 ^ 204); // 102
     }
 }
