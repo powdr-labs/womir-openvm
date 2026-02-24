@@ -217,10 +217,10 @@ where
     let num_output_words = womir::loader::word_count_types::<OpenVMSettings<F>>(results) as usize;
 
     // Registers used by startup code (relative to initial FP):
-    //   reg 0: zero_reg (holds value 0)
-    //   reg 1: scratch_reg (holds safe memory address for hint_storew)
+    //   reg 0: zero_reg (holds value 0, also used as pointer to mem[0])
+    //   reg 1: save_mem0_reg (holds saved value of mem[0] during hint reads)
     let zero_reg: usize = 0;
-    let scratch_reg: usize = 1;
+    let save_mem0_reg: usize = 1;
 
     // Frame offset for entry function = 2 (startup uses 2 registers)
     let frame_offset: usize = 2;
@@ -234,31 +234,30 @@ where
     let save_pc_reg = max_io;
     let save_fp_reg = max_io + 1;
 
-    // Safe scratch address for hint_storew in memory address space.
-    // This address is near the top of the 512MB memory address space (1 << 29),
-    // high enough that no WASM linear memory will reach it.
-    let safe_addr: u32 = 0x1FFF_FFE0;
-
     let mut code = vec![
         // 1. Set zero_reg = 0
         ib::const_32_imm(zero_reg, 0, 0),
-        // 2. Set scratch_reg = SAFE_ADDR
-        ib::const_32_imm(
-            scratch_reg,
-            (safe_addr & 0xFFFF) as u16,
-            (safe_addr >> 16) as u16,
-        ),
     ];
 
-    // 3. For each input word, read from hint stream into callee's argument register
-    for i in 0..num_input_words {
-        code.push(ib::prepare_read());
-        code.push(ib::hint_storew(scratch_reg)); // skip length word
-        code.push(ib::hint_storew(scratch_reg)); // write data to MEM[SAFE_ADDR]
-        code.push(ib::loadw(frame_offset + i, scratch_reg, 0)); // load from MEM[SAFE_ADDR] to callee's arg register
+    // 2. Read inputs using mem[0] as scratch space.
+    //    Save mem[0] first, then use it for hint_storew, then restore it.
+    if num_input_words > 0 {
+        // Save mem[0] into save_mem0_reg
+        code.push(ib::loadw(save_mem0_reg, zero_reg, 0));
+
+        // For each input word, read from hint stream via mem[0]
+        for i in 0..num_input_words {
+            code.push(ib::prepare_read());
+            code.push(ib::hint_storew(zero_reg)); // skip length word -> MEM[0]
+            code.push(ib::hint_storew(zero_reg)); // write data -> MEM[0]
+            code.push(ib::loadw(frame_offset + i, zero_reg, 0)); // load from MEM[0] into callee's arg register
+        }
+
+        // Restore mem[0]
+        code.push(ib::storew(save_mem0_reg, zero_reg, 0));
     }
 
-    // 4. Call the entry function
+    // 3. Call the entry function
     //    save_pc and save_fp are relative to callee's FP
     //    fp_offset must be frame_offset * NUM_LIMBS because ib::call does NOT multiply fp_offset
     code.push(ib::call(
@@ -268,12 +267,12 @@ where
         frame_offset * NUM_LIMBS,
     ));
 
-    // 5. Reveal output values
+    // 4. Reveal output values
     for i in 0..num_output_words {
         code.push(ib::reveal_imm(frame_offset + i, zero_reg, i * 4));
     }
 
-    // 6. Halt
+    // 5. Halt
     code.push(ib::halt());
 
     code
@@ -1158,12 +1157,10 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                 c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
 
             vec![
-                // Copy the 32 bit values to the high 32 bits of the temporary value.
-                // Leave the low bits undefined.
+                // Copy the 32 bit value to the high 32 bits of the temporary value.
                 Directive::Instruction(ib::add_imm(high_shifted + 1, input, AluImm::from(0))),
-                // shr will read 64 bits, so we need to zero the other half due to WOM
-                Directive::Instruction(ib::const_32_imm(high_shifted, 0, 0)),
                 // Arithmetic shift right to fill the high bits with the sign bit.
+                // The low 32 bits of the input are discarded by the shift.
                 Directive::Instruction(ib::shr_s_imm_64(output, high_shifted, 32_i16)),
             ]
             .into()
@@ -1405,9 +1402,8 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                 } else {
                     Directive::Instruction(ib::loadbu(val + 1, base_addr, imm))
                 },
-                // shr will read 64 bits, so we need to zero the other half due to WOM
-                Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                // shift i64 val right, keeping the sign
+                // shift i64 val right, keeping the sign.
+                // The low 32 bits of the input are discarded by the shift.
                 Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
             ]
             .into()
@@ -1437,9 +1433,8 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                         Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
                         // combine b0 and b1
                         Directive::Instruction(ib::or(val + 1, b0, b1_shifted)),
-                        // shr will read 64 bits, so we need to zero the other half due to WOM
-                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                        // shift i64 val right, keeping the sign
+                        // shift i64 val right, keeping the sign.
+                        // The low 32 bits of the input are discarded by the shift.
                         Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
                     ]
                 }
@@ -1448,9 +1443,8 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                         vec![
                             // load signed halfword as i32 on the hi part of the i64 val
                             Directive::Instruction(ib::loadh(val + 1, base_addr, imm)),
-                            // shr will read 64 bits, so we need to zero the other half due to WOM
-                            Directive::Instruction(ib::const_32_imm(val, 0, 0)),
-                            // shift i64 val right, keeping the sign
+                            // shift i64 val right, keeping the sign.
+                            // The low 32 bits of the input are discarded by the shift.
                             Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
                         ]
                     } else {
@@ -1470,21 +1464,22 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
 
-            // if signed, we need to place the loaded 32-bit value in a new register
-            // bit extend it with shr_s_imm_64, otherwise we can load directly into lo part
-            let (val_32, zeroed) = if let Op::I64Load32S { .. } = op {
+            // If signed, we place the loaded 32-bit value in the hi word of a temporary
+            // and sign-extend it with shr_s_imm_64.
+            // If unsigned, we load directly into the lo word and zero the hi word.
+            let (val_32, shr_base) = if let Op::I64Load32S { .. } = op {
                 let val = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
-                // Load the value into the hi word, and zero the lo word for the shr
-                (val + 1, val)
+                (val + 1, Some(val))
             } else {
-                // Load directly into lo part, zero the hi part
-                (output, output + 1)
+                (output, None)
             };
 
-            let mut directives = vec![
-                // zero the other half due to WOM
-                Directive::Instruction(ib::const_32_imm(zeroed, 0, 0)),
-            ];
+            let mut directives = vec![];
+
+            // For unsigned, zero the hi word of the output
+            if shr_base.is_none() {
+                directives.push(Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)));
+            }
 
             match memarg.align {
                 0 => {
@@ -1512,7 +1507,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                         // build hi and lo
                         Directive::Instruction(ib::or(lo, b0, b1_shifted)),
                         Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
-                        // build hi i32 in val
+                        // build i32 in val
                         Directive::Instruction(ib::or(val_32, lo, hi)),
                     ]);
                 }
@@ -1534,10 +1529,12 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                 2.. => directives.push(Directive::Instruction(ib::loadw(val_32, base_addr, imm))),
             }
 
-            // In case of signed, we need to right shift the loaded value into the output
-            if let Op::I64Load32S { .. } = op {
-                let d = Directive::Instruction(ib::shr_s_imm_64(output, zeroed, 32_i16));
-                directives.push(d);
+            // In case of signed, right shift to sign-extend the loaded value.
+            // The low 32 bits of the input are discarded by the shift.
+            if let Some(shr_base) = shr_base {
+                directives.push(Directive::Instruction(ib::shr_s_imm_64(
+                    output, shr_base, 32_i16,
+                )));
             }
 
             directives.into()
