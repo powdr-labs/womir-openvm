@@ -176,14 +176,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (exe, stdin) = load_wasm_exe_with_stdin(&program, &function, &args);
             let vm_config = WomirConfig::default();
 
-            let make_state = || {
-                VmState::initial(
-                    &vm_config.system,
-                    &exe.init_memory,
-                    exe.pc_start,
-                    stdin.clone(),
-                )
-            };
+            let make_state = VmState::initial(
+                &vm_config.system,
+                &exe.init_memory,
+                exe.pc_start,
+                stdin.clone(),
+            );
 
             proving::mock_prove(&exe, make_state).map_err(|e| eyre::eyre!("{e}"))?;
             println!("Mock proof verified successfully.");

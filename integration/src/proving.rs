@@ -65,7 +65,7 @@ pub fn prove(exe: &VmExe<F>, stdin: StdIn) -> Result<(), Box<dyn std::error::Err
 /// Mock proof with constraint verification (all segments).
 pub fn mock_prove(
     exe: &VmExe<F>,
-    make_state: impl Fn() -> VmState<F>,
+    init_state: VmState<F>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let engine = default_engine();
     let pk = vm_proving_key();
@@ -77,14 +77,15 @@ pub fn mock_prove(
     // Run metered execution to discover segments.
     let metered_ctx = vm.build_metered_ctx(exe);
     let metered_instance = vm.metered_interpreter(exe)?;
-    let (segments, _) = metered_instance.execute_metered_from_state(make_state(), metered_ctx)?;
+    let (segments, _) =
+        metered_instance.execute_metered_from_state(init_state.clone(), metered_ctx)?;
 
     let cached_program_trace = vm.commit_program_on_device(&exe.program);
     vm.load_program(cached_program_trace);
 
     // Preflight + constraint verification per segment.
     let mut preflight_interpreter = vm.preflight_interpreter(exe)?;
-    let mut state = make_state();
+    let mut state = init_state;
     for segment in &segments {
         vm.transport_init_memory_to_device(&state.memory);
         let preflight_output = vm.execute_preflight(
