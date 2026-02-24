@@ -151,3 +151,27 @@ fn test_cli_run_keccak_wrong_output_fails() {
         "Expected failure with wrong expected byte, but process succeeded"
     );
 }
+
+#[test]
+fn test_cli_mock_prove_fib() {
+    let output = cargo_bin()
+        .args([
+            "mock-prove",
+            sample_program("fib_loop.wasm").to_str().unwrap(),
+            "fib",
+            "--args",
+            "10",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("Mock proof verified successfully."),
+        "unexpected output: {stdout}"
+    );
+}

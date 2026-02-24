@@ -33,8 +33,14 @@ cargo run -r -- run \
     main --args 0 --args 0 --args 1 --args 41
 ```
 
-### Mock proof (constraint verification)
+### Prove (full cryptographic proof)
 
 ```bash
-cargo run -r -- prove sample-programs/fib_loop.wasm fib 10
+cargo run -r -- prove sample-programs/fib_loop.wasm fib --args 10
+```
+
+### Mock proof (constraint verification only)
+
+```bash
+cargo run -r -- mock-prove sample-programs/fib_loop.wasm fib --args 10
 ```

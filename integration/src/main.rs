@@ -69,7 +69,8 @@ enum Commands {
         program: String,
         /// Function name
         function: String,
-        /// Arguments to pass to the function
+        /// Arguments (u32 values)
+        #[arg(long)]
         args: Vec<String>,
         /// Path to output metrics JSON file
         #[arg(long)]
@@ -82,7 +83,8 @@ enum Commands {
         program: String,
         /// Function name
         function: String,
-        /// Arguments to pass to the function
+        /// Arguments (u32 values)
+        #[arg(long)]
         args: Vec<String>,
     },
     /// Proves execution of a function from the RISC-V program with the given arguments.
@@ -91,7 +93,8 @@ enum Commands {
     ProveRiscv {
         /// Path to the Rust crate
         program: String,
-        /// Arguments to pass to OpenVM RISC-V StdIn
+        /// Arguments (u32 values)
+        #[arg(long)]
         args: Vec<String>,
         /// Path to output metrics JSON file
         #[arg(long)]
