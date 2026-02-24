@@ -188,7 +188,7 @@ pub fn test_metered_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error:
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
     let (segments, final_state) =
-        helpers::test_metered_execution(&exe, || build_initial_state(spec, &exe, &vm_config))?;
+        helpers::test_metered_execution(&exe, build_initial_state(spec, &exe, &vm_config))?;
 
     assert_eq!(segments.len(), 1, "expected a single segment");
     verify_state(spec, &final_state)
@@ -198,8 +198,7 @@ pub fn test_metered_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error:
 pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-    let final_state =
-        helpers::test_preflight(&exe, || build_initial_state(spec, &exe, &vm_config))?;
+    let final_state = helpers::test_preflight(&exe, build_initial_state(spec, &exe, &vm_config))?;
 
     verify_state(spec, &final_state)
 }
