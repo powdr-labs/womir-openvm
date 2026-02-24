@@ -23,7 +23,7 @@ Address spaces 1, 2, and 3 are the same as in OpenVM's RISC-V implementation. Ad
 | AS | Constant | Purpose |
 |----|----------|---------|
 | 1 | `RV32_REGISTER_AS` | Register file (4-byte-aligned u8 cells) |
-| 2 | `RV32_MEMORY_AS` | Linear memory (WebAssembly heap) |
+| 2 | `RV32_MEMORY_AS` | Main memory (WebAssembly linear memory, tables, globals, initialization constants, etc.) |
 | 3 | `PUBLIC_VALUES_AS` | Public outputs |
 | 5 | `FP_AS` | Frame pointer storage (1 native field element at address 0) |
 
@@ -42,6 +42,8 @@ Used by ALU, shift, comparison, and equality instructions.
 | c | `RV32_REGISTER_NUM_LIMBS * rs2` |
 | d | 1 (register AS) |
 | e | 1 (register AS) |
+| f | 0 |
+| g | 0 |
 
 #### I-type (register-register-immediate)
 
@@ -51,9 +53,11 @@ Used by ALU/shift/comparison instructions with an immediate operand.
 |-------|-------|
 | a | `RV32_REGISTER_NUM_LIMBS * rd` |
 | b | `RV32_REGISTER_NUM_LIMBS * rs1` |
-| c | `AluImm`-encoded 16-bit signed immediate (low 16 bits = value, byte 2 = sign extension, byte 3 = 0) |
+| c | `AluImm`-encoded 16-bit signed immediate: `i16` sign-extended to 24 bits (`value as i32 as u32 & 0xff_ff_ff`) |
 | d | 1 (register AS) |
 | e | 0 (signals immediate mode) |
+| f | 0 |
+| g | 0 |
 
 ---
 
@@ -94,7 +98,7 @@ Opcodes from `BaseAlu64Opcode`, offset `0x2200`. Same variant names and order as
 
 32-bit opcodes from `DivRemOpcode` (re-exported from OpenVM RV32IM), offset `0x0100`. 64-bit opcodes from `DivRem64Opcode`, offset `0x2254`.
 
-**Division by zero:** The circuit constraints follow the RISC-V specification for division by zero, which differs from WebAssembly semantics. The WOMIR translator guards against this by emitting a trap before the division instruction when the divisor may be zero. See [#24](https://github.com/powdr-labs/womir-openvm/issues/24) for details.
+**Division by zero:** The circuit constraints follow the RISC-V specification for division by zero, which differs from WebAssembly semantics. See [#24](https://github.com/powdr-labs/womir-openvm/issues/24) for details.
 
 | Instruction | Opcode | Format | Semantics |
 |-------------|--------|--------|-----------|

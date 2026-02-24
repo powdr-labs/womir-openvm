@@ -16,9 +16,8 @@ pub struct AluImm(u32);
 
 impl From<i16> for AluImm {
     fn from(value: i16) -> Self {
-        // ALU adapter expects the 16 bits value in the lower 2 bytes,
-        // the sign extension on the 3rd byte, and the 4th byte to
-        // be zeroed.
+        // ALU adapter expects an i16 sign-extended to 24 bits (top byte zeroed).
+        // The adapter then copies byte 2 into byte 3 for full 32-bit sign extension.
         let value = value as i32 as u32 & 0xff_ff_ff;
         AluImm(value)
     }
@@ -125,9 +124,7 @@ pub fn mul_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instru
 
 // ---- Division / Remainder (32-bit) ----
 // The circuit constraints follow the RISC-V spec for division by zero, which
-// differs from WebAssembly semantics. The WOMIR translator guards against this
-// by emitting a trap before the division when the divisor may be zero.
-// See https://github.com/powdr-labs/womir-openvm/issues/24
+// differs from WebAssembly semantics. See https://github.com/powdr-labs/womir-openvm/issues/24
 
 /// rd = rs1 /s rs2 (signed division, 32-bit)
 #[cfg(test)]
