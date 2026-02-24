@@ -153,6 +153,34 @@ fn test_cli_run_keccak_wrong_output_fails() {
 }
 
 #[test]
+fn test_cli_prove_keccak_wrong_output_fails() {
+    build_wasm(&sample_program("keccak_with_inputs"));
+    let wasm = sample_program(
+        "keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm",
+    );
+    let output = cargo_bin()
+        .args([
+            "prove",
+            wasm.to_str().unwrap(),
+            "main",
+            "--args",
+            "0",
+            "--args",
+            "0",
+            "--args",
+            "1",
+            "--args",
+            "42",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "Expected failure with wrong expected byte, but process succeeded"
+    );
+}
+
+#[test]
 fn test_cli_prove_fib() {
     let output = cargo_bin()
         .args([
