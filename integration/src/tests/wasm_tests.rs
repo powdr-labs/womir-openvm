@@ -231,14 +231,12 @@ fn run_wasm_test_function(
         stdin
     };
 
-    let make_state = || {
-        VmState::initial(
-            &vm_config.system,
-            &exe.init_memory,
-            exe.pc_start,
-            make_stdin(),
-        )
-    };
+    let initial_state = VmState::initial(
+        &vm_config.system,
+        &exe.init_memory,
+        exe.pc_start,
+        make_stdin(),
+    );
 
     // Execution (also updates module.memory_image for wast test reuse)
     println!("  Execution");
@@ -261,16 +259,16 @@ fn run_wasm_test_function(
 
     // Metered execution
     println!("  Metered execution");
-    let (segments, _) = helpers::test_metered_execution(&exe, make_state)?;
+    let (segments, _) = helpers::test_metered_execution(&exe, initial_state.clone())?;
     println!("    {} segment(s)", segments.len());
 
     // Preflight
     println!("  Preflight");
-    helpers::test_preflight(&exe, make_state)?;
+    helpers::test_preflight(&exe, initial_state.clone())?;
 
     // Mock proof
     println!("  Mock proof");
-    mock_prove(&exe, make_state)?;
+    mock_prove(&exe, initial_state)?;
 
     Ok(())
 }

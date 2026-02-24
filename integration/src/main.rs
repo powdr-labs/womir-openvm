@@ -14,6 +14,7 @@ use itertools::Itertools;
 use metrics_tracing_context::{MetricsLayer, TracingContextLayer};
 use metrics_util::{debugging::DebuggingRecorder, layers::Layer};
 use openvm_circuit::arch::VmState;
+use openvm_instructions::exe::VmExe;
 use openvm_sdk::StdIn;
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
 use std::path::PathBuf;
@@ -63,16 +64,32 @@ enum Commands {
         binary_input_files: Vec<String>,
     },
     /// Proves execution of a function from the WASM program with the given arguments
+    /// (generates and verifies a full cryptographic proof)
     Prove {
         /// Path to the WASM program
         program: String,
         /// Function name
         function: String,
-        /// Arguments to pass to the function
+        /// Arguments (u32 values)
+        #[arg(long)]
         args: Vec<String>,
+        /// Also run aggregation (inner recursion) after the app proof
+        #[arg(long, default_value_t = false)]
+        recursion: bool,
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
+    },
+    /// Mock-proves execution of a function from the WASM program with the given arguments
+    /// (constraint verification only, no cryptographic proof)
+    MockProve {
+        /// Path to the WASM program
+        program: String,
+        /// Function name
+        function: String,
+        /// Arguments (u32 values)
+        #[arg(long)]
+        args: Vec<String>,
     },
     /// Proves execution of a function from the RISC-V program with the given arguments.
     /// Even though not the main goal of this crate, this is useful for benchmarking against
@@ -80,7 +97,8 @@ enum Commands {
     ProveRiscv {
         /// Path to the Rust crate
         program: String,
-        /// Arguments to pass to OpenVM RISC-V StdIn
+        /// Arguments (u32 values)
+        #[arg(long)]
         args: Vec<String>,
         /// Path to output metrics JSON file
         #[arg(long)]
@@ -135,26 +153,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             function,
             args,
+            recursion,
             metrics,
         } => {
-            let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
-            let (module, functions) = load_wasm(&wasm_bytes);
-            let linked_program = LinkedProgram::new(module, functions);
-            let exe = linked_program.program_with_entry_point(&function);
-            let vm_config = WomirConfig::default();
-
-            let args: Vec<u32> = args.iter().map(|s| s.parse::<u32>().unwrap()).collect();
-            let make_state = || {
-                let mut stdin = StdIn::default();
-                for &arg in &args {
-                    stdin.write(&arg);
-                }
-                VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin)
-            };
+            let exe = load_wasm_exe(&program, &function);
+            let stdin = make_stdin(&args);
 
             let prove = || -> Result<()> {
-                proving::mock_prove(&exe, make_state).map_err(|e| eyre::eyre!("{e}"))?;
-                println!("Mock proof verified successfully.");
+                proving::prove(&exe, stdin, recursion).map_err(|e| eyre::eyre!("{e}"))?;
+                println!("Proof verified successfully.");
                 Ok(())
             };
 
@@ -166,6 +173,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 prove()?;
             }
+        }
+        Commands::MockProve {
+            program,
+            function,
+            args,
+        } => {
+            let exe = load_wasm_exe(&program, &function);
+            let stdin = make_stdin(&args);
+            let vm_config = WomirConfig::default();
+
+            let initial_state = VmState::initial(
+                &vm_config.system,
+                &exe.init_memory,
+                exe.pc_start,
+                stdin.clone(),
+            );
+
+            proving::mock_prove(&exe, initial_state).map_err(|e| eyre::eyre!("{e}"))?;
+            println!("Mock proof verified successfully.");
         }
         Commands::ProveRiscv {
             program,
@@ -217,6 +243,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn load_wasm_exe(program: &str, function: &str) -> VmExe<F> {
+    let wasm_bytes = std::fs::read(program).expect("Failed to read WASM file");
+    let (module, functions) = load_wasm(&wasm_bytes);
+    let linked_program = LinkedProgram::new(module, functions);
+    linked_program.program_with_entry_point(function)
+}
+
+fn make_stdin(args: &[String]) -> StdIn {
+    let mut stdin = StdIn::default();
+    for arg in args {
+        let val = arg.parse::<u32>().unwrap();
+        stdin.write(&val);
+    }
+    stdin
 }
 
 fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) {
