@@ -1341,11 +1341,21 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                 }
                 2.. => {
                     // read two words
-                    // Load hi word first: if output == base_addr, loading lo first would
-                    // clobber the address before the second load reads it.
+                    // Use temps so we never clobber the base register,
+                    // even if output overlaps base_addr.
+                    let lo_tmp =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let hi_tmp =
+                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
-                        Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4)),
-                        Directive::Instruction(ib::loadw(output, base_addr, imm)),
+                        Directive::Instruction(ib::loadw(lo_tmp, base_addr, imm)),
+                        Directive::Instruction(ib::loadw(hi_tmp, base_addr, imm + 4)),
+                        Directive::Instruction(ib::add_imm(output, lo_tmp, AluImm::from(0))),
+                        Directive::Instruction(ib::add_imm(
+                            output + 1,
+                            hi_tmp,
+                            AluImm::from(0),
+                        )),
                     ]
                 }
             }
