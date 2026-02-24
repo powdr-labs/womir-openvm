@@ -487,7 +487,7 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
-    // ==================== LoadStore Tests ====================
+    // ==================== LoadStore and LoadSignExtend Tests ====================
 
     #[test]
     fn test_loadw() {
@@ -631,8 +631,6 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
-    // ==================== LoadSignExtend Tests ====================
-
     #[test]
     fn test_loadb_positive() {
         setup_tracing_with_log_level(Level::WARN);
@@ -705,6 +703,47 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
+    #[test]
+    fn test_storeb_with_offset_roundtrip() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Store byte at two offsets, load them back and add
+        let spec = TestSpec {
+            program: vec![
+                wom::storeb(0, 1, 0), // MEM[500+0] = lowest byte of reg[0] = 0x34
+                wom::storeb(0, 1, 1), // MEM[500+1] = lowest byte of reg[0] = 0x34
+                wom::loadbu(2, 1, 0), // reg[2] = 0x34
+                wom::loadbu(3, 1, 1), // reg[3] = 0x34
+                wom::add(4, 2, 3),    // reg[4] = 0x34 + 0x34 = 104
+            ],
+            start_fp: 10,
+            start_registers: vec![(10, 0x1234), (11, 500)],
+            expected_registers: vec![(14, 104)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_storeh_with_offset_roundtrip() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Store halfwords at two offsets, load them back and add
+        let spec = TestSpec {
+            program: vec![
+                wom::storeh(0, 2, 0), // MEM[600+0] = 0x1111
+                wom::storeh(1, 2, 2), // MEM[600+2] = 0x2222
+                wom::loadhu(3, 2, 0), // reg[3] = 0x1111
+                wom::loadhu(4, 2, 2), // reg[4] = 0x2222
+                wom::add(5, 3, 4),    // reg[5] = 0x1111 + 0x2222 = 13107
+            ],
+            start_fp: 10,
+            start_registers: vec![(10, 0x1111), (11, 0x2222), (12, 600)],
+            expected_registers: vec![(15, 13107)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
     // ==================== LessThan Tests ====================
 
     #[test]
@@ -822,6 +861,179 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
+    #[test]
+    fn test_lt_s_positive() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 50 < 100 = 1 (signed, both positive)
+        let spec = TestSpec {
+            program: vec![wom::lt_s(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 50), (11, 100)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_lt_s_both_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // -2 < -4 = 0 (signed, -2 is greater than -4)
+        let spec = TestSpec {
+            program: vec![wom::lt_s(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, (-2_i32) as u32), (11, (-4_i32) as u32)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_gt_u_false() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 100 > 200 = 0 (unsigned)
+        let spec = TestSpec {
+            program: vec![wom::gt_u(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 100), (11, 200)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_gt_u_equal() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 150 > 150 = 0 (unsigned)
+        let spec = TestSpec {
+            program: vec![wom::gt_u(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 150), (11, 150)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_gt_s_positive() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 100 > 50 = 1 (signed)
+        let spec = TestSpec {
+            program: vec![wom::gt_s(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 100), (11, 50)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_gt_s_both_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // -2 > -4 = 1 (signed)
+        let spec = TestSpec {
+            program: vec![wom::gt_s(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, (-2_i32) as u32), (11, (-4_i32) as u32)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_lt_comparison_chain() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // (10 < 20) && (20 < 30): both true, AND = 1
+        let spec = TestSpec {
+            program: vec![
+                wom::lt_u(3, 0, 1), // reg[3] = (10 < 20) = 1
+                wom::lt_u(4, 1, 2), // reg[4] = (20 < 30) = 1
+                wom::and(5, 3, 4),  // reg[5] = 1 & 1 = 1
+            ],
+            start_fp: 10,
+            start_registers: vec![(10, 10), (11, 20), (12, 30)],
+            expected_registers: vec![(15, 1)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_gt_edge_cases() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // max u32 > 0 (unsigned), max positive i32 > 0 (signed), combine
+        let spec = TestSpec {
+            program: vec![
+                wom::gt_u(2, 0, 1), // reg[2] = (0xFFFFFFFF > 0) unsigned = 1
+                wom::gt_s(5, 3, 4), // reg[5] = (0x7FFFFFFF > 0) signed = 1
+                wom::and(6, 2, 5),  // reg[6] = 1 & 1 = 1
+            ],
+            start_fp: 10,
+            start_registers: vec![
+                (10, 0xFFFFFFFF), // max u32
+                (11, 0),
+                (13, 0x7FFFFFFF), // max positive i32
+                (14, 0),
+            ],
+            expected_registers: vec![(16, 1)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_comparison_equivalence() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // gt_u(a, b) == lt_u(b, a): xor should be 0
+        let spec = TestSpec {
+            program: vec![
+                wom::gt_u(2, 0, 1), // reg[2] = (25 > 10) = 1
+                wom::lt_u(3, 1, 0), // reg[3] = (10 < 25) = 1
+                wom::xor(4, 2, 3),  // reg[4] = 0
+            ],
+            start_fp: 10,
+            start_registers: vec![(10, 25), (11, 10)],
+            expected_registers: vec![(14, 0)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mixed_signed_unsigned() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0xFFFFFFFE: large unsigned, but -2 signed
+        // unsigned: 0xFFFFFFFE > 2 = 1
+        // signed: -2 > 2 = 0
+        // difference = 1
+        let spec = TestSpec {
+            program: vec![
+                wom::gt_u(2, 0, 1), // reg[2] = (0xFFFFFFFE > 2) unsigned = 1
+                wom::gt_s(3, 0, 1), // reg[3] = (-2 > 2) signed = 0
+                wom::sub(4, 2, 3),  // reg[4] = 1 - 0 = 1
+            ],
+            start_fp: 10,
+            start_registers: vec![(10, 0xFFFFFFFE), (11, 2)],
+            expected_registers: vec![(14, 1)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
     // ==================== LessThan64 Tests ====================
 
     #[test]
@@ -1988,6 +2200,193 @@ mod tests {
         test_spec_for_all_register_bases(spec);
     }
 
+    #[test]
+    fn test_mul_zero() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 12345 * 0 = 0
+        let spec = TestSpec {
+            program: vec![wom::mul(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 12345), (11, 0)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_one() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 999 * 1 = 999
+        let spec = TestSpec {
+            program: vec![wom::mul(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 999), (11, 1)],
+            expected_registers: vec![(12, 999)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_powers_of_two() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 7 * 8 = 56
+        let spec = TestSpec {
+            program: vec![wom::mul(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 7), (11, 8)],
+            expected_registers: vec![(12, 56)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_large_numbers() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 65537 * 65521 = 4294049777 (wrapping u32)
+        let spec = TestSpec {
+            program: vec![wom::mul(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 65537), (11, 65521)],
+            expected_registers: vec![(12, 4294049777u32)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_max_value() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0xFFFFFFFF * 1 = 0xFFFFFFFF
+        let spec = TestSpec {
+            program: vec![wom::mul(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0xFFFFFFFF), (11, 1)],
+            expected_registers: vec![(12, 0xFFFFFFFF)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_negative_positive() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // (-5) * 3 = -15 = 0xFFFFFFF1
+        let spec = TestSpec {
+            program: vec![wom::mul(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, (-5_i32) as u32), (11, 3)],
+            expected_registers: vec![(12, 0xFFFFFFF1)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_positive_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 4 * (-6) = -24 = 0xFFFFFFE8
+        let spec = TestSpec {
+            program: vec![wom::mul(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 4), (11, (-6_i32) as u32)],
+            expected_registers: vec![(12, 0xFFFFFFE8)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_both_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // (-7) * (-3) = 21
+        let spec = TestSpec {
+            program: vec![wom::mul(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, (-7_i32) as u32), (11, (-3_i32) as u32)],
+            expected_registers: vec![(12, 21)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_negative_one() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 * (-1) = -42 = 0xFFFFFFD6
+        let spec = TestSpec {
+            program: vec![wom::mul(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, (-1_i32) as u32)],
+            expected_registers: vec![(12, 0xFFFFFFD6)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_negative_overflow() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // INT32_MIN * (-1) = INT32_MIN (0x80000000) due to overflow
+        let spec = TestSpec {
+            program: vec![wom::mul(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0x80000000), (11, (-1_i32) as u32)],
+            expected_registers: vec![(12, 0x80000000)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_commutative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Verify a*b == b*a: (13*17) - (17*13) = 0
+        let spec = TestSpec {
+            program: vec![
+                wom::mul(2, 0, 1), // reg[2] = 13 * 17
+                wom::mul(3, 1, 0), // reg[3] = 17 * 13
+                wom::sub(4, 2, 3), // reg[4] = 0
+            ],
+            start_fp: 10,
+            start_registers: vec![(10, 13), (11, 17)],
+            expected_registers: vec![(14, 0)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_mul_chain() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 2 * 3 = 6, 6 * 5 = 30
+        let spec = TestSpec {
+            program: vec![
+                wom::mul(3, 0, 1), // reg[3] = 2 * 3 = 6
+                wom::mul(4, 3, 2), // reg[4] = 6 * 5 = 30
+            ],
+            start_fp: 10,
+            start_registers: vec![(10, 2), (11, 3), (12, 5)],
+            expected_registers: vec![(14, 30)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
     // ==================== Jump Tests ====================
 
     #[test]
@@ -2314,6 +2713,147 @@ mod tests {
             ..Default::default()
         };
 
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_div_by_one() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 999 / 1 = 999
+        let spec = TestSpec {
+            program: vec![wom::div(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 999), (11, 1)],
+            expected_registers: vec![(12, 999)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_div_equal_numbers() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 / 42 = 1
+        let spec = TestSpec {
+            program: vec![wom::div(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 42), (11, 42)],
+            expected_registers: vec![(12, 1)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_div_with_remainder() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 17 / 5 = 3 (integer division, truncated)
+        let spec = TestSpec {
+            program: vec![wom::div(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 17), (11, 5)],
+            expected_registers: vec![(12, 3)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_div_zero_dividend() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 0 / 100 = 0
+        let spec = TestSpec {
+            program: vec![wom::div(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 0), (11, 100)],
+            expected_registers: vec![(12, 0)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_div_large_numbers() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 65536000 / 256 = 256000
+        let spec = TestSpec {
+            program: vec![wom::divu(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 65536000), (11, 256)],
+            expected_registers: vec![(12, 256000)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_div_powers_of_two() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 128 / 8 = 16
+        let spec = TestSpec {
+            program: vec![wom::div(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, 128), (11, 8)],
+            expected_registers: vec![(12, 16)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_div_both_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // (-20) / (-5) = 4
+        let spec = TestSpec {
+            program: vec![wom::div(2, 0, 1)],
+            start_fp: 10,
+            start_registers: vec![(10, (-20_i32) as u32), (11, (-5_i32) as u32)],
+            expected_registers: vec![(12, 4)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_div_chain() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 120 / 2 = 60, 60 / 3 = 20
+        let spec = TestSpec {
+            program: vec![
+                wom::div(3, 0, 1), // reg[3] = 120 / 2 = 60
+                wom::div(4, 3, 2), // reg[4] = 60 / 3 = 20
+            ],
+            start_fp: 10,
+            start_registers: vec![(10, 120), (11, 2), (12, 3)],
+            expected_registers: vec![(14, 20)],
+            ..Default::default()
+        };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_div_and_mul_inverse() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // (100 / 7) * 7 = 14 * 7 = 98 (not 100 due to integer truncation)
+        let spec = TestSpec {
+            program: vec![
+                wom::div(2, 0, 1), // reg[2] = 100 / 7 = 14
+                wom::mul(3, 2, 1), // reg[3] = 14 * 7 = 98
+            ],
+            start_fp: 10,
+            start_registers: vec![(10, 100), (11, 7)],
+            expected_registers: vec![(13, 98)],
+            ..Default::default()
+        };
         test_spec_for_all_register_bases(spec)
     }
 
@@ -2814,558 +3354,6 @@ mod tests {
                 (25, 100), // caller_frame[5] unchanged
                 (53, 42),  // callee_frame[3] at abs 53: written by callee, persists
             ],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    // ==================== Additional Mul Tests ====================
-
-    #[test]
-    fn test_mul_zero() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 12345 * 0 = 0
-        let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 12345), (11, 0)],
-            expected_registers: vec![(12, 0)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mul_one() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 999 * 1 = 999
-        let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 999), (11, 1)],
-            expected_registers: vec![(12, 999)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mul_powers_of_two() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 7 * 8 = 56
-        let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 7), (11, 8)],
-            expected_registers: vec![(12, 56)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mul_large_numbers() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 65537 * 65521 = 4294049777 (wrapping u32)
-        let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 65537), (11, 65521)],
-            expected_registers: vec![(12, 4294049777u32)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mul_max_value() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 0xFFFFFFFF * 1 = 0xFFFFFFFF
-        let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 0xFFFFFFFF), (11, 1)],
-            expected_registers: vec![(12, 0xFFFFFFFF)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mul_negative_positive() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // (-5) * 3 = -15 = 0xFFFFFFF1
-        let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, (-5_i32) as u32), (11, 3)],
-            expected_registers: vec![(12, 0xFFFFFFF1)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mul_positive_negative() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 4 * (-6) = -24 = 0xFFFFFFE8
-        let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 4), (11, (-6_i32) as u32)],
-            expected_registers: vec![(12, 0xFFFFFFE8)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mul_both_negative() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // (-7) * (-3) = 21
-        let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, (-7_i32) as u32), (11, (-3_i32) as u32)],
-            expected_registers: vec![(12, 21)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mul_negative_one() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 42 * (-1) = -42 = 0xFFFFFFD6
-        let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 42), (11, (-1_i32) as u32)],
-            expected_registers: vec![(12, 0xFFFFFFD6)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mul_negative_overflow() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // INT32_MIN * (-1) = INT32_MIN (0x80000000) due to overflow
-        let spec = TestSpec {
-            program: vec![wom::mul(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 0x80000000), (11, (-1_i32) as u32)],
-            expected_registers: vec![(12, 0x80000000)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mul_commutative() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // Verify a*b == b*a: (13*17) - (17*13) = 0
-        let spec = TestSpec {
-            program: vec![
-                wom::mul(2, 0, 1), // reg[2] = 13 * 17
-                wom::mul(3, 1, 0), // reg[3] = 17 * 13
-                wom::sub(4, 2, 3), // reg[4] = 0
-            ],
-            start_fp: 10,
-            start_registers: vec![(10, 13), (11, 17)],
-            expected_registers: vec![(14, 0)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mul_chain() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 2 * 3 = 6, 6 * 5 = 30
-        let spec = TestSpec {
-            program: vec![
-                wom::mul(3, 0, 1), // reg[3] = 2 * 3 = 6
-                wom::mul(4, 3, 2), // reg[4] = 6 * 5 = 30
-            ],
-            start_fp: 10,
-            start_registers: vec![(10, 2), (11, 3), (12, 5)],
-            expected_registers: vec![(14, 30)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    // ==================== Additional DivRem Tests ====================
-
-    #[test]
-    fn test_div_by_one() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 999 / 1 = 999
-        let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 999), (11, 1)],
-            expected_registers: vec![(12, 999)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_div_equal_numbers() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 42 / 42 = 1
-        let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 42), (11, 42)],
-            expected_registers: vec![(12, 1)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_div_with_remainder() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 17 / 5 = 3 (integer division, truncated)
-        let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 17), (11, 5)],
-            expected_registers: vec![(12, 3)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_div_zero_dividend() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 0 / 100 = 0
-        let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 0), (11, 100)],
-            expected_registers: vec![(12, 0)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_div_large_numbers() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 65536000 / 256 = 256000
-        let spec = TestSpec {
-            program: vec![wom::divu(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 65536000), (11, 256)],
-            expected_registers: vec![(12, 256000)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_div_powers_of_two() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 128 / 8 = 16
-        let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 128), (11, 8)],
-            expected_registers: vec![(12, 16)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_div_both_negative() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // (-20) / (-5) = 4
-        let spec = TestSpec {
-            program: vec![wom::div(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, (-20_i32) as u32), (11, (-5_i32) as u32)],
-            expected_registers: vec![(12, 4)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_div_chain() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 120 / 2 = 60, 60 / 3 = 20
-        let spec = TestSpec {
-            program: vec![
-                wom::div(3, 0, 1), // reg[3] = 120 / 2 = 60
-                wom::div(4, 3, 2), // reg[4] = 60 / 3 = 20
-            ],
-            start_fp: 10,
-            start_registers: vec![(10, 120), (11, 2), (12, 3)],
-            expected_registers: vec![(14, 20)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_div_and_mul_inverse() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // (100 / 7) * 7 = 14 * 7 = 98 (not 100 due to integer truncation)
-        let spec = TestSpec {
-            program: vec![
-                wom::div(2, 0, 1), // reg[2] = 100 / 7 = 14
-                wom::mul(3, 2, 1), // reg[3] = 14 * 7 = 98
-            ],
-            start_fp: 10,
-            start_registers: vec![(10, 100), (11, 7)],
-            expected_registers: vec![(13, 98)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    // ==================== Additional Comparison Tests ====================
-
-    #[test]
-    fn test_lt_s_positive() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 50 < 100 = 1 (signed, both positive)
-        let spec = TestSpec {
-            program: vec![wom::lt_s(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 50), (11, 100)],
-            expected_registers: vec![(12, 1)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_lt_s_both_negative() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // -2 < -4 = 0 (signed, -2 is greater than -4)
-        let spec = TestSpec {
-            program: vec![wom::lt_s(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, (-2_i32) as u32), (11, (-4_i32) as u32)],
-            expected_registers: vec![(12, 0)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_gt_u_false() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 100 > 200 = 0 (unsigned)
-        let spec = TestSpec {
-            program: vec![wom::gt_u(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 100), (11, 200)],
-            expected_registers: vec![(12, 0)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_gt_u_equal() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 150 > 150 = 0 (unsigned)
-        let spec = TestSpec {
-            program: vec![wom::gt_u(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 150), (11, 150)],
-            expected_registers: vec![(12, 0)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_gt_s_positive() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 100 > 50 = 1 (signed)
-        let spec = TestSpec {
-            program: vec![wom::gt_s(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, 100), (11, 50)],
-            expected_registers: vec![(12, 1)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_gt_s_both_negative() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // -2 > -4 = 1 (signed)
-        let spec = TestSpec {
-            program: vec![wom::gt_s(2, 0, 1)],
-            start_fp: 10,
-            start_registers: vec![(10, (-2_i32) as u32), (11, (-4_i32) as u32)],
-            expected_registers: vec![(12, 1)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_lt_comparison_chain() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // (10 < 20) && (20 < 30): both true, AND = 1
-        let spec = TestSpec {
-            program: vec![
-                wom::lt_u(3, 0, 1), // reg[3] = (10 < 20) = 1
-                wom::lt_u(4, 1, 2), // reg[4] = (20 < 30) = 1
-                wom::and(5, 3, 4),  // reg[5] = 1 & 1 = 1
-            ],
-            start_fp: 10,
-            start_registers: vec![(10, 10), (11, 20), (12, 30)],
-            expected_registers: vec![(15, 1)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_gt_edge_cases() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // max u32 > 0 (unsigned), max positive i32 > 0 (signed), combine
-        let spec = TestSpec {
-            program: vec![
-                wom::gt_u(2, 0, 1), // reg[2] = (0xFFFFFFFF > 0) unsigned = 1
-                wom::gt_s(5, 3, 4), // reg[5] = (0x7FFFFFFF > 0) signed = 1
-                wom::and(6, 2, 5),  // reg[6] = 1 & 1 = 1
-            ],
-            start_fp: 10,
-            start_registers: vec![
-                (10, 0xFFFFFFFF), // max u32
-                (11, 0),
-                (13, 0x7FFFFFFF), // max positive i32
-                (14, 0),
-            ],
-            expected_registers: vec![(16, 1)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_comparison_equivalence() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // gt_u(a, b) == lt_u(b, a): xor should be 0
-        let spec = TestSpec {
-            program: vec![
-                wom::gt_u(2, 0, 1), // reg[2] = (25 > 10) = 1
-                wom::lt_u(3, 1, 0), // reg[3] = (10 < 25) = 1
-                wom::xor(4, 2, 3),  // reg[4] = 0
-            ],
-            start_fp: 10,
-            start_registers: vec![(10, 25), (11, 10)],
-            expected_registers: vec![(14, 0)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_mixed_signed_unsigned() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // 0xFFFFFFFE: large unsigned, but -2 signed
-        // unsigned: 0xFFFFFFFE > 2 = 1
-        // signed: -2 > 2 = 0
-        // difference = 1
-        let spec = TestSpec {
-            program: vec![
-                wom::gt_u(2, 0, 1), // reg[2] = (0xFFFFFFFE > 2) unsigned = 1
-                wom::gt_s(3, 0, 1), // reg[3] = (-2 > 2) signed = 0
-                wom::sub(4, 2, 3),  // reg[4] = 1 - 0 = 1
-            ],
-            start_fp: 10,
-            start_registers: vec![(10, 0xFFFFFFFE), (11, 2)],
-            expected_registers: vec![(14, 1)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    // ==================== Additional LoadStore Tests ====================
-
-    #[test]
-    fn test_storeb_with_offset_roundtrip() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // Store byte at two offsets, load them back and add
-        let spec = TestSpec {
-            program: vec![
-                wom::storeb(0, 1, 0), // MEM[500+0] = lowest byte of reg[0] = 0x34
-                wom::storeb(0, 1, 1), // MEM[500+1] = lowest byte of reg[0] = 0x34
-                wom::loadbu(2, 1, 0), // reg[2] = 0x34
-                wom::loadbu(3, 1, 1), // reg[3] = 0x34
-                wom::add(4, 2, 3),    // reg[4] = 0x34 + 0x34 = 104
-            ],
-            start_fp: 10,
-            start_registers: vec![(10, 0x1234), (11, 500)],
-            expected_registers: vec![(14, 104)],
-            ..Default::default()
-        };
-        test_spec_for_all_register_bases(spec)
-    }
-
-    #[test]
-    fn test_storeh_with_offset_roundtrip() {
-        setup_tracing_with_log_level(Level::WARN);
-
-        // Store halfwords at two offsets, load them back and add
-        let spec = TestSpec {
-            program: vec![
-                wom::storeh(0, 2, 0), // MEM[600+0] = 0x1111
-                wom::storeh(1, 2, 2), // MEM[600+2] = 0x2222
-                wom::loadhu(3, 2, 0), // reg[3] = 0x1111
-                wom::loadhu(4, 2, 2), // reg[4] = 0x2222
-                wom::add(5, 3, 4),    // reg[5] = 0x1111 + 0x2222 = 13107
-            ],
-            start_fp: 10,
-            start_registers: vec![(10, 0x1111), (11, 0x2222), (12, 600)],
-            expected_registers: vec![(15, 13107)],
             ..Default::default()
         };
         test_spec_for_all_register_bases(spec)
