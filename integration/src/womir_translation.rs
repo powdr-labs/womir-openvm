@@ -884,9 +884,8 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
         | Op::I32LeU
         | Op::I64LeS
         | Op::I64LeU => {
-            let inverse_result =
-                c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
             let output = output.start as usize;
+            let inverse_result = output;
 
             let comp_instruction = match [&inputs[0], &inputs[1]] {
                 [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
@@ -1112,8 +1111,6 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let input = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
-            let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-
             let shift = match op {
                 Op::I32Extend8S => 24_i16,
                 Op::I32Extend16S => 16_i16,
@@ -1122,16 +1119,14 @@ fn translate_complex_ins<'a, F: PrimeField32>(
 
             // Left shift followed by arithmetic right shift
             vec![
-                Directive::Instruction(ib::shl_imm(tmp, input, shift)),
-                Directive::Instruction(ib::shr_s_imm(output, tmp, shift)),
+                Directive::Instruction(ib::shl_imm(output, input, shift)),
+                Directive::Instruction(ib::shr_s_imm(output, output, shift)),
             ]
             .into()
         }
         Op::I64Extend8S | Op::I64Extend16S | Op::I64Extend32S => {
             let input = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
-
-            let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
 
             let shift = match op {
                 Op::I64Extend8S => 56_i16,
@@ -1142,8 +1137,8 @@ fn translate_complex_ins<'a, F: PrimeField32>(
 
             // Left shift followed by arithmetic right shift
             vec![
-                Directive::Instruction(ib::shl_imm_64(tmp, input, shift)),
-                Directive::Instruction(ib::shr_s_imm_64(output, tmp, shift)),
+                Directive::Instruction(ib::shl_imm_64(output, input, shift)),
+                Directive::Instruction(ib::shr_s_imm_64(output, output, shift)),
             ]
             .into()
         }
@@ -1153,17 +1148,14 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let input = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
-            let high_shifted =
-                c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
-
             vec![
                 // Copy the 32 bit values to the high 32 bits of the temporary value.
                 // Leave the low bits undefined.
-                Directive::Instruction(ib::add_imm(high_shifted + 1, input, AluImm::from(0))),
+                Directive::Instruction(ib::add_imm(output + 1, input, AluImm::from(0))),
                 // shr will read 64 bits, so we need to zero the other half due to WOM
-                Directive::Instruction(ib::const_32_imm(high_shifted, 0, 0)),
+                Directive::Instruction(ib::const_32_imm(output, 0, 0)),
                 // Arithmetic shift right to fill the high bits with the sign bit.
-                Directive::Instruction(ib::shr_s_imm_64(output, high_shifted, 32_i16)),
+                Directive::Instruction(ib::shr_s_imm_64(output, output, 32_i16)),
             ]
             .into()
         }
@@ -1395,19 +1387,18 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
-            let val = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
 
             vec![
                 // load signed or unsigned byte as i32 hi part
                 if let Op::I64Load8S { .. } = op {
-                    Directive::Instruction(ib::loadb(val + 1, base_addr, imm))
+                    Directive::Instruction(ib::loadb(output + 1, base_addr, imm))
                 } else {
-                    Directive::Instruction(ib::loadbu(val + 1, base_addr, imm))
+                    Directive::Instruction(ib::loadbu(output + 1, base_addr, imm))
                 },
                 // shr will read 64 bits, so we need to zero the other half due to WOM
-                Directive::Instruction(ib::const_32_imm(val, 0, 0)),
+                Directive::Instruction(ib::const_32_imm(output, 0, 0)),
                 // shift i64 val right, keeping the sign
-                Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
+                Directive::Instruction(ib::shr_s_imm_64(output, output, 32_i16)),
             ]
             .into()
         }
@@ -1415,7 +1406,6 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
-            let val = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
 
             match memarg.align {
                 0 => {
@@ -1435,22 +1425,22 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                         // load b0
                         Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
                         // combine b0 and b1
-                        Directive::Instruction(ib::or(val + 1, b0, b1_shifted)),
+                        Directive::Instruction(ib::or(output + 1, b0, b1_shifted)),
                         // shr will read 64 bits, so we need to zero the other half due to WOM
-                        Directive::Instruction(ib::const_32_imm(val, 0, 0)),
+                        Directive::Instruction(ib::const_32_imm(output, 0, 0)),
                         // shift i64 val right, keeping the sign
-                        Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
+                        Directive::Instruction(ib::shr_s_imm_64(output, output, 32_i16)),
                     ]
                 }
                 1.. => {
                     if let Op::I64Load16S { .. } = op {
                         vec![
                             // load signed halfword as i32 on the hi part of the i64 val
-                            Directive::Instruction(ib::loadh(val + 1, base_addr, imm)),
+                            Directive::Instruction(ib::loadh(output + 1, base_addr, imm)),
                             // shr will read 64 bits, so we need to zero the other half due to WOM
-                            Directive::Instruction(ib::const_32_imm(val, 0, 0)),
+                            Directive::Instruction(ib::const_32_imm(output, 0, 0)),
                             // shift i64 val right, keeping the sign
-                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
+                            Directive::Instruction(ib::shr_s_imm_64(output, output, 32_i16)),
                         ]
                     } else {
                         vec![
@@ -1472,18 +1462,14 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             // if signed, we need to place the loaded 32-bit value in a new register
             // bit extend it with shr_s_imm_64, otherwise we can load directly into lo part
             let (val_32, zeroed) = if let Op::I64Load32S { .. } = op {
-                let val = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
                 // Load the value into the hi word, and zero the lo word for the shr
-                (val + 1, val)
+                (output + 1, output)
             } else {
                 // Load directly into lo part, zero the hi part
                 (output, output + 1)
             };
 
-            let mut directives = vec![
-                // zero the other half due to WOM
-                Directive::Instruction(ib::const_32_imm(zeroed, 0, 0)),
-            ];
+            let mut directives = vec![];
 
             match memarg.align {
                 0 => {
@@ -1532,6 +1518,9 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                 }
                 2.. => directives.push(Directive::Instruction(ib::loadw(val_32, base_addr, imm))),
             }
+
+            // Zero the other half due to WOM
+            directives.push(Directive::Instruction(ib::const_32_imm(zeroed, 0, 0)));
 
             // In case of signed, we need to right shift the loaded value into the output
             if let Op::I64Load32S { .. } = op {
