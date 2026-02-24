@@ -173,16 +173,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             function,
             args,
         } => {
-            let (exe, _) = load_wasm_exe_with_stdin(&program, &function, &args);
+            let (exe, stdin) = load_wasm_exe_with_stdin(&program, &function, &args);
             let vm_config = WomirConfig::default();
 
-            let args: Vec<u32> = args.iter().map(|s| s.parse::<u32>().unwrap()).collect();
             let make_state = || {
-                let mut stdin = StdIn::default();
-                for &arg in &args {
-                    stdin.write(&arg);
-                }
-                VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin)
+                VmState::initial(
+                    &vm_config.system,
+                    &exe.init_memory,
+                    exe.pc_start,
+                    stdin.clone(),
+                )
             };
 
             proving::mock_prove(&exe, make_state).map_err(|e| eyre::eyre!("{e}"))?;
