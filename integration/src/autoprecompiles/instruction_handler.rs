@@ -61,28 +61,6 @@ impl<F> InstructionHandler for WomirOriginalAirs<F> {
 }
 
 impl<F> WomirOriginalAirs<F> {
-    /// Build the instruction handler from a WomirConfig.
-    ///
-    /// This involves building the WOMIR chip complex, extracting symbolic AIRs
-    /// for each instruction chip, and mapping opcodes to those AIRs.
-    ///
-    /// Follows the pattern from `OriginalVmConfig::airs()` in
-    /// `powdr-openvm/src/extraction_utils.rs`.
-    pub fn from_womir_config(_degree_bound: DegreeBound) -> Self {
-        // TODO: Build the WOMIR chip complex (WomirConfig), extract AirInventory,
-        // iterate over allowed opcodes, and build opcode_to_air + air_name_to_machine maps.
-        //
-        // High-level steps:
-        // 1. Create WomirConfig::default() and build its AirInventory
-        // 2. Create executor inventory to get opcode -> executor mappings
-        // 3. For each opcode in instruction_allowlist():
-        //    a. Find the AIR that handles it
-        //    b. Extract symbolic constraints and bus interactions
-        //    c. Convert to powdr SymbolicMachine format
-        // 4. Populate opcode_to_air and air_name_to_machine
-        todo!("Build WomirOriginalAirs from WomirConfig")
-    }
-
     pub fn get_instruction_metrics(&self, opcode: VmOpcode) -> Option<&AirMetrics> {
         self.opcode_to_air.get(&opcode).and_then(|air_name| {
             self.air_name_to_machine
