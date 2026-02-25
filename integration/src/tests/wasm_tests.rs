@@ -496,21 +496,34 @@ fn test_read_serde() {
     run_womir_guest("read_serde", "main", &[0, 0], &[], &[], &[&bytes])
 }
 
-#[test]
-fn test_eth_block_1() {
+fn run_eth_block(block_input: &str, prove: bool) {
     let wasm_path = format!(
         "{}/../sample-programs/eth-block/openvm-client-eth.wasm",
         env!("CARGO_MANIFEST_DIR")
     );
     let input_path = format!(
-        "{}/../sample-programs/eth-block/1.bin",
+        "{}/../sample-programs/eth-block/{block_input}",
         env!("CARGO_MANIFEST_DIR")
     );
-    let input_bytes = std::fs::read(&input_path).expect("Failed to read block 1 input");
+    let input_bytes = std::fs::read(&input_path).expect("Failed to read block input");
     let wasm_bytes = std::fs::read(&wasm_path).expect("Failed to read WASM file");
     let mut module = load_wasm_module(&wasm_bytes);
-    // Execution only for now.
-    run_wasm_test_function(&mut module, "main", &[0, 0], &[], false, &[&input_bytes]).unwrap()
+    run_wasm_test_function(&mut module, "main", &[0, 0], &[], prove, &[&input_bytes]).unwrap()
+}
+
+#[test]
+fn test_eth_block_1() {
+    run_eth_block("1.bin", true);
+}
+
+#[test]
+fn test_eth_block_24171377() {
+    run_eth_block("24171377.bin", false);
+}
+
+#[test]
+fn test_eth_block_24171384() {
+    run_eth_block("24171384.bin", false);
 }
 
 fn run_womir_guest(

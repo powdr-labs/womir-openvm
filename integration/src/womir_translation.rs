@@ -1384,13 +1384,20 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                     ]
                 }
                 2.. => {
-                    // read two words
-                    // Load hi word first: if output == base_addr, loading lo first would
-                    // clobber the address before the second load reads it.
-                    vec![
-                        Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4)),
-                        Directive::Instruction(ib::loadw(output, base_addr, imm)),
-                    ]
+                    // Read two words.
+                    // If the output register pair overlaps the base address register,
+                    // one of the loads will clobber it. We must schedule the clobbering
+                    // load LAST so the other load can still read the base pointer.
+                    let lo = Directive::Instruction(ib::loadw(output, base_addr, imm));
+                    let hi = Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4));
+                    if output + 1 == base_addr {
+                        // hi clobbers base_addr → emit lo first
+                        vec![lo, hi]
+                    } else {
+                        // output == base_addr or no overlap → emit hi first
+                        // (if output == base_addr, lo clobbers it, so hi must go first)
+                        vec![hi, lo]
+                    }
                 }
             }
             .into()
@@ -1482,11 +1489,6 @@ fn translate_complex_ins<'a, F: PrimeField32>(
 
             let mut directives = vec![];
 
-            // For unsigned, zero the hi word of the output
-            if shr_base.is_none() {
-                directives.push(Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)));
-            }
-
             match memarg.align {
                 0 => {
                     let b0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
@@ -1533,6 +1535,14 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                     ]);
                 }
                 2.. => directives.push(Directive::Instruction(ib::loadw(val_32, base_addr, imm))),
+            }
+
+            // For unsigned, zero the hi word of the output.
+            // Must come AFTER the load so that the flattener emits the load before
+            // the const, preventing the const from clobbering a register that the
+            // load still reads (e.g. the base address pointer).
+            if shr_base.is_none() {
+                directives.push(Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)));
             }
 
             // In case of signed, right shift to sign-extend the loaded value.
