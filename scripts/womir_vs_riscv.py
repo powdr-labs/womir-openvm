@@ -21,25 +21,28 @@ vm_connector = "VmConnectorAir"
 phantom = "PhantomAir"
 
 # WOMIR specific
-womir_alu_32 = "VmAirWrapper<WomBaseAluAdapterAir<2, 4, 4>, BaseAluCoreAir<4, 8>"
-womir_alu_64 = "VmAirWrapper<WomBaseAluAdapterAir<4, 8, 8>, BaseAluCoreAir<8, 8>"
-womir_mul_32 = "VmAirWrapper<WomBaseAluAdapterAir<2, 4, 4>, MultiplicationCoreAir<4, 8>"
-womir_mul_64 = "VmAirWrapper<WomBaseAluAdapterAir<4, 8, 8>, MultiplicationCoreAir<8, 8>"
-womir_shift_32 = "VmAirWrapper<WomBaseAluAdapterAir<2, 4, 4>, ShiftCoreAir<4, 8>"
-womir_shift_64 = "VmAirWrapper<WomBaseAluAdapterAir<4, 8, 8>, ShiftCoreAir<8, 8>"
+womir_alu_32 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, BaseAluCoreAir<4, 8>"
+womir_alu_64 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 2>, BaseAluCoreAir<8, 8>"
+womir_mul_32 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, MultiplicationCoreAir<4, 8>"
+womir_mul_64 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 2>, MultiplicationCoreAir<8, 8>"
+womir_divrem_32 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, DivRemCoreAir<4, 8>"
+womir_divrem_64 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 2>, DivRemCoreAir<8, 8>"
+womir_shift_32 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, ShiftCoreAir<4, 8>"
+womir_shift_64 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 2>, ShiftCoreAir<8, 8>"
 womir_loadstore = "VmAirWrapper<Rv32LoadStoreAdapterAir, LoadStoreCoreAir<4>"
-womir_copy_into_frame = "VmAirWrapper<CopyIntoFrameAdapterAirWom, CopyIntoFrameCoreAir>"
-womir_less_than = "VmAirWrapper<WomBaseAluAdapterAir<2, 4, 4>, LessThanCoreAir<4, 4, 8>"
-womir_call = "VmAirWrapper<CallAdapterAirWom, CallCoreAir>"
-womir_allocate_frame = "VmAirWrapper<AllocateFrameAdapterAirWom, AllocateFrameCoreAir>"
-womir_jump = "VmAirWrapper<JumpAdapterAirWom, JumpCoreAir>"
-womir_consts = "VmAirWrapper<ConstsAdapterAirWom, ConstsCoreAir>"
-womir_eq_32 = "VmAirWrapper<WomBaseAluAdapterAir<2, 4, 4>, EqCoreAir<4, 4, 8>"
-womir_eq_64 = "VmAirWrapper<WomBaseAluAdapterAir<4, 8, 4>, EqCoreAir<8, 4, 8>"
-womir_hintstore = "HintStoreAir"
+womir_loadsignextend = "VmAirWrapper<Rv32LoadStoreAdapterAir, LoadSignExtendCoreAir<4, 8>"
+womir_less_than_32 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, LessThanCoreAir<4, 8>"
+womir_less_than_64 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 1>, LessThanCoreAir<8, 8>"
+womir_call = "VmAirWrapper<CallAdapterAir, CallCoreAir>"
+womir_jump = "VmAirWrapper<JumpAdapterAir, JumpCoreAir>"
+womir_consts = "Const32AdapterAir<4>"
+womir_eq_32 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, EqCoreAir<4>"
+womir_eq_64 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 1>, EqCoreAir<8>"
+womir_hintstore = "Rv32HintStoreAir"
 
 # RISC-V specific
 riscv_loadstore = "VmAirWrapper<Rv32LoadStoreAdapterAir, LoadStoreCoreAir<4>"
+riscv_loadsignextend = "VmAirWrapper<Rv32LoadStoreAdapterAir, LoadSignExtendCoreAir<4, 8>"
 riscv_alu = "VmAirWrapper<Rv32BaseAluAdapterAir, BaseAluCoreAir<4, 8>"
 riscv_shift = "VmAirWrapper<Rv32BaseAluAdapterAir, ShiftCoreAir<4, 8>"
 riscv_branch_eq = "VmAirWrapper<Rv32BranchAdapterAir, BranchEqualCoreAir<4>"
@@ -49,7 +52,13 @@ riscv_jalr = "VmAirWrapper<Rv32JalrAdapterAir, Rv32JalrCoreAir>"
 riscv_less_than = "VmAirWrapper<Rv32BaseAluAdapterAir, LessThanCoreAir<4, 8>"
 riscv_auipc = "VmAirWrapper<Rv32RdWriteAdapterAir, Rv32AuipcCoreAir>"
 riscv_mul = "VmAirWrapper<Rv32MultAdapterAir, MultiplicationCoreAir<4, 8>"
+riscv_mulh = "VmAirWrapper<Rv32MultAdapterAir, MulHCoreAir<4, 8>"
+riscv_divrem = "VmAirWrapper<Rv32MultAdapterAir, DivRemCoreAir<4, 8>"
 riscv_hintstore = "Rv32HintStoreAir"
+
+def get(d, key):
+    """Get a value from the dict, returning 0 if key is missing."""
+    return d.get(key, 0)
 
 def compare(cat, a, b):
     print(f"\nComparing {cat}:")
@@ -83,18 +92,18 @@ def main(womir_metrics_path, riscv_metrics_path):
 
     compare("Total WOMIR vs RISC-V", [w_total], [r_total])
 
-    compare("ALU WOMIR (32, 64) vs RISC-V 32", [w[womir_alu_32], w[womir_alu_64]], [r[riscv_alu]])
-    compare("Shift WOMIR (32, 64) vs RISC-V 32", [w[womir_shift_32], w[womir_shift_64]], [r[riscv_shift]])
-    compare("Mul WOMIR (32, 64) vs RISC-V 32", [w[womir_mul_32], w[womir_mul_64]], [r[riscv_mul]])
-    compare("LoadStore", [w[womir_loadstore]], [r[riscv_loadstore]])
-    compare("Comparison WOMIR (lt, eq_32, eq_64) vs RISC-V lt", [w[womir_less_than], w[womir_eq_32], w[womir_eq_64]], [r[riscv_less_than]])
-    compare("Branch/Jump WOMIR (call, jump) vs RISC-V (beq, blt, jalr, auipc)", [w[womir_call], w[womir_jump]], [r[riscv_branch_eq], r[riscv_branch_less_than], r[riscv_jalr], r[riscv_auipc]])
-    compare("Comparison + Branch/Jump (often combined) WOMIR (lt, eq_32, eq_64, call, jump) vs RISC-V (lt, beq, blt, jalr, auipc)", [w[womir_less_than], w[womir_eq_32], w[womir_eq_64], w[womir_call], w[womir_jump]], [r[riscv_less_than], r[riscv_branch_eq], r[riscv_branch_less_than], r[riscv_jalr], r[riscv_auipc]])
-    compare("HintStore", [w[womir_hintstore]], [r[riscv_hintstore]])
-    compare("Frame WOMIR (copy, allocate)", [w[womir_copy_into_frame], w[womir_allocate_frame]], [])
-    compare("Consts WOMIR", [w[womir_consts]], [])
-    compare("Lookups (range tuple checker, var range checker, bitwise)", [w[range_tuple_checker], w[var_range_checker], w[bitwise_lookup]], [r[range_tuple_checker], r[var_range_checker], r[bitwise_lookup]])
-    compare("Continuations (poseidon, merkle, access, boundary, vm_connector)", [w[poseidon], w[memory_merkle], w[access_adapter], w[persistent_boundary], w[vm_connector]], [r[poseidon], r[memory_merkle], r[access_adapter], r[persistent_boundary], r[vm_connector]])
+    compare("ALU WOMIR (32, 64) vs RISC-V 32", [get(w, womir_alu_32), get(w, womir_alu_64)], [get(r, riscv_alu)])
+    compare("Shift WOMIR (32, 64) vs RISC-V 32", [get(w, womir_shift_32), get(w, womir_shift_64)], [get(r, riscv_shift)])
+    compare("Mul WOMIR (32, 64) vs RISC-V 32", [get(w, womir_mul_32), get(w, womir_mul_64)], [get(r, riscv_mul)])
+    compare("DivRem WOMIR (32, 64) vs RISC-V 32", [get(w, womir_divrem_32), get(w, womir_divrem_64)], [get(r, riscv_divrem)])
+    compare("LoadStore", [get(w, womir_loadstore), get(w, womir_loadsignextend)], [get(r, riscv_loadstore), get(r, riscv_loadsignextend)])
+    compare("Comparison WOMIR (lt_32, lt_64, eq_32, eq_64) vs RISC-V lt", [get(w, womir_less_than_32), get(w, womir_less_than_64), get(w, womir_eq_32), get(w, womir_eq_64)], [get(r, riscv_less_than)])
+    compare("Branch/Jump WOMIR (call, jump) vs RISC-V (beq, blt, jal/lui, jalr, auipc)", [get(w, womir_call), get(w, womir_jump)], [get(r, riscv_branch_eq), get(r, riscv_branch_less_than), get(r, riscv_cond_rd_write), get(r, riscv_jalr), get(r, riscv_auipc)])
+    compare("Comparison + Branch/Jump", [get(w, womir_less_than_32), get(w, womir_less_than_64), get(w, womir_eq_32), get(w, womir_eq_64), get(w, womir_call), get(w, womir_jump)], [get(r, riscv_less_than), get(r, riscv_branch_eq), get(r, riscv_branch_less_than), get(r, riscv_cond_rd_write), get(r, riscv_jalr), get(r, riscv_auipc)])
+    compare("HintStore", [get(w, womir_hintstore)], [get(r, riscv_hintstore)])
+    compare("Consts WOMIR", [get(w, womir_consts)], [])
+    compare("Lookups (range tuple checker, var range checker, bitwise)", [get(w, range_tuple_checker), get(w, var_range_checker), get(w, bitwise_lookup)], [get(r, range_tuple_checker), get(r, var_range_checker), get(r, bitwise_lookup)])
+    compare("Continuations (poseidon, merkle, access, boundary, vm_connector)", [get(w, poseidon), get(w, memory_merkle), get(w, access_adapter), get(w, persistent_boundary), get(w, vm_connector)], [get(r, poseidon), get(r, memory_merkle), get(r, access_adapter), get(r, persistent_boundary), get(r, vm_connector)])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compare trace cells between WOMIR and RISC-V in OpenVM proofs.")
