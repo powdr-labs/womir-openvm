@@ -162,45 +162,23 @@ pub fn div_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -
 
 /// rd = rs1 /u imm (unsigned division by immediate, 32-bit)
 #[cfg(test)]
-pub fn divu_imm<F: PrimeField32>(
-    rd: usize,
-    rs1: usize,
-    imm: impl Into<AluImm>,
-) -> Instruction<F> {
+pub fn divu_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     use openvm_womir_transpiler::DivRemOpcode;
-    instr_i(
-        DivRemOpcode::DIVU.global_opcode().as_usize(),
-        rd,
-        rs1,
-        imm,
-    )
+    instr_i(DivRemOpcode::DIVU.global_opcode().as_usize(), rd, rs1, imm)
 }
 
 /// rd = rs1 %s imm (signed remainder by immediate, 32-bit)
 #[cfg(test)]
-pub fn rems_imm<F: PrimeField32>(
-    rd: usize,
-    rs1: usize,
-    imm: impl Into<AluImm>,
-) -> Instruction<F> {
+pub fn rems_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     use openvm_womir_transpiler::DivRemOpcode;
     instr_i(DivRemOpcode::REM.global_opcode().as_usize(), rd, rs1, imm)
 }
 
 /// rd = rs1 %u imm (unsigned remainder by immediate, 32-bit)
 #[cfg(test)]
-pub fn remu_imm<F: PrimeField32>(
-    rd: usize,
-    rs1: usize,
-    imm: impl Into<AluImm>,
-) -> Instruction<F> {
+pub fn remu_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
     use openvm_womir_transpiler::DivRemOpcode;
-    instr_i(
-        DivRemOpcode::REMU.global_opcode().as_usize(),
-        rd,
-        rs1,
-        imm,
-    )
+    instr_i(DivRemOpcode::REMU.global_opcode().as_usize(), rd, rs1, imm)
 }
 
 // ---- Division / Remainder (64-bit) ----

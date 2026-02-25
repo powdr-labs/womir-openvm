@@ -66,7 +66,13 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> DivRemExecutor<NUM_LIMBS,
         data: &mut DivRemPreCompute,
     ) -> Result<DivRemOpcode, StaticProgramError> {
         let Instruction {
-            opcode, a, b, c, d, e, ..
+            opcode,
+            a,
+            b,
+            c,
+            d,
+            e,
+            ..
         } = inst;
         let local_opcode = DivRemOpcode::from_usize(opcode.local_opcode_idx(self.0.offset));
         let e_u32 = e.as_canonical_u32();
