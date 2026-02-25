@@ -199,7 +199,6 @@ impl<'a> Adapter for WomirApcAdapter<'a> {
         // Sum up the metrics for each instruction
         let width_before = apc
             .instructions()
-            .iter()
             .map(|instr| {
                 instruction_handler
                     .get_instruction_metrics(instr.0.opcode)
