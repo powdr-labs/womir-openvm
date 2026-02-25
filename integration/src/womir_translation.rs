@@ -319,11 +319,17 @@ pub struct OpenVMSettings<F> {
     _phantom: std::marker::PhantomData<F>,
 }
 
-impl<F> OpenVMSettings<F> {
-    pub fn new() -> Self {
+impl<F> Default for OpenVMSettings<F> {
+    fn default() -> Self {
         Self {
             _phantom: std::marker::PhantomData,
         }
+    }
+}
+
+impl<F> OpenVMSettings<F> {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
