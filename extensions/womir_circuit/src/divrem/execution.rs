@@ -11,8 +11,9 @@ use std::{
     mem::size_of,
 };
 
-use crate::adapters::BaseAluAdapterExecutor;
+use crate::adapters::{BaseAluAdapterExecutor, imm_to_bytes};
 use crate::memory_config::FpMemory;
+use crate::utils::sign_extend_u32;
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
@@ -20,7 +21,7 @@ use openvm_instructions::{
     LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
-    riscv::{RV32_CELL_BITS, RV32_REGISTER_AS},
+    riscv::{RV32_CELL_BITS, RV32_IMM_AS, RV32_REGISTER_AS},
 };
 use openvm_rv32im_circuit::DivRemExecutor as DivRemExecutorInner;
 use openvm_rv32im_transpiler::DivRemOpcode;
@@ -45,12 +46,14 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> DivRemExecutor<NUM_LIMBS,
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
 pub(super) struct DivRemPreCompute {
+    /// Second operand value (if immediate) or register index (if register)
+    c: u32,
     /// Result register index
     a: u32,
     /// First operand register index
     b: u32,
-    /// Second operand register index
-    c: u32,
+    /// Whether the second operand is an immediate
+    is_imm: bool,
 }
 
 impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> DivRemExecutor<NUM_LIMBS, NUM_REG_OPS> {
@@ -63,29 +66,42 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> DivRemExecutor<NUM_LIMBS,
         data: &mut DivRemPreCompute,
     ) -> Result<DivRemOpcode, StaticProgramError> {
         let Instruction {
-            opcode, a, b, c, d, ..
+            opcode, a, b, c, d, e, ..
         } = inst;
         let local_opcode = DivRemOpcode::from_usize(opcode.local_opcode_idx(self.0.offset));
-        if d.as_canonical_u32() != RV32_REGISTER_AS {
+        let e_u32 = e.as_canonical_u32();
+        if (d.as_canonical_u32() != RV32_REGISTER_AS)
+            || !(e_u32 == RV32_IMM_AS || e_u32 == RV32_REGISTER_AS)
+        {
             return Err(StaticProgramError::InvalidInstruction(pc));
         }
-        let pre_compute: &mut DivRemPreCompute = data.borrow_mut();
-        *pre_compute = DivRemPreCompute {
+        let is_imm = e_u32 == RV32_IMM_AS;
+        let c_u32 = c.as_canonical_u32();
+        *data = DivRemPreCompute {
+            c: if is_imm {
+                u32::from_le_bytes(imm_to_bytes(c_u32))
+            } else {
+                c_u32
+            },
             a: a.as_canonical_u32(),
             b: b.as_canonical_u32(),
-            c: c.as_canonical_u32(),
+            is_imm,
         };
         Ok(local_opcode)
     }
 }
 
 macro_rules! dispatch {
-    ($execute_impl:ident, $local_opcode:ident, $num_limbs:expr) => {
-        match $local_opcode {
-            DivRemOpcode::DIV => Ok($execute_impl::<_, _, DivOp, $num_limbs>),
-            DivRemOpcode::DIVU => Ok($execute_impl::<_, _, DivuOp, $num_limbs>),
-            DivRemOpcode::REM => Ok($execute_impl::<_, _, RemOp, $num_limbs>),
-            DivRemOpcode::REMU => Ok($execute_impl::<_, _, RemuOp, $num_limbs>),
+    ($execute_impl:ident, $is_imm:ident, $local_opcode:ident, $num_limbs:expr) => {
+        match ($is_imm, $local_opcode) {
+            (true, DivRemOpcode::DIV) => Ok($execute_impl::<_, _, true, DivOp, $num_limbs>),
+            (true, DivRemOpcode::DIVU) => Ok($execute_impl::<_, _, true, DivuOp, $num_limbs>),
+            (true, DivRemOpcode::REM) => Ok($execute_impl::<_, _, true, RemOp, $num_limbs>),
+            (true, DivRemOpcode::REMU) => Ok($execute_impl::<_, _, true, RemuOp, $num_limbs>),
+            (false, DivRemOpcode::DIV) => Ok($execute_impl::<_, _, false, DivOp, $num_limbs>),
+            (false, DivRemOpcode::DIVU) => Ok($execute_impl::<_, _, false, DivuOp, $num_limbs>),
+            (false, DivRemOpcode::REM) => Ok($execute_impl::<_, _, false, RemOp, $num_limbs>),
+            (false, DivRemOpcode::REMU) => Ok($execute_impl::<_, _, false, RemuOp, $num_limbs>),
         }
     };
 }
@@ -113,8 +129,9 @@ where
     {
         let data: &mut DivRemPreCompute = data.borrow_mut();
         let local_opcode = self.pre_compute_impl(pc, inst, data)?;
+        let is_imm = data.is_imm;
 
-        dispatch!(execute_e1_handler, local_opcode, NUM_LIMBS)
+        dispatch!(execute_e1_handler, is_imm, local_opcode, NUM_LIMBS)
     }
 }
 
@@ -141,7 +158,8 @@ where
         let data: &mut E2PreCompute<DivRemPreCompute> = data.borrow_mut();
         data.chip_idx = chip_idx as u32;
         let local_opcode = self.pre_compute_impl(pc, inst, &mut data.data)?;
-        dispatch!(execute_e2_handler, local_opcode, NUM_LIMBS)
+        let is_imm = data.data.is_imm;
+        dispatch!(execute_e2_handler, is_imm, local_opcode, NUM_LIMBS)
     }
 }
 
@@ -149,6 +167,7 @@ where
 unsafe fn execute_e12_impl<
     F: PrimeField32,
     CTX: ExecutionCtxTrait,
+    const E_IS_IMM: bool,
     OP: DivRemOp<NUM_LIMBS>,
     const NUM_LIMBS: usize,
 >(
@@ -157,7 +176,11 @@ unsafe fn execute_e12_impl<
 ) {
     let fp = exec_state.memory.fp::<F>();
     let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.b);
-    let rs2 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c);
+    let rs2 = if E_IS_IMM {
+        sign_extend_u32::<NUM_LIMBS>(pre_compute.c)
+    } else {
+        exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c)
+    };
     let result = <OP as DivRemOp<_>>::compute(rs1, rs2);
 
     exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &result);
@@ -170,6 +193,7 @@ unsafe fn execute_e12_impl<
 fn execute_e1_impl<
     F: PrimeField32,
     CTX: ExecutionCtxTrait,
+    const E_IS_IMM: bool,
     OP: DivRemOp<NUM_LIMBS>,
     const NUM_LIMBS: usize,
 >(
@@ -179,7 +203,7 @@ fn execute_e1_impl<
     unsafe {
         let pre_compute: &DivRemPreCompute =
             std::slice::from_raw_parts(pre_compute, size_of::<DivRemPreCompute>()).borrow();
-        execute_e12_impl::<F, CTX, OP, NUM_LIMBS>(pre_compute, exec_state);
+        execute_e12_impl::<F, CTX, E_IS_IMM, OP, NUM_LIMBS>(pre_compute, exec_state);
     }
 }
 
@@ -188,6 +212,7 @@ fn execute_e1_impl<
 fn execute_e2_impl<
     F: PrimeField32,
     CTX: MeteredExecutionCtxTrait,
+    const E_IS_IMM: bool,
     OP: DivRemOp<NUM_LIMBS>,
     const NUM_LIMBS: usize,
 >(
@@ -201,7 +226,7 @@ fn execute_e2_impl<
         exec_state
             .ctx
             .on_height_change(pre_compute.chip_idx as usize, 1);
-        execute_e12_impl::<F, CTX, OP, NUM_LIMBS>(&pre_compute.data, exec_state);
+        execute_e12_impl::<F, CTX, E_IS_IMM, OP, NUM_LIMBS>(&pre_compute.data, exec_state);
     }
 }
 
