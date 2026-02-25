@@ -5,7 +5,7 @@ use openvm_sdk::StdIn;
 use serde::Deserialize;
 use serde_json::Value;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tracing::Level;
 
@@ -494,6 +494,23 @@ fn test_read_serde() {
     let bytes = postcard::to_allocvec(&data).unwrap();
 
     run_womir_guest("read_serde", "main", &[0, 0], &[], &[], &[&bytes])
+}
+
+#[test]
+fn test_eth_block_1() {
+    let wasm_path = format!(
+        "{}/../sample-programs/eth-block/openvm-client-eth.wasm",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let input_path = format!(
+        "{}/../sample-programs/eth-block/1.bin",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let input_bytes = std::fs::read(&input_path).expect("Failed to read block 1 input");
+    let wasm_bytes = std::fs::read(&wasm_path).expect("Failed to read WASM file");
+    let mut module = load_wasm_module(&wasm_bytes);
+    // Execution only for now.
+    run_wasm_test_function(&mut module, "main", &[0, 0], &[], false, &[&input_bytes]).unwrap()
 }
 
 fn run_womir_guest(
