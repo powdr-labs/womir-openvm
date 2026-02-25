@@ -511,7 +511,7 @@ fn test_eth_block_1() {
     let input_bytes = std::fs::read(&input_path).expect("Failed to read block 1 input");
     let wasm_bytes = std::fs::read(&wasm_path).expect("Failed to read WASM file");
     let mut module = load_wasm_module(&wasm_bytes);
-    // Execution only — the guest panics on state root mismatch.
+    // Execution only for now.
     run_wasm_test_function(&mut module, "main", &[0, 0], &[], false, &[&input_bytes]).unwrap()
 }
 
