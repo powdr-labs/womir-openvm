@@ -2573,7 +2573,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 [[package]]
 name = "openvm"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "bytemuck",
  "getrandom 0.2.16",
@@ -2588,7 +2588,7 @@ dependencies = [
 [[package]]
 name = "openvm-algebra-circuit"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "blstrs",
  "cfg-if",
@@ -2619,7 +2619,7 @@ dependencies = [
 [[package]]
 name = "openvm-algebra-complex-macros"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-macros-common",
  "quote",
@@ -2629,7 +2629,7 @@ dependencies = [
 [[package]]
 name = "openvm-algebra-guest"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "halo2curves-axiom 0.7.2",
  "num-bigint 0.4.6",
@@ -2645,7 +2645,7 @@ dependencies = [
 [[package]]
 name = "openvm-algebra-moduli-macros"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "num-bigint 0.4.6",
  "num-prime",
@@ -2657,7 +2657,7 @@ dependencies = [
 [[package]]
 name = "openvm-algebra-transpiler"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-algebra-guest",
  "openvm-instructions",
@@ -2671,7 +2671,7 @@ dependencies = [
 [[package]]
 name = "openvm-bigint-circuit"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "cfg-if",
  "derive-new 0.6.0",
@@ -2694,7 +2694,7 @@ dependencies = [
 [[package]]
 name = "openvm-bigint-guest"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-platform",
  "strum_macros 0.26.4",
@@ -2703,7 +2703,7 @@ dependencies = [
 [[package]]
 name = "openvm-bigint-transpiler"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-bigint-guest",
  "openvm-instructions",
@@ -2718,7 +2718,7 @@ dependencies = [
 [[package]]
 name = "openvm-build"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "cargo_metadata",
  "eyre",
@@ -2730,7 +2730,7 @@ dependencies = [
 [[package]]
 name = "openvm-circuit"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "abi_stable",
  "backtrace",
@@ -2774,7 +2774,7 @@ dependencies = [
 [[package]]
 name = "openvm-circuit-derive"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "itertools 0.14.0",
  "proc-macro2",
@@ -2785,7 +2785,7 @@ dependencies = [
 [[package]]
 name = "openvm-circuit-primitives"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "derive-new 0.6.0",
  "itertools 0.14.0",
@@ -2804,7 +2804,7 @@ dependencies = [
 [[package]]
 name = "openvm-circuit-primitives-derive"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "itertools 0.14.0",
  "quote",
@@ -2814,7 +2814,7 @@ dependencies = [
 [[package]]
 name = "openvm-continuations"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "derivative",
  "openvm-circuit",
@@ -2884,7 +2884,7 @@ dependencies = [
 [[package]]
 name = "openvm-custom-insn"
 version = "0.1.0"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2894,7 +2894,7 @@ dependencies = [
 [[package]]
 name = "openvm-ecc-circuit"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "blstrs",
  "cfg-if",
@@ -2924,7 +2924,7 @@ dependencies = [
 [[package]]
 name = "openvm-ecc-guest"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "ecdsa",
  "elliptic-curve",
@@ -2943,7 +2943,7 @@ dependencies = [
 [[package]]
 name = "openvm-ecc-sw-macros"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-macros-common",
  "quote",
@@ -2953,7 +2953,7 @@ dependencies = [
 [[package]]
 name = "openvm-ecc-transpiler"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-ecc-guest",
  "openvm-instructions",
@@ -2967,7 +2967,7 @@ dependencies = [
 [[package]]
 name = "openvm-instructions"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "backtrace",
  "derive-new 0.6.0",
@@ -2984,7 +2984,7 @@ dependencies = [
 [[package]]
 name = "openvm-instructions-derive"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "quote",
  "syn 2.0.108",
@@ -2993,7 +2993,7 @@ dependencies = [
 [[package]]
 name = "openvm-keccak256-circuit"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "cfg-if",
  "derive-new 0.6.0",
@@ -3019,7 +3019,7 @@ dependencies = [
 [[package]]
 name = "openvm-keccak256-guest"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-platform",
 ]
@@ -3027,7 +3027,7 @@ dependencies = [
 [[package]]
 name = "openvm-keccak256-transpiler"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-instructions",
  "openvm-instructions-derive",
@@ -3041,7 +3041,7 @@ dependencies = [
 [[package]]
 name = "openvm-macros-common"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "syn 2.0.108",
 ]
@@ -3049,7 +3049,7 @@ dependencies = [
 [[package]]
 name = "openvm-mod-circuit-builder"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "itertools 0.14.0",
  "num-bigint 0.4.6",
@@ -3067,7 +3067,7 @@ dependencies = [
 [[package]]
 name = "openvm-native-circuit"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "cfg-if",
  "derive-new 0.6.0",
@@ -3096,7 +3096,7 @@ dependencies = [
 [[package]]
 name = "openvm-native-compiler"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "backtrace",
  "itertools 0.14.0",
@@ -3120,7 +3120,7 @@ dependencies = [
 [[package]]
 name = "openvm-native-compiler-derive"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "quote",
  "syn 2.0.108",
@@ -3129,7 +3129,7 @@ dependencies = [
 [[package]]
 name = "openvm-native-recursion"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "cfg-if",
  "itertools 0.14.0",
@@ -3157,7 +3157,7 @@ dependencies = [
 [[package]]
 name = "openvm-native-transpiler"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-instructions",
  "openvm-transpiler",
@@ -3167,7 +3167,7 @@ dependencies = [
 [[package]]
 name = "openvm-pairing-circuit"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "cfg-if",
  "derive-new 0.6.0",
@@ -3196,7 +3196,7 @@ dependencies = [
 [[package]]
 name = "openvm-pairing-guest"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "blstrs",
  "halo2curves-axiom 0.7.2",
@@ -3218,7 +3218,7 @@ dependencies = [
 [[package]]
 name = "openvm-pairing-transpiler"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-instructions",
  "openvm-pairing-guest",
@@ -3231,7 +3231,7 @@ dependencies = [
 [[package]]
 name = "openvm-platform"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "libm",
  "openvm-custom-insn",
@@ -3241,7 +3241,7 @@ dependencies = [
 [[package]]
 name = "openvm-poseidon2-air"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "derivative",
  "lazy_static",
@@ -3259,7 +3259,7 @@ dependencies = [
 [[package]]
 name = "openvm-rv32-adapters"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "derive-new 0.6.0",
  "itertools 0.14.0",
@@ -3277,7 +3277,7 @@ dependencies = [
 [[package]]
 name = "openvm-rv32im-circuit"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "cfg-if",
  "derive-new 0.6.0",
@@ -3301,7 +3301,7 @@ dependencies = [
 [[package]]
 name = "openvm-rv32im-guest"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-custom-insn",
  "p3-field 0.1.0 (git+https://github.com/Plonky3/Plonky3.git?rev=539bbc84085efb609f4f62cb03cf49588388abdb)",
@@ -3311,7 +3311,7 @@ dependencies = [
 [[package]]
 name = "openvm-rv32im-transpiler"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-instructions",
  "openvm-instructions-derive",
@@ -3327,7 +3327,7 @@ dependencies = [
 [[package]]
 name = "openvm-sdk"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "bitcode",
  "bon",
@@ -3383,7 +3383,7 @@ dependencies = [
 [[package]]
 name = "openvm-sha256-air"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-circuit-primitives",
  "openvm-stark-backend",
@@ -3394,7 +3394,7 @@ dependencies = [
 [[package]]
 name = "openvm-sha256-circuit"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "cfg-if",
  "derive-new 0.6.0",
@@ -3417,7 +3417,7 @@ dependencies = [
 [[package]]
 name = "openvm-sha256-guest"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-platform",
 ]
@@ -3425,7 +3425,7 @@ dependencies = [
 [[package]]
 name = "openvm-sha256-transpiler"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "openvm-instructions",
  "openvm-instructions-derive",
@@ -3506,7 +3506,7 @@ dependencies = [
 [[package]]
 name = "openvm-transpiler"
 version = "1.4.2"
-source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.1#312aa2fd8d76cec3e4275c5f152011f09e588fcc"
+source = "git+https://github.com/powdr-labs/openvm.git?rev=v1.4.2-powdr-rc.2#a1252857c7a85ffe02c48ef4d088e9c3eebb84f6"
 dependencies = [
  "elf",
  "eyre",
@@ -4216,7 +4216,7 @@ dependencies = [
 [[package]]
 name = "powdr-autoprecompiles"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 dependencies = [
  "deepsize2",
  "derivative",
@@ -4239,7 +4239,7 @@ dependencies = [
 [[package]]
 name = "powdr-constraint-solver"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 dependencies = [
  "auto_enums",
  "bitvec",
@@ -4256,7 +4256,7 @@ dependencies = [
 [[package]]
 name = "powdr-expression"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 dependencies = [
  "derive_more 2.0.1",
  "num-traits",
@@ -4268,12 +4268,12 @@ dependencies = [
 [[package]]
 name = "powdr-isa-utils"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 
 [[package]]
 name = "powdr-number"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -4296,7 +4296,7 @@ dependencies = [
 [[package]]
 name = "powdr-openvm"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 dependencies = [
  "cfg-if",
  "clap",
@@ -4354,7 +4354,7 @@ dependencies = [
 [[package]]
 name = "powdr-openvm-bus-interaction-handler"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 dependencies = [
  "itertools 0.14.0",
  "powdr-autoprecompiles",
@@ -4367,7 +4367,7 @@ dependencies = [
 [[package]]
 name = "powdr-openvm-hints-circuit"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 dependencies = [
  "crypto-bigint 0.6.1",
  "elliptic-curve",
@@ -4385,7 +4385,7 @@ dependencies = [
 [[package]]
 name = "powdr-openvm-hints-guest"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 dependencies = [
  "openvm-custom-insn",
  "openvm-platform",
@@ -4396,7 +4396,7 @@ dependencies = [
 [[package]]
 name = "powdr-openvm-hints-transpiler"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 dependencies = [
  "openvm-instructions",
  "openvm-instructions-derive",
@@ -4410,7 +4410,7 @@ dependencies = [
 [[package]]
 name = "powdr-riscv-elf"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 dependencies = [
  "gimli 0.31.1",
  "goblin",
@@ -4427,7 +4427,7 @@ dependencies = [
 [[package]]
 name = "powdr-riscv-types"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 dependencies = [
  "powdr-isa-utils",
 ]
@@ -4435,7 +4435,7 @@ dependencies = [
 [[package]]
 name = "powdr-syscalls"
 version = "0.1.4"
-source = "git+https://github.com/powdr-labs/powdr.git?rev=28ab2ce#28ab2ce0dbf0631b4258e7b751738e3d30553fbb"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=4d469a0#4d469a0c1db94780b324aadc2a58058265c4d298"
 
 [[package]]
 name = "powerfmt"
@@ -6185,6 +6185,7 @@ dependencies = [
  "openvm-circuit-primitives",
  "openvm-circuit-primitives-derive",
  "openvm-instructions",
+ "openvm-native-circuit",
  "openvm-rv32im-transpiler",
  "openvm-sdk",
  "openvm-stark-backend",
