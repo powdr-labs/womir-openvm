@@ -13,6 +13,7 @@ use powdr_autoprecompiles::adapter::{Adapter, AdapterApc};
 use powdr_autoprecompiles::blocks::{Instruction, PcStep, Program};
 use powdr_autoprecompiles::execution::ExecutionState;
 use powdr_number::{BabyBearField, FieldElement, LargeInt};
+use powdr_openvm::bus_map::OpenVmBusType;
 use powdr_openvm::extraction_utils::{AirWidthsDiff, get_air_metrics};
 use powdr_openvm_bus_interaction_handler::OpenVmBusInteractionHandler;
 use powdr_openvm_bus_interaction_handler::memory_bus_interaction::OpenVmMemoryBusInteraction;
@@ -153,26 +154,16 @@ pub struct WomirApcAdapter<'a> {
     _marker: std::marker::PhantomData<&'a ()>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, derive_more::Display)]
-pub enum CustomBusTypes {
-    VariableRangeChecker,
-    TupleRangeChecker,
-    BitwiseLookup,
-    FpBus,
-}
-
 impl<'a> Adapter for WomirApcAdapter<'a> {
     type PowdrField = BabyBearField;
     type Field = BabyBear;
     type InstructionHandler = WomirOriginalAirs<Self::Field>;
-    // TODO: For now, we just use the OpenVmBusInteractionHandler. This almost works, because the buses
-    // are largely the same, but we need to find a way to add the frame pointer bus.
     type BusInteractionHandler = OpenVmBusInteractionHandler<Self::PowdrField>;
     type Program = Prog<'a, Self::Field>;
     type Instruction = Instr<Self::Field>;
     type MemoryBusInteraction<V: Ord + Clone + Eq + Display + Hash> =
         OpenVmMemoryBusInteraction<Self::PowdrField, V>;
-    type CustomBusTypes = CustomBusTypes;
+    type CustomBusTypes = OpenVmBusType;
     type ApcStats = ApcStats;
     type AirId = String;
     type ExecutionState = WomirExecutionState;
