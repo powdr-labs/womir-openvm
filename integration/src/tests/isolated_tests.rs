@@ -746,6 +746,101 @@ mod tests {
         };
         test_spec_for_all_register_bases(spec)
     }
+    // ==================== LoadB/LoadH large immediate tests ====================
+
+    #[test]
+    fn test_loadb_large_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Test loadb with a large immediate where the upper 16 bits > 1.
+        // This is the exact pattern that was broken: imm = 135015 = 0x20F67,
+        // which splits into c = 0x0F67 (lower 16) and g = 0x0002 (upper 16).
+        // The bug reconstructed this as c + g * 0xFFFF0000 = wrong address.
+        let imm: u32 = 0x2_0004; // 131076, upper 16 bits = 2
+        let addr: u32 = 100;
+        let target = addr + imm;
+
+        let spec = TestSpec {
+            program: vec![loadb(1, 0, imm)],
+            start_fp: 10,
+            start_registers: vec![(10, addr)],
+            start_ram: vec![(target, 0x0000007F)], // positive byte
+            expected_registers: vec![(11, 0x0000007F)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_loadb_large_imm_negative() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Same as above but with a negative byte to verify sign extension
+        let imm: u32 = 0x2_0004;
+        let addr: u32 = 100;
+        let target = addr + imm;
+
+        let spec = TestSpec {
+            program: vec![loadb(1, 0, imm)],
+            start_fp: 10,
+            start_registers: vec![(10, addr)],
+            start_ram: vec![(target, 0x000000FE)], // -2 as signed byte
+            expected_registers: vec![(11, 0xFFFFFFFE)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_loadh_large_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Test loadh with a large immediate (upper 16 bits > 1)
+        let imm: u32 = 0x3_0000; // 196608, upper 16 bits = 3
+        let addr: u32 = 200;
+        let target = addr + imm;
+
+        let spec = TestSpec {
+            program: vec![loadh(1, 0, imm)],
+            start_fp: 10,
+            start_registers: vec![(10, addr)],
+            start_ram: vec![(target, 0x00008001)], // negative halfword
+            expected_registers: vec![(11, 0xFFFF8001)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_storeb_loadb_large_imm_roundtrip() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Store a byte with a large immediate, then load it back with loadb
+        // (sign-extending). This tests that STOREB and LOADB agree on the address
+        // when the immediate has upper 16 bits > 1.
+        let imm: u32 = 0x2_0004;
+        let addr: u32 = 100;
+        let target = addr + imm;
+
+        let spec = TestSpec {
+            program: vec![
+                storeb(0, 1, imm), // MEM[addr + imm] = 0x42
+                loadb(2, 1, imm),  // reg[2] = sign_extend(MEM[addr + imm])
+            ],
+            start_fp: 10,
+            start_registers: vec![(10, 0x42), (11, addr)],
+            start_ram: vec![(target, 0)],
+            expected_registers: vec![(12, 0x42)],
+            expected_ram: vec![(target, 0x42)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
     // ==================== LessThan Tests ====================
 
     #[test]

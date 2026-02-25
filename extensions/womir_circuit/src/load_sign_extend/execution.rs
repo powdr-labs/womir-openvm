@@ -77,9 +77,9 @@ impl LoadSignExtendExecutor<{ RV32_REGISTER_NUM_LIMBS }> {
             _ => unreachable!("LoadSignExtendExecutor should only handle LOADB/LOADH opcodes"),
         }
 
-        let imm = c.as_canonical_u32();
-        let imm_sign = g.as_canonical_u32();
-        let imm_extended = imm + imm_sign * 0xffff0000;
+        let imm_lo = c.as_canonical_u32();
+        let imm_hi = g.as_canonical_u32();
+        let imm_extended = imm_lo | (imm_hi << 16);
 
         *data = LoadSignExtendPreCompute {
             imm_extended,
