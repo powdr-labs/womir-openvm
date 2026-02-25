@@ -8,14 +8,17 @@ use openvm_instructions::instruction::Instruction as OpenVmInstruction;
 use openvm_instructions::program::{DEFAULT_PC_STEP, Program as OpenVmProgram};
 use openvm_stark_backend::p3_field::{FieldAlgebra, PrimeField32};
 use openvm_stark_sdk::p3_baby_bear::BabyBear;
+use powdr_autoprecompiles::InstructionHandler;
 use powdr_autoprecompiles::adapter::{Adapter, AdapterApc};
 use powdr_autoprecompiles::blocks::{Instruction, PcStep, Program};
 use powdr_autoprecompiles::execution::ExecutionState;
 use powdr_number::{BabyBearField, FieldElement, LargeInt};
+use powdr_openvm::extraction_utils::{AirWidthsDiff, get_air_metrics};
 use powdr_openvm_bus_interaction_handler::OpenVmBusInteractionHandler;
-use powdr_openvm_bus_interaction_handler::bus_map::OpenVmBusType;
 use powdr_openvm_bus_interaction_handler::memory_bus_interaction::OpenVmMemoryBusInteraction;
 use serde::{Deserialize, Serialize};
+
+use crate::autoprecompiles::air::WomirAir;
 
 use super::instruction_handler::WomirOriginalAirs;
 
@@ -28,6 +31,7 @@ pub struct Instr<F>(pub OpenVmInstruction<F>);
 
 impl<F: PrimeField32> Display for Instr<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO: Improve formatting
         write!(
             f,
             "Instr({}, {}, {}, {}, {}, {}, {}, {})",
@@ -129,10 +133,17 @@ impl ExecutionState for WomirExecutionState {
 
 // ---- APC stats ----
 
-/// Statistics about a WOMIR autoprecompile.
+/// Statistics about an autoprecompile.
+// TODO: Identical to OvmApcStats in powdr-openvm, but reimplemented here because OvmApcStats is private.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct WomirApcStats {
-    // TODO: Add width diff tracking once AIR extraction is working
+pub struct ApcStats {
+    pub widths: AirWidthsDiff,
+}
+
+impl ApcStats {
+    fn new(widths: AirWidthsDiff) -> Self {
+        Self { widths }
+    }
 }
 
 // ---- Adapter ----
@@ -142,17 +153,27 @@ pub struct WomirApcAdapter<'a> {
     _marker: std::marker::PhantomData<&'a ()>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, derive_more::Display)]
+pub enum CustomBusTypes {
+    VariableRangeChecker,
+    TupleRangeChecker,
+    BitwiseLookup,
+    FpBus,
+}
+
 impl<'a> Adapter for WomirApcAdapter<'a> {
     type PowdrField = BabyBearField;
     type Field = BabyBear;
     type InstructionHandler = WomirOriginalAirs<Self::Field>;
+    // TODO: For now, we just use the OpenVmBusInteractionHandler. This almost works, because the buses
+    // are largely the same, but we need to find a way to add the frame pointer bus.
     type BusInteractionHandler = OpenVmBusInteractionHandler<Self::PowdrField>;
     type Program = Prog<'a, Self::Field>;
     type Instruction = Instr<Self::Field>;
     type MemoryBusInteraction<V: Ord + Clone + Eq + Display + Hash> =
         OpenVmMemoryBusInteraction<Self::PowdrField, V>;
-    type CustomBusTypes = OpenVmBusType;
-    type ApcStats = WomirApcStats;
+    type CustomBusTypes = CustomBusTypes;
+    type ApcStats = ApcStats;
     type AirId = String;
     type ExecutionState = WomirExecutionState;
 
@@ -165,11 +186,28 @@ impl<'a> Adapter for WomirApcAdapter<'a> {
     }
 
     fn apc_stats(
-        _apc: Arc<AdapterApc<Self>>,
-        _instruction_handler: &Self::InstructionHandler,
+        apc: Arc<AdapterApc<Self>>,
+        instruction_handler: &Self::InstructionHandler,
     ) -> Self::ApcStats {
-        // TODO: Compute APC stats (needs AIR metrics).
-        // Should compute width savings similar to OvmApcStats in powdr-openvm.
-        todo!("APC stats computation")
+        // Get the metrics for the apc using the same degree bound as the one used for the instruction chips
+        let apc_metrics = get_air_metrics(
+            Arc::new(WomirAir::new(apc.clone())),
+            instruction_handler.degree_bound().identities,
+        );
+        let width_after = apc_metrics.widths;
+
+        // Sum up the metrics for each instruction
+        let width_before = apc
+            .instructions()
+            .iter()
+            .map(|instr| {
+                instruction_handler
+                    .get_instruction_metrics(instr.0.opcode)
+                    .unwrap()
+                    .widths
+            })
+            .sum();
+
+        ApcStats::new(AirWidthsDiff::new(width_before, width_after))
     }
 }

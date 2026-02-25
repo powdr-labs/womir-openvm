@@ -1,22 +1,26 @@
 use std::collections::{BTreeMap, HashMap};
 
 use openvm_instructions::VmOpcode;
-use openvm_stark_sdk::p3_baby_bear::BabyBear;
 use powdr_autoprecompiles::evaluation::AirStats;
 use powdr_autoprecompiles::symbolic_machine::SymbolicMachine;
 use powdr_autoprecompiles::{DegreeBound, InstructionHandler};
+use powdr_openvm::AirMetrics;
 use serde::{Deserialize, Serialize};
 
 use super::adapter::Instr;
 use super::opcodes::branch_opcodes_set;
 
-/// Analogous to `OriginalAirs<F>` in powdr-openvm.
 /// Maps WOMIR opcodes to their symbolic AIR machines.
+/// Analogous to `OriginalAirs<F>` in powdr-openvm.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct WomirOriginalAirs<F> {
+    /// The degree bound used when building the airs
     degree_bound: DegreeBound,
+    /// Maps a VM opcode to the name of the (unique) AIR that implements it.
     opcode_to_air: HashMap<VmOpcode, String>,
-    air_name_to_machine: BTreeMap<String, (SymbolicMachine<F>, AirStats)>,
+    /// Maps an AIR name to its symbolic machine and metrics.
+    /// Note that this map only contains AIRs that implement instructions.
+    air_name_to_machine: BTreeMap<String, (SymbolicMachine<F>, AirMetrics)>,
 }
 
 impl<F> InstructionHandler for WomirOriginalAirs<F> {
@@ -46,9 +50,9 @@ impl<F> InstructionHandler for WomirOriginalAirs<F> {
     }
 
     fn get_instruction_air_stats(&self, instruction: &Self::Instruction) -> AirStats {
-        let id = self.opcode_to_air.get(&instruction.0.opcode).unwrap();
-        let (_, stats) = self.air_name_to_machine.get(id).unwrap();
-        *stats
+        self.get_instruction_metrics(instruction.0.opcode)
+            .map(|metrics| metrics.clone().into())
+            .unwrap()
     }
 
     fn degree_bound(&self) -> DegreeBound {
@@ -56,7 +60,7 @@ impl<F> InstructionHandler for WomirOriginalAirs<F> {
     }
 }
 
-impl WomirOriginalAirs<BabyBear> {
+impl<F> WomirOriginalAirs<F> {
     /// Build the instruction handler from a WomirConfig.
     ///
     /// This involves building the WOMIR chip complex, extracting symbolic AIRs
@@ -77,5 +81,13 @@ impl WomirOriginalAirs<BabyBear> {
         //    c. Convert to powdr SymbolicMachine format
         // 4. Populate opcode_to_air and air_name_to_machine
         todo!("Build WomirOriginalAirs from WomirConfig")
+    }
+
+    pub fn get_instruction_metrics(&self, opcode: VmOpcode) -> Option<&AirMetrics> {
+        self.opcode_to_air.get(&opcode).and_then(|air_name| {
+            self.air_name_to_machine
+                .get(air_name)
+                .map(|(_, metrics)| metrics)
+        })
     }
 }
