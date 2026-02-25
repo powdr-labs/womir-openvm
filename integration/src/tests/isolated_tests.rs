@@ -3132,6 +3132,136 @@ mod tests {
         test_spec_for_all_register_bases(spec)
     }
 
+    // ==================== DivRem Immediate Tests ====================
+
+    #[test]
+    fn test_div_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 / 7 = 6
+        let spec = TestSpec {
+            program: vec![div_imm(1, 0, 7_i16)],
+            start_fp: 10,
+            start_registers: vec![(10, 42)],
+            expected_registers: vec![(11, 6)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_divu_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 100 / 7 = 14
+        let spec = TestSpec {
+            program: vec![divu_imm(1, 0, 7_i16)],
+            start_fp: 10,
+            start_registers: vec![(10, 100)],
+            expected_registers: vec![(11, 14)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_rems_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 43 % 7 = 1
+        let spec = TestSpec {
+            program: vec![rems_imm(1, 0, 7_i16)],
+            start_fp: 10,
+            start_registers: vec![(10, 43)],
+            expected_registers: vec![(11, 1)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_remu_imm() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 100 % 7 = 2
+        let spec = TestSpec {
+            program: vec![remu_imm(1, 0, 7_i16)],
+            start_fp: 10,
+            start_registers: vec![(10, 100)],
+            expected_registers: vec![(11, 2)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_div_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 42 / 7 = 6 (64-bit)
+        let spec = TestSpec {
+            program: vec![div_imm_64(2, 0, 7_i16)],
+            start_fp: 124,
+            start_registers: vec![(124, 42), (125, 0)],
+            expected_registers: vec![(126, 6), (127, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_divu_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 100 / 7 = 14 (64-bit)
+        let spec = TestSpec {
+            program: vec![divu_imm_64(2, 0, 7_i16)],
+            start_fp: 124,
+            start_registers: vec![(124, 100), (125, 0)],
+            expected_registers: vec![(126, 14), (127, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_rems_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 43 % 7 = 1 (64-bit)
+        let spec = TestSpec {
+            program: vec![rems_imm_64(2, 0, 7_i16)],
+            start_fp: 124,
+            start_registers: vec![(124, 43), (125, 0)],
+            expected_registers: vec![(126, 1), (127, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_remu_imm_64() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // 100 % 7 = 2 (64-bit)
+        let spec = TestSpec {
+            program: vec![remu_imm_64(2, 0, 7_i16)],
+            start_fp: 124,
+            start_registers: vec![(124, 100), (125, 0)],
+            expected_registers: vec![(126, 2), (127, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
     // ==================== Cross-width tests ====================
 
     #[test]
@@ -3159,6 +3289,105 @@ mod tests {
             expected_registers: vec![(10, 0x42), (11, 0), (12, 0x42)],
             ..Default::default()
         };
+        test_spec_for_all_register_bases(spec)
+    }
+
+    // ==================== I64Load / I64Load32U anti-dependency tests ====================
+    //
+    // These test the instruction orderings that arise during WASM-to-OpenVM
+    // translation of 64-bit loads. The bugs were caused by register
+    // anti-dependencies (WAR hazards) when the output register pair
+    // overlaps the base address register.
+
+    #[test]
+    fn test_i64load_output_plus_1_eq_base_addr() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Simulate I64Load where output+1 == base_addr:
+        //   reg[fp+0]:reg[fp+1] = MEM64[reg[fp+1]]
+        //
+        // base_addr is reg fp+1, output lo is fp+0, output hi is fp+1.
+        // The hi-word load must come AFTER the lo-word load, because the
+        // hi-word destination (fp+1) clobbers the base address.
+        //
+        // Correct order: loadw(0, 1, 0), loadw(1, 1, 4)
+        // Buggy order:   loadw(1, 1, 4), loadw(0, 1, 0)  — clobbers base before lo read
+        let spec = TestSpec {
+            program: vec![loadw(0, 1, 0), loadw(1, 1, 4)],
+            start_fp: 10,
+            start_registers: vec![(11, 200)], // reg fp+1 = address 200
+            start_ram: vec![(200, 0xAAAA_BBBB), (204, 0xCCCC_DDDD)],
+            expected_registers: vec![(10, 0xAAAA_BBBB), (11, 0xCCCC_DDDD)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_i64load_output_eq_base_addr() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Simulate I64Load where output == base_addr:
+        //   reg[fp+0]:reg[fp+1] = MEM64[reg[fp+0]]
+        //
+        // Here the lo-word load clobbers the base address, so the hi-word
+        // load must come first.
+        //
+        // Correct order: loadw(1, 0, 4), loadw(0, 0, 0)
+        let spec = TestSpec {
+            program: vec![loadw(1, 0, 4), loadw(0, 0, 0)],
+            start_fp: 10,
+            start_registers: vec![(10, 200)], // reg fp+0 = address 200
+            start_ram: vec![(200, 0x1111_2222), (204, 0x3333_4444)],
+            expected_registers: vec![(10, 0x1111_2222), (11, 0x3333_4444)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_i64load32u_output_plus_1_eq_base_addr() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Simulate I64Load32U where output+1 == base_addr:
+        //   reg[fp+0] = MEM32[reg[fp+1]], reg[fp+1] = 0
+        //
+        // The CONST32 that zeros the hi word (fp+1) must come AFTER the
+        // LOADW, because fp+1 is the base address register.
+        //
+        // Correct order: loadw(0, 1, 0), const_32_imm(1, 0, 0)
+        // Buggy order:   const_32_imm(1, 0, 0), loadw(0, 1, 0)  — zeros base first
+        let spec = TestSpec {
+            program: vec![loadw(0, 1, 0), const_32_imm(1, 0, 0)],
+            start_fp: 10,
+            start_registers: vec![(11, 200)], // reg fp+1 = address 200
+            start_ram: vec![(200, 0xDEAD_BEEF)],
+            expected_registers: vec![(10, 0xDEAD_BEEF), (11, 0)],
+            ..Default::default()
+        };
+
+        test_spec_for_all_register_bases(spec)
+    }
+
+    #[test]
+    fn test_i64load32u_no_overlap() {
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Simulate I64Load32U with no overlap (output != base_addr, output+1 != base_addr):
+        //   reg[fp+0] = MEM32[reg[fp+2]], reg[fp+1] = 0
+        //
+        // Order doesn't matter here, but verify the result is correct.
+        let spec = TestSpec {
+            program: vec![loadw(0, 2, 0), const_32_imm(1, 0, 0)],
+            start_fp: 10,
+            start_registers: vec![(12, 200)], // reg fp+2 = address 200
+            start_ram: vec![(200, 0xCAFE_BABE)],
+            expected_registers: vec![(10, 0xCAFE_BABE), (11, 0)],
+            ..Default::default()
+        };
+
         test_spec_for_all_register_bases(spec)
     }
 

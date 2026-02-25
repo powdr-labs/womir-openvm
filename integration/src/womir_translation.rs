@@ -319,11 +319,17 @@ pub struct OpenVMSettings<F> {
     _phantom: std::marker::PhantomData<F>,
 }
 
-impl<F> OpenVMSettings<F> {
-    pub fn new() -> Self {
+impl<F> Default for OpenVMSettings<F> {
+    fn default() -> Self {
         Self {
             _phantom: std::marker::PhantomData,
         }
+    }
+}
+
+impl<F> OpenVMSettings<F> {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -1338,19 +1344,20 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                     ]
                 }
                 2.. => {
-                    // read two words
-                    // Use temps so we never clobber the base register,
-                    // even if output overlaps base_addr.
-                    let lo_tmp =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let hi_tmp =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    vec![
-                        Directive::Instruction(ib::loadw(lo_tmp, base_addr, imm)),
-                        Directive::Instruction(ib::loadw(hi_tmp, base_addr, imm + 4)),
-                        Directive::Instruction(ib::add_imm(output, lo_tmp, AluImm::from(0))),
-                        Directive::Instruction(ib::add_imm(output + 1, hi_tmp, AluImm::from(0))),
-                    ]
+                    // Read two words.
+                    // If the output register pair overlaps the base address register,
+                    // one of the loads will clobber it. We must schedule the clobbering
+                    // load LAST so the other load can still read the base pointer.
+                    let lo = Directive::Instruction(ib::loadw(output, base_addr, imm));
+                    let hi = Directive::Instruction(ib::loadw(output + 1, base_addr, imm + 4));
+                    if output + 1 == base_addr {
+                        // hi clobbers base_addr → emit lo first
+                        vec![lo, hi]
+                    } else {
+                        // output == base_addr or no overlap → emit hi first
+                        // (if output == base_addr, lo clobbers it, so hi must go first)
+                        vec![hi, lo]
+                    }
                 }
             }
             .into()
