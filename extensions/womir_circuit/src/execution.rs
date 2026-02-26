@@ -50,7 +50,9 @@ impl<T> ExecutionState<T> {
     }
 }
 
-/// Helper wrapper around `VmExecState::vm_read` that reads `NUM_LIMBS` bytes by doing `NUM_REG_OPS` reads of `RV32_REGISTER_NUM_LIMBS` bytes and concatenating the results.
+/// Reads `NUM_LIMBS` bytes by doing `NUM_REG_OPS` reads of `RV32_REGISTER_NUM_LIMBS` bytes.
+/// This matches the behavior enforced by the adapter constraints, which read register-sized
+/// chunks rather than a single large block.
 pub fn vm_read_multiple_ops<
     const NUM_LIMBS: usize,
     const NUM_REG_OPS: usize,
@@ -61,17 +63,19 @@ pub fn vm_read_multiple_ops<
     addr_space: u32,
     ptr: u32,
 ) -> [u8; NUM_LIMBS] {
+    const { assert!(NUM_LIMBS == NUM_REG_OPS * RV32_REGISTER_NUM_LIMBS) };
     let mut buf = [0u8; NUM_LIMBS];
-    for i in 0u32..NUM_REG_OPS as u32 {
+    for i in 0..NUM_REG_OPS {
+        let offset = i * RV32_REGISTER_NUM_LIMBS;
         let chunk: [u8; RV32_REGISTER_NUM_LIMBS] =
-            exec_state.vm_read(addr_space, ptr + i * RV32_REGISTER_NUM_LIMBS as u32);
-        buf[i as usize * RV32_REGISTER_NUM_LIMBS..(i as usize + 1) * RV32_REGISTER_NUM_LIMBS]
-            .copy_from_slice(&chunk);
+            exec_state.vm_read(addr_space, ptr + offset as u32);
+        buf[offset..offset + RV32_REGISTER_NUM_LIMBS].copy_from_slice(&chunk);
     }
     buf
 }
 
-/// Helper wrapper around `VmExecState::vm_write` that writes `NUM_LIMBS` bytes by doing `NUM_REG_OPS` writes of `RV32_REGISTER_NUM_LIMBS` bytes, taking the data from the input slice.
+/// Writes `NUM_LIMBS` bytes by doing `NUM_REG_OPS` writes of `RV32_REGISTER_NUM_LIMBS` bytes.
+/// This matches the behavior enforced by the adapter constraints.
 pub fn vm_write_multiple_ops<
     const NUM_LIMBS: usize,
     const NUM_REG_OPS: usize,
@@ -83,13 +87,10 @@ pub fn vm_write_multiple_ops<
     ptr: u32,
     data: &[u8; NUM_LIMBS],
 ) {
-    for i in 0u32..NUM_REG_OPS as u32 {
-        let chunk =
-            &data[i as usize * RV32_REGISTER_NUM_LIMBS..(i as usize + 1) * RV32_REGISTER_NUM_LIMBS];
-        exec_state.vm_write::<_, RV32_REGISTER_NUM_LIMBS>(
-            addr_space,
-            ptr + i * RV32_REGISTER_NUM_LIMBS as u32,
-            chunk.try_into().unwrap(),
-        );
+    const { assert!(NUM_LIMBS == NUM_REG_OPS * RV32_REGISTER_NUM_LIMBS) };
+    for i in 0..NUM_REG_OPS {
+        let offset = i * RV32_REGISTER_NUM_LIMBS;
+        let chunk: [u8; RV32_REGISTER_NUM_LIMBS] = std::array::from_fn(|j| data[offset + j]);
+        exec_state.vm_write(addr_space, ptr + offset as u32, &chunk);
     }
 }
