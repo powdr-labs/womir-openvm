@@ -10,6 +10,7 @@ use std::{
     mem::size_of,
 };
 
+use crate::execution::{vm_read_multiple_ops, vm_write_multiple_ops};
 use crate::memory_config::FpMemory;
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_derive::PreflightExecutor;
@@ -96,25 +97,25 @@ impl<const NUM_LIMBS: usize, const NUM_REG_OPS: usize> ShiftExecutor<NUM_LIMBS, 
 }
 
 macro_rules! dispatch {
-    ($execute_impl:ident, $is_imm:ident, $opcode:ident, $num_limbs:expr) => {
+    ($execute_impl:ident, $is_imm:ident, $opcode:ident, $num_limbs:expr, $num_reg_ops:expr) => {
         match ($is_imm, $opcode) {
             (true, ShiftOpcode::SLL) => {
-                Ok($execute_impl::<_, _, true, { ShiftOpcode::SLL as u8 }, $num_limbs>)
+                Ok($execute_impl::<_, _, true, { ShiftOpcode::SLL as u8 }, $num_limbs, $num_reg_ops>)
             }
             (false, ShiftOpcode::SLL) => {
-                Ok($execute_impl::<_, _, false, { ShiftOpcode::SLL as u8 }, $num_limbs>)
+                Ok($execute_impl::<_, _, false, { ShiftOpcode::SLL as u8 }, $num_limbs, $num_reg_ops>)
             }
             (true, ShiftOpcode::SRL) => {
-                Ok($execute_impl::<_, _, true, { ShiftOpcode::SRL as u8 }, $num_limbs>)
+                Ok($execute_impl::<_, _, true, { ShiftOpcode::SRL as u8 }, $num_limbs, $num_reg_ops>)
             }
             (false, ShiftOpcode::SRL) => {
-                Ok($execute_impl::<_, _, false, { ShiftOpcode::SRL as u8 }, $num_limbs>)
+                Ok($execute_impl::<_, _, false, { ShiftOpcode::SRL as u8 }, $num_limbs, $num_reg_ops>)
             }
             (true, ShiftOpcode::SRA) => {
-                Ok($execute_impl::<_, _, true, { ShiftOpcode::SRA as u8 }, $num_limbs>)
+                Ok($execute_impl::<_, _, true, { ShiftOpcode::SRA as u8 }, $num_limbs, $num_reg_ops>)
             }
             (false, ShiftOpcode::SRA) => {
-                Ok($execute_impl::<_, _, false, { ShiftOpcode::SRA as u8 }, $num_limbs>)
+                Ok($execute_impl::<_, _, false, { ShiftOpcode::SRA as u8 }, $num_limbs, $num_reg_ops>)
             }
         }
     };
@@ -143,7 +144,7 @@ where
         let data: &mut ShiftPreCompute = data.borrow_mut();
         let (is_imm, opcode) = self.pre_compute_impl(pc, inst, data)?;
 
-        dispatch!(execute_e1_handler, is_imm, opcode, NUM_LIMBS)
+        dispatch!(execute_e1_handler, is_imm, opcode, NUM_LIMBS, NUM_REG_OPS)
     }
 }
 
@@ -172,7 +173,7 @@ where
         data.chip_idx = chip_idx as u32;
         let (is_imm, opcode) = self.pre_compute_impl(pc, inst, &mut data.data)?;
 
-        dispatch!(execute_e2_handler, is_imm, opcode, NUM_LIMBS)
+        dispatch!(execute_e2_handler, is_imm, opcode, NUM_LIMBS, NUM_REG_OPS)
     }
 }
 
@@ -183,6 +184,7 @@ unsafe fn execute_e12_impl<
     const E_IS_IMM: bool,
     const OPCODE: u8,
     const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
 >(
     pre_compute: &ShiftPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
@@ -191,11 +193,19 @@ unsafe fn execute_e12_impl<
 
     let num_bits = NUM_LIMBS * 8;
     let fp = exec_state.memory.fp::<F>();
-    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.b);
+    let rs1 = vm_read_multiple_ops::<NUM_LIMBS, NUM_REG_OPS, _, _>(
+        exec_state,
+        RV32_REGISTER_AS,
+        fp + pre_compute.b,
+    );
     let rs2 = if E_IS_IMM {
         sign_extend_u32::<NUM_LIMBS>(pre_compute.c)
     } else {
-        exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c)
+        vm_read_multiple_ops::<NUM_LIMBS, NUM_REG_OPS, _, _>(
+            exec_state,
+            RV32_REGISTER_AS,
+            fp + pre_compute.c,
+        )
     };
 
     // Shift amount is taken mod num_bits, from the lowest byte only
@@ -224,7 +234,12 @@ unsafe fn execute_e12_impl<
     let result_bytes = result.to_le_bytes();
     let result_val: [u8; NUM_LIMBS] = std::array::from_fn(|i| result_bytes[i]);
 
-    exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &result_val);
+    vm_write_multiple_ops::<NUM_LIMBS, NUM_REG_OPS, _, _>(
+        exec_state,
+        RV32_REGISTER_AS,
+        fp + pre_compute.a,
+        &result_val,
+    );
     let pc = exec_state.pc();
     exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
 }
@@ -237,6 +252,7 @@ unsafe fn execute_e1_impl<
     const E_IS_IMM: bool,
     const OPCODE: u8,
     const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
 >(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
@@ -244,7 +260,10 @@ unsafe fn execute_e1_impl<
     unsafe {
         let pre_compute: &ShiftPreCompute =
             std::slice::from_raw_parts(pre_compute, size_of::<ShiftPreCompute>()).borrow();
-        execute_e12_impl::<F, CTX, E_IS_IMM, OPCODE, NUM_LIMBS>(pre_compute, exec_state);
+        execute_e12_impl::<F, CTX, E_IS_IMM, OPCODE, NUM_LIMBS, NUM_REG_OPS>(
+            pre_compute,
+            exec_state,
+        );
     }
 }
 
@@ -256,6 +275,7 @@ unsafe fn execute_e2_impl<
     const E_IS_IMM: bool,
     const OPCODE: u8,
     const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
 >(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
@@ -267,6 +287,9 @@ unsafe fn execute_e2_impl<
         exec_state
             .ctx
             .on_height_change(pre_compute.chip_idx as usize, 1);
-        execute_e12_impl::<F, CTX, E_IS_IMM, OPCODE, NUM_LIMBS>(&pre_compute.data, exec_state);
+        execute_e12_impl::<F, CTX, E_IS_IMM, OPCODE, NUM_LIMBS, NUM_REG_OPS>(
+            &pre_compute.data,
+            exec_state,
+        );
     }
 }
