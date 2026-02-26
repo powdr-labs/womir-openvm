@@ -43,7 +43,7 @@ pub fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
     })
 }
 
-type WomirSdk = GenericSdk<BabyBearPoseidon2Engine, WomirCpuBuilder, NativeCpuBuilder>;
+pub type WomirSdk = GenericSdk<BabyBearPoseidon2Engine, WomirCpuBuilder, NativeCpuBuilder>;
 
 /// Generate and verify a real cryptographic proof, with optional recursion.
 pub fn prove(
