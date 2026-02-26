@@ -890,9 +890,8 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
         | Op::I32LeU
         | Op::I64LeS
         | Op::I64LeU => {
-            let inverse_result =
-                c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
             let output = output.start as usize;
+            let inverse_result = output;
 
             let comp_instruction = match [&inputs[0], &inputs[1]] {
                 [WasmOpInput::Register(input1), WasmOpInput::Register(input2)] => {
@@ -1118,8 +1117,6 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let input = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
-            let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-
             let shift = match op {
                 Op::I32Extend8S => 24_i16,
                 Op::I32Extend16S => 16_i16,
@@ -1128,16 +1125,14 @@ fn translate_complex_ins<'a, F: PrimeField32>(
 
             // Left shift followed by arithmetic right shift
             vec![
-                Directive::Instruction(ib::shl_imm(tmp, input, shift)),
-                Directive::Instruction(ib::shr_s_imm(output, tmp, shift)),
+                Directive::Instruction(ib::shl_imm(output, input, shift)),
+                Directive::Instruction(ib::shr_s_imm(output, output, shift)),
             ]
             .into()
         }
         Op::I64Extend8S | Op::I64Extend16S | Op::I64Extend32S => {
             let input = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
-
-            let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
 
             let shift = match op {
                 Op::I64Extend8S => 56_i16,
@@ -1148,8 +1143,8 @@ fn translate_complex_ins<'a, F: PrimeField32>(
 
             // Left shift followed by arithmetic right shift
             vec![
-                Directive::Instruction(ib::shl_imm_64(tmp, input, shift)),
-                Directive::Instruction(ib::shr_s_imm_64(output, tmp, shift)),
+                Directive::Instruction(ib::shl_imm_64(output, input, shift)),
+                Directive::Instruction(ib::shr_s_imm_64(output, output, shift)),
             ]
             .into()
         }
@@ -1159,15 +1154,12 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let input = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
-            let high_shifted =
-                c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
-
             vec![
-                // Copy the 32 bit value to the high 32 bits of the temporary value.
-                Directive::Instruction(ib::add_imm(high_shifted + 1, input, AluImm::from(0))),
+                // Copy the 32 bit value to the high 32 bits.
+                Directive::Instruction(ib::add_imm(output + 1, input, AluImm::from(0))),
                 // Arithmetic shift right to fill the high bits with the sign bit.
                 // The low 32 bits of the input are discarded by the shift.
-                Directive::Instruction(ib::shr_s_imm_64(output, high_shifted, 32_i16)),
+                Directive::Instruction(ib::shr_s_imm_64(output, output, 32_i16)),
             ]
             .into()
         }
@@ -1211,43 +1203,33 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             match memarg.align {
                 0 => {
                     // read four bytes
-                    let b0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b1_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b2_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b3_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let lo = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let hi = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
-                        Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
-                        Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
-                        Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
-                        Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
-                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16)),
-                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16)),
-                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16)),
-                        Directive::Instruction(ib::or(lo, b0, b1_shifted)),
-                        Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
-                        Directive::Instruction(ib::or(output, lo, hi)),
+                        Directive::Instruction(ib::loadbu(acc, base_addr, imm)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 1)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 8_i16)),
+                        Directive::Instruction(ib::or(acc, acc, tmp)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 2)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 16_i16)),
+                        Directive::Instruction(ib::or(acc, acc, tmp)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 3)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 24_i16)),
+                        Directive::Instruction(ib::or(acc, acc, tmp)),
+                        Directive::Instruction(ib::add_imm(output, acc, AluImm::from(0))),
                     ]
                     .into()
                 }
                 1 => {
                     // read two half words
-                    let hi = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let hi_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let lo = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
-                        Directive::Instruction(ib::loadhu(lo, base_addr, imm)),
-                        Directive::Instruction(ib::loadhu(hi, base_addr, imm + 2)),
-                        Directive::Instruction(ib::shl_imm(hi_shifted, hi, 16_i16)),
-                        Directive::Instruction(ib::or(output, lo, hi_shifted)),
+                        Directive::Instruction(ib::loadhu(acc, base_addr, imm)),
+                        Directive::Instruction(ib::loadhu(tmp, base_addr, imm + 2)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 16_i16)),
+                        Directive::Instruction(ib::or(acc, acc, tmp)),
+                        Directive::Instruction(ib::add_imm(output, acc, AluImm::from(0))),
                     ]
                     .into()
                 }
@@ -1263,19 +1245,18 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             match memarg.align {
                 0 => {
                     // read four bytes
-                    let b0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b1_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
-                        Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
                         if let Op::I32Load16S { .. } = op {
-                            Directive::Instruction(ib::loadb(b1, base_addr, imm + 1))
+                            Directive::Instruction(ib::loadb(tmp, base_addr, imm + 1))
                         } else {
-                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
+                            Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 1))
                         },
-                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16)),
-                        Directive::Instruction(ib::or(output, b0, b1_shifted)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 8_i16)),
+                        Directive::Instruction(ib::loadbu(acc, base_addr, imm)),
+                        Directive::Instruction(ib::or(acc, acc, tmp)),
+                        Directive::Instruction(ib::add_imm(output, acc, AluImm::from(0))),
                     ]
                     .into()
                 }
@@ -1309,78 +1290,57 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             match memarg.align {
                 0 => {
                     // read byte by byte
-                    let b0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b4 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b5 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b6 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b7 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b1_shifted =
+                    let acc_lo =
                         c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b2_shifted =
+                    let acc_hi =
                         c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b3_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b5_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b6_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b7_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-
-                    let hi0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let hi1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let lo0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let lo1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
 
                     vec![
                         // load each byte
-                        Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
-                        Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
-                        Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
-                        Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
-                        Directive::Instruction(ib::loadbu(b4, base_addr, imm + 4)),
-                        Directive::Instruction(ib::loadbu(b5, base_addr, imm + 5)),
-                        Directive::Instruction(ib::loadbu(b6, base_addr, imm + 6)),
-                        Directive::Instruction(ib::loadbu(b7, base_addr, imm + 7)),
-                        // build lo 32 bits
-                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16)),
-                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16)),
-                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16)),
-                        Directive::Instruction(ib::or(lo0, b0, b1_shifted)),
-                        Directive::Instruction(ib::or(lo1, b2_shifted, b3_shifted)),
-                        Directive::Instruction(ib::or(output, lo0, lo1)),
-                        // build hi 32 bits
-                        Directive::Instruction(ib::shl_imm(b5_shifted, b5, 8_i16)),
-                        Directive::Instruction(ib::shl_imm(b6_shifted, b6, 16_i16)),
-                        Directive::Instruction(ib::shl_imm(b7_shifted, b7, 24_i16)),
-                        Directive::Instruction(ib::or(hi0, b4, b5_shifted)),
-                        Directive::Instruction(ib::or(hi1, b6_shifted, b7_shifted)),
-                        Directive::Instruction(ib::or(output + 1, hi0, hi1)),
+                        Directive::Instruction(ib::loadbu(acc_lo, base_addr, imm)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 1)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 8_i16)),
+                        Directive::Instruction(ib::or(acc_lo, acc_lo, tmp)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 2)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 16_i16)),
+                        Directive::Instruction(ib::or(acc_lo, acc_lo, tmp)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 3)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 24_i16)),
+                        Directive::Instruction(ib::or(acc_lo, acc_lo, tmp)),
+                        Directive::Instruction(ib::loadbu(acc_hi, base_addr, imm + 4)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 5)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 8_i16)),
+                        Directive::Instruction(ib::or(acc_hi, acc_hi, tmp)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 6)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 16_i16)),
+                        Directive::Instruction(ib::or(acc_hi, acc_hi, tmp)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 7)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 24_i16)),
+                        Directive::Instruction(ib::or(acc_hi, acc_hi, tmp)),
+                        Directive::Instruction(ib::add_imm(output, acc_lo, AluImm::from(0))),
+                        Directive::Instruction(ib::add_imm(output + 1, acc_hi, AluImm::from(0))),
                     ]
                 }
                 1 => {
                     // read four halfwords
-                    let h0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let h1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let h2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let h3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let h1_shifted =
+                    let acc_lo =
                         c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let h3_shifted =
+                    let acc_hi =
                         c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
 
                     vec![
-                        Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
-                        Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
-                        Directive::Instruction(ib::loadhu(h2, base_addr, imm + 4)),
-                        Directive::Instruction(ib::loadhu(h3, base_addr, imm + 6)),
-                        Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16)),
-                        Directive::Instruction(ib::shl_imm(h3_shifted, h3, 16_i16)),
-                        Directive::Instruction(ib::or(output, h0, h1_shifted)),
-                        Directive::Instruction(ib::or(output + 1, h2, h3_shifted)),
+                        Directive::Instruction(ib::loadhu(acc_lo, base_addr, imm)),
+                        Directive::Instruction(ib::loadhu(tmp, base_addr, imm + 2)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 16_i16)),
+                        Directive::Instruction(ib::or(acc_lo, acc_lo, tmp)),
+                        Directive::Instruction(ib::loadhu(acc_hi, base_addr, imm + 4)),
+                        Directive::Instruction(ib::loadhu(tmp, base_addr, imm + 6)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 16_i16)),
+                        Directive::Instruction(ib::or(acc_hi, acc_hi, tmp)),
+                        Directive::Instruction(ib::add_imm(output, acc_lo, AluImm::from(0))),
+                        Directive::Instruction(ib::add_imm(output + 1, acc_hi, AluImm::from(0))),
                     ]
                 }
                 2.. => {
@@ -1406,18 +1366,20 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
-            let val = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
+
+            let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
 
             vec![
                 // load signed or unsigned byte as i32 hi part
                 if let Op::I64Load8S { .. } = op {
-                    Directive::Instruction(ib::loadb(val + 1, base_addr, imm))
+                    Directive::Instruction(ib::loadb(acc, base_addr, imm))
                 } else {
-                    Directive::Instruction(ib::loadbu(val + 1, base_addr, imm))
+                    Directive::Instruction(ib::loadbu(acc, base_addr, imm))
                 },
+                Directive::Instruction(ib::add_imm(output + 1, acc, AluImm::from(0))),
                 // shift i64 val right, keeping the sign.
                 // The low 32 bits of the input are discarded by the shift.
-                Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
+                Directive::Instruction(ib::shr_s_imm_64(output, output, 32_i16)),
             ]
             .into()
         }
@@ -1425,45 +1387,49 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
-            let val = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
 
             match memarg.align {
                 0 => {
-                    let b0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b1_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         // load b1 signed/unsigned
                         if let Op::I64Load16S { .. } = op {
-                            Directive::Instruction(ib::loadb(b1, base_addr, imm + 1))
+                            Directive::Instruction(ib::loadb(tmp, base_addr, imm + 1))
                         } else {
-                            Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1))
+                            Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 1))
                         },
                         // shift b1
-                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 8_i16)),
                         // load b0
-                        Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
+                        Directive::Instruction(ib::loadbu(acc, base_addr, imm)),
                         // combine b0 and b1
-                        Directive::Instruction(ib::or(val + 1, b0, b1_shifted)),
+                        Directive::Instruction(ib::or(acc, acc, tmp)),
+                        Directive::Instruction(ib::add_imm(output + 1, acc, AluImm::from(0))),
                         // shift i64 val right, keeping the sign.
                         // The low 32 bits of the input are discarded by the shift.
-                        Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
+                        Directive::Instruction(ib::shr_s_imm_64(output, output, 32_i16)),
                     ]
                 }
                 1.. => {
                     if let Op::I64Load16S { .. } = op {
+                        let acc =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                         vec![
                             // load signed halfword as i32 on the hi part of the i64 val
-                            Directive::Instruction(ib::loadh(val + 1, base_addr, imm)),
+                            Directive::Instruction(ib::loadh(acc, base_addr, imm)),
+                            Directive::Instruction(ib::add_imm(output + 1, acc, AluImm::from(0))),
                             // shift i64 val right, keeping the sign.
                             // The low 32 bits of the input are discarded by the shift.
-                            Directive::Instruction(ib::shr_s_imm_64(output, val, 32_i16)),
+                            Directive::Instruction(ib::shr_s_imm_64(output, output, 32_i16)),
                         ]
                     } else {
+                        let acc =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                         vec![
                             // load unsigned lo i32
-                            Directive::Instruction(ib::loadhu(output, base_addr, imm)),
+                            Directive::Instruction(ib::loadhu(acc, base_addr, imm)),
+                            Directive::Instruction(ib::add_imm(output, acc, AluImm::from(0))),
                             // zero out hi i32
                             Directive::Instruction(ib::const_32_imm(output + 1, 0x0, 0x0)),
                         ]
@@ -1477,80 +1443,60 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
 
-            // If signed, we place the loaded 32-bit value in the hi word of a temporary
+            // If signed, place the loaded 32-bit value in the hi word of the output
             // and sign-extend it with shr_s_imm_64.
-            // If unsigned, we load directly into the lo word and zero the hi word.
-            let (val_32, shr_base) = if let Op::I64Load32S { .. } = op {
-                let val = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I64).start as usize;
-                (val + 1, Some(val))
+            // If unsigned, load directly into the lo word and zero the hi word after.
+            let val_32 = if let Op::I64Load32S { .. } = op {
+                output + 1
             } else {
-                (output, None)
+                output
             };
 
             let mut directives = vec![];
 
             match memarg.align {
                 0 => {
-                    let b0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b1_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b2_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b3_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let hi = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let lo = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     directives.extend([
-                        Directive::Instruction(ib::loadbu(b0, base_addr, imm)),
-                        Directive::Instruction(ib::loadbu(b1, base_addr, imm + 1)),
-                        Directive::Instruction(ib::loadbu(b2, base_addr, imm + 2)),
-                        Directive::Instruction(ib::loadbu(b3, base_addr, imm + 3)),
-                        // shifts
-                        Directive::Instruction(ib::shl_imm(b1_shifted, b1, 8_i16)),
-                        Directive::Instruction(ib::shl_imm(b2_shifted, b2, 16_i16)),
-                        Directive::Instruction(ib::shl_imm(b3_shifted, b3, 24_i16)),
-                        // build hi and lo
-                        Directive::Instruction(ib::or(lo, b0, b1_shifted)),
-                        Directive::Instruction(ib::or(hi, b2_shifted, b3_shifted)),
-                        // build i32 in val
-                        Directive::Instruction(ib::or(val_32, lo, hi)),
+                        Directive::Instruction(ib::loadbu(acc, base_addr, imm)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 1)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 8_i16)),
+                        Directive::Instruction(ib::or(acc, acc, tmp)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 2)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 16_i16)),
+                        Directive::Instruction(ib::or(acc, acc, tmp)),
+                        Directive::Instruction(ib::loadbu(tmp, base_addr, imm + 3)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 24_i16)),
+                        Directive::Instruction(ib::or(acc, acc, tmp)),
+                        Directive::Instruction(ib::add_imm(val_32, acc, AluImm::from(0))),
                     ]);
                 }
                 1 => {
-                    let h0 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let h1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let h1_shifted =
-                        c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     directives.extend([
                         // load h0, h1
-                        Directive::Instruction(ib::loadhu(h0, base_addr, imm)),
-                        Directive::Instruction(ib::loadhu(h1, base_addr, imm + 2)),
+                        Directive::Instruction(ib::loadhu(acc, base_addr, imm)),
+                        Directive::Instruction(ib::loadhu(tmp, base_addr, imm + 2)),
                         // shift h1
-                        Directive::Instruction(ib::shl_imm(h1_shifted, h1, 16_i16)),
+                        Directive::Instruction(ib::shl_imm(tmp, tmp, 16_i16)),
                         // combine h0 and h1
-                        Directive::Instruction(ib::or(val_32, h0, h1_shifted)),
+                        Directive::Instruction(ib::or(acc, acc, tmp)),
+                        Directive::Instruction(ib::add_imm(val_32, acc, AluImm::from(0))),
                     ]);
                 }
                 2.. => directives.push(Directive::Instruction(ib::loadw(val_32, base_addr, imm))),
             }
 
-            // For unsigned, zero the hi word of the output.
-            // Must come AFTER the load so that the flattener emits the load before
-            // the const, preventing the const from clobbering a register that the
-            // load still reads (e.g. the base address pointer).
-            if shr_base.is_none() {
-                directives.push(Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)));
-            }
-
-            // In case of signed, right shift to sign-extend the loaded value.
-            // The low 32 bits of the input are discarded by the shift.
-            if let Some(shr_base) = shr_base {
+            if let Op::I64Load32S { .. } = op {
+                // Sign-extend via shift. Low 32 bits are discarded by the shift.
                 directives.push(Directive::Instruction(ib::shr_s_imm_64(
-                    output, shr_base, 32_i16,
+                    output, output, 32_i16,
                 )));
+            } else {
+                // Unsigned: zero the high word.
+                directives.push(Directive::Instruction(ib::const_32_imm(output + 1, 0, 0)));
             }
 
             directives.into()
@@ -1563,32 +1509,30 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             match memarg.align {
                 0 => {
                     // write byte by byte
-                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         // store byte 0
                         Directive::Instruction(ib::storeb(value, base_addr, imm)),
                         // shift and store byte 1
-                        Directive::Instruction(ib::shr_u_imm(b1, value, 8_i16)),
-                        Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value, 8_i16)),
+                        Directive::Instruction(ib::storeb(tmp, base_addr, imm + 1)),
                         // shift and store byte 2
-                        Directive::Instruction(ib::shr_u_imm(b2, value, 16_i16)),
-                        Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value, 16_i16)),
+                        Directive::Instruction(ib::storeb(tmp, base_addr, imm + 2)),
                         // shift and store byte 3
-                        Directive::Instruction(ib::shr_u_imm(b3, value, 24_i16)),
-                        Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value, 24_i16)),
+                        Directive::Instruction(ib::storeb(tmp, base_addr, imm + 3)),
                     ]
                     .into()
                 }
                 1 => {
-                    let h1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         // store halfword 0
                         Directive::Instruction(ib::storeh(value, base_addr, imm)),
                         // shift and store halfword 1
-                        Directive::Instruction(ib::shr_u_imm(h1, value, 16_i16)),
-                        Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value, 16_i16)),
+                        Directive::Instruction(ib::storeh(tmp, base_addr, imm + 2)),
                     ]
                     .into()
                 }
@@ -1631,52 +1575,46 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             match memarg.align {
                 0 => {
                     // write byte by byte
-                    let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b2 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b5 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b6 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let b7 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         // store byte 0
                         Directive::Instruction(ib::storeb(value_lo, base_addr, imm)),
                         // shift and store byte 1
-                        Directive::Instruction(ib::shr_u_imm(b1, value_lo, 8_i16)),
-                        Directive::Instruction(ib::storeb(b1, base_addr, imm + 1)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value_lo, 8_i16)),
+                        Directive::Instruction(ib::storeb(tmp, base_addr, imm + 1)),
                         // shift and store byte 2
-                        Directive::Instruction(ib::shr_u_imm(b2, value_lo, 16_i16)),
-                        Directive::Instruction(ib::storeb(b2, base_addr, imm + 2)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value_lo, 16_i16)),
+                        Directive::Instruction(ib::storeb(tmp, base_addr, imm + 2)),
                         // shift and store byte 3
-                        Directive::Instruction(ib::shr_u_imm(b3, value_lo, 24_i16)),
-                        Directive::Instruction(ib::storeb(b3, base_addr, imm + 3)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value_lo, 24_i16)),
+                        Directive::Instruction(ib::storeb(tmp, base_addr, imm + 3)),
                         // store byte 4
                         Directive::Instruction(ib::storeb(value_hi, base_addr, imm + 4)),
                         // shift and store byte 5
-                        Directive::Instruction(ib::shr_u_imm(b5, value_hi, 8_i16)),
-                        Directive::Instruction(ib::storeb(b5, base_addr, imm + 5)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value_hi, 8_i16)),
+                        Directive::Instruction(ib::storeb(tmp, base_addr, imm + 5)),
                         // shift and store byte 6
-                        Directive::Instruction(ib::shr_u_imm(b6, value_hi, 16_i16)),
-                        Directive::Instruction(ib::storeb(b6, base_addr, imm + 6)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value_hi, 16_i16)),
+                        Directive::Instruction(ib::storeb(tmp, base_addr, imm + 6)),
                         // shift and store byte 7
-                        Directive::Instruction(ib::shr_u_imm(b7, value_hi, 24_i16)),
-                        Directive::Instruction(ib::storeb(b7, base_addr, imm + 7)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value_hi, 24_i16)),
+                        Directive::Instruction(ib::storeb(tmp, base_addr, imm + 7)),
                     ]
                 }
                 1 => {
                     // write by halfwords
-                    let h1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    let h3 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
                         // store halfword 0
                         Directive::Instruction(ib::storeh(value_lo, base_addr, imm)),
                         // shift and store halfword 1
-                        Directive::Instruction(ib::shr_u_imm(h1, value_lo, 16_i16)),
-                        Directive::Instruction(ib::storeh(h1, base_addr, imm + 2)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value_lo, 16_i16)),
+                        Directive::Instruction(ib::storeh(tmp, base_addr, imm + 2)),
                         // store halfword 2
                         Directive::Instruction(ib::storeh(value_hi, base_addr, imm + 4)),
                         // shift and store halfword 3
-                        Directive::Instruction(ib::shr_u_imm(h3, value_hi, 16_i16)),
-                        Directive::Instruction(ib::storeh(h3, base_addr, imm + 6)),
+                        Directive::Instruction(ib::shr_u_imm(tmp, value_hi, 16_i16)),
+                        Directive::Instruction(ib::storeh(tmp, base_addr, imm + 6)),
                     ]
                 }
                 2.. => {
