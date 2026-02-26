@@ -627,11 +627,65 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                         set_output_const(&mut directives, &outputs, 0);
                     }
                     // fd_write(fd, iovs_ptr, iovs_len, nwritten_ptr) -> errno
-                    // We can't easily iterate iovs at compile time, so just write 0 to nwritten.
+                    // We emit a debug_print for the first iov entry so that guest
+                    // println! output is visible during execution.  We cannot loop
+                    // over all iovs because iovs_len is a runtime value, but a single
+                    // entry covers the common println! case.
                     "fd_write" => {
+                        let iovs_ptr = inputs[1].as_register().unwrap().start as usize;
                         let nwritten_ptr =
                             inputs.last().unwrap().as_register().unwrap().start as usize;
-                        store_const_to_mem(c, &mut directives, nwritten_ptr, mem_start, 0);
+
+                        // Load iov[0].buf_ptr and iov[0].buf_len from guest memory.
+                        let buf_ptr =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                        let buf_len =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                        directives.push(Directive::Instruction(ib::loadw(
+                            buf_ptr, iovs_ptr, mem_start,
+                        )));
+                        directives.push(Directive::Instruction(ib::loadw(
+                            buf_len,
+                            iovs_ptr,
+                            mem_start + 4,
+                        )));
+
+                        // debug_print encodes mem_imm as u16, so when mem_start is
+                        // large we pre-add it to buf_ptr and pass mem_imm=0.
+                        let (print_ptr, print_mem_imm) = if mem_start < (1 << 16) {
+                            (buf_ptr, mem_start as u16)
+                        } else {
+                            let adjusted = c
+                                .allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32)
+                                .start as usize;
+                            let mem_start_reg = c
+                                .allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32)
+                                .start as usize;
+                            directives.push(Directive::Instruction(ib::const_32_imm(
+                                mem_start_reg,
+                                mem_start as u16,
+                                (mem_start >> 16) as u16,
+                            )));
+                            directives.push(Directive::Instruction(ib::add(
+                                adjusted,
+                                buf_ptr,
+                                mem_start_reg,
+                            )));
+                            (adjusted, 0u16)
+                        };
+
+                        directives.push(Directive::Instruction(ib::debug_print(
+                            print_ptr,
+                            buf_len,
+                            print_mem_imm,
+                        )));
+
+                        // Store buf_len as nwritten (only accounts for first iov).
+                        directives.push(Directive::Instruction(ib::storew(
+                            buf_len,
+                            nwritten_ptr,
+                            mem_start,
+                        )));
                         set_output_const(&mut directives, &outputs, 0);
                     }
                     // fd_read(fd, iovs_ptr, iovs_len, nread_ptr) -> errno
