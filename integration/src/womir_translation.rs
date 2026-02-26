@@ -506,12 +506,37 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
         inputs: &[WasmOpInput],
         outputs: Vec<Range<u32>>,
     ) -> Vec<Directive<F>> {
-        assert!(
-            outputs.is_empty(),
-            "imported functions should not need outputs"
-        );
+        // Helper: set a single output register to a 32-bit constant.
+        let set_output_const =
+            |directives: &mut Vec<Directive<F>>, outputs: &[Range<u32>], value: u32| {
+                if let Some(out) = outputs.first() {
+                    directives.push(Directive::Instruction(ib::const_32_imm(
+                        out.start as usize,
+                        value as u16,
+                        (value >> 16) as u16,
+                    )));
+                }
+            };
+
+        // Helper: store a 32-bit constant to memory at address held in a register.
+        // Uses a temporary register for the constant value.
+        let store_const_to_mem = |c: &mut Ctx<'a, '_>,
+                                  directives: &mut Vec<Directive<F>>,
+                                  addr_reg: usize,
+                                  mem_start: u32,
+                                  value: u32| {
+            let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+            directives.push(Directive::Instruction(ib::const_32_imm(
+                tmp,
+                value as u16,
+                (value >> 16) as u16,
+            )));
+            directives.push(Directive::Instruction(ib::storew(tmp, addr_reg, mem_start)));
+        };
+
         match (module, function) {
             ("env", "__debug_print") => {
+                assert!(outputs.is_empty());
                 let mem_start = c
                     .module()
                     .linear_memory_start()
@@ -527,10 +552,12 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                 ))]
             }
             ("env", "__hint_input") => {
+                assert!(outputs.is_empty());
                 // prepare an object to be read
                 vec![Directive::Instruction(ib::prepare_read())]
             }
             ("env", "__hint_buffer") => {
+                assert!(outputs.is_empty());
                 let mem_start = c
                     .module()
                     .linear_memory_start()
@@ -543,11 +570,19 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                 // clobbering the input register (which may be a live WASM local).
                 let effective_ptr = if mem_start > 0 {
                     let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    directives.push(Directive::Instruction(ib::add_imm(
-                        tmp,
-                        mem_ptr,
-                        AluImm::try_from(mem_start).unwrap(),
-                    )));
+                    if let Ok(imm) = AluImm::try_from(mem_start) {
+                        directives.push(Directive::Instruction(ib::add_imm(tmp, mem_ptr, imm)));
+                    } else {
+                        // mem_start too large for immediate — load into tmp, then add.
+                        let tmp2 =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                        directives.push(Directive::Instruction(ib::const_32_imm(
+                            tmp2,
+                            mem_start as u16,
+                            (mem_start >> 16) as u16,
+                        )));
+                        directives.push(Directive::Instruction(ib::add(tmp, mem_ptr, tmp2)));
+                    }
                     tmp
                 } else {
                     mem_ptr
@@ -564,6 +599,124 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
             ("gojs", _) => {
                 // Just NOP for GoJS intrinsics
                 vec![]
+            }
+            // ============== WASI snapshot_preview1 syscalls ==============
+            // All WASI syscalls return an errno as their single output.
+            // We fake most results with constants for deterministic execution.
+            ("wasi_snapshot_preview1", fname) => {
+                let mem_start = c.module().linear_memory_start().unwrap_or(0);
+                let mut directives = vec![];
+                match fname {
+                    // args_sizes_get(argc_ptr, argv_buf_size_ptr) -> errno
+                    // Write 0 to both pointers (no args).
+                    "args_sizes_get" => {
+                        let argc_ptr = inputs[0].as_register().unwrap().start as usize;
+                        let argv_buf_size_ptr = inputs[1].as_register().unwrap().start as usize;
+                        store_const_to_mem(c, &mut directives, argc_ptr, mem_start, 0);
+                        store_const_to_mem(c, &mut directives, argv_buf_size_ptr, mem_start, 0);
+                        set_output_const(&mut directives, &outputs, 0); // ESUCCESS
+                    }
+                    // args_get(argv, argv_buf) -> errno
+                    "args_get" => {
+                        set_output_const(&mut directives, &outputs, 0);
+                    }
+                    // environ_sizes_get(count_ptr, buf_size_ptr) -> errno
+                    "environ_sizes_get" => {
+                        let count_ptr = inputs[0].as_register().unwrap().start as usize;
+                        let buf_size_ptr = inputs[1].as_register().unwrap().start as usize;
+                        store_const_to_mem(c, &mut directives, count_ptr, mem_start, 0);
+                        store_const_to_mem(c, &mut directives, buf_size_ptr, mem_start, 0);
+                        set_output_const(&mut directives, &outputs, 0);
+                    }
+                    "environ_get" => {
+                        set_output_const(&mut directives, &outputs, 0);
+                    }
+                    // fd_write(fd, iovs_ptr, iovs_len, nwritten_ptr) -> errno
+                    // We can't easily iterate iovs at compile time, so just write 0 to nwritten.
+                    "fd_write" => {
+                        let nwritten_ptr =
+                            inputs.last().unwrap().as_register().unwrap().start as usize;
+                        store_const_to_mem(c, &mut directives, nwritten_ptr, mem_start, 0);
+                        set_output_const(&mut directives, &outputs, 0);
+                    }
+                    // fd_read(fd, iovs_ptr, iovs_len, nread_ptr) -> errno
+                    "fd_read" => {
+                        let nread_ptr =
+                            inputs.last().unwrap().as_register().unwrap().start as usize;
+                        store_const_to_mem(c, &mut directives, nread_ptr, mem_start, 0);
+                        set_output_const(&mut directives, &outputs, 0);
+                    }
+                    "fd_close" | "fd_fdstat_set_flags" | "fd_sync" | "sched_yield" => {
+                        set_output_const(&mut directives, &outputs, 0); // ESUCCESS
+                    }
+                    // fd_fdstat_get(fd, buf) -> errno
+                    // Write 6 zero words (24 bytes) to buf.
+                    "fd_fdstat_get" => {
+                        let buf = inputs[1].as_register().unwrap().start as usize;
+                        for i in 0..6u32 {
+                            store_const_to_mem(c, &mut directives, buf, mem_start + i * 4, 0);
+                        }
+                        set_output_const(&mut directives, &outputs, 0);
+                    }
+                    // Return EBADF (8) for unsupported fd operations.
+                    "fd_seek"
+                    | "fd_prestat_get"
+                    | "fd_prestat_dir_name"
+                    | "fd_filestat_get"
+                    | "fd_filestat_set_size"
+                    | "fd_pread"
+                    | "fd_readdir" => {
+                        set_output_const(&mut directives, &outputs, 8); // EBADF
+                    }
+                    // clock_time_get(clock_id, precision, time_ptr) -> errno
+                    // Write a fake constant timestamp (1 second in nanoseconds).
+                    "clock_time_get" => {
+                        // time_ptr is the last input argument
+                        let time_ptr = inputs.last().unwrap().as_register().unwrap().start as usize;
+                        let ns: u64 = 1_000_000_000; // 1 second
+                        store_const_to_mem(c, &mut directives, time_ptr, mem_start, ns as u32);
+                        store_const_to_mem(
+                            c,
+                            &mut directives,
+                            time_ptr,
+                            mem_start + 4,
+                            (ns >> 32) as u32,
+                        );
+                        set_output_const(&mut directives, &outputs, 0);
+                    }
+                    // random_get(buf, buf_len) -> errno
+                    // We can't easily do byte-level writes at compile time.
+                    // Just return success; the buffer stays as-is (zeros from init).
+                    "random_get" => {
+                        set_output_const(&mut directives, &outputs, 0);
+                    }
+                    // proc_exit(exit_code) -> !
+                    // Terminate the program.
+                    "proc_exit" => {
+                        directives.push(Directive::Instruction(ib::halt()));
+                    }
+                    // poll_oneoff(in_ptr, out_ptr, nsubscriptions, nevents_ptr) -> errno
+                    "poll_oneoff" => {
+                        let nevents_ptr =
+                            inputs.last().unwrap().as_register().unwrap().start as usize;
+                        store_const_to_mem(c, &mut directives, nevents_ptr, mem_start, 0);
+                        set_output_const(&mut directives, &outputs, 0);
+                    }
+                    // Path operations: return ENOSYS (52).
+                    "path_create_directory"
+                    | "path_remove_directory"
+                    | "path_unlink_file"
+                    | "path_rename"
+                    | "path_filestat_get"
+                    | "path_open" => {
+                        set_output_const(&mut directives, &outputs, 52); // ENOSYS
+                    }
+                    _ => {
+                        // Unknown WASI syscall: return ENOSYS.
+                        set_output_const(&mut directives, &outputs, 52);
+                    }
+                }
+                directives
             }
             _ => unimplemented!(
                 "Imported function `{}` from module `{}` is not supported",
