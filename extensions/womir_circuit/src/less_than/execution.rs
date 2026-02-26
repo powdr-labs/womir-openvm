@@ -192,6 +192,7 @@ unsafe fn execute_e12_impl<
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     const { assert!(NUM_LIMBS == 4 || NUM_LIMBS == 8) };
+    const { assert!(NUM_READ_OPS * RV32_REGISTER_NUM_LIMBS == NUM_LIMBS) };
 
     let fp = exec_state.memory.fp::<F>();
     let rs1 = vm_read_multiple_ops::<NUM_LIMBS, NUM_READ_OPS, _, _>(

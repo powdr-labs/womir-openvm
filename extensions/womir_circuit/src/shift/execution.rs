@@ -25,7 +25,7 @@ use openvm_rv32im_circuit::ShiftExecutor as ShiftExecutorInner;
 use openvm_rv32im_transpiler::ShiftOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 
-use crate::adapters::{BaseAluAdapterExecutor, imm_to_bytes};
+use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 use crate::utils::sign_extend_u32;
 
 /// Newtype wrapper to satisfy orphan rules for trait implementations.
@@ -190,6 +190,7 @@ unsafe fn execute_e12_impl<
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     const { assert!(NUM_LIMBS == 4 || NUM_LIMBS == 8) };
+    const { assert!(NUM_REG_OPS * RV32_REGISTER_NUM_LIMBS == NUM_LIMBS) };
 
     let num_bits = NUM_LIMBS * 8;
     let fp = exec_state.memory.fp::<F>();

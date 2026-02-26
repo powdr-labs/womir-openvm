@@ -11,7 +11,7 @@ use std::{
     mem::size_of,
 };
 
-use crate::adapters::{BaseAluAdapterExecutor, imm_to_bytes};
+use crate::adapters::{BaseAluAdapterExecutor, RV32_REGISTER_NUM_LIMBS, imm_to_bytes};
 use crate::execution::{vm_read_multiple_ops, vm_write_multiple_ops};
 use crate::memory_config::FpMemory;
 use crate::utils::sign_extend_u32;
@@ -210,6 +210,9 @@ unsafe fn execute_e12_impl<
     pre_compute: &DivRemPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
+    const { assert!(NUM_LIMBS == 4 || NUM_LIMBS == 8) };
+    const { assert!(NUM_REG_OPS * RV32_REGISTER_NUM_LIMBS == NUM_LIMBS) };
+
     let fp = exec_state.memory.fp::<F>();
     let rs1 = vm_read_multiple_ops::<NUM_LIMBS, NUM_REG_OPS, _, _>(
         exec_state,
