@@ -601,6 +601,29 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
             ("wasi_snapshot_preview1", fname) => {
                 let mem_start = c.module().linear_memory_start().unwrap_or(0);
                 let mut directives = vec![];
+                // Emit a TraceSyscall phantom at the start of every WASI call.
+                let syscall_id: u16 = match fname {
+                    "args_sizes_get" => 0,
+                    "args_get" => 1,
+                    "environ_sizes_get" => 2,
+                    "environ_get" => 3,
+                    "fd_write" => 4,
+                    "fd_read" => 5,
+                    "fd_close" => 6,
+                    "fd_fdstat_get" => 7,
+                    "fd_fdstat_set_flags" => 8,
+                    "fd_prestat_get" => 9,
+                    "clock_time_get" => 10,
+                    "random_get" => 11,
+                    "proc_exit" => 12,
+                    "poll_oneoff" => 13,
+                    "fd_seek" => 14,
+                    "fd_sync" => 15,
+                    "sched_yield" => 16,
+                    "path_open" => 17,
+                    _ => 0xFFFF,
+                };
+                directives.push(Directive::Instruction(ib::trace_syscall(syscall_id)));
                 match fname {
                     // args_sizes_get(argc_ptr, argv_buf_size_ptr) -> errno
                     // Write 0 to both pointers (no args).
@@ -718,25 +741,83 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                         set_output_const(&mut directives, &outputs, 8); // EBADF
                     }
                     // clock_time_get(clock_id, precision, time_ptr) -> errno
-                    // Write a fake constant timestamp (1 second in nanoseconds).
+                    // Use ClockTimeGet phantom to fill hint stream with 8 bytes of
+                    // incrementing timestamp, then hint_storew twice to write to memory.
                     "clock_time_get" => {
-                        // time_ptr is the last input argument
                         let time_ptr = inputs.last().unwrap().as_register().unwrap().start as usize;
-                        let ns: u64 = 1_000_000_000; // 1 second
-                        store_const_to_mem(c, &mut directives, time_ptr, mem_start, ns as u32);
-                        store_const_to_mem(
-                            c,
-                            &mut directives,
+
+                        // Phantom: fill hint stream with 8 bytes of timestamp
+                        directives.push(Directive::Instruction(ib::clock_time_get_phantom()));
+
+                        // Compute time_addr = time_ptr + mem_start
+                        let time_addr =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                        let mem_start_reg =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                        directives.push(Directive::Instruction(ib::const_32_imm(
+                            mem_start_reg,
+                            mem_start as u16,
+                            (mem_start >> 16) as u16,
+                        )));
+                        directives.push(Directive::Instruction(ib::add(
+                            time_addr,
                             time_ptr,
-                            mem_start + 4,
-                            (ns >> 32) as u32,
-                        );
+                            mem_start_reg,
+                        )));
+
+                        // hint_storew: write low 4 bytes
+                        directives.push(Directive::Instruction(ib::hint_storew(time_addr)));
+
+                        // Increment time_addr by 4 for high word
+                        directives.push(Directive::Instruction(ib::add_imm(
+                            time_addr, time_addr, 4i16,
+                        )));
+
+                        // hint_storew: write high 4 bytes
+                        directives.push(Directive::Instruction(ib::hint_storew(time_addr)));
+
                         set_output_const(&mut directives, &outputs, 0);
                     }
                     // random_get(buf, buf_len) -> errno
-                    // We can't easily do byte-level writes at compile time.
-                    // Just return success; the buffer stays as-is (zeros from init).
+                    // Use HintRandom phantom to fill hint stream, then hint_buffer to
+                    // write random bytes to guest memory.
                     "random_get" => {
+                        let buf = inputs[0].as_register().unwrap().start as usize;
+                        let buf_len = inputs[1].as_register().unwrap().start as usize;
+
+                        // Compute num_words = (buf_len + 3) / 4 = ceil(buf_len / 4)
+                        let num_words =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                        directives.push(Directive::Instruction(ib::add_imm(
+                            num_words, buf_len, 3i16,
+                        )));
+                        directives.push(Directive::Instruction(ib::shr_u_imm(
+                            num_words, num_words, 2i16,
+                        )));
+
+                        // Phantom: fill hint stream with num_words random words
+                        directives.push(Directive::Instruction(ib::prepare_random(num_words)));
+
+                        // Compute buf_addr = buf + mem_start in a register
+                        let buf_addr =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                        let mem_start_reg =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                        directives.push(Directive::Instruction(ib::const_32_imm(
+                            mem_start_reg,
+                            mem_start as u16,
+                            (mem_start >> 16) as u16,
+                        )));
+                        directives.push(Directive::Instruction(ib::add(
+                            buf_addr,
+                            buf,
+                            mem_start_reg,
+                        )));
+
+                        // hint_buffer: write num_words words from hint stream to memory
+                        directives
+                            .push(Directive::Instruction(ib::hint_buffer(num_words, buf_addr)));
+
                         set_output_const(&mut directives, &outputs, 0);
                     }
                     // proc_exit(exit_code) -> !
