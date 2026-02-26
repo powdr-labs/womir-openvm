@@ -813,6 +813,7 @@ pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F>
 }
 
 /// LOADHU: rd = zero_extend(MEM16[rs1 + imm])
+#[allow(dead_code)]
 pub fn loadhu<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::LOADHU.global_opcode(),
@@ -841,6 +842,7 @@ pub fn storeb<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<
 }
 
 /// STOREH: MEM16[rs1 + imm] = rs2[15:0]
+#[allow(dead_code)]
 pub fn storeh<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::STOREH.global_opcode(),
