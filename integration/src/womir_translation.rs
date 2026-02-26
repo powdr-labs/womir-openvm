@@ -55,11 +55,6 @@ pub const ERROR_CODE_OFFSET: u32 = 100;
 
 pub const ERROR_ABORT_CODE: u32 = 200;
 
-/// Error code emitted in place of unimplemented instructions.
-/// This is to allow programs that has such instruction to compile,
-/// but the runtime error only happens if they are actually executed.
-pub const ERROR_UNIMPLEMENTED_CODE: u32 = 201;
-
 pub struct LinkedProgram<'a, F: PrimeField32> {
     module: Module<'a>,
     label_map: HashMap<String, LabelValue>,
@@ -723,7 +718,7 @@ fn translate_most_binary_ops<'a, F: PrimeField32>(
         Op::I64ShrS => Shift64Opcode::SRA.global_opcode(),
         Op::I64ShrU => Shift64Opcode::SRL.global_opcode(),
 
-        // Float instructions
+        // Float instructions are replaced by builtin function calls before translation.
         Op::F32Eq
         | Op::F32Ne
         | Op::F32Lt
@@ -750,7 +745,7 @@ fn translate_most_binary_ops<'a, F: PrimeField32>(
         | Op::F64Min
         | Op::F64Max
         | Op::F64Copysign => {
-            return Some(ib::trap(ERROR_UNIMPLEMENTED_CODE as usize));
+            unreachable!("Float ops should have been replaced with function calls")
         }
 
         // Not an operation we handle here
@@ -1196,7 +1191,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             }
         }
 
-        Op::I32Load { memarg } => {
+        Op::I32Load { memarg } | Op::F32Load { memarg } => {
             let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
@@ -1282,7 +1277,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
 
             Directive::Instruction(ib::loadb(output, base_addr, imm)).into()
         }
-        Op::I64Load { memarg } => {
+        Op::I64Load { memarg } | Op::F64Load { memarg } => {
             let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
@@ -1501,7 +1496,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
 
             directives.into()
         }
-        Op::I32Store { memarg } | Op::I64Store32 { memarg } => {
+        Op::I32Store { memarg } | Op::I64Store32 { memarg } | Op::F32Store { memarg } => {
             let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let value = inputs[1].start as usize;
@@ -1566,7 +1561,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                 1.. => Directive::Instruction(ib::storeh(value, base_addr, imm)).into(),
             }
         }
-        Op::I64Store { memarg } => {
+        Op::I64Store { memarg } | Op::F64Store { memarg } => {
             let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let value_lo = inputs[1].start as usize;
@@ -1758,45 +1753,6 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             .into()
         }
 
-        Op::F32Load { .. }
-        | Op::F64Load { .. }
-        | Op::F32Store { .. }
-        | Op::F64Store { .. }
-        | Op::F32Abs
-        | Op::F32Neg
-        | Op::F32Ceil
-        | Op::F32Floor
-        | Op::F32Trunc
-        | Op::F32Nearest
-        | Op::F32Sqrt
-        | Op::F64Abs
-        | Op::F64Neg
-        | Op::F64Ceil
-        | Op::F64Floor
-        | Op::F64Trunc
-        | Op::F64Nearest
-        | Op::F64Sqrt
-        | Op::I32TruncF32S
-        | Op::I32TruncF32U
-        | Op::I32TruncF64S
-        | Op::I32TruncF64U
-        | Op::I64TruncF32S
-        | Op::I64TruncF32U
-        | Op::I64TruncF64S
-        | Op::I64TruncF64U
-        | Op::F32ConvertI32S
-        | Op::F32ConvertI32U
-        | Op::F32ConvertI64S
-        | Op::F32ConvertI64U
-        | Op::F32DemoteF64
-        | Op::F64ConvertI32S
-        | Op::F64ConvertI32U
-        | Op::F64ConvertI64S
-        | Op::F64ConvertI64U
-        | Op::F64PromoteF32 => {
-            Directive::Instruction(ib::trap(ERROR_UNIMPLEMENTED_CODE as usize)).into()
-        }
-
         Op::I32ReinterpretF32
         | Op::F32ReinterpretI32
         | Op::I64ReinterpretF64
@@ -1819,7 +1775,8 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                 .into()
         }
 
-        // Instructions that are implemented as function calls
+        // Instructions that are implemented as function calls to built-in functions.
+        // They are replaced by the builtin tracker before reaching this translation stage.
         Op::MemoryCopy { .. }
         | Op::MemoryFill { .. }
         | Op::I32Popcnt
@@ -1827,8 +1784,75 @@ fn translate_complex_ins<'a, F: PrimeField32>(
         | Op::I32Ctz
         | Op::I64Ctz
         | Op::I32Clz
-        | Op::I64Clz => {
-            unreachable!("These ops should have been replaced with function calls")
+        | Op::I64Clz
+        // Float operations (replaced by software implementations)
+        | Op::F32Abs
+        | Op::F32Neg
+        | Op::F32Ceil
+        | Op::F32Floor
+        | Op::F32Trunc
+        | Op::F32Nearest
+        | Op::F32Sqrt
+        | Op::F32Add
+        | Op::F32Sub
+        | Op::F32Mul
+        | Op::F32Div
+        | Op::F32Eq
+        | Op::F32Ne
+        | Op::F32Lt
+        | Op::F32Le
+        | Op::F32Gt
+        | Op::F32Ge
+        | Op::F32Copysign
+        | Op::F32Min
+        | Op::F32Max
+        | Op::F64Abs
+        | Op::F64Neg
+        | Op::F64Ceil
+        | Op::F64Floor
+        | Op::F64Trunc
+        | Op::F64Nearest
+        | Op::F64Sqrt
+        | Op::F64Add
+        | Op::F64Sub
+        | Op::F64Mul
+        | Op::F64Div
+        | Op::F64Eq
+        | Op::F64Ne
+        | Op::F64Lt
+        | Op::F64Le
+        | Op::F64Gt
+        | Op::F64Ge
+        | Op::F64Copysign
+        | Op::F64Min
+        | Op::F64Max
+        | Op::F32ConvertI32S
+        | Op::F32ConvertI32U
+        | Op::F32ConvertI64S
+        | Op::F32ConvertI64U
+        | Op::F64ConvertI32S
+        | Op::F64ConvertI32U
+        | Op::F64ConvertI64S
+        | Op::F64ConvertI64U
+        | Op::I32TruncF32S
+        | Op::I32TruncF32U
+        | Op::I32TruncF64S
+        | Op::I32TruncF64U
+        | Op::I64TruncF32S
+        | Op::I64TruncF32U
+        | Op::I64TruncF64S
+        | Op::I64TruncF64U
+        | Op::F64PromoteF32
+        | Op::F32DemoteF64
+        | Op::I32TruncSatF32S
+        | Op::I32TruncSatF32U
+        | Op::I32TruncSatF64S
+        | Op::I32TruncSatF64U
+        | Op::I64TruncSatF32S
+        | Op::I64TruncSatF32U
+        | Op::I64TruncSatF64S
+        | Op::I64TruncSatF64U => {
+            unreachable!("Op {op:?} should have been replaced with a function call")
         }
         _ => todo!("{op:?}"),
     }
