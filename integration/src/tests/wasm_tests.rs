@@ -416,6 +416,21 @@ fn test_keeper_js() {
     .unwrap();
 }
 
+#[test]
+fn test_keeper_wasi() {
+    // Same keeper program, compiled for WASI (wasip1) target.
+    // Compile command:
+    //   GOOS=wasip1 GOARCH=wasm go build -gcflags=all=-d=softfloat -tags "womir" -o keeper_wasi.wasm
+    // Execution only (no proving) — the binary contains float instructions that
+    // are not yet supported by the compiled backend.
+    let payload = std::fs::read("../sample-programs/keeper/hoodi_payload.bin")
+        .expect("failed to read hoodi_payload.bin");
+    let wasm_bytes =
+        std::fs::read("../sample-programs/keeper_wasi.wasm").expect("failed to read WASM file");
+    let mut module = load_wasm_module(&wasm_bytes);
+    run_wasm_test_function(&mut module, "_start", &[], &[], false, &[&payload]).unwrap();
+}
+
 fn keccak_rust_womir(iterations: u32, expected_first_byte: u32) {
     run_womir_guest(
         "keccak_with_inputs",
