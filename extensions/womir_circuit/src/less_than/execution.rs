@@ -10,7 +10,7 @@ use std::{
     mem::size_of,
 };
 
-use crate::memory_config::FpMemory;
+use crate::{execution::vm_read_multiple_ops, memory_config::FpMemory};
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
@@ -113,12 +113,12 @@ impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usi
 }
 
 macro_rules! dispatch {
-    ($execute_impl:ident, $is_imm:ident, $is_sltu:ident, $num_limbs:expr) => {
+    ($execute_impl:ident, $is_imm:ident, $is_sltu:ident, $num_limbs:expr, $num_read_ops:expr) => {
         match ($is_imm, $is_sltu) {
-            (true, true) => Ok($execute_impl::<_, _, true, true, $num_limbs>),
-            (true, false) => Ok($execute_impl::<_, _, true, false, $num_limbs>),
-            (false, true) => Ok($execute_impl::<_, _, false, true, $num_limbs>),
-            (false, false) => Ok($execute_impl::<_, _, false, false, $num_limbs>),
+            (true, true) => Ok($execute_impl::<_, _, true, true, $num_limbs, $num_read_ops>),
+            (true, false) => Ok($execute_impl::<_, _, true, false, $num_limbs, $num_read_ops>),
+            (false, true) => Ok($execute_impl::<_, _, false, true, $num_limbs, $num_read_ops>),
+            (false, false) => Ok($execute_impl::<_, _, false, false, $num_limbs, $num_read_ops>),
         }
     };
 }
@@ -146,7 +146,7 @@ where
         let data: &mut LessThanPreCompute = data.borrow_mut();
         let (is_imm, is_sltu) = self.pre_compute_impl(pc, inst, data)?;
 
-        dispatch!(execute_e1_handler, is_imm, is_sltu, NUM_LIMBS)
+        dispatch!(execute_e1_handler, is_imm, is_sltu, NUM_LIMBS, NUM_READ_OPS)
     }
 }
 
@@ -175,7 +175,7 @@ where
         data.chip_idx = chip_idx as u32;
         let (is_imm, is_sltu) = self.pre_compute_impl(pc, inst, &mut data.data)?;
 
-        dispatch!(execute_e2_handler, is_imm, is_sltu, NUM_LIMBS)
+        dispatch!(execute_e2_handler, is_imm, is_sltu, NUM_LIMBS, NUM_READ_OPS)
     }
 }
 
@@ -186,14 +186,20 @@ unsafe fn execute_e12_impl<
     const E_IS_IMM: bool,
     const IS_U32: bool,
     const NUM_LIMBS: usize,
+    const NUM_READ_OPS: usize,
 >(
     pre_compute: &LessThanPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     const { assert!(NUM_LIMBS == 4 || NUM_LIMBS == 8) };
+    const { assert!(NUM_READ_OPS * RV32_REGISTER_NUM_LIMBS == NUM_LIMBS) };
 
     let fp = exec_state.memory.fp::<F>();
-    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.b);
+    let rs1 = vm_read_multiple_ops::<NUM_LIMBS, NUM_READ_OPS, _, _>(
+        exec_state,
+        RV32_REGISTER_AS,
+        fp + pre_compute.b,
+    );
     let a = to_u64(rs1);
     let b = if E_IS_IMM {
         // pre_compute.c is already sign-extended to 32 bits by pre_compute_impl
@@ -203,7 +209,11 @@ unsafe fn execute_e12_impl<
             pre_compute.c as i32 as i64 as u64
         }
     } else {
-        let rs2 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c);
+        let rs2 = vm_read_multiple_ops::<NUM_LIMBS, NUM_READ_OPS, _, _>(
+            exec_state,
+            RV32_REGISTER_AS,
+            fp + pre_compute.c,
+        );
         to_u64(rs2)
     };
     let cmp_result = if IS_U32 {
@@ -230,6 +240,7 @@ unsafe fn execute_e1_impl<
     const E_IS_IMM: bool,
     const IS_U32: bool,
     const NUM_LIMBS: usize,
+    const NUM_READ_OPS: usize,
 >(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
@@ -237,7 +248,10 @@ unsafe fn execute_e1_impl<
     unsafe {
         let pre_compute: &LessThanPreCompute =
             std::slice::from_raw_parts(pre_compute, size_of::<LessThanPreCompute>()).borrow();
-        execute_e12_impl::<F, CTX, E_IS_IMM, IS_U32, NUM_LIMBS>(pre_compute, exec_state);
+        execute_e12_impl::<F, CTX, E_IS_IMM, IS_U32, NUM_LIMBS, NUM_READ_OPS>(
+            pre_compute,
+            exec_state,
+        );
     }
 }
 
@@ -249,6 +263,7 @@ unsafe fn execute_e2_impl<
     const E_IS_IMM: bool,
     const IS_U32: bool,
     const NUM_LIMBS: usize,
+    const NUM_READ_OPS: usize,
 >(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
@@ -260,6 +275,9 @@ unsafe fn execute_e2_impl<
         exec_state
             .ctx
             .on_height_change(pre_compute.chip_idx as usize, 1);
-        execute_e12_impl::<F, CTX, E_IS_IMM, IS_U32, NUM_LIMBS>(&pre_compute.data, exec_state);
+        execute_e12_impl::<F, CTX, E_IS_IMM, IS_U32, NUM_LIMBS, NUM_READ_OPS>(
+            &pre_compute.data,
+            exec_state,
+        );
     }
 }
