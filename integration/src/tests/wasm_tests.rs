@@ -11,7 +11,14 @@ use tracing::Level;
 
 use super::helpers;
 
-type TestCase = (String, Vec<u32>, Vec<u32>);
+#[derive(Debug, Clone)]
+enum ExpectedResult {
+    Values(Vec<u32>),
+    NanCanonical { is_f64: bool },
+    NanArithmetic { is_f64: bool },
+}
+
+type TestCase = (String, Vec<u32>, ExpectedResult);
 type TestModule = (String, u32, Vec<TestCase>);
 
 #[derive(Debug, Deserialize)]
@@ -122,19 +129,43 @@ fn extract_wast_test_info(
                         .flatten()
                         .collect();
 
-                    let expected_u32: Vec<u32> = expected
-                        .iter()
-                        .filter_map(|e| {
-                            // Parse as 32-bit limbs for the same reason as
-                            // above.
-                            e.value
-                                .as_ref()
-                                .and_then(|v| parse_as_vec_u32(&e.expected_type, v))
-                        })
-                        .flatten()
-                        .collect();
+                    // Check if any expected value is a NaN assertion
+                    let expected_result = if expected.len() == 1 {
+                        let e = &expected[0];
+                        match e.value.as_deref() {
+                            Some("nan:canonical") => ExpectedResult::NanCanonical {
+                                is_f64: e.expected_type == "f64",
+                            },
+                            Some("nan:arithmetic") => ExpectedResult::NanArithmetic {
+                                is_f64: e.expected_type == "f64",
+                            },
+                            _ => {
+                                let vals: Vec<u32> = expected
+                                    .iter()
+                                    .filter_map(|e| {
+                                        e.value
+                                            .as_ref()
+                                            .and_then(|v| parse_as_vec_u32(&e.expected_type, v))
+                                    })
+                                    .flatten()
+                                    .collect();
+                                ExpectedResult::Values(vals)
+                            }
+                        }
+                    } else {
+                        let vals: Vec<u32> = expected
+                            .iter()
+                            .filter_map(|e| {
+                                e.value
+                                    .as_ref()
+                                    .and_then(|v| parse_as_vec_u32(&e.expected_type, v))
+                            })
+                            .flatten()
+                            .collect();
+                        ExpectedResult::Values(vals)
+                    };
 
-                    assert_cases.push((field, args_u32, expected_u32));
+                    assert_cases.push((field, args_u32, expected_result));
                 }
             }
             _ => {}
@@ -151,14 +182,26 @@ fn extract_wast_test_info(
 }
 
 fn parse_as_vec_u32(ty: &str, value: &str) -> Option<Vec<u32>> {
-    if ty == "i32" {
-        let v = value.parse::<u32>().unwrap();
-        Some(vec![v])
-    } else if ty == "i64" {
-        let v = value.parse::<u64>().unwrap();
-        Some(vec![v as u32, (v >> 32) as u32])
-    } else {
-        None
+    match ty {
+        "i32" => {
+            let v = value.parse::<u32>().unwrap();
+            Some(vec![v])
+        }
+        "i64" => {
+            let v = value.parse::<u64>().unwrap();
+            Some(vec![v as u32, (v >> 32) as u32])
+        }
+        "f32" => {
+            // wast2json represents f32 as decimal u32 bit pattern
+            let v = value.parse::<u32>().unwrap();
+            Some(vec![v])
+        }
+        "f64" => {
+            // wast2json represents f64 as decimal u64 bit pattern
+            let v = value.parse::<u64>().unwrap();
+            Some(vec![v as u32, (v >> 32) as u32])
+        }
+        _ => None,
     }
 }
 
@@ -213,8 +256,29 @@ fn run_wasm_test_function(
     prove: bool,
     byte_inputs: &[&[u8]],
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let output =
+        run_wasm_test_function_raw(module, function, args, expected.len(), prove, byte_inputs)?;
+    if !expected.is_empty() {
+        assert_eq!(
+            output, expected,
+            "Test failed for {function}({args:?}): expected {expected:?}, got {output:?}"
+        );
+    }
+    Ok(())
+}
+
+/// Run a WASM program and return the output as Vec<u32>.
+/// When `prove` is true, also runs metered execution, preflight, and mock proof.
+fn run_wasm_test_function_raw(
+    module: &mut LinkedProgram<F>,
+    function: &str,
+    args: &[u32],
+    output_words: usize,
+    prove: bool,
+    byte_inputs: &[&[u8]],
+) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
     setup_tracing_with_log_level(Level::WARN);
-    println!("Running WASM test with {function}({args:?}): expected {expected:?}");
+    println!("Running WASM test with {function}({args:?}): output_words={output_words}");
 
     // Capture the exe before module.execute() mutates memory_image.
     let exe = module.program_with_entry_point(function);
@@ -240,21 +304,19 @@ fn run_wasm_test_function(
 
     // Execution (also updates module.memory_image for wast test reuse)
     println!("  Execution");
-    let output = module.execute(vm_config.clone(), function, make_stdin())?;
+    let output_bytes = module.execute(vm_config.clone(), function, make_stdin())?;
 
-    if !expected.is_empty() {
-        let output: Vec<u32> = output[..expected.len() * 4]
+    let output: Vec<u32> = if output_words > 0 {
+        output_bytes[..output_words * 4]
             .chunks(4)
             .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
-            .collect();
-        assert_eq!(
-            output, expected,
-            "Test failed for {function}({args:?}): expected {expected:?}, got {output:?}"
-        );
-    }
+            .collect()
+    } else {
+        vec![]
+    };
 
     if !prove {
-        return Ok(());
+        return Ok(output);
     }
 
     // Metered execution
@@ -270,7 +332,7 @@ fn run_wasm_test_function(
     println!("  Mock proof");
     mock_prove(&exe, initial_state)?;
 
-    Ok(())
+    Ok(output)
 }
 
 #[test]
@@ -281,6 +343,51 @@ fn test_i32() {
 #[test]
 fn test_i64() {
     run_wasm_test("../wasm_tests/i64.wast").unwrap()
+}
+
+#[test]
+fn test_f32() {
+    run_wasm_test("../wasm_tests/f32.wast").unwrap()
+}
+
+#[test]
+fn test_f64() {
+    run_wasm_test("../wasm_tests/f64.wast").unwrap()
+}
+
+#[test]
+fn test_f32_official() {
+    run_wasm_test("../wasm_tests/f32_official.wast").unwrap()
+}
+
+#[test]
+fn test_f64_official() {
+    run_wasm_test("../wasm_tests/f64_official.wast").unwrap()
+}
+
+#[test]
+fn test_f32_cmp() {
+    run_wasm_test("../wasm_tests/f32_cmp.wast").unwrap()
+}
+
+#[test]
+fn test_f64_cmp() {
+    run_wasm_test("../wasm_tests/f64_cmp.wast").unwrap()
+}
+
+#[test]
+fn test_f32_bitwise() {
+    run_wasm_test("../wasm_tests/f32_bitwise.wast").unwrap()
+}
+
+#[test]
+fn test_f64_bitwise() {
+    run_wasm_test("../wasm_tests/f64_bitwise.wast").unwrap()
+}
+
+#[test]
+fn test_conversions() {
+    run_wasm_test("../wasm_tests/conversions.wast").unwrap()
 }
 
 #[test]
@@ -341,11 +448,79 @@ fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut module = load_wasm_module(&wasm_bytes);
 
         for (function, args, expected) in cases {
-            run_wasm_test_function(&mut module, function, args, expected, false, &[])?;
+            match expected {
+                ExpectedResult::Values(vals) => {
+                    run_wasm_test_function(&mut module, function, args, vals, false, &[])?;
+                }
+                ExpectedResult::NanCanonical { is_f64 } => {
+                    let output_words = if *is_f64 { 2 } else { 1 };
+                    let output = run_wasm_test_function_raw(
+                        &mut module,
+                        function,
+                        args,
+                        output_words,
+                        false,
+                        &[],
+                    )?;
+                    check_nan_canonical(&output, *is_f64, function, args);
+                }
+                ExpectedResult::NanArithmetic { is_f64 } => {
+                    let output_words = if *is_f64 { 2 } else { 1 };
+                    let output = run_wasm_test_function_raw(
+                        &mut module,
+                        function,
+                        args,
+                        output_words,
+                        false,
+                        &[],
+                    )?;
+                    check_nan_arithmetic(&output, *is_f64, function, args);
+                }
+            }
         }
     }
 
     Ok(())
+}
+
+fn check_nan_canonical(output: &[u32], is_f64: bool, function: &str, args: &[u32]) {
+    if is_f64 {
+        assert!(output.len() >= 2, "Expected 2 words for f64 NaN check");
+        let bits = (output[0] as u64) | ((output[1] as u64) << 32);
+        // Canonical NaN: sign bit can be either, exponent all 1s, mantissa = 1<<51
+        assert!(
+            (bits & 0x7FFFFFFFFFFFFFFF) == 0x7FF8000000000000,
+            "Test failed for {function}({args:?}): expected canonical f64 NaN, got bits {bits:#018x}"
+        );
+    } else {
+        assert!(!output.is_empty(), "Expected 1 word for f32 NaN check");
+        let bits = output[0];
+        // Canonical NaN: sign bit can be either, exponent all 1s, mantissa = 1<<22
+        assert!(
+            (bits & 0x7FFFFFFF) == 0x7FC00000,
+            "Test failed for {function}({args:?}): expected canonical f32 NaN, got bits {bits:#010x}"
+        );
+    }
+}
+
+fn check_nan_arithmetic(output: &[u32], is_f64: bool, function: &str, args: &[u32]) {
+    if is_f64 {
+        assert!(output.len() >= 2, "Expected 2 words for f64 NaN check");
+        let bits = (output[0] as u64) | ((output[1] as u64) << 32);
+        // Arithmetic NaN: any quiet NaN (exponent all 1s, quiet bit set)
+        assert!(
+            (bits & 0x7FF8000000000000) == 0x7FF8000000000000,
+            "Test failed for {function}({args:?}): expected arithmetic f64 NaN, got bits {bits:#018x}"
+        );
+    } else {
+        assert!(!output.is_empty(), "Expected 1 word for f32 NaN check");
+        let bits = output[0];
+        // Arithmetic NaN: any quiet NaN (exponent all 1s, quiet bit set)
+        assert!(
+            (bits & 0x7FC00000) == 0x7FC00000,
+            "Test failed for {function}({args:?}): expected arithmetic f32 NaN, got bits {bits:#010x}"
+        );
+    }
 }
 
 #[test]
