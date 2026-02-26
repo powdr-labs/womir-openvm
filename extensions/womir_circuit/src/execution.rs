@@ -1,5 +1,10 @@
 //! Execution state with frame pointer (fp) support.
+use openvm_circuit::arch::ExecutionCtxTrait;
+use openvm_circuit::arch::VmExecState;
+use openvm_circuit::system::memory::online::GuestMemory;
 use openvm_circuit_primitives::AlignedBorrow;
+use openvm_instructions::riscv::RV32_REGISTER_NUM_LIMBS;
+use openvm_stark_backend::p3_field::PrimeField32;
 use serde::{Deserialize, Serialize};
 use struct_reflection::StructReflection;
 use struct_reflection::StructReflectionHelper;
@@ -42,5 +47,49 @@ impl<T> ExecutionState<T> {
             fp: function(self.fp),
             timestamp: function(self.timestamp),
         }
+    }
+}
+
+/// Helper wrapper around `VmExecState::vm_read` that reads `NUM_LIMBS` bytes by doing `NUM_REG_OPS` reads of `RV32_REGISTER_NUM_LIMBS` bytes and concatenating the results.
+pub fn vm_read_multiple_ops<
+    const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
+    F: PrimeField32,
+    CTX: ExecutionCtxTrait,
+>(
+    exec_state: &mut VmExecState<F, GuestMemory, CTX>,
+    addr_space: u32,
+    ptr: u32,
+) -> [u8; NUM_LIMBS] {
+    let mut buf = [0u8; NUM_LIMBS];
+    for i in 0u32..NUM_REG_OPS as u32 {
+        let chunk: [u8; RV32_REGISTER_NUM_LIMBS] =
+            exec_state.vm_read(addr_space, ptr + i * RV32_REGISTER_NUM_LIMBS as u32);
+        buf[i as usize * RV32_REGISTER_NUM_LIMBS..(i as usize + 1) * RV32_REGISTER_NUM_LIMBS]
+            .copy_from_slice(&chunk);
+    }
+    buf
+}
+
+/// Helper wrapper around `VmExecState::vm_write` that writes `NUM_LIMBS` bytes by doing `NUM_REG_OPS` writes of `RV32_REGISTER_NUM_LIMBS` bytes, taking the data from the input slice.
+pub fn vm_write_multiple_ops<
+    const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
+    F: PrimeField32,
+    CTX: ExecutionCtxTrait,
+>(
+    exec_state: &mut VmExecState<F, GuestMemory, CTX>,
+    addr_space: u32,
+    ptr: u32,
+    data: &[u8; NUM_LIMBS],
+) {
+    for i in 0u32..NUM_REG_OPS as u32 {
+        let chunk =
+            &data[i as usize * RV32_REGISTER_NUM_LIMBS..(i as usize + 1) * RV32_REGISTER_NUM_LIMBS];
+        exec_state.vm_write::<_, RV32_REGISTER_NUM_LIMBS>(
+            addr_space,
+            ptr + i * RV32_REGISTER_NUM_LIMBS as u32,
+            chunk.try_into().unwrap(),
+        );
     }
 }
