@@ -2216,13 +2216,13 @@ fn const_function_reference<F: PrimeField32>(
             ty.unique_id as u16,
             (ty.unique_id >> 16) as u16,
         )),
+        // Function frame size (unused in RWM, set to 0)
+        Directive::Instruction(ib::const_32_imm((reg_dest + 1) as usize, 0, 0)),
         // Function address
         Directive::ConstFuncAddr {
             func_idx,
-            reg_dest: reg_dest + 1,
+            reg_dest: reg_dest + 2,
         },
-        // Function frame size (unused in RWM, set to 0)
-        Directive::Instruction(ib::const_32_imm((reg_dest + 2) as usize, 0, 0)),
     ]
 }
 
