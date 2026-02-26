@@ -70,4 +70,8 @@ fn main() {
     compile_wat_to_wasm(&out_dir, "i64_popcnt");
     compile_wat_to_wasm(&out_dir, "i32_ctz");
     compile_wat_to_wasm(&out_dir, "i64_ctz");
+
+    compile_c_to_wasm(&out_dir, "f32_ops");
+    compile_c_to_wasm(&out_dir, "f64_ops");
+    compile_c_to_wasm(&out_dir, "float_conv");
 }
