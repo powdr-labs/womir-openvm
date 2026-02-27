@@ -46,12 +46,12 @@ pub struct JumpCoreCols<T> {
     /// - JUMP_IF_ZERO: do_absolute_jump = cond_is_zero
     pub do_absolute_jump: T,
 
-    /// Inverse of the first non-zero limb (if condition is non-zero).
-    /// Used to prove non-zeroness: if cond_is_zero=0, then there exists i such that
-    /// rs_val[i] * nonzero_inv_marker[i] = 1.
-    // TODO: We could be more efficient here and just check whether the sum of limbs
-    // is zero.
-    pub nonzero_inv_marker: [T; RV32_REGISTER_NUM_LIMBS],
+    /// Inverse of the sum of limbs (when the condition is non-zero).
+    /// Since each limb is an 8-bit value, their sum is in [0, 4*255=1020],
+    /// which is far below the BabyBear prime (~2^31). Therefore:
+    ///   sum == 0  ⟺  all limbs are zero  ⟺  condition is zero.
+    /// Constraint: cond_is_zero + (Σ rs_val[i]) * sum_inv = 1  (when is_valid).
+    pub sum_inv: T,
 }
 
 #[derive(Copy, Clone, Debug, derive_new::new)]
@@ -105,27 +105,27 @@ where
         // Constrain cond_is_zero is boolean.
         builder.assert_bool(cols.cond_is_zero);
 
-        // Constrain cond_is_zero using a combined-sum pattern adapted from BranchEqual
-        // (<openvm>/extensions/rv32im/circuit/src/branch_eq/core.rs).
+        // Constrain cond_is_zero using the sum of limbs.
         //
-        // The trick: fold cond_is_zero into the witness sum so that a single
-        // `when(is_valid).assert_one(sum)` covers both the zero and non-zero cases.
-        // Using two nested `.when()` guards (is_valid, not(cond_is_zero)) would produce
-        // a degree-4 constraint, exceeding DEFAULT_POSEIDON2_MAX_CONSTRAINT_DEGREE (3).
+        // Since each limb is an 8-bit value, the sum of all limbs is in [0, 4*255 = 1020],
+        // which is far below the BabyBear prime (~2^31). Therefore the sum is zero in the
+        // field if and only if every limb is zero.
         //
-        //   sum = cond_is_zero + sum_i(rs_val[i] * nonzero_inv_marker[i])
+        //   check = cond_is_zero + limb_sum * sum_inv
         //
-        // When cond_is_zero=1: all limbs are forced to zero, so sum = 1 + 0 = 1.
-        // When cond_is_zero=0: sum = 0 + witness_sum, which equals 1 iff some limb is
-        //   non-zero (prover sets nonzero_inv_marker[i] = rs_val[i]^{-1} for the first
-        //   non-zero limb).
-        let mut sum: AB::Expr = cols.cond_is_zero.into();
+        // When cond_is_zero=1: all limbs are forced to zero, so check = 1 + 0 = 1. ✓
+        // When cond_is_zero=0: check = limb_sum * sum_inv = 1, which holds because
+        //   limb_sum != 0 (at least one limb is non-zero) and sum_inv = limb_sum^{-1}.
+        let limb_sum = cols
+            .rs_val
+            .iter()
+            .fold(AB::Expr::ZERO, |acc, &limb| acc + limb.into());
         for i in 0..RV32_REGISTER_NUM_LIMBS {
             builder.when(cols.cond_is_zero).assert_zero(cols.rs_val[i]);
-            sum += cols.rs_val[i].into() * cols.nonzero_inv_marker[i].into();
         }
-        // Degree: is_valid (1) * (sum (2) - 1) = 3.
-        builder.when(is_valid.clone()).assert_one(sum);
+        let check: AB::Expr = cols.cond_is_zero.into() + limb_sum * cols.sum_inv;
+        // Degree: is_valid (1) * (check (2) - 1) = 3.
+        builder.when(is_valid.clone()).assert_one(check);
 
         // Compute the expected opcode.
         let expected_opcode = flags
@@ -226,16 +226,14 @@ impl JumpCoreFiller {
 
         let local_opcode = JumpOpcode::from_usize(record.local_opcode as usize);
 
-        // Compute cond_is_zero and nonzero_inv_marker.
-        let mut cond_is_zero = true;
-        let mut nonzero_inv_marker = [F::ZERO; RV32_REGISTER_NUM_LIMBS];
-        for (i, &limb) in record.rs_val.iter().enumerate() {
-            if limb != 0 {
-                cond_is_zero = false;
-                nonzero_inv_marker[i] = F::from_canonical_u8(limb).inverse();
-                break;
-            }
-        }
+        // Compute cond_is_zero and sum_inv.
+        let limb_sum: u32 = record.rs_val.iter().map(|&x| x as u32).sum();
+        let cond_is_zero = limb_sum == 0;
+        let sum_inv = if cond_is_zero {
+            F::ZERO
+        } else {
+            F::from_canonical_u32(limb_sum).inverse()
+        };
 
         // Compute do_absolute_jump.
         let do_absolute_jump = match local_opcode {
@@ -246,7 +244,7 @@ impl JumpCoreFiller {
         };
 
         // Assign in reverse order (since record overlaps with row).
-        core_row.nonzero_inv_marker = nonzero_inv_marker;
+        core_row.sum_inv = sum_inv;
         core_row.do_absolute_jump = F::from_bool(do_absolute_jump);
         core_row.cond_is_zero = F::from_bool(cond_is_zero);
 
