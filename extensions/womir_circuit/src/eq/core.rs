@@ -20,11 +20,23 @@ use openvm_womir_transpiler::EqOpcode;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
 
+/// Maximum number of limbs per group for the equality check.
+///
+/// Each group composes up to GROUP_SIZE limbs with weights 256^i, giving a
+/// composed value in [0, 256^GROUP_SIZE - 1]. The difference of two such values
+/// is in [-(256^GROUP_SIZE - 1), 256^GROUP_SIZE - 1].
+///
+/// For soundness, the absolute difference must be less than P/2 (BabyBear prime
+/// P ≈ 2^31), so that a non-zero integer difference cannot wrap to zero mod P.
+///   GROUP_SIZE=3 → max |diff| = 256^3 - 1 = 16777215 << P/2 ≈ 10^9. ✓
+///   GROUP_SIZE=4 → max |diff| = 256^4 - 1 ≈ 4.3×10^9 > P/2. ✗
+pub const EQ_GROUP_SIZE: usize = 3;
+
 // ======================== Core Columns ========================
 
 #[repr(C)]
 #[derive(AlignedBorrow, StructReflection)]
-pub struct EqCoreCols<T, const NUM_LIMBS: usize> {
+pub struct EqCoreCols<T, const NUM_LIMBS: usize, const NUM_GROUPS: usize> {
     pub b: [T; NUM_LIMBS],
     pub c: [T; NUM_LIMBS],
 
@@ -34,34 +46,46 @@ pub struct EqCoreCols<T, const NUM_LIMBS: usize> {
     pub opcode_eq_flag: T,
     pub opcode_neq_flag: T,
 
-    /// For proving inequality: at the first position i where b[i] != c[i],
-    /// diff_inv_marker[i] = inverse(b[i] - c[i]). All other positions are 0.
-    /// When b == c, all positions are 0.
-    pub diff_inv_marker: [T; NUM_LIMBS],
+    /// For proving inequality: limbs are grouped into NUM_GROUPS chunks of up to
+    /// EQ_GROUP_SIZE. For each group j, the composed difference is:
+    ///   group_diff_j = Σ_{i in group_j} (b[i] - c[i]) * 256^(i - group_start)
+    /// When b == c, all group differences are zero. When b != c, at least one
+    /// group_diff is non-zero. The prover sets the corresponding group_diff_inv
+    /// to the inverse of that group_diff (and zero for the others) so that:
+    ///   cmp_eq + Σ_j group_diff_j * group_diff_inv_j = 1
+    pub group_diff_inv: [T; NUM_GROUPS],
 }
 
 // ======================== Core AIR ========================
 
 #[derive(Copy, Clone, Debug, derive_new::new)]
-pub struct EqCoreAir<const NUM_LIMBS: usize> {
+pub struct EqCoreAir<const NUM_LIMBS: usize, const NUM_GROUPS: usize> {
     offset: usize,
 }
 
-impl<F: Field, const NUM_LIMBS: usize> BaseAir<F> for EqCoreAir<NUM_LIMBS> {
+impl<F: Field, const NUM_LIMBS: usize, const NUM_GROUPS: usize> BaseAir<F>
+    for EqCoreAir<NUM_LIMBS, NUM_GROUPS>
+{
     fn width(&self) -> usize {
-        EqCoreCols::<F, NUM_LIMBS>::width()
+        EqCoreCols::<F, NUM_LIMBS, NUM_GROUPS>::width()
     }
 }
 
-impl<F: Field, const NUM_LIMBS: usize> ColumnsAir<F> for EqCoreAir<NUM_LIMBS> {
+impl<F: Field, const NUM_LIMBS: usize, const NUM_GROUPS: usize> ColumnsAir<F>
+    for EqCoreAir<NUM_LIMBS, NUM_GROUPS>
+{
     fn columns(&self) -> Option<Vec<String>> {
-        EqCoreCols::<F, NUM_LIMBS>::struct_reflection()
+        EqCoreCols::<F, NUM_LIMBS, NUM_GROUPS>::struct_reflection()
     }
 }
 
-impl<F: Field, const NUM_LIMBS: usize> BaseAirWithPublicValues<F> for EqCoreAir<NUM_LIMBS> {}
+impl<F: Field, const NUM_LIMBS: usize, const NUM_GROUPS: usize> BaseAirWithPublicValues<F>
+    for EqCoreAir<NUM_LIMBS, NUM_GROUPS>
+{
+}
 
-impl<AB, I, const NUM_LIMBS: usize> VmCoreAir<AB, I> for EqCoreAir<NUM_LIMBS>
+impl<AB, I, const NUM_LIMBS: usize, const NUM_GROUPS: usize> VmCoreAir<AB, I>
+    for EqCoreAir<NUM_LIMBS, NUM_GROUPS>
 where
     AB: InteractionBuilder,
     I: VmAdapterInterface<AB::Expr>,
@@ -75,7 +99,7 @@ where
         local: &[AB::Var],
         _from_pc: AB::Var,
     ) -> AdapterAirContext<AB::Expr, I> {
-        let cols: &EqCoreCols<_, NUM_LIMBS> = local.borrow();
+        let cols: &EqCoreCols<_, NUM_LIMBS, NUM_GROUPS> = local.borrow();
         let flags = [cols.opcode_eq_flag, cols.opcode_neq_flag];
 
         let is_valid = flags.iter().fold(AB::Expr::ZERO, |acc, &flag| {
@@ -87,25 +111,40 @@ where
 
         let b = &cols.b;
         let c = &cols.c;
-        let inv_marker = &cols.diff_inv_marker;
 
         // 1 if claiming values are equal, 0 otherwise.
         // For EQ: cmp_result=1 means equal → cmp_eq=1.
         // For NEQ: cmp_result=0 means equal → cmp_eq=1.
         let cmp_eq =
             cols.cmp_result * cols.opcode_eq_flag + not(cols.cmp_result) * cols.opcode_neq_flag;
+
+        // Grouped equality proof via multiplicative inverses.
+        //
+        // Limbs are partitioned into NUM_GROUPS groups of up to EQ_GROUP_SIZE.
+        // For each group j, compute the composed difference:
+        //   group_diff_j = Σ_{k=0..group_size_j} (b[start+k] - c[start+k]) * 256^k
+        //
+        // b == c  ⟺  all group_diff_j are zero.
+        //
+        // Constraints:
+        //   cmp_eq + Σ_j group_diff_j * group_diff_inv_j = 1      (when is_valid)
+        //   cmp_eq * group_diff_j = 0                               (for all j)
+        //
+        // When equal: cmp_eq=1, all group_diffs=0, sum=1. ✓
+        // When not equal: cmp_eq=0, prover sets one group_diff_inv to the inverse of
+        //   the first non-zero group_diff, sum = 0 + 1 = 1. ✓
         let mut sum = cmp_eq.clone();
 
-        // Equality proof via multiplicative inverses:
-        // - If b == c: cmp_eq must be 1, all (b[i] - c[i]) are 0, so sum = 1. ✓
-        //   The second constraint cmp_eq * (b[i] - c[i]) = 0 holds since differences are 0.
-        // - If b != c: cmp_eq must be 0, and at some position i where b[i] != c[i],
-        //   inv_marker[i] = inverse(b[i] - c[i]), so (b[i] - c[i]) * inv_marker[i] = 1,
-        //   making sum = 0 + 1 = 1. ✓
-        //   The second constraint trivially holds since cmp_eq = 0.
-        for i in 0..NUM_LIMBS {
-            sum += (b[i] - c[i]) * inv_marker[i];
-            builder.assert_zero(cmp_eq.clone() * (b[i] - c[i]));
+        for j in 0..NUM_GROUPS {
+            let start = j * EQ_GROUP_SIZE;
+            let end = std::cmp::min(start + EQ_GROUP_SIZE, NUM_LIMBS);
+            let mut group_diff = AB::Expr::ZERO;
+            for k in start..end {
+                let weight = AB::Expr::from_canonical_u32(1u32 << ((k - start) * 8));
+                group_diff += (b[k] - c[k]) * weight;
+            }
+            sum += group_diff.clone() * cols.group_diff_inv[j];
+            builder.assert_zero(cmp_eq.clone() * group_diff);
         }
         builder.when(is_valid.clone()).assert_one(sum);
 
@@ -216,12 +255,13 @@ where
 // ======================== Trace Filler ========================
 
 #[derive(Clone, derive_new::new)]
-pub struct EqFiller<A, const NUM_LIMBS: usize> {
+pub struct EqFiller<A, const NUM_LIMBS: usize, const NUM_GROUPS: usize> {
     adapter: A,
     pub offset: usize,
 }
 
-impl<F, A, const NUM_LIMBS: usize> TraceFiller<F> for EqFiller<A, NUM_LIMBS>
+impl<F, A, const NUM_LIMBS: usize, const NUM_GROUPS: usize> TraceFiller<F>
+    for EqFiller<A, NUM_LIMBS, NUM_GROUPS>
 where
     F: PrimeField32,
     A: 'static + AdapterTraceFiller<F>,
@@ -234,14 +274,13 @@ where
         // SAFETY: core_row contains a valid EqCoreRecord written by the executor
         // during trace generation
         let record: &EqCoreRecord<NUM_LIMBS> = unsafe { get_record_from_slice(&mut core_row, ()) };
-        let core_row: &mut EqCoreCols<F, NUM_LIMBS> = core_row.borrow_mut();
+        let core_row: &mut EqCoreCols<F, NUM_LIMBS, NUM_GROUPS> = core_row.borrow_mut();
 
         let is_eq = record.local_opcode == EqOpcode::EQ as u8;
-        let (cmp_result, diff_idx, diff_inv_val) =
-            run_eq::<F, NUM_LIMBS>(is_eq, &record.b, &record.c);
+        let (cmp_result, group_diff_inv) =
+            run_eq::<F, NUM_LIMBS, NUM_GROUPS>(is_eq, &record.b, &record.c);
 
-        core_row.diff_inv_marker = [F::ZERO; NUM_LIMBS];
-        core_row.diff_inv_marker[diff_idx] = diff_inv_val;
+        core_row.group_diff_inv = group_diff_inv;
 
         core_row.opcode_eq_flag = F::from_bool(is_eq);
         core_row.opcode_neq_flag = F::from_bool(!is_eq);
@@ -255,27 +294,44 @@ where
 
 // ======================== Helper ========================
 
-/// Returns (cmp_result, diff_idx, diff_inv_val).
+/// Returns (cmp_result, group_diff_inv).
 ///
-/// When values are equal: diff_idx = 0, diff_inv_val = 0.
-/// When values differ at position i: diff_idx = i, diff_inv_val = inverse(b[i] - c[i]).
+/// When values are equal: all group_diff_inv entries are zero.
+/// When values differ: the first group with a non-zero composed difference
+/// gets its inverse set; all others are zero.
 #[inline(always)]
-fn run_eq<F, const NUM_LIMBS: usize>(
+fn run_eq<F, const NUM_LIMBS: usize, const NUM_GROUPS: usize>(
     is_eq: bool,
     x: &[u8; NUM_LIMBS],
     y: &[u8; NUM_LIMBS],
-) -> (bool, usize, F)
+) -> (bool, [F; NUM_GROUPS])
 where
     F: PrimeField32,
 {
-    for i in 0..NUM_LIMBS {
-        if x[i] != y[i] {
-            return (
-                !is_eq,
-                i,
-                (F::from_canonical_u8(x[i]) - F::from_canonical_u8(y[i])).inverse(),
-            );
+    let mut group_diff_inv = [F::ZERO; NUM_GROUPS];
+
+    for j in 0..NUM_GROUPS {
+        let start = j * EQ_GROUP_SIZE;
+        let end = std::cmp::min(start + EQ_GROUP_SIZE, NUM_LIMBS);
+
+        // Compose the group difference with weights 256^k.
+        let mut group_diff: i64 = 0;
+        for k in start..end {
+            group_diff += ((x[k] as i64) - (y[k] as i64)) << ((k - start) * 8);
+        }
+
+        if group_diff != 0 {
+            // Found the first non-zero group. Set its inverse and return.
+            let group_diff_field = if group_diff > 0 {
+                F::from_canonical_u32(group_diff as u32)
+            } else {
+                F::ZERO - F::from_canonical_u32((-group_diff) as u32)
+            };
+            group_diff_inv[j] = group_diff_field.inverse();
+            return (!is_eq, group_diff_inv);
         }
     }
-    (is_eq, 0, F::ZERO)
+
+    // All groups are zero: values are equal.
+    (is_eq, group_diff_inv)
 }
