@@ -11,7 +11,12 @@ use std::{
     mem::size_of,
 };
 
-use crate::{adapters::BaseAluAdapterExecutor, memory_config::FpMemory, utils::sign_extend_u32};
+use crate::{
+    adapters::BaseAluAdapterExecutor,
+    execution::{vm_read_multiple_ops, vm_write_multiple_ops},
+    memory_config::FpMemory,
+    utils::sign_extend_u32,
+};
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
@@ -127,9 +132,9 @@ where
         self.pre_compute_impl(pc, inst, data)?;
 
         if data.is_imm {
-            Ok(execute_e1_handler::<_, _, true, NUM_LIMBS>)
+            Ok(execute_e1_handler::<_, _, true, NUM_LIMBS, NUM_REG_OPS>)
         } else {
-            Ok(execute_e1_handler::<_, _, false, NUM_LIMBS>)
+            Ok(execute_e1_handler::<_, _, false, NUM_LIMBS, NUM_REG_OPS>)
         }
     }
 }
@@ -160,9 +165,9 @@ where
         self.pre_compute_impl(pc, inst, &mut data.data)?;
 
         if data.data.is_imm {
-            Ok(execute_e2_handler::<_, _, true, NUM_LIMBS>)
+            Ok(execute_e2_handler::<_, _, true, NUM_LIMBS, NUM_REG_OPS>)
         } else {
-            Ok(execute_e2_handler::<_, _, false, NUM_LIMBS>)
+            Ok(execute_e2_handler::<_, _, false, NUM_LIMBS, NUM_REG_OPS>)
         }
     }
 }
@@ -192,21 +197,35 @@ unsafe fn execute_e12_impl<
     CTX: ExecutionCtxTrait,
     const E_IS_IMM: bool,
     const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
 >(
     pre_compute: &MulPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
     let fp = exec_state.memory.fp::<F>();
-    let rs1 = exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.b);
+    let rs1 = vm_read_multiple_ops::<NUM_LIMBS, NUM_REG_OPS, _, _>(
+        exec_state,
+        RV32_REGISTER_AS,
+        fp + pre_compute.b,
+    );
     let rs2 = if E_IS_IMM {
         sign_extend_u32::<NUM_LIMBS>(pre_compute.c)
     } else {
-        exec_state.vm_read::<u8, NUM_LIMBS>(RV32_REGISTER_AS, fp + pre_compute.c)
+        vm_read_multiple_ops::<NUM_LIMBS, NUM_REG_OPS, _, _>(
+            exec_state,
+            RV32_REGISTER_AS,
+            fp + pre_compute.c,
+        )
     };
 
     let result = wrapping_mul_bytes(&rs1, &rs2);
 
-    exec_state.vm_write(RV32_REGISTER_AS, fp + pre_compute.a, &result);
+    vm_write_multiple_ops::<NUM_LIMBS, NUM_REG_OPS, _, _>(
+        exec_state,
+        RV32_REGISTER_AS,
+        fp + pre_compute.a,
+        &result,
+    );
     let pc = exec_state.pc();
     exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
 }
@@ -218,6 +237,7 @@ unsafe fn execute_e1_impl<
     CTX: ExecutionCtxTrait,
     const E_IS_IMM: bool,
     const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
 >(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
@@ -225,7 +245,7 @@ unsafe fn execute_e1_impl<
     unsafe {
         let pre_compute: &MulPreCompute =
             std::slice::from_raw_parts(pre_compute, size_of::<MulPreCompute>()).borrow();
-        execute_e12_impl::<F, CTX, E_IS_IMM, NUM_LIMBS>(pre_compute, exec_state);
+        execute_e12_impl::<F, CTX, E_IS_IMM, NUM_LIMBS, NUM_REG_OPS>(pre_compute, exec_state);
     }
 }
 
@@ -236,6 +256,7 @@ unsafe fn execute_e2_impl<
     CTX: MeteredExecutionCtxTrait,
     const E_IS_IMM: bool,
     const NUM_LIMBS: usize,
+    const NUM_REG_OPS: usize,
 >(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
@@ -247,6 +268,6 @@ unsafe fn execute_e2_impl<
         exec_state
             .ctx
             .on_height_change(pre_compute.chip_idx as usize, 1);
-        execute_e12_impl::<F, CTX, E_IS_IMM, NUM_LIMBS>(&pre_compute.data, exec_state);
+        execute_e12_impl::<F, CTX, E_IS_IMM, NUM_LIMBS, NUM_REG_OPS>(&pre_compute.data, exec_state);
     }
 }
