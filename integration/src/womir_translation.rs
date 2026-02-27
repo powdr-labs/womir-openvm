@@ -309,14 +309,20 @@ pub enum Directive<F> {
 
 type Ctx<'a, 'b> = Context<'a, 'b>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct OpenVMSettings<F> {
+    /// When true, memory load/store instructions always use byte-by-byte access
+    /// instead of trusting WASM alignment hints. This is slower but correct for
+    /// programs that perform unaligned memory accesses (the WASM spec says
+    /// alignment hints are just hints and actual addresses may be unaligned).
+    pub support_unaligned_memory: bool,
     _phantom: std::marker::PhantomData<F>,
 }
 
 impl<F> Default for OpenVMSettings<F> {
     fn default() -> Self {
         Self {
+            support_unaligned_memory: false,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -325,6 +331,12 @@ impl<F> Default for OpenVMSettings<F> {
 impl<F> OpenVMSettings<F> {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    #[allow(dead_code)]
+    pub fn with_unaligned_memory(mut self) -> Self {
+        self.support_unaligned_memory = true;
+        self
     }
 }
 
@@ -897,6 +909,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
         output: Option<Range<u32>>,
     ) -> Tree<Directive<F>> {
         let module = c.module();
+        let unaligned = self.support_unaligned_memory;
         output
             .as_ref()
             .and_then(|output| {
@@ -904,9 +917,11 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                     .or_else(|| translate_less_than_ops(&op, inputs, output))
                     .or_else(|| translate_greater_than_ops(&op, inputs, output))
                     .map(|instruction| Directive::Instruction(instruction).into())
-                    .or_else(|| translate_complex_ins_with_const(c, module, &op, inputs, output))
+                    .or_else(|| {
+                        translate_complex_ins_with_const(c, module, &op, inputs, output, unaligned)
+                    })
             })
-            .unwrap_or_else(|| translate_complex_ins(c, module, op, inputs, output))
+            .unwrap_or_else(|| translate_complex_ins(c, module, op, inputs, output, unaligned))
     }
 }
 
@@ -1161,6 +1176,7 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
     op: &Op,
     inputs: &[WasmOpInput],
     output: &Range<u32>,
+    _unaligned: bool,
 ) -> Option<Tree<Directive<F>>> {
     use openvm_instructions::LocalOpcode;
 
@@ -1338,6 +1354,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
     op: Op,
     inputs: &[WasmOpInput],
     output: Option<Range<u32>>,
+    unaligned: bool,
 ) -> Tree<Directive<F>> {
     // Handle the remaining operations, whose inputs are all registers
     let inputs = inputs
@@ -1475,7 +1492,9 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                         .0
                         .into()
                 }
-                Global::Immutable(op) => translate_complex_ins(c, module, op.clone(), &[], output),
+                Global::Immutable(op) => {
+                    translate_complex_ins(c, module, op.clone(), &[], output, unaligned)
+                }
             }
         }
 
@@ -1483,7 +1502,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
-            match memarg.align {
+            match if unaligned { 0 } else { memarg.align } {
                 0 => {
                     // read four bytes
                     let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
@@ -1525,7 +1544,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
-            match memarg.align {
+            match if unaligned { 0 } else { memarg.align } {
                 0 => {
                     // read four bytes
                     let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
@@ -1570,7 +1589,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
 
-            match memarg.align {
+            match if unaligned { 0 } else { memarg.align } {
                 0 => {
                     // read byte by byte
                     let acc_lo =
@@ -1671,7 +1690,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
 
-            match memarg.align {
+            match if unaligned { 0 } else { memarg.align } {
                 0 => {
                     let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
@@ -1737,7 +1756,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
 
             let mut directives = vec![];
 
-            match memarg.align {
+            match if unaligned { 0 } else { memarg.align } {
                 0 => {
                     let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
@@ -1789,7 +1808,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let value = inputs[1].start as usize;
 
-            match memarg.align {
+            match if unaligned { 0 } else { memarg.align } {
                 0 => {
                     // write byte by byte
                     let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
@@ -1834,7 +1853,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let value = inputs[1].start as usize;
 
-            match memarg.align {
+            match if unaligned { 0 } else { memarg.align } {
                 0 => {
                     let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
@@ -1855,7 +1874,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let value_lo = inputs[1].start as usize;
             let value_hi = (inputs[1].start + 1) as usize;
 
-            match memarg.align {
+            match if unaligned { 0 } else { memarg.align } {
                 0 => {
                     // write byte by byte
                     let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
