@@ -1233,8 +1233,8 @@ rs2_as * (from_state__timestamp + 4 - rs2_reads_aux__1__base__prev_timestamp - 1
 (0 + opcode_div_flag + opcode_divu_flag + opcode_rem_flag + opcode_remu_flag) * (from_state__timestamp + 6 - writes_aux__1__base__prev_timestamp - 1 - (0 + writes_aux__1__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__1__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 
 
-# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, EqCoreAir<4>
-Symbolic machine using 38 unique main columns:
+# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, EqCoreAir<4, 2>
+Symbolic machine using 36 unique main columns:
   from_state__pc
   from_state__fp
   from_state__timestamp
@@ -1269,10 +1269,8 @@ Symbolic machine using 38 unique main columns:
   cmp_result
   opcode_eq_flag
   opcode_neq_flag
-  diff_inv_marker__0
-  diff_inv_marker__1
-  diff_inv_marker__2
-  diff_inv_marker__3
+  group_diff_inv__0
+  group_diff_inv__1
 
 // Bus 0 (EXECUTION_BRIDGE):
 mult=-(0 + opcode_eq_flag + opcode_neq_flag), args=[from_state__pc, from_state__timestamp]
@@ -1309,11 +1307,9 @@ opcode_eq_flag * (opcode_eq_flag - 1) = 0
 opcode_neq_flag * (opcode_neq_flag - 1) = 0
 (0 + opcode_eq_flag + opcode_neq_flag) * (0 + opcode_eq_flag + opcode_neq_flag - 1) = 0
 cmp_result * (cmp_result - 1) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__0 - c__0) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__1 - c__1) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__2 - c__2) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__3 - c__3) = 0
-(0 + opcode_eq_flag + opcode_neq_flag) * (cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag + (b__0 - c__0) * diff_inv_marker__0 + (b__1 - c__1) * diff_inv_marker__1 + (b__2 - c__2) * diff_inv_marker__2 + (b__3 - c__3) * diff_inv_marker__3 - 1) = 0
+(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (0 + (b__0 - c__0) * 1 + (b__1 - c__1) * 256 + (b__2 - c__2) * 65536) = 0
+(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (0 + (b__3 - c__3) * 1) = 0
+(0 + opcode_eq_flag + opcode_neq_flag) * (cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag + (0 + (b__0 - c__0) * 1 + (b__1 - c__1) * 256 + (b__2 - c__2) * 65536) * group_diff_inv__0 + (0 + (b__3 - c__3) * 1) * group_diff_inv__1 - 1) = 0
 (0 + opcode_eq_flag + opcode_neq_flag) * (from_state__timestamp + 0 - fp_read_aux__base__prev_timestamp - 1 - (0 + fp_read_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + fp_read_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 rs2_as * (rs2_as - 1) = 0
 (1 - rs2_as) * (rs2 - (c__0 + c__1 * 256 + c__2 * 65536)) = 0
@@ -1325,8 +1321,8 @@ rs2_as * (from_state__timestamp + 2 - rs2_reads_aux__0__base__prev_timestamp - 1
 (0 + opcode_eq_flag + opcode_neq_flag) * (from_state__timestamp + 3 - writes_aux__0__base__prev_timestamp - 1 - (0 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__0 * 1 + writes_aux__0__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 
 
-# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 1>, EqCoreAir<8>
-Symbolic machine using 56 unique main columns:
+# VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 1>, EqCoreAir<8, 3>
+Symbolic machine using 51 unique main columns:
   from_state__pc
   from_state__fp
   from_state__timestamp
@@ -1375,14 +1371,9 @@ Symbolic machine using 56 unique main columns:
   cmp_result
   opcode_eq_flag
   opcode_neq_flag
-  diff_inv_marker__0
-  diff_inv_marker__1
-  diff_inv_marker__2
-  diff_inv_marker__3
-  diff_inv_marker__4
-  diff_inv_marker__5
-  diff_inv_marker__6
-  diff_inv_marker__7
+  group_diff_inv__0
+  group_diff_inv__1
+  group_diff_inv__2
 
 // Bus 0 (EXECUTION_BRIDGE):
 mult=-(0 + opcode_eq_flag + opcode_neq_flag), args=[from_state__pc, from_state__timestamp]
@@ -1427,15 +1418,10 @@ opcode_eq_flag * (opcode_eq_flag - 1) = 0
 opcode_neq_flag * (opcode_neq_flag - 1) = 0
 (0 + opcode_eq_flag + opcode_neq_flag) * (0 + opcode_eq_flag + opcode_neq_flag - 1) = 0
 cmp_result * (cmp_result - 1) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__0 - c__0) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__1 - c__1) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__2 - c__2) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__3 - c__3) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__4 - c__4) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__5 - c__5) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__6 - c__6) = 0
-(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (b__7 - c__7) = 0
-(0 + opcode_eq_flag + opcode_neq_flag) * (cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag + (b__0 - c__0) * diff_inv_marker__0 + (b__1 - c__1) * diff_inv_marker__1 + (b__2 - c__2) * diff_inv_marker__2 + (b__3 - c__3) * diff_inv_marker__3 + (b__4 - c__4) * diff_inv_marker__4 + (b__5 - c__5) * diff_inv_marker__5 + (b__6 - c__6) * diff_inv_marker__6 + (b__7 - c__7) * diff_inv_marker__7 - 1) = 0
+(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (0 + (b__0 - c__0) * 1 + (b__1 - c__1) * 256 + (b__2 - c__2) * 65536) = 0
+(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (0 + (b__3 - c__3) * 1 + (b__4 - c__4) * 256 + (b__5 - c__5) * 65536) = 0
+(cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag) * (0 + (b__6 - c__6) * 1 + (b__7 - c__7) * 256) = 0
+(0 + opcode_eq_flag + opcode_neq_flag) * (cmp_result * opcode_eq_flag + (1 - cmp_result) * opcode_neq_flag + (0 + (b__0 - c__0) * 1 + (b__1 - c__1) * 256 + (b__2 - c__2) * 65536) * group_diff_inv__0 + (0 + (b__3 - c__3) * 1 + (b__4 - c__4) * 256 + (b__5 - c__5) * 65536) * group_diff_inv__1 + (0 + (b__6 - c__6) * 1 + (b__7 - c__7) * 256) * group_diff_inv__2 - 1) = 0
 (0 + opcode_eq_flag + opcode_neq_flag) * (from_state__timestamp + 0 - fp_read_aux__base__prev_timestamp - 1 - (0 + fp_read_aux__base__timestamp_lt_aux__lower_decomp__0 * 1 + fp_read_aux__base__timestamp_lt_aux__lower_decomp__1 * 131072)) = 0
 rs2_as * (rs2_as - 1) = 0
 (1 - rs2_as) * (rs2 - (c__0 + c__1 * 256 + c__2 * 65536)) = 0
@@ -2167,7 +2153,7 @@ needs_write * (from_state__timestamp + 3 - write_base_aux__prev_timestamp - 1 - 
 
 
 # VmAirWrapper<JumpAdapterAir, JumpCoreAir>
-Symbolic machine using 25 unique main columns:
+Symbolic machine using 22 unique main columns:
   from_state__pc
   from_state__fp
   from_state__timestamp
@@ -2189,10 +2175,7 @@ Symbolic machine using 25 unique main columns:
   opcode_jump_if_zero_flag
   cond_is_zero
   do_absolute_jump
-  nonzero_inv_marker__0
-  nonzero_inv_marker__1
-  nonzero_inv_marker__2
-  nonzero_inv_marker__3
+  sum_inv
 
 // Bus 0 (EXECUTION_BRIDGE):
 mult=-(0 + opcode_jump_flag + opcode_skip_flag + opcode_jump_if_flag + opcode_jump_if_zero_flag), args=[from_state__pc, from_state__timestamp]
@@ -2224,7 +2207,7 @@ cond_is_zero * rs_val__0 = 0
 cond_is_zero * rs_val__1 = 0
 cond_is_zero * rs_val__2 = 0
 cond_is_zero * rs_val__3 = 0
-(0 + opcode_jump_flag + opcode_skip_flag + opcode_jump_if_flag + opcode_jump_if_zero_flag) * (cond_is_zero + rs_val__0 * nonzero_inv_marker__0 + rs_val__1 * nonzero_inv_marker__1 + rs_val__2 * nonzero_inv_marker__2 + rs_val__3 * nonzero_inv_marker__3 - 1) = 0
+(0 + opcode_jump_flag + opcode_skip_flag + opcode_jump_if_flag + opcode_jump_if_zero_flag) * (cond_is_zero + (0 + rs_val__0 + rs_val__1 + rs_val__2 + rs_val__3) * sum_inv - 1) = 0
 do_absolute_jump * (do_absolute_jump - 1) = 0
 opcode_jump_flag * (do_absolute_jump - 1) = 0
 opcode_skip_flag * do_absolute_jump = 0
