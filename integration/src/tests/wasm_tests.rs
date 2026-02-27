@@ -233,6 +233,14 @@ fn load_wasm_module(wasm_bytes: &[u8]) -> LinkedProgram<'_, F> {
     LinkedProgram::new(module, functions)
 }
 
+fn load_wasm_module_with_settings(
+    wasm_bytes: &[u8],
+    settings: OpenVMSettings<F>,
+) -> LinkedProgram<'_, F> {
+    let (module, functions) = load_wasm_with_settings(wasm_bytes, settings);
+    LinkedProgram::new(module, functions)
+}
+
 fn run_and_prove_single_wasm_test(
     module_path: &str,
     function: &str,
@@ -435,7 +443,35 @@ fn test_memory_fill() {
     run_wasm_test("../wasm_tests/memory_fill.wast").unwrap()
 }
 
+#[test]
+fn test_unaligned_memory() {
+    run_wasm_test_with_settings(
+        "../wasm_tests/unaligned.wast",
+        OpenVMSettings::new().with_unaligned_memory(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn test_address_unaligned() {
+    // Run the standard address.wast tests with unaligned memory support enabled.
+    // This is a regression test: the byte-by-byte path must produce the same
+    // results as the alignment-trusting path for naturally aligned data.
+    run_wasm_test_with_settings(
+        "../wasm_tests/address.wast",
+        OpenVMSettings::new().with_unaligned_memory(),
+    )
+    .unwrap()
+}
+
 fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
+    run_wasm_test_with_settings(tf, OpenVMSettings::new())
+}
+
+fn run_wasm_test_with_settings(
+    tf: &str,
+    settings: OpenVMSettings<F>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let (target_dir, test_cases) = extract_wast_test_info(tf)?;
 
     // Run all test cases
@@ -445,7 +481,7 @@ fn run_wasm_test(tf: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Load the module to be executed multiple times.
         println!("Loading test module: {module_path}");
         let wasm_bytes = std::fs::read(full_module_path).expect("Failed to read WASM file");
-        let mut module = load_wasm_module(&wasm_bytes);
+        let mut module = load_wasm_module_with_settings(&wasm_bytes, settings);
 
         for (function, args, expected) in cases {
             match expected {
