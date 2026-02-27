@@ -293,6 +293,14 @@ fn run_wasm_test_function_raw(
         stdin
     };
 
+    // Capture the exe before module.execute() mutates memory_image.
+    // Only needed for the proving path, which requires the initial state.
+    let exe = if prove {
+        Some(module.program_with_entry_point(function))
+    } else {
+        None
+    };
+
     // Execution (also updates module.memory_image for wast test reuse)
     println!("  Execution");
     let output_bytes = module.execute(vm_config.clone(), function, make_stdin())?;
@@ -310,8 +318,7 @@ fn run_wasm_test_function_raw(
         return Ok(output);
     }
 
-    // Build exe and initial_state only for the proving path.
-    let exe = module.program_with_entry_point(function);
+    let exe = exe.unwrap();
     let initial_state = VmState::initial(
         &vm_config.system,
         &exe.init_memory,
