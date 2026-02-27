@@ -251,6 +251,14 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
             phantom::HintLoadByKeySubEx,
             PhantomDiscriminant(Phantom::HintLoadByKey as u16),
         )?;
+        inventory.add_phantom_sub_executor(
+            phantom::TraceSyscallSubEx,
+            PhantomDiscriminant(Phantom::TraceSyscall as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            phantom::ClockTimeGetSubEx::new(),
+            PhantomDiscriminant(Phantom::ClockTimeGet as u16),
+        )?;
 
         Ok(())
     }

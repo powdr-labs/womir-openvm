@@ -813,6 +813,7 @@ pub fn loadh<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F>
 }
 
 /// LOADHU: rd = zero_extend(MEM16[rs1 + imm])
+#[allow(dead_code)]
 pub fn loadhu<F: PrimeField32>(rd: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::LOADHU.global_opcode(),
@@ -841,6 +842,7 @@ pub fn storeb<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<
 }
 
 /// STOREH: MEM16[rs1 + imm] = rs2[15:0]
+#[allow(dead_code)]
 pub fn storeh<F: PrimeField32>(rs2: usize, rs1: usize, imm: u32) -> Instruction<F> {
     Instruction::new(
         LoadStoreOpcode::STOREH.global_opcode(),
@@ -992,5 +994,44 @@ pub fn hint_buffer<F: PrimeField32>(num_words_reg: usize, mem_ptr_reg: usize) ->
         0,
         riscv::RV32_REGISTER_AS as isize,
         riscv::RV32_MEMORY_AS as isize,
+    )
+}
+
+/// TraceSyscall phantom: Prints "[wasi] #<seq> <name>" to stderr.
+/// c_upper encodes a syscall ID that the phantom maps to a name string.
+pub fn trace_syscall<F: PrimeField32>(syscall_id: u16) -> Instruction<F> {
+    let c = ((syscall_id as usize) << 16) | (Phantom::TraceSyscall as usize);
+    Instruction::from_isize(
+        SystemOpcode::PHANTOM.global_opcode(),
+        0,
+        0,
+        c as isize,
+        0,
+        0,
+    )
+}
+
+/// ClockTimeGet phantom: Fills the hint stream with 8 bytes of incrementing timestamp.
+pub fn clock_time_get_phantom<F: PrimeField32>() -> Instruction<F> {
+    Instruction::from_isize(
+        SystemOpcode::PHANTOM.global_opcode(),
+        0,
+        0,
+        Phantom::ClockTimeGet as isize,
+        0,
+        0,
+    )
+}
+
+/// HintRandom phantom: Fills the hint stream with `len` random words (4 bytes each).
+/// `num_words_reg` is the register holding the number of words to generate.
+pub fn prepare_random<F: PrimeField32>(num_words_reg: usize) -> Instruction<F> {
+    Instruction::from_isize(
+        SystemOpcode::PHANTOM.global_opcode(),
+        (riscv::RV32_REGISTER_NUM_LIMBS * num_words_reg) as isize,
+        0,
+        Phantom::HintRandom as isize,
+        0,
+        0,
     )
 }
