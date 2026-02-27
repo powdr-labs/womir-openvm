@@ -280,8 +280,6 @@ fn run_wasm_test_function_raw(
     setup_tracing_with_log_level(Level::WARN);
     println!("Running WASM test with {function}({args:?}): output_words={output_words}");
 
-    // Capture the exe before module.execute() mutates memory_image.
-    let exe = module.program_with_entry_point(function);
     let vm_config = WomirConfig::default();
 
     let make_stdin = || {
@@ -294,13 +292,6 @@ fn run_wasm_test_function_raw(
         }
         stdin
     };
-
-    let initial_state = VmState::initial(
-        &vm_config.system,
-        &exe.init_memory,
-        exe.pc_start,
-        make_stdin(),
-    );
 
     // Execution (also updates module.memory_image for wast test reuse)
     println!("  Execution");
@@ -318,6 +309,15 @@ fn run_wasm_test_function_raw(
     if !prove {
         return Ok(output);
     }
+
+    // Build exe and initial_state only for the proving path.
+    let exe = module.program_with_entry_point(function);
+    let initial_state = VmState::initial(
+        &vm_config.system,
+        &exe.init_memory,
+        exe.pc_start,
+        make_stdin(),
+    );
 
     // Metered execution
     println!("  Metered execution");
