@@ -262,8 +262,15 @@ fn make_stdin(args: &[String]) -> StdIn {
 }
 
 fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) {
+    load_wasm_with_settings(wasm_bytes, OpenVMSettings::<F>::new())
+}
+
+fn load_wasm_with_settings(
+    wasm_bytes: &[u8],
+    settings: OpenVMSettings<F>,
+) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) {
     let PartiallyParsedProgram { s: _, m, functions } =
-        womir::loader::load_wasm(OpenVMSettings::<F>::new(), wasm_bytes).unwrap();
+        womir::loader::load_wasm(settings, wasm_bytes).unwrap();
 
     let num_functions = functions.len() as u32;
     let tracker = RwLock::new(Some(builtin_functions::Tracker::new(num_functions)));
@@ -311,7 +318,7 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) 
                                 }
                                 func = func
                                     .advance_stage(
-                                        &OpenVMSettings::new(),
+                                        &settings,
                                         &module,
                                         func_idx,
                                         label_gen,
@@ -335,7 +342,7 @@ fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) 
                             let module = module.read().unwrap();
                             let func = func
                                 .advance_all_stages(
-                                    &OpenVMSettings::new(),
+                                    &settings,
                                     &module,
                                     func_idx,
                                     label_gen,
