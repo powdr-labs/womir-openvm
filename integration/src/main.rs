@@ -225,7 +225,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     stdin.write(&val);
                 }
 
-                powdr_openvm::prove(&compiled, true, false, stdin, None)
+                powdr_openvm::prove(&compiled, false, false, stdin, None)
                     .map_err(|e| eyre::eyre!("{e}"))?;
                 println!("RISC-V proof verified successfully.");
                 Ok(())
