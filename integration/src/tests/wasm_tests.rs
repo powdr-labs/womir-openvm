@@ -322,7 +322,12 @@ fn run_wasm_test_function_raw(
     // Metered execution
     println!("  Metered execution");
     let (segments, _) = helpers::test_metered_execution(&exe, initial_state.clone())?;
-    println!("    {} segment(s)", segments.len());
+    let total_insns: u64 = segments.iter().map(|s| s.num_insns).sum();
+    println!(
+        "    {} segment(s), {} total instructions",
+        segments.len(),
+        total_insns
+    );
 
     // Preflight
     println!("  Preflight");
@@ -603,7 +608,53 @@ fn test_keeper_wasi() {
     let wasm_bytes =
         std::fs::read("../sample-programs/keeper_wasi.wasm").expect("failed to read WASM file");
     let mut module = load_wasm_module(&wasm_bytes);
+
+    // Capture exe before execute() mutates memory_image.
+    let exe = module.program_with_entry_point("_start");
+    let vm_config = WomirConfig::default();
+
     run_wasm_test_function(&mut module, "_start", &[], &[], false, &[&payload]).unwrap();
+
+    // Run metered execution to report instruction count.
+    let mut stdin = StdIn::default();
+    stdin.write_bytes(&payload);
+    let initial_state = VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin);
+    let (segments, _) = helpers::test_metered_execution(&exe, initial_state).unwrap();
+    let total_insns: u64 = segments.iter().map(|s| s.num_insns).sum();
+    println!(
+        "  keeper_wasi: {} segment(s), {} total instructions",
+        segments.len(),
+        total_insns
+    );
+}
+
+#[test]
+fn test_keeper_decode_only() {
+    // Keeper with only input reading + RLP deserialization (no ExecuteStateless).
+    // Used to measure the cycle cost of deserialization alone.
+    let payload = std::fs::read("../sample-programs/keeper/hoodi_payload.bin")
+        .expect("failed to read hoodi_payload.bin");
+    let wasm_bytes = std::fs::read("../sample-programs/keeper_decode_only.wasm")
+        .expect("failed to read WASM file");
+    let mut module = load_wasm_module(&wasm_bytes);
+
+    // Capture exe before execute() mutates memory_image.
+    let exe = module.program_with_entry_point("_start");
+    let vm_config = WomirConfig::default();
+
+    run_wasm_test_function(&mut module, "_start", &[], &[], true, &[&payload]).unwrap();
+
+    // Run metered execution to report instruction count.
+    let mut stdin = StdIn::default();
+    stdin.write_bytes(&payload);
+    let initial_state = VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin);
+    let (segments, _) = helpers::test_metered_execution(&exe, initial_state).unwrap();
+    let total_insns: u64 = segments.iter().map(|s| s.num_insns).sum();
+    println!(
+        "  keeper_decode_only: {} segment(s), {} total instructions",
+        segments.len(),
+        total_insns
+    );
 }
 
 fn keccak_rust_womir(iterations: u32, expected_first_byte: u32) {
