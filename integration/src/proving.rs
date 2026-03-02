@@ -206,16 +206,57 @@ pub fn mock_prove(
 }
 
 /// Mock proof with constraint verification (all segments) using GPU engine.
+/// Currently uses SystemConfig because WOMIR GPU tracegen is not implemented.
+/// This means only system instructions (halt, etc.) can be tested on GPU.
 #[cfg(feature = "cuda")]
 #[allow(dead_code)]
 pub fn mock_prove_gpu(
     exe: &VmExe<F>,
     init_state: VmState<F>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    mock_prove_with(
-        gpu_engine(),
-        womir_circuit::WomirGpuBuilder,
-        exe,
-        init_state,
-    )
+    use openvm_circuit::system::cuda::extensions::SystemGpuBuilder;
+    use womir_circuit::system_config;
+
+    // Use system-only config for GPU (WOMIR GPU tracegen not yet implemented)
+    let engine = gpu_engine();
+    let system_config = system_config();
+    let circuit = system_config
+        .create_airs()
+        .expect("failed to create AIR inventory for keygen");
+    let pk = circuit.keygen(&engine);
+    let d_pk = engine.device().transport_pk_to_device(&pk);
+
+    let mut vm =
+        VirtualMachine::<_, SystemGpuBuilder>::new(engine, SystemGpuBuilder, system_config, d_pk)?;
+
+    // Run metered execution to discover segments.
+    let metered_ctx = vm.build_metered_ctx(exe);
+    let metered_instance = vm.metered_interpreter(exe)?;
+    let (segments, _) =
+        metered_instance.execute_metered_from_state(init_state.clone(), metered_ctx)?;
+
+    let cached_program_trace = vm.commit_program_on_device(&exe.program);
+    vm.load_program(cached_program_trace);
+
+    // Preflight + constraint verification per segment.
+    let mut preflight_interpreter = vm.preflight_interpreter(exe)?;
+    let mut state = init_state;
+    for segment in &segments {
+        vm.transport_init_memory_to_device(&state.memory);
+        let preflight_output = vm.execute_preflight(
+            &mut preflight_interpreter,
+            state,
+            Some(segment.num_insns),
+            &segment.trace_heights,
+        )?;
+        state = preflight_output.to_state;
+
+        let ctx = vm.generate_proving_ctx(
+            preflight_output.system_records,
+            preflight_output.record_arenas,
+        )?;
+        debug_proving_ctx(&vm, &pk, &ctx);
+    }
+
+    Ok(())
 }
