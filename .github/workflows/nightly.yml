@@ -1,0 +1,114 @@
+name: Nightly Benchmark
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # 2 AM UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Keccak Benchmark
+    runs-on: warp-ubuntu-2404-x64-16x
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y wabt
+
+      - name: Install Rust toolchain 1.91.0 (stable)
+        run: |
+          rustup install 1.91.0
+          rustup +1.91.0 component add rust-src
+
+      - name: Install WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build project
+        run: cargo build --release
+
+      - name: Build keccak WASM target
+        run: |
+          cd sample-programs/keccak_with_inputs
+          cargo build --release --target wasm32-unknown-unknown
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Run benchmarks
+        run: bash scripts/run_guest_benches.sh
+
+      - name: Post results to job summary
+        if: always()
+        run: |
+          for bench_dir in results/keccak_*; do
+            bench_name=$(basename "$bench_dir")
+            echo "## ${bench_name}" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+
+            if [ -f "${bench_dir}/basic_metrics.csv" ]; then
+              echo "### Basic Metrics" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              # Print CSV as a readable table: header + data
+              python3 -c "
+          import csv, sys
+          with open('${bench_dir}/basic_metrics.csv') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  for k, v in row.items():
+                      print(f'{k}: {v}')
+                  print()
+          " >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+            fi
+
+            if [ -f "${bench_dir}/womir_vs_riscv.txt" ]; then
+              echo "### WOMIR vs RISC-V Comparison" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              cat "${bench_dir}/womir_vs_riscv.txt" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+            fi
+
+            # Include trace cell text breakdown
+            for txt in "${bench_dir}"/*/trace_cells.txt; do
+              if [ -f "$txt" ]; then
+                label=$(basename "$(dirname "$txt")")
+                echo "### Trace Cells - ${label}" >> "$GITHUB_STEP_SUMMARY"
+                echo '```' >> "$GITHUB_STEP_SUMMARY"
+                cat "$txt" >> "$GITHUB_STEP_SUMMARY"
+                echo '```' >> "$GITHUB_STEP_SUMMARY"
+                echo "" >> "$GITHUB_STEP_SUMMARY"
+              fi
+            done
+            echo "_Trace cell plots (PNG) are available in the uploaded artifacts._" >> "$GITHUB_STEP_SUMMARY"
+
+            echo "---" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: results/
