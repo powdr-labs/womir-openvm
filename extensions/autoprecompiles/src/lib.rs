@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use openvm_circuit::arch::{
     AirInventory, ChipInventoryError, InitFileGenerator, MatrixRecordArena, SystemConfig,
@@ -7,9 +7,7 @@ use openvm_circuit::arch::{
 use openvm_circuit::system::{SystemChipInventory, SystemCpuBuilder};
 use openvm_circuit_derive::{AnyEnum, Executor, MeteredExecutor, PreflightExecutor};
 use openvm_circuit_primitives::Chip;
-use openvm_instructions::{
-    LocalOpcode, VmOpcode, instruction::Instruction, program::DEFAULT_PC_STEP,
-};
+use openvm_instructions::{LocalOpcode, VmOpcode, instruction::Instruction};
 use openvm_sdk::config::{SdkVmConfig, TranspilerConfig};
 use openvm_stark_backend::{config::Val, p3_field::PrimeField32, prover::cpu::CpuBackend};
 use openvm_stark_sdk::{
@@ -21,6 +19,7 @@ use openvm_womir_transpiler::{
     Eq64Opcode, EqOpcode, HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode,
     LoadStoreOpcode, Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
 };
+use powdr_openvm_common::program::OriginalCompiledProgram;
 use powdr_openvm_common::{
     isa::{OpenVmISA, OriginalCpuChipComplex, OriginalCpuChipInventory},
     trace_generator::cpu::periphery::{SharedPeripheryChipsCpu, SharedPeripheryChipsCpuProverExt},
@@ -169,8 +168,6 @@ fn branch_opcodes() -> HashSet<VmOpcode> {
 }
 
 impl OpenVmISA for WomirISA {
-    const DEFAULT_PC_STEP: u32 = DEFAULT_PC_STEP;
-
     type RegisterAddress = OpenVmRegisterAddress;
     type DummyExecutor = WomirConfigExecutor<BabyBear>;
     type DummyConfig = WomirOpenVmConfig;
@@ -245,10 +242,6 @@ impl OpenVmISA for WomirISA {
         vm_opcode_set()
     }
 
-    fn extra_targets() -> HashSet<VmOpcode> {
-        branch_opcodes()
-    }
-
     fn get_register_value(_: &Self::RegisterAddress) -> u32 {
         unimplemented!("execution constraints are currently unused")
     }
@@ -260,4 +253,13 @@ impl OpenVmISA for WomirISA {
     fn format<F: PrimeField32>(instruction: &Instruction<F>) -> String {
         format!("{instruction:?}")
     }
+
+    type Program = WomirAssembly;
+
+    fn get_labels(_program: &OriginalCompiledProgram<Self>) -> BTreeMap<u64, Vec<String>> {
+        todo!("get jump targets")
+    }
 }
+
+// TODO: the type from which, along with the exe, we can determine the jump targets
+type WomirAssembly = ();
