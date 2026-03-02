@@ -20,13 +20,16 @@ def render_bench(bench_dir: str) -> str:
     csv_path = os.path.join(bench_dir, "basic_metrics.csv")
     if os.path.isfile(csv_path):
         lines.append("### Basic Metrics\n")
-        lines.append("```")
         with open(csv_path) as f:
-            for row in csv.DictReader(f):
-                for k, v in row.items():
-                    lines.append(f"{k}: {v}")
-                lines.append("")
-        lines.append("```\n")
+            reader = csv.DictReader(f)
+            rows = list(reader)
+        if rows:
+            headers = list(rows[0].keys())
+            lines.append("| " + " | ".join(headers) + " |")
+            lines.append("| " + " | ".join("---" for _ in headers) + " |")
+            for row in rows:
+                lines.append("| " + " | ".join(row[h] for h in headers) + " |")
+            lines.append("")
 
     # WOMIR vs RISC-V comparison
     cmp_path = os.path.join(bench_dir, "womir_vs_riscv.txt")
