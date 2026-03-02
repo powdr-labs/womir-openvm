@@ -61,8 +61,7 @@ cfg_if::cfg_if! {
         use openvm_circuit::system::cuda::{extensions::SystemGpuBuilder, SystemChipInventoryGPU};
         use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::GpuBackend};
         use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
-        // cuda_abi disabled - WOMIR GPU tracegen kernels not yet compiled
-        // pub(crate) mod cuda_abi;
+        pub(crate) mod cuda_abi;
     }
 }
 
@@ -189,3 +188,75 @@ impl VmBuilder<GpuBabyBearPoseidon2Engine> for WomirGpuBuilder {
         Ok(chip_complex)
     }
 }
+
+// ============ Config for incremental GPU testing (CUDA only) ============
+// These types have "PreparingGpu" suffix because they are temporary scaffolding
+// for testing GPU chips one at a time. Once all WOMIR chips have GPU
+// implementations, these types will be removed and WomirConfig+WomirGpuBuilder
+// will be used directly for GPU proving.
+
+#[cfg(feature = "cuda")]
+mod preparing_gpu_config {
+    use super::*;
+
+    /// VM config for incremental GPU testing.
+    /// Contains only GPU-ready chips (currently: BaseAlu32 + system).
+    /// Will be removed once all chips have GPU implementations.
+    #[derive(Clone, Debug, derive_new::new, VmConfig, Serialize, Deserialize)]
+    pub struct WomirPreparingGpuConfig {
+        #[config(executor = "SystemExecutor<F>")]
+        pub system: SystemConfig,
+        #[extension]
+        pub base_alu: WomirPreparingGpu,
+    }
+
+    impl InitFileGenerator for WomirPreparingGpuConfig {}
+
+    impl Default for WomirPreparingGpuConfig {
+        fn default() -> Self {
+            Self {
+                system: system_config(),
+                base_alu: Default::default(),
+            }
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct WomirPreparingGpuBuilder;
+
+    impl VmBuilder<GpuBabyBearPoseidon2Engine> for WomirPreparingGpuBuilder {
+        type VmConfig = WomirPreparingGpuConfig;
+        type SystemChipInventory = SystemChipInventoryGPU;
+        type RecordArena = DenseRecordArena;
+
+        fn create_chip_complex(
+            &self,
+            config: &WomirPreparingGpuConfig,
+            circuit: AirInventory<BabyBearPoseidon2Config>,
+        ) -> Result<
+            VmChipComplex<
+                BabyBearPoseidon2Config,
+                Self::RecordArena,
+                GpuBackend,
+                Self::SystemChipInventory,
+            >,
+            ChipInventoryError,
+        > {
+            let mut chip_complex = VmBuilder::<GpuBabyBearPoseidon2Engine>::create_chip_complex(
+                &SystemGpuBuilder,
+                &config.system,
+                circuit,
+            )?;
+            let inventory = &mut chip_complex.inventory;
+            VmProverExtension::<GpuBabyBearPoseidon2Engine, _, _>::extend_prover(
+                &WomirPreparingGpuProverExt,
+                &config.base_alu,
+                inventory,
+            )?;
+            Ok(chip_complex)
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
+pub use preparing_gpu_config::{WomirPreparingGpuBuilder, WomirPreparingGpuConfig};

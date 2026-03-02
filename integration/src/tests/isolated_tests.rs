@@ -211,16 +211,18 @@ pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>>
 /// Mock proving with constraint verification using debug_proving_ctx.
 /// This generates traces and verifies all constraints are satisfied without
 /// generating actual cryptographic proofs.
-/// Runs on the specified backends (CPU, GPU, or both).
+/// Runs on the specified backends (CPU, GPU, or both) and verifies the final state.
 pub fn test_prove(spec: &TestSpec, backends: &[Backend]) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
     let init_state = build_initial_state(spec, &exe, &vm_config);
 
     for &backend in backends {
-        backend
+        let final_state = backend
             .mock_prove(&exe, init_state.clone())
             .map_err(|e| format!("{} mock_prove: {e}", backend.name()))?;
+        verify_state(spec, &final_state)
+            .map_err(|e| format!("{} verify_state: {e}", backend.name()))?;
     }
     Ok(())
 }
@@ -232,7 +234,8 @@ fn test_spec(spec: TestSpec) {
 }
 
 /// Run a test spec through all stages with specified proving backends.
-fn test_spec_with_backends(mut spec: TestSpec, backends: &[Backend]) {
+/// Appends halt instruction automatically.
+pub fn test_spec_with_backends(mut spec: TestSpec, backends: &[Backend]) {
     // Append halt instruction:
     spec.program.push(halt());
 
@@ -260,7 +263,7 @@ fn test_spec_with_backends(mut spec: TestSpec, backends: &[Backend]) {
 
 /// Run a test spec on all available backends (CPU and GPU if available).
 #[allow(dead_code)]
-fn test_spec_all_backends(spec: TestSpec) {
+pub fn test_spec_all_backends(spec: TestSpec) {
     test_spec_with_backends(spec, ALL_BACKENDS)
 }
 

@@ -42,12 +42,12 @@ pub enum Backend {
 
 #[allow(dead_code)]
 impl Backend {
-    /// Run mock proof on this backend.
+    /// Run mock proof on this backend, returning the final state.
     pub fn mock_prove(
         self,
         exe: &VmExe<F>,
         init_state: VmState<F>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<VmState<F>, Box<dyn std::error::Error>> {
         match self {
             Backend::Cpu => mock_prove(exe, init_state),
             #[cfg(feature = "cuda")]
@@ -66,7 +66,7 @@ impl Backend {
 }
 
 /// All available backends for the current build configuration.
-/// Currently only CPU works for WOMIR instructions (GPU tracegen not implemented).
+/// GPU uses WomirPreparingGpuConfig which supports: BaseAlu32 + system instructions.
 #[allow(dead_code)]
 pub const ALL_BACKENDS: &[Backend] = &[
     Backend::Cpu,
@@ -146,12 +146,13 @@ pub fn prove(
 }
 
 /// Mock proof with constraint verification (all segments) using a specific engine and builder.
+/// Returns the final state after all segments have been processed.
 pub fn mock_prove_with<E, VB>(
     engine: E,
     builder: VB,
     exe: &VmExe<F>,
     init_state: VmState<F>,
-) -> Result<(), Box<dyn std::error::Error>>
+) -> Result<VmState<F>, Box<dyn std::error::Error>>
 where
     E: StarkEngine<SC = SC>,
     VB: VmBuilder<E, VmConfig = WomirConfig> + Clone,
@@ -194,40 +195,46 @@ where
         debug_proving_ctx(&vm, pk, &ctx);
     }
 
-    Ok(())
+    Ok(state)
 }
 
 /// Mock proof with constraint verification (all segments) using CPU engine.
+/// Returns the final state after all segments have been processed.
 pub fn mock_prove(
     exe: &VmExe<F>,
     init_state: VmState<F>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<VmState<F>, Box<dyn std::error::Error>> {
     mock_prove_with(cpu_engine(), WomirCpuBuilder, exe, init_state)
 }
 
 /// Mock proof with constraint verification (all segments) using GPU engine.
-/// Currently uses SystemConfig because WOMIR GPU tracegen is not implemented.
-/// This means only system instructions (halt, etc.) can be tested on GPU.
+/// Uses WomirPreparingGpuConfig which includes only GPU-ready chips.
+/// Currently supports: BaseAlu32 + system instructions.
+/// Returns the final state after all segments have been processed.
+///
+/// TODO: Once all WOMIR GPU chips are implemented, switch to WomirConfig+WomirGpuBuilder.
 #[cfg(feature = "cuda")]
 #[allow(dead_code)]
 pub fn mock_prove_gpu(
     exe: &VmExe<F>,
     init_state: VmState<F>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use openvm_circuit::system::cuda::extensions::SystemGpuBuilder;
-    use womir_circuit::system_config;
+) -> Result<VmState<F>, Box<dyn std::error::Error>> {
+    use womir_circuit::{WomirPreparingGpuBuilder, WomirPreparingGpuConfig};
 
-    // Use system-only config for GPU (WOMIR GPU tracegen not yet implemented)
     let engine = gpu_engine();
-    let system_config = system_config();
-    let circuit = system_config
+    let vm_config = WomirPreparingGpuConfig::default();
+    let circuit = vm_config
         .create_airs()
         .expect("failed to create AIR inventory for keygen");
     let pk = circuit.keygen(&engine);
     let d_pk = engine.device().transport_pk_to_device(&pk);
 
-    let mut vm =
-        VirtualMachine::<_, SystemGpuBuilder>::new(engine, SystemGpuBuilder, system_config, d_pk)?;
+    let mut vm = VirtualMachine::<_, WomirPreparingGpuBuilder>::new(
+        engine,
+        WomirPreparingGpuBuilder,
+        vm_config,
+        d_pk,
+    )?;
 
     // Run metered execution to discover segments.
     let metered_ctx = vm.build_metered_ctx(exe);
@@ -258,5 +265,5 @@ pub fn mock_prove_gpu(
         debug_proving_ctx(&vm, &pk, &ctx);
     }
 
-    Ok(())
+    Ok(state)
 }
