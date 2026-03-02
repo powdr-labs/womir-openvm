@@ -62,13 +62,14 @@ cfg_if::cfg_if! {
         use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::GpuBackend};
         use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
         pub(crate) mod cuda_abi;
-        pub use self::{
-            WomirGpuBuilder as WomirBuilder,
-        };
+    }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "cuda")] {
+        pub use self::WomirGpuBuilder as WomirBuilder;
     } else {
-        pub use self::{
-            WomirCpuBuilder as WomirBuilder,
-        };
+        pub use self::WomirCpuBuilder as WomirBuilder;
     }
 }
 
@@ -148,4 +149,42 @@ where
 
 pub fn system_config() -> SystemConfig {
     SystemConfig::default_from_memory(memory_config_with_fp())
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Clone, Default)]
+pub struct WomirGpuBuilder;
+
+#[cfg(feature = "cuda")]
+impl VmBuilder<GpuBabyBearPoseidon2Engine> for WomirGpuBuilder {
+    type VmConfig = WomirConfig;
+    type SystemChipInventory = SystemChipInventoryGPU;
+    type RecordArena = DenseRecordArena;
+
+    fn create_chip_complex(
+        &self,
+        config: &WomirConfig,
+        circuit: AirInventory<BabyBearPoseidon2Config>,
+    ) -> Result<
+        VmChipComplex<
+            BabyBearPoseidon2Config,
+            Self::RecordArena,
+            GpuBackend,
+            Self::SystemChipInventory,
+        >,
+        ChipInventoryError,
+    > {
+        let mut chip_complex = VmBuilder::<GpuBabyBearPoseidon2Engine>::create_chip_complex(
+            &SystemGpuBuilder,
+            &config.system,
+            circuit,
+        )?;
+        let inventory = &mut chip_complex.inventory;
+        VmProverExtension::<GpuBabyBearPoseidon2Engine, _, _>::extend_prover(
+            &WomirGpuProverExt,
+            &config.base,
+            inventory,
+        )?;
+        Ok(chip_complex)
+    }
 }
