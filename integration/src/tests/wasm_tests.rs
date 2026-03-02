@@ -444,7 +444,7 @@ fn test_memory_fill() {
 }
 
 #[test]
-fn test_unaligned_memory() {
+fn test_unaligned_memory_with_assume_unaligned() {
     run_wasm_test_with_settings(
         "../wasm_tests/unaligned.wast",
         OpenVMSettings::new().with_unaligned_memory(),
@@ -453,7 +453,7 @@ fn test_unaligned_memory() {
 }
 
 #[test]
-fn test_address_unaligned() {
+fn test_address_aligned_memory_with_assume_unaligned() {
     // Run the standard address.wast tests with unaligned memory support enabled.
     // This is a regression test: the byte-by-byte path must produce the same
     // results as the alignment-trusting path for naturally aligned data.
