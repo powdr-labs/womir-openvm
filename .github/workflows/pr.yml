@@ -90,5 +90,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run GPU tests
-        run: cargo test --release --features cuda -- --test-threads=1
+      - name: Run GPU ALU tests
+        run: |
+          cargo test --release --features cuda test_add -- --test-threads=1
+          cargo test --release --features cuda test_sub -- --test-threads=1
+          cargo test --release --features cuda test_xor -- --test-threads=1
+          cargo test --release --features cuda test_or -- --test-threads=1
+          cargo test --release --features cuda test_and -- --test-threads=1
