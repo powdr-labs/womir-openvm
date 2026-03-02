@@ -637,13 +637,12 @@ fn test_keeper_wasi() {
     // Same keeper program, compiled for WASI (wasip1) target.
     // Compile command:
     //   GOOS=wasip1 GOARCH=wasm go build -gcflags=all=-d=softfloat -tags "womir" -o keeper_wasi.wasm
-    // Execution only (no proving) — the binary contains float instructions that
-    // are not yet supported by the compiled backend.
     let payload = std::fs::read("../sample-programs/keeper/hoodi_payload.bin")
         .expect("failed to read hoodi_payload.bin");
     let wasm_bytes =
         std::fs::read("../sample-programs/keeper_wasi.wasm").expect("failed to read WASM file");
-    let mut module = load_wasm_module(&wasm_bytes);
+    let mut module =
+        load_wasm_module_with_settings(&wasm_bytes, OpenVMSettings::new().with_unaligned_memory());
 
     // Capture exe before execute() mutates memory_image.
     let exe = module.program_with_entry_point("_start");
@@ -672,7 +671,8 @@ fn test_keeper_decode_only() {
         .expect("failed to read hoodi_payload.bin");
     let wasm_bytes = std::fs::read("../sample-programs/keeper_decode_only.wasm")
         .expect("failed to read WASM file");
-    let mut module = load_wasm_module(&wasm_bytes);
+    let mut module =
+        load_wasm_module_with_settings(&wasm_bytes, OpenVMSettings::new().with_unaligned_memory());
 
     // Capture exe before execute() mutates memory_image.
     let exe = module.program_with_entry_point("_start");

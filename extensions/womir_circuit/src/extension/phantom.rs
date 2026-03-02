@@ -164,6 +164,8 @@ fn extract_u32(value: &[u8], offset: usize) -> u32 {
 
 /// ClockTimeGet: fills hint stream with 8 bytes of an incrementing nanosecond
 /// timestamp. Starts at 1 second and increments by 1 ms per call.
+/// Go's runtime expects monotonically increasing values from clock_time_get;
+/// returning a constant causes infinite loops in time-based scheduling.
 pub struct ClockTimeGetSubEx {
     counter: AtomicU64,
 }
