@@ -61,7 +61,8 @@ cfg_if::cfg_if! {
         use openvm_circuit::system::cuda::{extensions::SystemGpuBuilder, SystemChipInventoryGPU};
         use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::GpuBackend};
         use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
-        pub(crate) mod cuda_abi;
+        // cuda_abi disabled - WOMIR GPU tracegen kernels not yet compiled
+        // pub(crate) mod cuda_abi;
     }
 }
 

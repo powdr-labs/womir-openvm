@@ -43,3 +43,15 @@ metrics-util = "0.17.0"
 
 [dev-dependencies]
 postcard = { version = "1.1", features = ["alloc"] }
+
+[features]
+default = []
+cuda = [
+  "womir-circuit/cuda",
+  "openvm-circuit/cuda",
+  "dep:openvm-cuda-backend",
+]
+
+[dependencies.openvm-cuda-backend]
+workspace = true
+optional = true

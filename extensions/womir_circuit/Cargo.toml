@@ -37,8 +37,7 @@ powdr-autoprecompiles = { workspace = true }
 powdr-number = { workspace = true }
 pretty_assertions = "1"
 
-[build-dependencies]
-openvm-cuda-builder = { workspace = true, optional = true }
+# build-dependencies removed - CUDA kernel compilation disabled for now
 
 [features]
 default = ["parallel", "jemalloc"]
@@ -54,7 +53,6 @@ nightly-features = ["openvm-circuit/nightly-features"]
 
 cuda = [
   "dep:openvm-stark-sdk",
-  "dep:openvm-cuda-builder",
   "dep:openvm-cuda-common",
   "dep:openvm-cuda-backend",
   "openvm-circuit-primitives/cuda",
