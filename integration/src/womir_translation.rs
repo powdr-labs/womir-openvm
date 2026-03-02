@@ -309,14 +309,20 @@ pub enum Directive<F> {
 
 type Ctx<'a, 'b> = Context<'a, 'b>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct OpenVMSettings<F> {
+    /// When true, memory load/store instructions always use byte-by-byte access
+    /// instead of trusting WASM alignment hints. This is slower but correct for
+    /// programs that perform unaligned memory accesses (the WASM spec says
+    /// alignment hints are just hints and actual addresses may be unaligned).
+    pub support_unaligned_memory: bool,
     _phantom: std::marker::PhantomData<F>,
 }
 
 impl<F> Default for OpenVMSettings<F> {
     fn default() -> Self {
         Self {
+            support_unaligned_memory: false,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -325,6 +331,12 @@ impl<F> Default for OpenVMSettings<F> {
 impl<F> OpenVMSettings<F> {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    #[cfg(test)]
+    pub fn with_unaligned_memory(mut self) -> Self {
+        self.support_unaligned_memory = true;
+        self
     }
 }
 
@@ -897,6 +909,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
         output: Option<Range<u32>>,
     ) -> Tree<Directive<F>> {
         let module = c.module();
+        let unaligned = self.support_unaligned_memory;
         output
             .as_ref()
             .and_then(|output| {
@@ -906,7 +919,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                     .map(|instruction| Directive::Instruction(instruction).into())
                     .or_else(|| translate_complex_ins_with_const(c, module, &op, inputs, output))
             })
-            .unwrap_or_else(|| translate_complex_ins(c, module, op, inputs, output))
+            .unwrap_or_else(|| translate_complex_ins(c, module, op, inputs, output, unaligned))
     }
 }
 
@@ -1332,13 +1345,48 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
     })
 }
 
+/// Returns a mutable reference to the [`MemArg`] of a WASM memory operator, if any.
+fn get_memarg_mut<'a>(op: &'a mut Op<'_>) -> Option<&'a mut MemArg> {
+    match op {
+        Op::I32Load { memarg }
+        | Op::I64Load { memarg }
+        | Op::F32Load { memarg }
+        | Op::F64Load { memarg }
+        | Op::I32Load8S { memarg }
+        | Op::I32Load8U { memarg }
+        | Op::I32Load16S { memarg }
+        | Op::I32Load16U { memarg }
+        | Op::I64Load8S { memarg }
+        | Op::I64Load8U { memarg }
+        | Op::I64Load16S { memarg }
+        | Op::I64Load16U { memarg }
+        | Op::I64Load32S { memarg }
+        | Op::I64Load32U { memarg }
+        | Op::I32Store { memarg }
+        | Op::I64Store { memarg }
+        | Op::F32Store { memarg }
+        | Op::F64Store { memarg }
+        | Op::I32Store8 { memarg }
+        | Op::I32Store16 { memarg }
+        | Op::I64Store8 { memarg }
+        | Op::I64Store16 { memarg }
+        | Op::I64Store32 { memarg } => Some(memarg),
+        _ => None,
+    }
+}
+
 fn translate_complex_ins<'a, F: PrimeField32>(
     c: &mut Ctx<'a, '_>,
     module: &Module<'a>,
-    op: Op,
+    mut op: Op,
     inputs: &[WasmOpInput],
     output: Option<Range<u32>>,
+    unaligned: bool,
 ) -> Tree<Directive<F>> {
+    if unaligned && let Some(memarg) = get_memarg_mut(&mut op) {
+        memarg.align = 0;
+    }
+
     // Handle the remaining operations, whose inputs are all registers
     let inputs = inputs
         .iter()
@@ -1475,7 +1523,9 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                         .0
                         .into()
                 }
-                Global::Immutable(op) => translate_complex_ins(c, module, op.clone(), &[], output),
+                Global::Immutable(op) => {
+                    translate_complex_ins(c, module, op.clone(), &[], output, unaligned)
+                }
             }
         }
 
