@@ -9,7 +9,6 @@ use openvm_circuit::{
 use openvm_instructions::{exe::VmExe, program::Program};
 use openvm_stark_backend::prover::hal::DeviceDataTransporter;
 use openvm_stark_sdk::engine::StarkEngine;
-use womir_circuit::memory_config::memory_config_with_fp;
 
 use crate::instruction_builder::halt;
 use crate::proving::gpu_engine;
@@ -18,6 +17,8 @@ type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 /// Test that a simple halt() program can be proven on GPU.
 /// Uses system-only config (no WOMIR extension) since WOMIR GPU tracegen is not yet implemented.
+/// Note: We use SystemConfig::default() instead of memory_config_with_fp() because the CUDA
+/// merkle tree kernel only supports address spaces 0-3, but FP_AS = 5 would require index 4.
 #[test]
 #[ignore] // Requires CUDA hardware; run with: cargo test --features cuda test_gpu_halt -- --ignored
 fn test_gpu_halt() {
@@ -26,8 +27,8 @@ fn test_gpu_halt() {
     let program = Program::from_instructions(&instructions);
     let exe = Arc::new(VmExe::<F>::new(program));
 
-    // Use system-only config with WOMIR memory layout
-    let system_config = SystemConfig::default_from_memory(memory_config_with_fp());
+    // Use default system config (without FP_AS) since CUDA merkle tree only supports AS 0-3
+    let system_config = SystemConfig::default();
     let engine = gpu_engine();
 
     // Generate proving key for system-only config
