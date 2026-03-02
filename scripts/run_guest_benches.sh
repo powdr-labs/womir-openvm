@@ -12,6 +12,13 @@ set -e
 SCRIPT_PATH=$(realpath "${BASH_SOURCE[0]}")
 SCRIPTS_DIR=$(dirname "$SCRIPT_PATH")
 
+# Download shared analysis scripts from powdr upstream.
+POWDR_SCRIPTS_URL="https://raw.githubusercontent.com/powdr-labs/powdr/main/openvm/scripts"
+curl -sL "$POWDR_SCRIPTS_URL/basic_metrics.py" -o "$SCRIPTS_DIR/basic_metrics.py"
+curl -sL "$POWDR_SCRIPTS_URL/metrics_utils.py" -o "$SCRIPTS_DIR/metrics_utils.py"
+# TODO: switch to main once https://github.com/powdr-labs/powdr/pull/2776 is merged
+curl -sL "https://raw.githubusercontent.com/powdr-labs/powdr/plot-script/openvm/scripts/plot_trace_cells.py" -o "$SCRIPTS_DIR/plot_trace_cells.py"
+
 # Convert space-separated values into --args flags for the CLI.
 # E.g. "0 0 10 155" -> "--args 0 --args 0 --args 10 --args 155"
 make_args_flags() {
@@ -63,10 +70,14 @@ run_bench_riscv() {
     rm -f debug.pil
 }
 
-### Keccak 10 iterations
-dir="results/keccak_10"
-input_riscv="10"
-input_wasm="0 0 10 155"
+### Keccak 1000 iterations
+dir="results/keccak_1000"
+# The RISC-V guest takes as input the number of iterations.
+# It returns the first byte of the result as a public.
+input_riscv="1000"
+# The WASM guest takes as input the main arguments [argc, argv], the input number of iterations,
+# and the first byte of the result to be asserted inside the guest program.
+input_wasm="0 0 1000 39"
 
 ROOT_DIR=$(pwd)
 
@@ -76,21 +87,6 @@ pushd "$dir"
 run_bench_riscv "$ROOT_DIR/sample-programs/keccak_with_inputs" "$input_riscv" "riscv"
 run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "womir"
 
-python3 "$SCRIPTS_DIR"/basic_metrics.py --csv */metrics.json > basic_metrics.csv
-python3 "$SCRIPTS_DIR"/womir_vs_riscv.py "womir/metrics.json" "riscv/metrics.json" > womir_vs_riscv.txt
-popd
-
-### Keccak 500 iterations
-dir="results/keccak_500"
-input_riscv="500"
-input_wasm="0 0 500 57"
-
-mkdir -p "$dir"
-pushd "$dir"
-
-run_bench_riscv "$ROOT_DIR/sample-programs/keccak_with_inputs" "$input_riscv" "riscv"
-run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "womir"
-
-python3 "$SCRIPTS_DIR"/basic_metrics.py --csv */metrics.json > basic_metrics.csv
+python3 "$SCRIPTS_DIR"/basic_metrics.py summary-table --csv */metrics.json > basic_metrics.csv
 python3 "$SCRIPTS_DIR"/womir_vs_riscv.py "womir/metrics.json" "riscv/metrics.json" > womir_vs_riscv.txt
 popd
