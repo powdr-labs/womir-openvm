@@ -16,7 +16,11 @@ use metrics_util::{debugging::DebuggingRecorder, layers::Layer};
 use openvm_circuit::arch::VmState;
 use openvm_instructions::exe::VmExe;
 use openvm_sdk::StdIn;
+use openvm_sdk::config::{AppConfig, DEFAULT_APP_LOG_BLOWUP};
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
+use openvm_stark_sdk::config::FriParameters;
+use powdr_autoprecompiles::execution_profile::execution_profile;
+use powdr_openvm::{BabyBearOpenVmApcAdapter, Prog};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
 use std::sync::mpsc::channel;
@@ -33,6 +37,7 @@ use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use crate::builtin_functions::BuiltinFunction;
+use crate::proving::WomirSdk;
 use crate::womir_translation::{Directive, LinkedProgram, OpenVMSettings};
 
 use womir_circuit::WomirConfig;
@@ -158,6 +163,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             let exe = load_wasm_exe(&program, &function);
             let stdin = make_stdin(&args);
+
+            // TODO: This is copied from prove() below
+            let program = Prog::from(&exe.program);
+            let vm_config = WomirConfig::default();
+            let app_fri_params =
+                FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+            let app_config = AppConfig::new(app_fri_params, vm_config);
+            let sdk = WomirSdk::new_without_transpiler(app_config)?;
+
+            let _execution_profile =
+                execution_profile::<BabyBearOpenVmApcAdapter>(&program, || {
+                    sdk.execute_interpreted(exe.clone(), stdin.clone()).unwrap();
+                });
 
             let prove = || -> Result<()> {
                 proving::prove(&exe, stdin, recursion).map_err(|e| eyre::eyre!("{e}"))?;
