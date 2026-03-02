@@ -327,6 +327,12 @@ mod tests {
         test_spec(rebase_spec(&spec, REG_BASE_FITS_3_BYTES));
     }
 
+    fn test_spec_for_all_register_bases_all_backends(spec: TestSpec) {
+        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_1_BYTE));
+        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_2_BYTES));
+        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_3_BYTES));
+    }
+
     // ==================== BaseAlu Tests ====================
 
     #[test]
@@ -358,9 +364,7 @@ mod tests {
         };
 
         // Test all register bases on all backends (CPU + GPU)
-        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_1_BYTE));
-        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_2_BYTES));
-        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_3_BYTES));
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     #[test]
