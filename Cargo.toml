@@ -8,11 +8,11 @@ members = ["integration", "extensions/transpiler", "extensions/womir_circuit", "
 resolver = "2"
 
 [workspace.dependencies]
-powdr-openvm = { git = "https://github.com/powdr-labs/powdr.git", rev = "4d469a0", default-features = false, features = [
+powdr-openvm = { git = "https://github.com/powdr-labs/powdr.git", branch = "cuda-fp-as-support", default-features = false, features = [
   "metrics",
 ] }
-powdr-autoprecompiles = { git = "https://github.com/powdr-labs/powdr.git", rev = "4d469a0", default-features = false }
-powdr-number = { git = "https://github.com/powdr-labs/powdr.git", rev = "4d469a0", default-features = false }
+powdr-autoprecompiles = { git = "https://github.com/powdr-labs/powdr.git", branch = "cuda-fp-as-support", default-features = false }
+powdr-number = { git = "https://github.com/powdr-labs/powdr.git", branch = "cuda-fp-as-support", default-features = false }
 
 openvm-womir-transpiler = { path = "extensions/transpiler" }
 
@@ -32,23 +32,23 @@ openvm-stark-backend = { git = "https://github.com/powdr-labs/stark-backend.git"
 openvm-cuda-backend = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "v1.2.2-powdr", default-features = false }
 openvm-cuda-builder = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "v1.2.2-powdr", default-features = false }
 openvm-cuda-common = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "v1.2.2-powdr", default-features = false }
-openvm-sdk = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.2-powdr-rc.2", default-features = false, features = [
+openvm-sdk = { git = "https://github.com/powdr-labs/openvm.git", branch = "cuda-fp-as-support", default-features = false, features = [
   "parallel",
   "jemalloc",
   "nightly-features",
   "evm-prove",
   "metrics",
 ] }
-openvm-circuit-primitives = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.2-powdr-rc.2", default-features = false }
-openvm-circuit-primitives-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.2-powdr-rc.2", default-features = false }
-openvm-circuit = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.2-powdr-rc.2", default-features = false }
-openvm-circuit-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.2-powdr-rc.2", default-features = false }
-openvm-instructions = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.2-powdr-rc.2", default-features = false }
-openvm-instructions-derive = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.2-powdr-rc.2", default-features = false }
-openvm-rv32im-transpiler = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.2-powdr-rc.2", default-features = false }
-openvm-rv32im-circuit = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.2-powdr-rc.2", default-features = false }
-openvm-transpiler = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.2-powdr-rc.2", default-features = false }
-openvm-native-circuit = { git = "https://github.com/powdr-labs/openvm.git", rev = "v1.4.2-powdr-rc.2", default-features = false }
+openvm-circuit-primitives = { git = "https://github.com/powdr-labs/openvm.git", branch = "cuda-fp-as-support", default-features = false }
+openvm-circuit-primitives-derive = { git = "https://github.com/powdr-labs/openvm.git", branch = "cuda-fp-as-support", default-features = false }
+openvm-circuit = { git = "https://github.com/powdr-labs/openvm.git", branch = "cuda-fp-as-support", default-features = false }
+openvm-circuit-derive = { git = "https://github.com/powdr-labs/openvm.git", branch = "cuda-fp-as-support", default-features = false }
+openvm-instructions = { git = "https://github.com/powdr-labs/openvm.git", branch = "cuda-fp-as-support", default-features = false }
+openvm-instructions-derive = { git = "https://github.com/powdr-labs/openvm.git", branch = "cuda-fp-as-support", default-features = false }
+openvm-rv32im-transpiler = { git = "https://github.com/powdr-labs/openvm.git", branch = "cuda-fp-as-support", default-features = false }
+openvm-rv32im-circuit = { git = "https://github.com/powdr-labs/openvm.git", branch = "cuda-fp-as-support", default-features = false }
+openvm-transpiler = { git = "https://github.com/powdr-labs/openvm.git", branch = "cuda-fp-as-support", default-features = false }
+openvm-native-circuit = { git = "https://github.com/powdr-labs/openvm.git", branch = "cuda-fp-as-support", default-features = false }
 
 thiserror = "1.0.65"
 strum_macros = "0.26.4"
@@ -76,43 +76,13 @@ tracing = "0.1.40"
 womir = { git = "https://github.com/powdr-labs/womir.git", rev = "ef0be00" }
 wasmparser = { version = "0.235", default-features = false }
 
-[patch."https://github.com/powdr-labs/openvm.git"]
-openvm = { path = "../openvm/crates/toolchain/openvm" }
-openvm-build = { path = "../openvm/crates/toolchain/build" }
-openvm-circuit = { path = "../openvm/crates/vm" }
-openvm-circuit-derive = { path = "../openvm/crates/vm/derive" }
-openvm-circuit-primitives = { path = "../openvm/crates/circuits/primitives" }
-openvm-circuit-primitives-derive = { path = "../openvm/crates/circuits/primitives/derive" }
-openvm-continuations = { path = "../openvm/crates/continuations" }
-openvm-custom-insn = { path = "../openvm/crates/toolchain/custom_insn" }
-openvm-instructions = { path = "../openvm/crates/toolchain/instructions" }
-openvm-instructions-derive = { path = "../openvm/crates/toolchain/instructions/derive" }
-openvm-native-circuit = { path = "../openvm/extensions/native/circuit" }
-openvm-native-recursion = { path = "../openvm/extensions/native/recursion" }
-openvm-native-transpiler = { path = "../openvm/extensions/native/transpiler" }
-openvm-platform = { path = "../openvm/crates/toolchain/platform" }
-openvm-rv32im-circuit = { path = "../openvm/extensions/rv32im/circuit" }
-openvm-rv32im-guest = { path = "../openvm/extensions/rv32im/guest" }
-openvm-rv32im-transpiler = { path = "../openvm/extensions/rv32im/transpiler" }
-openvm-sdk = { path = "../openvm/crates/sdk" }
-openvm-transpiler = { path = "../openvm/crates/toolchain/transpiler" }
-# Extension circuits and transpilers
-openvm-algebra-circuit = { path = "../openvm/extensions/algebra/circuit" }
-openvm-algebra-transpiler = { path = "../openvm/extensions/algebra/transpiler" }
-openvm-bigint-circuit = { path = "../openvm/extensions/bigint/circuit" }
-openvm-bigint-transpiler = { path = "../openvm/extensions/bigint/transpiler" }
-openvm-ecc-circuit = { path = "../openvm/extensions/ecc/circuit" }
-openvm-ecc-transpiler = { path = "../openvm/extensions/ecc/transpiler" }
-openvm-keccak256-circuit = { path = "../openvm/extensions/keccak256/circuit" }
-openvm-keccak256-transpiler = { path = "../openvm/extensions/keccak256/transpiler" }
-openvm-pairing-circuit = { path = "../openvm/extensions/pairing/circuit" }
-openvm-pairing-transpiler = { path = "../openvm/extensions/pairing/transpiler" }
-openvm-sha256-circuit = { path = "../openvm/extensions/sha256/circuit" }
-openvm-sha256-transpiler = { path = "../openvm/extensions/sha256/transpiler" }
+# Uncomment for local development with path patches:
+# [patch."https://github.com/powdr-labs/openvm.git"]
+# openvm-circuit = { path = "../openvm/crates/vm" }
+# ... add other crates as needed
 #
 # [patch."https://github.com/powdr-labs/stark-backend.git"]
 # openvm-stark-sdk = { path = "../stark-backend/crates/stark-sdk/", default-features = false }
-# openvm-stark-backend = { path = "../stark-backend/crates/stark-backend/", default-features = false }
 #
 # [patch."https://github.com/powdr-labs/womir.git"]
 # womir = { path = "../womir" }
