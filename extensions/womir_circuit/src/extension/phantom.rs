@@ -198,10 +198,18 @@ impl<F: PrimeField32> PhantomSubExecutor<F> for ClockTimeGetSubEx {
     }
 }
 
-static WASI_CALL_SEQ: AtomicU32 = AtomicU32::new(0);
-
 /// TraceSyscall: prints a WASI syscall name with sequence number to stderr.
-pub struct TraceSyscallSubEx;
+pub struct TraceSyscallSubEx {
+    counter: AtomicU32,
+}
+
+impl TraceSyscallSubEx {
+    pub fn new() -> Self {
+        Self {
+            counter: AtomicU32::new(0),
+        }
+    }
+}
 
 impl<F: Field> PhantomSubExecutor<F> for TraceSyscallSubEx {
     fn phantom_execute(
@@ -214,7 +222,7 @@ impl<F: Field> PhantomSubExecutor<F> for TraceSyscallSubEx {
         _: u32,
         c_upper: u16,
     ) -> eyre::Result<()> {
-        let seq = WASI_CALL_SEQ.fetch_add(1, Ordering::Relaxed);
+        let seq = self.counter.fetch_add(1, Ordering::Relaxed);
         let name = match c_upper {
             0 => "args_sizes_get",
             1 => "args_get",

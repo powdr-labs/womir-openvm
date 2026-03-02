@@ -513,9 +513,10 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
         inputs: &[WasmOpInput],
         outputs: Vec<Range<u32>>,
     ) -> Vec<Directive<F>> {
-        // Helper: set a single output register to a 32-bit constant.
+        // Helper: set the first output register to a 32-bit constant.
         let set_output_const =
             |directives: &mut Vec<Directive<F>>, outputs: &[Range<u32>], value: u32| {
+                assert_eq!(outputs.len(), 1, "expected exactly one output register");
                 if let Some(out) = outputs.first() {
                     directives.push(Directive::Instruction(ib::const_32_imm(
                         out.start as usize,
@@ -672,6 +673,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                             inputs.last().unwrap().as_register().unwrap().start as usize;
 
                         // Load iov[0].buf_ptr and iov[0].buf_len from guest memory.
+                        // buf_len may be 0, which is harmless (debug_print prints nothing).
                         let buf_ptr =
                             c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                         let buf_len =
@@ -759,7 +761,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                         let time_ptr = inputs.last().unwrap().as_register().unwrap().start as usize;
 
                         // Phantom: fill hint stream with 8 bytes of timestamp
-                        directives.push(Directive::Instruction(ib::clock_time_get_phantom()));
+                        directives.push(Directive::Instruction(ib::clock_time_get()));
 
                         // Compute time_addr = time_ptr + mem_start
                         let time_addr =
@@ -833,7 +835,8 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                         set_output_const(&mut directives, &outputs, 0);
                     }
                     // proc_exit(exit_code) -> !
-                    // Terminate the program.
+                    // Terminate the program. The exit code is ignored — the VM
+                    // halt instruction does not carry a status.
                     "proc_exit" => {
                         directives.push(Directive::Instruction(ib::halt()));
                     }

@@ -1010,7 +1010,7 @@ pub fn trace_syscall<F: PrimeField32>(syscall_id: u16) -> Instruction<F> {
 }
 
 /// ClockTimeGet phantom: Fills the hint stream with 8 bytes of incrementing timestamp.
-pub fn clock_time_get_phantom<F: PrimeField32>() -> Instruction<F> {
+pub fn clock_time_get<F: PrimeField32>() -> Instruction<F> {
     Instruction::from_isize(
         SystemOpcode::PHANTOM.global_opcode(),
         0,
