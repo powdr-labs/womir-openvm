@@ -1057,14 +1057,39 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
     })
 }
 
+/// Sets `memarg.align` to 0 for all memory operations, forcing byte-by-byte access.
+fn clear_memarg_align(op: &mut Op) {
+    macro_rules! clear {
+        ($($variant:ident),+ $(,)?) => {
+            match op {
+                $(Op::$variant { memarg } => memarg.align = 0,)+
+                _ => {}
+            }
+        };
+    }
+    clear!(
+        I32Load, I64Load, F32Load, F64Load,
+        I32Load8S, I32Load8U, I32Load16S, I32Load16U,
+        I64Load8S, I64Load8U, I64Load16S, I64Load16U,
+        I64Load32S, I64Load32U,
+        I32Store, I64Store, F32Store, F64Store,
+        I32Store8, I32Store16,
+        I64Store8, I64Store16, I64Store32,
+    );
+}
+
 fn translate_complex_ins<'a, F: PrimeField32>(
     c: &mut Ctx<'a, '_>,
     module: &Module<'a>,
-    op: Op,
+    mut op: Op,
     inputs: &[WasmOpInput],
     output: Option<Range<u32>>,
     unaligned: bool,
 ) -> Tree<Directive<F>> {
+    if unaligned {
+        clear_memarg_align(&mut op);
+    }
+
     // Handle the remaining operations, whose inputs are all registers
     let inputs = inputs
         .iter()
@@ -1211,7 +1236,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let imm = mem_offset(memarg, module);
             let base_addr = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
-            match if unaligned { 0 } else { memarg.align } {
+            match memarg.align {
                 0 => {
                     // read four bytes
                     let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
@@ -1253,7 +1278,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let output = output.unwrap().start as usize;
 
-            match if unaligned { 0 } else { memarg.align } {
+            match memarg.align {
                 0 => {
                     // read four bytes
                     let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
@@ -1298,7 +1323,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
 
-            match if unaligned { 0 } else { memarg.align } {
+            match memarg.align {
                 0 => {
                     // read byte by byte
                     let acc_lo =
@@ -1399,7 +1424,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let output = (output.unwrap().start) as usize;
 
-            match if unaligned { 0 } else { memarg.align } {
+            match memarg.align {
                 0 => {
                     let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
@@ -1465,7 +1490,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
 
             let mut directives = vec![];
 
-            match if unaligned { 0 } else { memarg.align } {
+            match memarg.align {
                 0 => {
                     let acc = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
@@ -1517,7 +1542,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let value = inputs[1].start as usize;
 
-            match if unaligned { 0 } else { memarg.align } {
+            match memarg.align {
                 0 => {
                     // write byte by byte
                     let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
@@ -1562,7 +1587,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let base_addr = inputs[0].start as usize;
             let value = inputs[1].start as usize;
 
-            match if unaligned { 0 } else { memarg.align } {
+            match memarg.align {
                 0 => {
                     let b1 = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
                     vec![
@@ -1583,7 +1608,7 @@ fn translate_complex_ins<'a, F: PrimeField32>(
             let value_lo = inputs[1].start as usize;
             let value_hi = (inputs[1].start + 1) as usize;
 
-            match if unaligned { 0 } else { memarg.align } {
+            match memarg.align {
                 0 => {
                     // write byte by byte
                     let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
