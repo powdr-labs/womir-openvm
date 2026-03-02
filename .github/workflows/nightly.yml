@@ -59,52 +59,7 @@ jobs:
 
       - name: Post results to job summary
         if: always()
-        run: |
-          for bench_dir in results/keccak_*; do
-            bench_name=$(basename "$bench_dir")
-            echo "## ${bench_name}" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-
-            if [ -f "${bench_dir}/basic_metrics.csv" ]; then
-              echo "### Basic Metrics" >> "$GITHUB_STEP_SUMMARY"
-              echo '```' >> "$GITHUB_STEP_SUMMARY"
-              # Print CSV as a readable table: header + data
-              python3 -c "
-          import csv, sys
-          with open('${bench_dir}/basic_metrics.csv') as f:
-              reader = csv.DictReader(f)
-              for row in reader:
-                  for k, v in row.items():
-                      print(f'{k}: {v}')
-                  print()
-          " >> "$GITHUB_STEP_SUMMARY"
-              echo '```' >> "$GITHUB_STEP_SUMMARY"
-              echo "" >> "$GITHUB_STEP_SUMMARY"
-            fi
-
-            if [ -f "${bench_dir}/womir_vs_riscv.txt" ]; then
-              echo "### WOMIR vs RISC-V Comparison" >> "$GITHUB_STEP_SUMMARY"
-              echo '```' >> "$GITHUB_STEP_SUMMARY"
-              cat "${bench_dir}/womir_vs_riscv.txt" >> "$GITHUB_STEP_SUMMARY"
-              echo '```' >> "$GITHUB_STEP_SUMMARY"
-              echo "" >> "$GITHUB_STEP_SUMMARY"
-            fi
-
-            # Include trace cell text breakdown
-            for txt in "${bench_dir}"/*/trace_cells.txt; do
-              if [ -f "$txt" ]; then
-                label=$(basename "$(dirname "$txt")")
-                echo "### Trace Cells - ${label}" >> "$GITHUB_STEP_SUMMARY"
-                echo '```' >> "$GITHUB_STEP_SUMMARY"
-                cat "$txt" >> "$GITHUB_STEP_SUMMARY"
-                echo '```' >> "$GITHUB_STEP_SUMMARY"
-                echo "" >> "$GITHUB_STEP_SUMMARY"
-              fi
-            done
-            echo "_Trace cell plots (PNG) are available in the uploaded artifacts._" >> "$GITHUB_STEP_SUMMARY"
-
-            echo "---" >> "$GITHUB_STEP_SUMMARY"
-          done
+        run: python3 scripts/render_summary.py results/keccak_* >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark results
         if: always()
