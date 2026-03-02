@@ -6,7 +6,10 @@ edition.workspace = true
 [dependencies]
 powdr-openvm = { workspace = true }
 powdr-autoprecompiles = { workspace = true }
+powdr-number = { workspace = true }
+powdr-openvm-bus-interaction-handler = { workspace = true }
 serde.workspace = true
+strum = { workspace = true }
 eyre.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

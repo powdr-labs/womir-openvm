@@ -1,3 +1,4 @@
+mod autoprecompiles;
 mod builtin_functions;
 mod const_collapse;
 mod instruction_builder;
