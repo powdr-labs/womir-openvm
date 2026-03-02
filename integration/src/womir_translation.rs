@@ -333,7 +333,7 @@ impl<F> OpenVMSettings<F> {
         Self::default()
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn with_unaligned_memory(mut self) -> Self {
         self.support_unaligned_memory = true;
         self
@@ -629,9 +629,7 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                     .or_else(|| translate_less_than_ops(&op, inputs, output))
                     .or_else(|| translate_greater_than_ops(&op, inputs, output))
                     .map(|instruction| Directive::Instruction(instruction).into())
-                    .or_else(|| {
-                        translate_complex_ins_with_const(c, module, &op, inputs, output, unaligned)
-                    })
+                    .or_else(|| translate_complex_ins_with_const(c, module, &op, inputs, output))
             })
             .unwrap_or_else(|| translate_complex_ins(c, module, op, inputs, output, unaligned))
     }
@@ -888,7 +886,6 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
     op: &Op,
     inputs: &[WasmOpInput],
     output: &Range<u32>,
-    _unaligned: bool,
 ) -> Option<Tree<Directive<F>>> {
     use openvm_instructions::LocalOpcode;
 
