@@ -1,0 +1,69 @@
+name: Nightly Benchmark
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # 2 AM UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Keccak Benchmark
+    runs-on: warp-ubuntu-2404-x64-16x
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y wabt
+
+      - name: Install Rust toolchain 1.91.0 (stable)
+        run: |
+          rustup install 1.91.0
+          rustup +1.91.0 component add rust-src
+
+      - name: Install WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build project
+        run: cargo build --release
+
+      - name: Build keccak WASM target
+        run: |
+          cd sample-programs/keccak_with_inputs
+          cargo build --release --target wasm32-unknown-unknown
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Run benchmarks
+        run: bash scripts/run_guest_benches.sh
+
+      - name: Post results to job summary
+        if: always()
+        run: python3 scripts/render_summary.py results/keccak_* >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: results/

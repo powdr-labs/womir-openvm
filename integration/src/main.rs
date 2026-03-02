@@ -225,7 +225,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     stdin.write(&val);
                 }
 
-                powdr_openvm::prove(&compiled, true, false, stdin, None)
+                powdr_openvm::prove(&compiled, false, true, stdin, None)
                     .map_err(|e| eyre::eyre!("{e}"))?;
                 println!("RISC-V proof verified successfully.");
                 Ok(())
@@ -422,6 +422,7 @@ pub fn setup_tracing_with_log_level(level: Level) {
         .with(env_filter)
         .with(ForestLayer::default())
         .with(MetricsLayer::new())
+        .with(openvm_stark_sdk::metrics_tracing::TimingMetricsLayer::new())
         .try_init();
 }
 
