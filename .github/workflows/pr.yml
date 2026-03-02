@@ -81,3 +81,14 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+  gpu-tests:
+    name: GPU Tests
+    runs-on: [self-hosted, gpu]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run GPU tests
+        run: cargo test --release --features cuda -- --test-threads=1
