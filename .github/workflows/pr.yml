@@ -84,7 +84,7 @@ jobs:
 
   gpu-tests:
     name: GPU Tests
-    runs-on: [self-hosted, gpu]
+    runs-on: [self-hosted, gpu-womir]
 
     steps:
       - name: Checkout code
