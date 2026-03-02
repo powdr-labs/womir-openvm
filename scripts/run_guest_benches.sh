@@ -16,8 +16,7 @@ SCRIPTS_DIR=$(dirname "$SCRIPT_PATH")
 POWDR_SCRIPTS_URL="https://raw.githubusercontent.com/powdr-labs/powdr/main/openvm/scripts"
 curl -sL "$POWDR_SCRIPTS_URL/basic_metrics.py" -o "$SCRIPTS_DIR/basic_metrics.py"
 curl -sL "$POWDR_SCRIPTS_URL/metrics_utils.py" -o "$SCRIPTS_DIR/metrics_utils.py"
-# TODO: switch to main once https://github.com/powdr-labs/powdr/pull/2776 is merged
-curl -sL "https://raw.githubusercontent.com/powdr-labs/powdr/plot-script/openvm/scripts/plot_trace_cells.py" -o "$SCRIPTS_DIR/plot_trace_cells.py"
+curl -sL "$POWDR_SCRIPTS_URL/plot_trace_cells.py" -o "$SCRIPTS_DIR/plot_trace_cells.py"
 
 # Convert space-separated values into --args flags for the CLI.
 # E.g. "0 0 10 155" -> "--args 0 --args 0 --args 10 --args 155"
