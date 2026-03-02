@@ -21,7 +21,9 @@ use openvm_sdk::StdIn;
 use womir_circuit::{WomirConfig, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory};
 
 use super::helpers;
-use crate::{instruction_builder::*, proving::mock_prove};
+use crate::instruction_builder::*;
+#[allow(unused_imports)]
+use crate::proving::{ALL_BACKENDS, Backend, CPU_ONLY};
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -209,13 +211,28 @@ pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>>
 /// Mock proving with constraint verification using debug_proving_ctx.
 /// This generates traces and verifies all constraints are satisfied without
 /// generating actual cryptographic proofs.
-pub fn test_prove(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
+/// Runs on the specified backends (CPU, GPU, or both).
+pub fn test_prove(spec: &TestSpec, backends: &[Backend]) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-    mock_prove(&exe, build_initial_state(spec, &exe, &vm_config))
+    let init_state = build_initial_state(spec, &exe, &vm_config);
+
+    for &backend in backends {
+        backend
+            .mock_prove(&exe, init_state.clone())
+            .map_err(|e| format!("{} mock_prove: {e}", backend.name()))?;
+    }
+    Ok(())
 }
 
-fn test_spec(mut spec: TestSpec) {
+/// Run a test spec through all stages (execution, metered, preflight, prove).
+/// Uses CPU_ONLY for proving by default.
+fn test_spec(spec: TestSpec) {
+    test_spec_with_backends(spec, CPU_ONLY)
+}
+
+/// Run a test spec through all stages with specified proving backends.
+fn test_spec_with_backends(mut spec: TestSpec, backends: &[Backend]) {
     // Append halt instruction:
     spec.program.push(halt());
 
@@ -233,12 +250,18 @@ fn test_spec(mut spec: TestSpec) {
         println!("test_preflight: {e}");
         is_error = true;
     }
-    if let Err(e) = test_prove(&spec) {
+    if let Err(e) = test_prove(&spec, backends) {
         println!("test_prove: {e}");
         is_error = true;
     }
 
     assert!(!is_error)
+}
+
+/// Run a test spec on all available backends (CPU and GPU if available).
+#[allow(dead_code)]
+fn test_spec_all_backends(spec: TestSpec) {
+    test_spec_with_backends(spec, ALL_BACKENDS)
 }
 
 #[cfg(test)]

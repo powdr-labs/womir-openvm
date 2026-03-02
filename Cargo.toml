@@ -76,15 +76,39 @@ tracing = "0.1.40"
 womir = { git = "https://github.com/powdr-labs/womir.git", rev = "ef0be00" }
 wasmparser = { version = "0.235", default-features = false }
 
-# [patch."https://github.com/powdr-labs/openvm.git"]
-# openvm-sdk = { path = "../openvm/crates/sdk" }
-# openvm-circuit-primitives = { path = "../openvm/crates/circuits/primitives" }
-# openvm-circuit-primitives-derive = { path = "../openvm/crates/circuits/primitives/derive" }
-# openvm-circuit = { path = "../openvm/crates/vm" }
-# openvm-circuit-derive = { path = "../openvm/crates/vm/derive" }
-# openvm-instructions = { path = "../openvm/crates/toolchain/instructions" }
-# openvm-instructions-derive = { path = "../openvm/crates/toolchain/instructions/derive" }
-# openvm-rv32im-transpiler = { path = "../openvm/extensions/rv32im/transpiler" }
+[patch."https://github.com/powdr-labs/openvm.git"]
+openvm = { path = "../openvm/crates/toolchain/openvm" }
+openvm-build = { path = "../openvm/crates/toolchain/build" }
+openvm-circuit = { path = "../openvm/crates/vm" }
+openvm-circuit-derive = { path = "../openvm/crates/vm/derive" }
+openvm-circuit-primitives = { path = "../openvm/crates/circuits/primitives" }
+openvm-circuit-primitives-derive = { path = "../openvm/crates/circuits/primitives/derive" }
+openvm-continuations = { path = "../openvm/crates/continuations" }
+openvm-custom-insn = { path = "../openvm/crates/toolchain/custom_insn" }
+openvm-instructions = { path = "../openvm/crates/toolchain/instructions" }
+openvm-instructions-derive = { path = "../openvm/crates/toolchain/instructions/derive" }
+openvm-native-circuit = { path = "../openvm/extensions/native/circuit" }
+openvm-native-recursion = { path = "../openvm/extensions/native/recursion" }
+openvm-native-transpiler = { path = "../openvm/extensions/native/transpiler" }
+openvm-platform = { path = "../openvm/crates/toolchain/platform" }
+openvm-rv32im-circuit = { path = "../openvm/extensions/rv32im/circuit" }
+openvm-rv32im-guest = { path = "../openvm/extensions/rv32im/guest" }
+openvm-rv32im-transpiler = { path = "../openvm/extensions/rv32im/transpiler" }
+openvm-sdk = { path = "../openvm/crates/sdk" }
+openvm-transpiler = { path = "../openvm/crates/toolchain/transpiler" }
+# Extension circuits and transpilers
+openvm-algebra-circuit = { path = "../openvm/extensions/algebra/circuit" }
+openvm-algebra-transpiler = { path = "../openvm/extensions/algebra/transpiler" }
+openvm-bigint-circuit = { path = "../openvm/extensions/bigint/circuit" }
+openvm-bigint-transpiler = { path = "../openvm/extensions/bigint/transpiler" }
+openvm-ecc-circuit = { path = "../openvm/extensions/ecc/circuit" }
+openvm-ecc-transpiler = { path = "../openvm/extensions/ecc/transpiler" }
+openvm-keccak256-circuit = { path = "../openvm/extensions/keccak256/circuit" }
+openvm-keccak256-transpiler = { path = "../openvm/extensions/keccak256/transpiler" }
+openvm-pairing-circuit = { path = "../openvm/extensions/pairing/circuit" }
+openvm-pairing-transpiler = { path = "../openvm/extensions/pairing/transpiler" }
+openvm-sha256-circuit = { path = "../openvm/extensions/sha256/circuit" }
+openvm-sha256-transpiler = { path = "../openvm/extensions/sha256/transpiler" }
 #
 # [patch."https://github.com/powdr-labs/stark-backend.git"]
 # openvm-stark-sdk = { path = "../stark-backend/crates/stark-sdk/", default-features = false }

@@ -30,6 +30,54 @@ type SC = BabyBearPoseidon2Config;
 
 static VM_PROVING_KEY: OnceLock<MultiStarkProvingKey<SC>> = OnceLock::new();
 
+/// Proving backend selection.
+/// Used by test infrastructure to run tests on different backends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum Backend {
+    Cpu,
+    #[cfg(feature = "cuda")]
+    Gpu,
+}
+
+#[allow(dead_code)]
+impl Backend {
+    /// Run mock proof on this backend.
+    pub fn mock_prove(
+        self,
+        exe: &VmExe<F>,
+        init_state: VmState<F>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        match self {
+            Backend::Cpu => mock_prove(exe, init_state),
+            #[cfg(feature = "cuda")]
+            Backend::Gpu => mock_prove_gpu(exe, init_state),
+        }
+    }
+
+    /// Name for display/logging.
+    pub fn name(self) -> &'static str {
+        match self {
+            Backend::Cpu => "CPU",
+            #[cfg(feature = "cuda")]
+            Backend::Gpu => "GPU",
+        }
+    }
+}
+
+/// All available backends for the current build configuration.
+/// Currently only CPU works for WOMIR instructions (GPU tracegen not implemented).
+#[allow(dead_code)]
+pub const ALL_BACKENDS: &[Backend] = &[
+    Backend::Cpu,
+    #[cfg(feature = "cuda")]
+    Backend::Gpu,
+];
+
+/// CPU-only backend (useful for tests that don't support GPU yet).
+#[allow(dead_code)]
+pub const CPU_ONLY: &[Backend] = &[Backend::Cpu];
+
 /// Create a CPU engine with default FRI parameters.
 pub fn cpu_engine() -> BabyBearPoseidon2Engine {
     let fri_params =
