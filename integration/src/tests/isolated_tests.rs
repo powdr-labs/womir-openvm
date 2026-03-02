@@ -357,7 +357,10 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        // Test all register bases on all backends (CPU + GPU)
+        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_1_BYTE));
+        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_2_BYTES));
+        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_3_BYTES));
     }
 
     #[test]
