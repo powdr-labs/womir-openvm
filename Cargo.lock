@@ -505,6 +505,7 @@ dependencies = [
  "openvm-stark-sdk",
  "openvm-transpiler",
  "openvm-womir-transpiler",
+ "powdr-autoprecompiles",
  "powdr-openvm-common",
  "serde",
  "strum 0.26.3",
