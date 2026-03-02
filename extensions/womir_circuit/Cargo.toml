@@ -32,6 +32,7 @@ openvm-stark-sdk = { workspace = true }
 openvm-circuit = { workspace = true, features = ["test-utils"] }
 test-case.workspace = true
 itertools.workspace = true
+powdr-openvm-common = { workspace = true }
 powdr-openvm = { workspace = true }
 powdr-autoprecompiles = { workspace = true }
 powdr-number = { workspace = true }

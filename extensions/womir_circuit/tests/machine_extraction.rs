@@ -20,8 +20,9 @@ use openvm_stark_sdk::p3_baby_bear::BabyBear;
 use powdr_autoprecompiles::bus_map::{BusMap, BusType};
 use powdr_autoprecompiles::expression::try_convert;
 use powdr_autoprecompiles::symbolic_machine::SymbolicMachine;
-use powdr_openvm::{
-    bus_map::OpenVmBusType,
+// TODO: this is the riscv bus map!
+use powdr_openvm::bus_map::OpenVmBusType;
+use powdr_openvm_common::{
     extraction_utils::{get_columns, get_constraints},
     utils::{
         UnsupportedOpenVmReferenceError, openvm_bus_interaction_to_powdr, symbolic_to_algebraic,

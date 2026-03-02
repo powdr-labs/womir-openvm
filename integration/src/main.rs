@@ -160,7 +160,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let stdin = make_stdin(&args);
 
             let prove = || -> Result<()> {
-                proving::prove(&exe, stdin, recursion).map_err(|e| eyre::eyre!("{e}"))?;
+                proving::prove(&exe, stdin, recursion, 0).map_err(|e| eyre::eyre!("{e}"))?;
                 println!("Proof verified successfully.");
                 Ok(())
             };

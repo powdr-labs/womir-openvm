@@ -50,6 +50,7 @@ pub fn prove(
     exe: &VmExe<F>,
     stdin: StdIn,
     recursion: bool,
+    _apc_count: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let vm_config = WomirConfig::default();
     let app_fri_params =
