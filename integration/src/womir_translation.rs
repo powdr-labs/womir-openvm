@@ -1057,25 +1057,34 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
     })
 }
 
-/// Sets `memarg.align` to 0 for all memory operations, forcing byte-by-byte access.
-fn clear_memarg_align(op: &mut Op) {
-    macro_rules! clear {
-        ($($variant:ident),+ $(,)?) => {
-            match op {
-                $(Op::$variant { memarg } => memarg.align = 0,)+
-                _ => {}
-            }
-        };
+/// Returns a mutable reference to the [`MemArg`] of a WASM memory operator, if any.
+fn get_memarg_mut<'a>(op: &'a mut Op<'_>) -> Option<&'a mut MemArg> {
+    match op {
+        Op::I32Load { memarg }
+        | Op::I64Load { memarg }
+        | Op::F32Load { memarg }
+        | Op::F64Load { memarg }
+        | Op::I32Load8S { memarg }
+        | Op::I32Load8U { memarg }
+        | Op::I32Load16S { memarg }
+        | Op::I32Load16U { memarg }
+        | Op::I64Load8S { memarg }
+        | Op::I64Load8U { memarg }
+        | Op::I64Load16S { memarg }
+        | Op::I64Load16U { memarg }
+        | Op::I64Load32S { memarg }
+        | Op::I64Load32U { memarg }
+        | Op::I32Store { memarg }
+        | Op::I64Store { memarg }
+        | Op::F32Store { memarg }
+        | Op::F64Store { memarg }
+        | Op::I32Store8 { memarg }
+        | Op::I32Store16 { memarg }
+        | Op::I64Store8 { memarg }
+        | Op::I64Store16 { memarg }
+        | Op::I64Store32 { memarg } => Some(memarg),
+        _ => None,
     }
-    clear!(
-        I32Load, I64Load, F32Load, F64Load,
-        I32Load8S, I32Load8U, I32Load16S, I32Load16U,
-        I64Load8S, I64Load8U, I64Load16S, I64Load16U,
-        I64Load32S, I64Load32U,
-        I32Store, I64Store, F32Store, F64Store,
-        I32Store8, I32Store16,
-        I64Store8, I64Store16, I64Store32,
-    );
 }
 
 fn translate_complex_ins<'a, F: PrimeField32>(
@@ -1086,8 +1095,8 @@ fn translate_complex_ins<'a, F: PrimeField32>(
     output: Option<Range<u32>>,
     unaligned: bool,
 ) -> Tree<Directive<F>> {
-    if unaligned {
-        clear_memarg_align(&mut op);
+    if unaligned && let Some(memarg) = get_memarg_mut(&mut op) {
+        memarg.align = 0;
     }
 
     // Handle the remaining operations, whose inputs are all registers
