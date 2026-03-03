@@ -2,13 +2,17 @@
 
 use std::sync::OnceLock;
 
-use openvm_circuit::arch::{VirtualMachine, VmCircuitConfig, VmState, debug_proving_ctx};
+use openvm_circuit::arch::{
+    Executor, MeteredExecutor, PreflightExecutor, VirtualMachine, VmBuilder, VmCircuitConfig,
+    VmExecutionConfig, VmState, debug_proving_ctx,
+};
 use openvm_instructions::exe::VmExe;
 use openvm_native_circuit::NativeCpuBuilder;
 use openvm_sdk::GenericSdk;
 use openvm_sdk::StdIn;
 use openvm_sdk::config::{AppConfig, DEFAULT_APP_LOG_BLOWUP};
 use openvm_sdk::prover::verify_app_proof;
+use openvm_stark_backend::{config::Val, p3_field::PrimeField32};
 use openvm_stark_sdk::{
     config::{
         FriParameters,
@@ -26,16 +30,81 @@ type SC = BabyBearPoseidon2Config;
 
 static VM_PROVING_KEY: OnceLock<MultiStarkProvingKey<SC>> = OnceLock::new();
 
-pub fn default_engine() -> BabyBearPoseidon2Engine {
+/// Create a CPU engine with default FRI parameters.
+pub fn cpu_engine() -> BabyBearPoseidon2Engine {
     let fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
     BabyBearPoseidon2Engine::new(fri_params)
 }
 
+// --- Test-only backend infrastructure ---
+// These are only used by integration tests (binary crate, so `pub` alone doesn't suppress warnings).
+
+/// Proving backend selection.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Backend {
+    Cpu,
+    #[cfg(feature = "cuda")]
+    Gpu,
+}
+
+#[cfg(test)]
+impl Backend {
+    /// Run mock proof on this backend, returning the final state.
+    pub fn mock_prove(
+        self,
+        exe: &VmExe<F>,
+        init_state: VmState<F>,
+    ) -> Result<VmState<F>, Box<dyn std::error::Error>> {
+        match self {
+            Backend::Cpu => mock_prove(exe, init_state),
+            #[cfg(feature = "cuda")]
+            Backend::Gpu => mock_prove_gpu(exe, init_state),
+        }
+    }
+
+    /// Name for display/logging.
+    pub fn name(self) -> &'static str {
+        match self {
+            Backend::Cpu => "CPU",
+            #[cfg(feature = "cuda")]
+            Backend::Gpu => "GPU",
+        }
+    }
+}
+
+/// All available backends for the current build configuration.
+/// GPU uses WomirPreparingGpuConfig which supports: BaseAlu32 + system instructions.
+#[cfg(test)]
+pub const ALL_BACKENDS: &[Backend] = &[
+    Backend::Cpu,
+    #[cfg(feature = "cuda")]
+    Backend::Gpu,
+];
+
+/// CPU-only backend (useful for tests that don't support GPU yet).
+#[cfg(test)]
+pub const CPU_ONLY: &[Backend] = &[Backend::Cpu];
+
+/// Alias for backwards compatibility.
+#[cfg(test)]
+pub fn default_engine() -> BabyBearPoseidon2Engine {
+    cpu_engine()
+}
+
+/// Create a GPU engine with default FRI parameters.
+#[cfg(all(test, feature = "cuda"))]
+pub fn gpu_engine() -> openvm_cuda_backend::engine::GpuBabyBearPoseidon2Engine {
+    let fri_params =
+        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+    openvm_cuda_backend::engine::GpuBabyBearPoseidon2Engine::new(fri_params)
+}
+
 pub fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
     VM_PROVING_KEY.get_or_init(|| {
         let config = WomirConfig::default();
-        let engine = default_engine();
+        let engine = cpu_engine();
         let circuit = config
             .create_airs()
             .expect("failed to create AIR inventory for keygen");
@@ -77,17 +146,26 @@ pub fn prove(
     Ok(())
 }
 
-/// Mock proof with constraint verification (all segments).
-pub fn mock_prove(
+/// Mock proof with constraint verification (all segments) using a specific engine and builder.
+/// Returns the final state after all segments have been processed.
+pub fn mock_prove_with<E, VB>(
+    engine: E,
+    builder: VB,
     exe: &VmExe<F>,
     init_state: VmState<F>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let engine = default_engine();
+) -> Result<VmState<F>, Box<dyn std::error::Error>>
+where
+    E: StarkEngine<SC = SC>,
+    VB: VmBuilder<E, VmConfig = WomirConfig> + Clone,
+    Val<E::SC>: PrimeField32,
+    <WomirConfig as VmExecutionConfig<Val<E::SC>>>::Executor: Executor<Val<E::SC>>
+        + MeteredExecutor<Val<E::SC>>
+        + PreflightExecutor<Val<E::SC>, VB::RecordArena>,
+{
     let pk = vm_proving_key();
     let d_pk = engine.device().transport_pk_to_device(pk);
     let vm_config = WomirConfig::default();
-    let mut vm =
-        VirtualMachine::<_, WomirCpuBuilder>::new(engine, WomirCpuBuilder, vm_config, d_pk)?;
+    let mut vm = VirtualMachine::<_, VB>::new(engine, builder, vm_config, d_pk)?;
 
     // Run metered execution to discover segments.
     let metered_ctx = vm.build_metered_ctx(exe);
@@ -118,5 +196,74 @@ pub fn mock_prove(
         debug_proving_ctx(&vm, pk, &ctx);
     }
 
-    Ok(())
+    Ok(state)
+}
+
+/// Mock proof with constraint verification (all segments) using CPU engine.
+/// Returns the final state after all segments have been processed.
+pub fn mock_prove(
+    exe: &VmExe<F>,
+    init_state: VmState<F>,
+) -> Result<VmState<F>, Box<dyn std::error::Error>> {
+    mock_prove_with(cpu_engine(), WomirCpuBuilder, exe, init_state)
+}
+
+/// Mock proof with constraint verification (all segments) using GPU engine.
+/// Uses WomirPreparingGpuConfig which includes only GPU-ready chips.
+/// Currently supports: BaseAlu32 + system instructions.
+/// Returns the final state after all segments have been processed.
+///
+/// TODO: Once all WOMIR GPU chips are implemented, switch to WomirConfig+WomirGpuBuilder.
+#[cfg(all(test, feature = "cuda"))]
+pub fn mock_prove_gpu(
+    exe: &VmExe<F>,
+    init_state: VmState<F>,
+) -> Result<VmState<F>, Box<dyn std::error::Error>> {
+    use womir_circuit::{WomirPreparingGpuBuilder, WomirPreparingGpuConfig};
+
+    let engine = gpu_engine();
+    let vm_config = WomirPreparingGpuConfig::default();
+    let circuit = vm_config
+        .create_airs()
+        .expect("failed to create AIR inventory for keygen");
+    let pk = circuit.keygen(&engine);
+    let d_pk = engine.device().transport_pk_to_device(&pk);
+
+    let mut vm = VirtualMachine::<_, WomirPreparingGpuBuilder>::new(
+        engine,
+        WomirPreparingGpuBuilder,
+        vm_config,
+        d_pk,
+    )?;
+
+    // Run metered execution to discover segments.
+    let metered_ctx = vm.build_metered_ctx(exe);
+    let metered_instance = vm.metered_interpreter(exe)?;
+    let (segments, _) =
+        metered_instance.execute_metered_from_state(init_state.clone(), metered_ctx)?;
+
+    let cached_program_trace = vm.commit_program_on_device(&exe.program);
+    vm.load_program(cached_program_trace);
+
+    // Preflight + constraint verification per segment.
+    let mut preflight_interpreter = vm.preflight_interpreter(exe)?;
+    let mut state = init_state;
+    for segment in &segments {
+        vm.transport_init_memory_to_device(&state.memory);
+        let preflight_output = vm.execute_preflight(
+            &mut preflight_interpreter,
+            state,
+            Some(segment.num_insns),
+            &segment.trace_heights,
+        )?;
+        state = preflight_output.to_state;
+
+        let ctx = vm.generate_proving_ctx(
+            preflight_output.system_records,
+            preflight_output.record_arenas,
+        )?;
+        debug_proving_ctx(&vm, &pk, &ctx);
+    }
+
+    Ok(state)
 }

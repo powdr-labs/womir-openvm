@@ -81,3 +81,29 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+  gpu-tests:
+    name: GPU Tests
+    runs-on: [self-hosted, gpu-womir]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check GPU memory
+        run: |
+          FREE_MB=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits)
+          echo "Free GPU memory: ${FREE_MB} MiB"
+          if [ "$FREE_MB" -lt 16000 ]; then
+            echo "ERROR: Less than 16GB GPU memory free. Check for other GPU processes:"
+            nvidia-smi
+            exit 1
+          fi
+
+      - name: Run GPU ALU tests
+        run: |
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_add --exact
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_sub --exact
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_xor --exact
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_or --exact
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_and --exact

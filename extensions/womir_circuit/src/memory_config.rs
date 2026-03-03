@@ -21,7 +21,9 @@ pub fn memory_config_with_fp() -> MemoryConfig {
     addr_spaces[RV32_REGISTER_AS as usize].num_cells = MAX_CELLS;
     addr_spaces[RV32_MEMORY_AS as usize].num_cells = MAX_CELLS;
     addr_spaces[PUBLIC_VALUES_AS as usize].num_cells = DEFAULT_MAX_NUM_PUBLIC_VALUES;
-    addr_spaces[FP_AS as usize].num_cells = size_of::<u32>();
+    // GPU requires num_cells to be divisible by DIGEST_WIDTH (8).
+    // We only need 4 bytes (size_of::<u32>()), but round up to 8.
+    addr_spaces[FP_AS as usize].num_cells = 8;
     MemoryConfig::new(3, addr_spaces, POINTER_MAX_BITS, 29, 17, 32)
 }
 

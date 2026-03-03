@@ -1,31 +1,33 @@
+// Adapted from <openvm>/extensions/rv32im/circuit/cuda/src/alu.cu (namespace renames only)
+// Diff: https://gist.github.com/leonardoalt/09fd3d60bd571851bb656dc53cec0a4b#file-diff-alu-cu-diff
 #include "launcher.cuh"
 #include "primitives/buffer_view.cuh"
 #include "primitives/constants.h"
 #include "primitives/trace_access.h"
-#include "rv32im/adapters/alu.cuh"
-#include "rv32im/cores/alu.cuh"
+#include "womir/adapters/alu.cuh"
+#include "womir/cores/alu.cuh"
 
 using namespace riscv;
 
 // Concrete type aliases for 32-bit
-using Rv32BaseAluCoreRecord = BaseAluCoreRecord<RV32_REGISTER_NUM_LIMBS>;
-using Rv32BaseAluCore = BaseAluCore<RV32_REGISTER_NUM_LIMBS>;
-template <typename T> using Rv32BaseAluCoreCols = BaseAluCoreCols<T, RV32_REGISTER_NUM_LIMBS>;
+using WomirBaseAluCoreRecord = BaseAluCoreRecord<RV32_REGISTER_NUM_LIMBS>;
+using WomirBaseAluCore = BaseAluCore<RV32_REGISTER_NUM_LIMBS>;
+template <typename T> using WomirBaseAluCoreCols = BaseAluCoreCols<T, RV32_REGISTER_NUM_LIMBS>;
 
-template <typename T> struct Rv32BaseAluCols {
-    Rv32BaseAluAdapterCols<T> adapter;
-    Rv32BaseAluCoreCols<T> core;
+template <typename T> struct WomirBaseAluCols {
+    WomirBaseAluAdapterCols<T> adapter;
+    WomirBaseAluCoreCols<T> core;
 };
 
-struct Rv32BaseAluRecord {
-    Rv32BaseAluAdapterRecord adapter;
-    Rv32BaseAluCoreRecord core;
+struct WomirBaseAluRecord {
+    WomirBaseAluAdapterRecord adapter;
+    WomirBaseAluCoreRecord core;
 };
 
-__global__ void alu_tracegen(
+__global__ void womir_alu_tracegen(
     Fp *d_trace,
     size_t height,
-    DeviceBufferConstView<Rv32BaseAluRecord> d_records,
+    DeviceBufferConstView<WomirBaseAluRecord> d_records,
     uint32_t *d_range_checker_ptr,
     size_t range_checker_bins,
     uint32_t *d_bitwise_lookup_ptr,
@@ -37,25 +39,25 @@ __global__ void alu_tracegen(
     if (idx < d_records.len()) {
         auto const &rec = d_records[idx];
 
-        Rv32BaseAluAdapter adapter(
+        WomirBaseAluAdapter adapter(
             VariableRangeChecker(d_range_checker_ptr, range_checker_bins),
             BitwiseOperationLookup(d_bitwise_lookup_ptr, bitwise_num_bits),
             timestamp_max_bits
         );
         adapter.fill_trace_row(row, rec.adapter);
 
-        Rv32BaseAluCore core(BitwiseOperationLookup(d_bitwise_lookup_ptr, bitwise_num_bits));
-        core.fill_trace_row(row.slice_from(COL_INDEX(Rv32BaseAluCols, core)), rec.core);
+        WomirBaseAluCore core(BitwiseOperationLookup(d_bitwise_lookup_ptr, bitwise_num_bits));
+        core.fill_trace_row(row.slice_from(COL_INDEX(WomirBaseAluCols, core)), rec.core);
     } else {
-        row.fill_zero(0, sizeof(Rv32BaseAluCols<uint8_t>));
+        row.fill_zero(0, sizeof(WomirBaseAluCols<uint8_t>));
     }
 }
 
-extern "C" int _alu_tracegen(
+extern "C" int _womir_alu_tracegen(
     Fp *d_trace,
     size_t height,
     size_t width,
-    DeviceBufferConstView<Rv32BaseAluRecord> d_records,
+    DeviceBufferConstView<WomirBaseAluRecord> d_records,
     uint32_t *d_range_checker_ptr,
     size_t range_checker_bins,
     uint32_t *d_bitwise_lookup_ptr,
@@ -64,9 +66,9 @@ extern "C" int _alu_tracegen(
 ) {
     assert((height & (height - 1)) == 0);
     assert(height >= d_records.len());
-    assert(width == sizeof(Rv32BaseAluCols<uint8_t>));
+    assert(width == sizeof(WomirBaseAluCols<uint8_t>));
     auto [grid, block] = kernel_launch_params(height);
-    alu_tracegen<<<grid, block>>>(
+    womir_alu_tracegen<<<grid, block>>>(
         d_trace,
         height,
         d_records,

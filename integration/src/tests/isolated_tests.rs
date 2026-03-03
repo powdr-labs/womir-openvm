@@ -21,7 +21,8 @@ use openvm_sdk::StdIn;
 use womir_circuit::{WomirConfig, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory};
 
 use super::helpers;
-use crate::{instruction_builder::*, proving::mock_prove};
+use crate::instruction_builder::*;
+use crate::proving::{ALL_BACKENDS, Backend, CPU_ONLY};
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -209,13 +210,31 @@ pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>>
 /// Mock proving with constraint verification using debug_proving_ctx.
 /// This generates traces and verifies all constraints are satisfied without
 /// generating actual cryptographic proofs.
-pub fn test_prove(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
+/// Runs on the specified backends (CPU, GPU, or both) and verifies the final state.
+pub fn test_prove(spec: &TestSpec, backends: &[Backend]) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
     let vm_config = WomirConfig::default();
-    mock_prove(&exe, build_initial_state(spec, &exe, &vm_config))
+    let init_state = build_initial_state(spec, &exe, &vm_config);
+
+    for &backend in backends {
+        let final_state = backend
+            .mock_prove(&exe, init_state.clone())
+            .map_err(|e| format!("{} mock_prove: {e}", backend.name()))?;
+        verify_state(spec, &final_state)
+            .map_err(|e| format!("{} verify_state: {e}", backend.name()))?;
+    }
+    Ok(())
 }
 
-fn test_spec(mut spec: TestSpec) {
+/// Run a test spec through all stages (execution, metered, preflight, prove).
+/// Uses CPU_ONLY for proving by default.
+fn test_spec(spec: TestSpec) {
+    test_spec_with_backends(spec, CPU_ONLY)
+}
+
+/// Run a test spec through all stages with specified proving backends.
+/// Appends halt instruction automatically.
+pub fn test_spec_with_backends(mut spec: TestSpec, backends: &[Backend]) {
     // Append halt instruction:
     spec.program.push(halt());
 
@@ -233,12 +252,17 @@ fn test_spec(mut spec: TestSpec) {
         println!("test_preflight: {e}");
         is_error = true;
     }
-    if let Err(e) = test_prove(&spec) {
+    if let Err(e) = test_prove(&spec, backends) {
         println!("test_prove: {e}");
         is_error = true;
     }
 
     assert!(!is_error)
+}
+
+/// Run a test spec on all available backends (CPU and GPU if available).
+pub fn test_spec_all_backends(spec: TestSpec) {
+    test_spec_with_backends(spec, ALL_BACKENDS)
 }
 
 #[cfg(test)]
@@ -301,6 +325,12 @@ mod tests {
         test_spec(rebase_spec(&spec, REG_BASE_FITS_3_BYTES));
     }
 
+    fn test_spec_for_all_register_bases_all_backends(spec: TestSpec) {
+        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_1_BYTE));
+        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_2_BYTES));
+        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_3_BYTES));
+    }
+
     // ==================== BaseAlu Tests ====================
 
     #[test]
@@ -314,7 +344,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     #[test]
@@ -331,7 +361,8 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        // Test all register bases on all backends (CPU + GPU)
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     #[test]
@@ -348,7 +379,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     #[test]
@@ -365,7 +396,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     #[test]
@@ -382,7 +413,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     #[test]
@@ -399,7 +430,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     #[test]
@@ -416,7 +447,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     #[test]
@@ -433,7 +464,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     #[test]
@@ -450,7 +481,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     #[test]
@@ -467,7 +498,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     #[test]
@@ -484,7 +515,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec);
     }
 
     // ==================== LoadStore and LoadSignExtend Tests ====================

@@ -54,9 +54,9 @@ nightly-features = ["openvm-circuit/nightly-features"]
 
 cuda = [
   "dep:openvm-stark-sdk",
-  "dep:openvm-cuda-builder",
   "dep:openvm-cuda-common",
   "dep:openvm-cuda-backend",
+  "dep:openvm-cuda-builder",
   "openvm-circuit-primitives/cuda",
   "openvm-circuit/cuda",
 ]

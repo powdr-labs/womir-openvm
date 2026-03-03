@@ -49,7 +49,21 @@ use crate::{
 
 mod phantom;
 
-pub use self::WomirCpuProverExt as WomirProverExt;
+#[cfg(feature = "cuda")]
+pub mod preparing_gpu;
+#[cfg(feature = "cuda")]
+pub use preparing_gpu::{WomirPreparingGpu, WomirPreparingGpuExecutor, WomirPreparingGpuProverExt};
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "cuda")] {
+        #[path = "cuda.rs"]
+        mod womir_cuda;
+        pub use womir_cuda::WomirGpuProverExt;
+        pub use self::WomirGpuProverExt as WomirProverExt;
+    } else {
+        pub use self::WomirCpuProverExt as WomirProverExt;
+    }
+}
 
 // ============ Extension Struct Definitions ============
 
