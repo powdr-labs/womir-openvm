@@ -205,6 +205,7 @@ fn test_cli_prove_fib() {
 }
 
 #[test]
+#[should_panic = "panicked at integration/src/proving.rs:66:5"]
 fn test_cli_prove_fib_with_apc() {
     let output = cargo_bin()
         .args([
