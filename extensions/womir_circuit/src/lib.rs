@@ -19,6 +19,7 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_transpiler::transpiler::Transpiler;
+use powdr_openvm_common::isa::{OpenVmISA, SpecializedExecutor};
 use serde::{Deserialize, Serialize};
 
 pub mod execution;
@@ -84,6 +85,15 @@ pub struct WomirConfig {
     pub system: SystemConfig,
     #[extension]
     pub base: Womir,
+}
+
+// This seems trivial but it's tricky to put into powdr-openvm-common because of some From implementation issues.
+impl<F: PrimeField32, ISA: OpenVmISA<OriginalExecutor<F> = WomirConfigExecutor<F>>>
+    From<WomirConfigExecutor<F>> for SpecializedExecutor<F, ISA>
+{
+    fn from(value: WomirConfigExecutor<F>) -> Self {
+        Self::OriginalExecutor(value)
+    }
 }
 
 // Default implementation uses no init file

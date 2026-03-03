@@ -209,7 +209,10 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         let mut labels = BTreeMap::<u64, Vec<String>>::new();
 
         for (name, value) in &self.label_map {
-            labels.entry(value.pc as u64).or_default().push(name.clone());
+            labels
+                .entry(value.pc as u64)
+                .or_default()
+                .push(name.clone());
         }
 
         for names in labels.values_mut() {

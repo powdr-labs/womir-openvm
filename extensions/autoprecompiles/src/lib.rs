@@ -1,12 +1,10 @@
 use std::collections::{BTreeMap, HashSet};
 
 use openvm_circuit::arch::{
-    AirInventory, ChipInventoryError, MatrixRecordArena, VmBuilder, VmCircuitExtension,
-    VmCircuitConfig, VmProverExtension,
+    AirInventory, ChipInventoryError, MatrixRecordArena, VmBuilder, VmCircuitConfig,
+    VmCircuitExtension, VmProverExtension,
 };
 use openvm_circuit::system::{SystemChipInventory, SystemCpuBuilder};
-use openvm_circuit_derive::{AnyEnum, Executor, MeteredExecutor, PreflightExecutor};
-use openvm_circuit_primitives::Chip;
 use openvm_instructions::{LocalOpcode, VmOpcode, instruction::Instruction};
 use openvm_stark_backend::{config::Val, p3_field::PrimeField32, prover::cpu::CpuBackend};
 use openvm_stark_sdk::{
@@ -21,7 +19,6 @@ use powdr_openvm_common::program::OriginalCompiledProgram;
 use powdr_openvm_common::{
     isa::{OpenVmISA, OriginalCpuChipComplex, OriginalCpuChipInventory},
     trace_generator::cpu::periphery::{SharedPeripheryChipsCpu, SharedPeripheryChipsCpuProverExt},
-    vm::PowdrExtensionExecutor,
 };
 use strum::IntoEnumIterator;
 use womir_circuit::{WomirConfig, WomirConfigExecutor, WomirCpuBuilder, WomirProverExt};
@@ -29,25 +26,6 @@ use womir_translation::LinkedProgram;
 
 #[derive(Clone, Default)]
 pub struct WomirISA;
-
-#[allow(clippy::large_enum_variant)]
-#[derive(AnyEnum, Chip, Executor, MeteredExecutor, PreflightExecutor)]
-pub enum SpecializedExecutor {
-    Base(WomirConfigExecutor<BabyBear>),
-    Powdr(PowdrExtensionExecutor<WomirISA>),
-}
-
-impl From<WomirConfigExecutor<BabyBear>> for SpecializedExecutor {
-    fn from(value: WomirConfigExecutor<BabyBear>) -> Self {
-        Self::Base(value)
-    }
-}
-
-impl From<PowdrExtensionExecutor<WomirISA>> for SpecializedExecutor {
-    fn from(value: PowdrExtensionExecutor<WomirISA>) -> Self {
-        Self::Powdr(value)
-    }
-}
 
 #[derive(Clone, Default)]
 pub struct WomirDummyBuilder;
@@ -115,15 +93,9 @@ fn branch_opcodes() -> HashSet<VmOpcode> {
 impl OpenVmISA for WomirISA {
     type Program<'a> = LinkedProgram<'a, BabyBear>;
     type RegisterAddress = ();
-    type DummyExecutor = WomirConfigExecutor<BabyBear>;
-    type DummyConfig = WomirConfig;
-    type DummyBuilder = WomirDummyBuilder;
-    type Executor = SpecializedExecutor;
+    type OriginalExecutor<F: PrimeField32> = WomirConfigExecutor<F>;
     type OriginalConfig = WomirConfig;
-
-    fn lower(original: Self::OriginalConfig) -> Self::DummyConfig {
-        original
-    }
+    type OriginalBuilder = WomirDummyBuilder;
 
     fn create_original_chip_complex(
         config: &Self::OriginalConfig,
@@ -140,20 +112,19 @@ impl OpenVmISA for WomirISA {
         config: &Self::OriginalConfig,
         context: SharedPeripheryChipsCpu<Self>,
     ) -> OriginalCpuChipInventory {
-        let dummy_config = Self::lower(config.clone());
-        let mut airs = dummy_config
+        let mut airs = config
             .system
             .create_airs()
             .expect("failed to create system AIR inventory for dummy config");
         airs.start_new_extension();
         VmCircuitExtension::extend_circuit(&context, &mut airs)
             .expect("failed to extend dummy AIRs with shared periphery");
-        VmCircuitExtension::extend_circuit(&dummy_config.base, &mut airs)
+        VmCircuitExtension::extend_circuit(&config.base, &mut airs)
             .expect("failed to extend dummy AIRs with womir extension");
 
         let mut chip_complex = VmBuilder::<BabyBearPoseidon2Engine>::create_chip_complex(
             &SystemCpuBuilder,
-            &dummy_config.system,
+            &config.system,
             airs,
         )
         .expect("failed to create dummy chip complex");
@@ -167,7 +138,7 @@ impl OpenVmISA for WomirISA {
         .expect("failed to preload shared periphery chips into dummy inventory");
         VmProverExtension::<BabyBearPoseidon2Engine, _, _>::extend_prover(
             &WomirProverExt,
-            &dummy_config.base,
+            &config.base,
             inventory,
         )
         .expect("failed to extend dummy inventory with womir chips");

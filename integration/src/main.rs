@@ -16,9 +16,9 @@ use openvm_sdk::StdIn;
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
 use powdr_openvm_common::{extraction_utils::OriginalVmConfig, program::OriginalCompiledProgram};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 use std::sync::mpsc::channel;
-use std::sync::Arc;
 use std::sync::{Mutex, RwLock};
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -160,7 +160,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let stdin = make_stdin(&args);
 
             let prove = || -> Result<()> {
-                proving::prove(original_program, stdin, recursion).map_err(|e| eyre::eyre!("{e}"))?;
+                proving::prove(original_program, stdin, recursion)
+                    .map_err(|e| eyre::eyre!("{e}"))?;
                 println!("Proof verified successfully.");
                 Ok(())
             };

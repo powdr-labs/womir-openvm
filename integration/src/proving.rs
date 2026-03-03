@@ -18,12 +18,9 @@ use openvm_stark_sdk::{
         keygen::types::MultiStarkProvingKey, prover::hal::DeviceDataTransporter,
     },
 };
-use powdr_autoprecompiles::{
-    empirical_constraints::EmpiricalConstraints,
-    pgo::NonePgo,
-};
+use powdr_autoprecompiles::{empirical_constraints::EmpiricalConstraints, pgo::NonePgo};
 use powdr_openvm_common::{
-    customize_exe::customize, program::OriginalCompiledProgram, PowdrSdkCpu,
+    PowdrSdkCpu, customize_exe::customize, program::OriginalCompiledProgram,
 };
 use womir_circuit::{WomirConfig, WomirCpuBuilder};
 
