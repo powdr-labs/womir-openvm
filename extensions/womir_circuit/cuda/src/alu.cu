@@ -15,12 +15,12 @@ using WomirBaseAluCore = BaseAluCore<RV32_REGISTER_NUM_LIMBS>;
 template <typename T> using WomirBaseAluCoreCols = BaseAluCoreCols<T, RV32_REGISTER_NUM_LIMBS>;
 
 template <typename T> struct WomirBaseAluCols {
-    WomirBaseAluAdapterCols<T> adapter;
+    WomirBaseAluAdapterCols<T, 1, 1> adapter;
     WomirBaseAluCoreCols<T> core;
 };
 
 struct WomirBaseAluRecord {
-    WomirBaseAluAdapterRecord adapter;
+    WomirBaseAluAdapterRecord<1, 1> adapter;
     WomirBaseAluCoreRecord core;
 };
 
@@ -39,7 +39,7 @@ __global__ void womir_alu_tracegen(
     if (idx < d_records.len()) {
         auto const &rec = d_records[idx];
 
-        WomirBaseAluAdapter adapter(
+        WomirBaseAluAdapter<1, 1> adapter(
             VariableRangeChecker(d_range_checker_ptr, range_checker_bins),
             BitwiseOperationLookup(d_bitwise_lookup_ptr, bitwise_num_bits),
             timestamp_max_bits
