@@ -1,10 +1,7 @@
 mod builtin_functions;
-mod const_collapse;
-mod instruction_builder;
 mod proving;
 #[cfg(test)]
 mod tests;
-mod womir_translation;
 
 use std::fs;
 
@@ -16,10 +13,13 @@ use metrics_util::{debugging::DebuggingRecorder, layers::Layer};
 use openvm_circuit::arch::VmState;
 use openvm_instructions::exe::VmExe;
 use openvm_sdk::StdIn;
+use openvm_sdk::config::SdkVmConfig;
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
+use powdr_openvm_common::{extraction_utils::OriginalVmConfig, program::OriginalCompiledProgram};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
 use std::sync::mpsc::channel;
+use std::sync::Arc;
 use std::sync::{Mutex, RwLock};
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -33,7 +33,7 @@ use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use crate::builtin_functions::BuiltinFunction;
-use crate::womir_translation::{Directive, LinkedProgram, OpenVMSettings};
+use womir_translation::{Directive, LinkedProgram, OpenVMSettings};
 
 use womir_circuit::WomirConfig;
 
@@ -156,11 +156,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             recursion,
             metrics,
         } => {
-            let exe = load_wasm_exe(&program, &function);
+            let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
+            let original_program = load_wasm_original_program(&wasm_bytes, &function);
             let stdin = make_stdin(&args);
 
             let prove = || -> Result<()> {
-                proving::prove(&exe, stdin, recursion, 0).map_err(|e| eyre::eyre!("{e}"))?;
+                proving::prove(original_program, stdin, recursion).map_err(|e| eyre::eyre!("{e}"))?;
                 println!("Proof verified successfully.");
                 Ok(())
             };
@@ -250,6 +251,25 @@ fn load_wasm_exe(program: &str, function: &str) -> VmExe<F> {
     let (module, functions) = load_wasm(&wasm_bytes);
     let linked_program = LinkedProgram::new(module, functions);
     linked_program.program_with_entry_point(function)
+}
+
+fn load_wasm_original_program<'a>(
+    wasm_bytes: &'a [u8],
+    function: &str,
+) -> OriginalCompiledProgram<'a, autoprecompiles::WomirISA> {
+    let (module, functions) = load_wasm(wasm_bytes);
+    let linked_program = LinkedProgram::new(module, functions);
+    let exe = Arc::new(linked_program.program_with_entry_point(function));
+    let vm_config = OriginalVmConfig::new(autoprecompiles::WomirOpenVmConfig {
+        sdk: SdkVmConfig::riscv32(),
+        womir: WomirConfig::default(),
+    });
+
+    OriginalCompiledProgram {
+        exe,
+        vm_config,
+        elf: linked_program,
+    }
 }
 
 fn make_stdin(args: &[String]) -> StdIn {

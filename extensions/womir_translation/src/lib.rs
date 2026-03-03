@@ -1,7 +1,13 @@
-use std::{collections::HashMap, ops::Range, vec};
+use std::{
+    collections::{BTreeMap, HashMap},
+    ops::Range,
+    vec,
+};
+
+pub mod const_collapse;
+pub mod instruction_builder;
 
 use crate::{
-    WomirConfig,
     const_collapse::can_turn_to_lt,
     instruction_builder::{self as ib, AluImm},
 };
@@ -36,6 +42,7 @@ use womir::{
     },
     utils::tree::Tree,
 };
+use womir_circuit::WomirConfig;
 
 /// This is our convention for null function references.
 ///
@@ -197,6 +204,20 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
 
         Ok(public_values)
     }
+
+    pub fn labels(&self) -> BTreeMap<u64, Vec<String>> {
+        let mut labels = BTreeMap::<u64, Vec<String>>::new();
+
+        for (name, value) in &self.label_map {
+            labels.entry(value.pc as u64).or_default().push(name.clone());
+        }
+
+        for names in labels.values_mut() {
+            names.sort();
+        }
+
+        labels
+    }
 }
 
 fn create_startup_code<F>(ctx: &Module, entry_point: &LabelValue) -> Vec<Instruction<F>>
@@ -333,7 +354,6 @@ impl<F> OpenVMSettings<F> {
         Self::default()
     }
 
-    #[cfg(test)]
     pub fn with_unaligned_memory(mut self) -> Self {
         self.support_unaligned_memory = true;
         self

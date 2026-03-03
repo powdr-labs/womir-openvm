@@ -4,7 +4,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace]
-members = ["integration", "extensions/transpiler", "extensions/womir_circuit", "guest-io", "extensions/autoprecompiles"]
+members = ["integration", "extensions/transpiler", "extensions/womir_circuit", "guest-io", "extensions/autoprecompiles", "extensions/womir_translation"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -20,6 +20,8 @@ powdr-number = { git = "https://github.com/powdr-labs/powdr.git", rev = "01f1f57
 openvm-womir-transpiler = { path = "extensions/transpiler" }
 
 womir-circuit = { path = "extensions/womir_circuit" }
+autoprecompiles = { path = "extensions/autoprecompiles" }
+womir-translation = { path = "extensions/womir_translation" }
 
 openvm-stark-sdk = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "v1.2.2-powdr", features = [
   "parallel",
@@ -96,8 +98,8 @@ wasmparser = { version = "0.235", default-features = false }
 # [patch."https://github.com/powdr-labs/womir.git"]
 # womir = { path = "../womir" }
 
-# [patch."https://github.com/powdr-labs/powdr.git"]
-# powdr-autoprecompiles = { path = "../powdr/autoprecompiles"}
-# powdr-number = { path = "../powdr/number"}
-# powdr-openvm-common = { path = "../powdr/powdr-openvm-common"}
-# powdr-openvm = { path = "../powdr/openvm"}
+[patch."https://github.com/powdr-labs/powdr.git"]
+powdr-autoprecompiles = { path = "../powdr/autoprecompiles"}
+powdr-number = { path = "../powdr/number"}
+powdr-openvm-common = { path = "../powdr/powdr-openvm-common"}
+powdr-openvm = { path = "../powdr/openvm"}

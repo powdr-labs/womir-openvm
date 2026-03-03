@@ -2,10 +2,9 @@
 
 use std::sync::OnceLock;
 
+use autoprecompiles::WomirISA;
 use openvm_circuit::arch::{VirtualMachine, VmCircuitConfig, VmState, debug_proving_ctx};
 use openvm_instructions::exe::VmExe;
-use openvm_native_circuit::NativeCpuBuilder;
-use openvm_sdk::GenericSdk;
 use openvm_sdk::StdIn;
 use openvm_sdk::config::{AppConfig, DEFAULT_APP_LOG_BLOWUP};
 use openvm_sdk::prover::verify_app_proof;
@@ -18,6 +17,13 @@ use openvm_stark_sdk::{
     openvm_stark_backend::{
         keygen::types::MultiStarkProvingKey, prover::hal::DeviceDataTransporter,
     },
+};
+use powdr_autoprecompiles::{
+    empirical_constraints::EmpiricalConstraints,
+    pgo::NonePgo,
+};
+use powdr_openvm_common::{
+    customize_exe::customize, program::OriginalCompiledProgram, PowdrSdkCpu,
 };
 use womir_circuit::{WomirConfig, WomirCpuBuilder};
 
@@ -43,29 +49,32 @@ pub fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
     })
 }
 
-type WomirSdk = GenericSdk<BabyBearPoseidon2Engine, WomirCpuBuilder, NativeCpuBuilder>;
-
 /// Generate and verify a real cryptographic proof, with optional recursion.
 pub fn prove(
-    exe: &VmExe<F>,
+    original_program: OriginalCompiledProgram<WomirISA>,
     stdin: StdIn,
     recursion: bool,
-    _apc_count: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let vm_config = WomirConfig::default();
+    let compiled = customize(
+        original_program,
+        powdr_openvm::default_powdr_openvm_config(0, 0),
+        NonePgo::default(),
+        EmpiricalConstraints::default(),
+    );
+
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
-    let app_config = AppConfig::new(app_fri_params, vm_config);
-    let sdk = WomirSdk::new_without_transpiler(app_config)?;
+    let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
+    let sdk = PowdrSdkCpu::<WomirISA>::new_without_transpiler(app_config)?;
 
-    let mut app_prover = sdk.app_prover(exe.clone())?;
+    let mut app_prover = sdk.app_prover(compiled.exe.clone())?;
     let app_proof = app_prover.prove(stdin)?;
 
     let app_vk = sdk.app_pk().get_app_vk();
     verify_app_proof(&app_vk, &app_proof)?;
 
     if recursion {
-        let mut agg_prover = sdk.prover(exe.clone())?.agg_prover;
+        let mut agg_prover = sdk.prover(compiled.exe.clone())?.agg_prover;
 
         // Note that this proof is not verified. We assume that any valid app proof
         // (verified above) also leads to a valid aggregation proof.

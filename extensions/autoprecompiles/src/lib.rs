@@ -28,12 +28,10 @@ use powdr_openvm_common::{
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use womir_circuit::{WomirConfig, WomirConfigExecutor, WomirCpuBuilder, WomirProverExt};
+use womir_translation::LinkedProgram;
 
 #[derive(Clone, Default)]
 pub struct WomirISA;
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OpenVmRegisterAddress(u8);
 
 #[allow(clippy::large_enum_variant)]
 #[derive(AnyEnum, Chip, Executor, MeteredExecutor, PreflightExecutor)]
@@ -168,7 +166,8 @@ fn branch_opcodes() -> HashSet<VmOpcode> {
 }
 
 impl OpenVmISA for WomirISA {
-    type RegisterAddress = OpenVmRegisterAddress;
+    type Program<'a> = LinkedProgram<'a, BabyBear>;
+    type RegisterAddress = ();
     type DummyExecutor = WomirConfigExecutor<BabyBear>;
     type DummyConfig = WomirOpenVmConfig;
     type DummyBuilder = WomirDummyBuilder;
@@ -230,10 +229,6 @@ impl OpenVmISA for WomirISA {
         chip_complex.inventory
     }
 
-    fn is_allowed(opcode: VmOpcode) -> bool {
-        vm_opcode_set().contains(&opcode)
-    }
-
     fn is_branching(opcode: VmOpcode) -> bool {
         branch_opcodes().contains(&opcode)
     }
@@ -254,12 +249,8 @@ impl OpenVmISA for WomirISA {
         format!("{instruction:?}")
     }
 
-    type Program = WomirAssembly;
-
-    fn get_labels(_program: &OriginalCompiledProgram<Self>) -> BTreeMap<u64, Vec<String>> {
-        todo!("get jump targets")
+    fn get_labels(program: &OriginalCompiledProgram<Self>) -> BTreeMap<u64, Vec<String>> {
+        // TODO: is this correct?
+        program.elf.labels()
     }
 }
-
-// TODO: the type from which, along with the exe, we can determine the jump targets
-type WomirAssembly = ();
