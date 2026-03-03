@@ -8,6 +8,11 @@ use super::adapters::{
 
 mod execution;
 
+#[cfg(feature = "cuda")]
+pub mod cuda;
+#[cfg(feature = "cuda")]
+pub use cuda::{Rv32ShiftChipGpu, Shift64ChipGpu};
+
 pub use execution::ShiftExecutor;
 
 // 32-bit type aliases
