@@ -92,8 +92,8 @@ jobs:
 
       - name: Run GPU ALU tests
         run: |
-          cargo test --release --features cuda test_add -- --test-threads=1
-          cargo test --release --features cuda test_sub -- --test-threads=1
-          cargo test --release --features cuda test_xor -- --test-threads=1
-          cargo test --release --features cuda test_or -- --test-threads=1
-          cargo test --release --features cuda test_and -- --test-threads=1
+          cargo test --release --features cuda isolated_tests::tests::test_add -- --test-threads=1
+          cargo test --release --features cuda isolated_tests::tests::test_sub -- --test-threads=1
+          cargo test --release --features cuda isolated_tests::tests::test_xor -- --test-threads=1
+          cargo test --release --features cuda isolated_tests::tests::test_or -- --test-threads=1
+          cargo test --release --features cuda isolated_tests::tests::test_and -- --test-threads=1
