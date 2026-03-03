@@ -7,7 +7,7 @@ use openvm_circuit::{
 use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::GpuBackend};
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 
-use crate::{Rv32BaseAluAir, Rv32BaseAluChipGpu};
+use crate::{BaseAlu64Air, BaseAlu64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu};
 
 use super::Womir;
 
@@ -32,7 +32,15 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(base_alu);
 
-        // TODO: Add more WOMIR GPU chips here (64-bit ALU, mul, div, etc.)
+        inventory.next_air::<BaseAlu64Air>()?;
+        let base_alu_64 = BaseAlu64ChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(base_alu_64);
+
+        // TODO: Add more WOMIR GPU chips here (mul, div, etc.)
 
         Ok(())
     }
