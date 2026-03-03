@@ -12,8 +12,8 @@ use openvm_stark_sdk::{
 };
 use openvm_womir_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode,
-    Eq64Opcode, EqOpcode, HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode,
-    LoadStoreOpcode, Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
+    Eq64Opcode, EqOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
+    Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
 };
 use powdr_openvm_common::program::OriginalCompiledProgram;
 use powdr_openvm_common::{
@@ -50,7 +50,6 @@ fn vm_opcode_set() -> HashSet<VmOpcode> {
     set.extend(JumpOpcode::iter().map(|x| x.global_opcode()));
     set.extend(CallOpcode::iter().map(|x| x.global_opcode()));
     set.extend(ConstOpcodes::iter().map(|x| x.global_opcode()));
-    set.extend(HintStoreOpcode::iter().map(|x| x.global_opcode()));
     set
 }
 
@@ -140,5 +139,19 @@ impl OpenVmISA for WomirISA {
     fn get_labels(program: &OriginalCompiledProgram<Self>) -> BTreeMap<u64, Vec<String>> {
         // TODO: is this correct?
         program.elf.labels()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use powdr_openvm_common::extraction_utils::{OriginalAirs, OriginalVmConfig};
+
+    use super::*;
+
+    #[test]
+    fn machine_extraction() {
+        let powdr_config = powdr_openvm_common::default_powdr_openvm_config(0, 0);
+        let original_config = OriginalVmConfig::<WomirISA>::new(WomirConfig::default());
+        let _ = original_config.airs(powdr_config.degree_bound).unwrap();
     }
 }

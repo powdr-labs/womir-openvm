@@ -211,7 +211,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .map_err(|e| eyre::eyre!("{e}"))?;
 
-                let config = powdr_openvm::default_powdr_openvm_config(0, 0);
+                let config = powdr_openvm_common::default_powdr_openvm_config(0, 0);
                 let compiled = powdr_openvm::compile_exe(
                     original,
                     config,

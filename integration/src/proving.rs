@@ -54,7 +54,7 @@ pub fn prove(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let compiled = customize(
         original_program,
-        powdr_openvm::default_powdr_openvm_config(0, 0),
+        powdr_openvm_common::default_powdr_openvm_config(0, 0),
         NonePgo::default(),
         EmpiricalConstraints::default(),
     );
