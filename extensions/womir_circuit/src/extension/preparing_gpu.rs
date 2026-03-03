@@ -5,7 +5,9 @@
 //! GPU implementations, these types will be removed and the main WomirConfig
 //! will be used for GPU proving.
 //!
-//! Currently includes: BaseAlu32, Shift32, Shift64
+//! Currently includes: BaseAlu32, BaseAlu64, Shift32, Shift64, Mul32, Mul64
+
+use std::sync::Arc;
 
 use derive_more::derive::From;
 use openvm_circuit::{
@@ -20,34 +22,48 @@ use openvm_circuit::{
     },
 };
 use openvm_circuit_derive::{AnyEnum, Executor, MeteredExecutor, PreflightExecutor};
-use openvm_circuit_primitives::bitwise_op_lookup::{
-    BitwiseOperationLookupAir, BitwiseOperationLookupBus,
+use openvm_circuit_primitives::{
+    bitwise_op_lookup::{BitwiseOperationLookupAir, BitwiseOperationLookupBus},
+    range_tuple::{RangeTupleCheckerAir, RangeTupleCheckerBus, RangeTupleCheckerChipGPU},
 };
 use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::GpuBackend};
 use openvm_instructions::LocalOpcode;
-use openvm_rv32im_circuit::{BaseAluCoreAir, ShiftCoreAir};
+use openvm_rv32im_circuit::{BaseAluCoreAir, MultiplicationCoreAir, ShiftCoreAir};
 use openvm_stark_backend::{config::StarkGenericConfig, p3_field::PrimeField32};
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
-use openvm_womir_transpiler::{BaseAlu64Opcode, BaseAluOpcode, Shift64Opcode, ShiftOpcode};
+use openvm_womir_transpiler::{
+    BaseAlu64Opcode, BaseAluOpcode, Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
+};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use openvm_circuit::arch::ExecutionBridge;
 
 use crate::{
-    BaseAlu64Air, BaseAlu64ChipGpu, BaseAlu64Executor, Rv32BaseAluAir, Rv32BaseAluChipGpu,
-    Rv32BaseAluExecutor, Rv32ShiftAir, Rv32ShiftChipGpu, Rv32ShiftExecutor, Shift64Air,
-    Shift64ChipGpu, Shift64Executor,
+    BaseAlu64Air, BaseAlu64ChipGpu, BaseAlu64Executor, Mul64Air, Mul64ChipGpu, Mul64Executor,
+    Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32BaseAluExecutor, Rv32MultiplicationAir,
+    Rv32MultiplicationChipGpu, Rv32MultiplicationExecutor, Rv32ShiftAir, Rv32ShiftChipGpu,
+    Rv32ShiftExecutor, Shift64Air, Shift64ChipGpu, Shift64Executor,
     adapters::{BaseAluAdapterAir, Rv32BaseAluAdapterAir, W64_NUM_LIMBS, W64_REG_OPS},
 };
 
 // ============ Extension Struct ============
 
 /// WOMIR extension for incremental GPU testing.
-/// Contains only GPU-ready chips (currently: BaseAlu32).
 /// Will be removed once all chips have GPU implementations.
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
-pub struct WomirPreparingGpu;
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct WomirPreparingGpu {
+    #[serde(default = "super::default_range_tuple_checker_sizes")]
+    pub range_tuple_checker_sizes: [u32; 2],
+}
+
+impl Default for WomirPreparingGpu {
+    fn default() -> Self {
+        Self {
+            range_tuple_checker_sizes: super::default_range_tuple_checker_sizes(),
+        }
+    }
+}
 
 // ============ Executor Enum ============
 
@@ -56,6 +72,8 @@ pub struct WomirPreparingGpu;
 pub enum WomirPreparingGpuExecutor {
     BaseAlu(Rv32BaseAluExecutor),
     BaseAlu64(BaseAlu64Executor),
+    Mul(Rv32MultiplicationExecutor),
+    Mul64(Mul64Executor),
     Shift(Rv32ShiftExecutor),
     Shift64(Shift64Executor),
 }
@@ -85,6 +103,16 @@ impl<F: PrimeField32> VmExecutionExtension<F> for WomirPreparingGpu {
             base_alu_64,
             BaseAlu64Opcode::iter().map(|x| x.global_opcode()),
         )?;
+
+        let mul = Rv32MultiplicationExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            MulOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(mul, MulOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let mul_64 =
+            Mul64Executor::new(BaseAluAdapterExecutor::default(), Mul64Opcode::CLASS_OFFSET);
+        inventory.add_executor(mul_64, Mul64Opcode::iter().map(|x| x.global_opcode()))?;
 
         let shift = Rv32ShiftExecutor::new(
             Rv32BaseAluAdapterExecutor::default(),
@@ -141,6 +169,37 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for WomirPreparingGpu {
         );
         inventory.add_air(base_alu_64);
 
+        let range_tuple_bus = {
+            let existing_air = inventory.find_air::<RangeTupleCheckerAir<2>>().next();
+            if let Some(air) = existing_air {
+                air.bus
+            } else {
+                let bus = RangeTupleCheckerBus::new(
+                    inventory.new_bus_idx(),
+                    self.range_tuple_checker_sizes,
+                );
+                let air = RangeTupleCheckerAir { bus };
+                inventory.add_air(air);
+                bus
+            }
+        };
+
+        let mul = Rv32MultiplicationAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            MultiplicationCoreAir::new(range_tuple_bus, MulOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(mul);
+
+        let mul_64 = Mul64Air::new(
+            BaseAluAdapterAir::<W64_NUM_LIMBS, W64_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
+            MultiplicationCoreAir::new(range_tuple_bus, Mul64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(mul_64);
+
         let shift = Rv32ShiftAir::new(
             Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
             ShiftCoreAir::new(bitwise_lu, range_checker, ShiftOpcode::CLASS_OFFSET),
@@ -170,7 +229,7 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, WomirPrepar
 {
     fn extend_prover(
         &self,
-        _: &WomirPreparingGpu,
+        extension: &WomirPreparingGpu,
         inventory: &mut ChipInventory<BabyBearPoseidon2Config, DenseRecordArena, GpuBackend>,
     ) -> Result<(), ChipInventoryError> {
         let timestamp_max_bits = inventory.timestamp_max_bits();
@@ -193,6 +252,43 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, WomirPrepar
             timestamp_max_bits,
         );
         inventory.add_executor_chip(base_alu_64);
+
+        let range_tuple_checker = {
+            let existing_chip = inventory
+                .find_chip::<Arc<RangeTupleCheckerChipGPU<2>>>()
+                .find(|c| {
+                    c.sizes[0] >= extension.range_tuple_checker_sizes[0]
+                        && c.sizes[1] >= extension.range_tuple_checker_sizes[1]
+                });
+            if let Some(chip) = existing_chip {
+                chip.clone()
+            } else {
+                inventory.next_air::<RangeTupleCheckerAir<2>>()?;
+                let chip = Arc::new(RangeTupleCheckerChipGPU::new(
+                    extension.range_tuple_checker_sizes,
+                ));
+                inventory.add_periphery_chip(chip.clone());
+                chip
+            }
+        };
+
+        inventory.next_air::<Rv32MultiplicationAir>()?;
+        let mul = Rv32MultiplicationChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            range_tuple_checker.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(mul);
+
+        inventory.next_air::<Mul64Air>()?;
+        let mul_64 = Mul64ChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            range_tuple_checker.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(mul_64);
 
         inventory.next_air::<Rv32ShiftAir>()?;
         let shift = Rv32ShiftChipGpu::new(

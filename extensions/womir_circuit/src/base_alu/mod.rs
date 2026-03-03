@@ -9,7 +9,7 @@ use super::adapters::{
 mod execution;
 
 #[cfg(feature = "cuda")]
-pub mod cuda;
+mod cuda;
 #[cfg(feature = "cuda")]
 pub use cuda::{BaseAlu64ChipGpu, Rv32BaseAluChipGpu};
 

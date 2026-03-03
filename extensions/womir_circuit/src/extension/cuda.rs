@@ -1,15 +1,19 @@
 // Adapted from <openvm>/extensions/rv32im/circuit/src/extension/cuda.rs (stripped to BaseAlu only)
 // Diff: https://gist.github.com/leonardoalt/09fd3d60bd571851bb656dc53cec0a4b#file-diff-extension-cuda-rs-diff
+use std::sync::Arc;
+
 use openvm_circuit::{
     arch::{ChipInventory, ChipInventoryError, DenseRecordArena, VmProverExtension},
     system::cuda::extensions::{get_inventory_range_checker, get_or_create_bitwise_op_lookup},
 };
+use openvm_circuit_primitives::range_tuple::{RangeTupleCheckerAir, RangeTupleCheckerChipGPU};
 use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::GpuBackend};
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 
 use crate::{
-    BaseAlu64Air, BaseAlu64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32ShiftAir,
-    Rv32ShiftChipGpu, Shift64Air, Shift64ChipGpu,
+    BaseAlu64Air, BaseAlu64ChipGpu, Mul64Air, Mul64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu,
+    Rv32MultiplicationAir, Rv32MultiplicationChipGpu, Rv32ShiftAir, Rv32ShiftChipGpu, Shift64Air,
+    Shift64ChipGpu,
 };
 
 use super::Womir;
@@ -19,7 +23,7 @@ pub struct WomirGpuProverExt;
 impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for WomirGpuProverExt {
     fn extend_prover(
         &self,
-        _: &Womir,
+        extension: &Womir,
         inventory: &mut ChipInventory<BabyBearPoseidon2Config, DenseRecordArena, GpuBackend>,
     ) -> Result<(), ChipInventoryError> {
         let timestamp_max_bits = inventory.timestamp_max_bits();
@@ -43,6 +47,43 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(base_alu_64);
 
+        let range_tuple_checker = {
+            let existing_chip = inventory
+                .find_chip::<Arc<RangeTupleCheckerChipGPU<2>>>()
+                .find(|c| {
+                    c.sizes[0] >= extension.range_tuple_checker_sizes[0]
+                        && c.sizes[1] >= extension.range_tuple_checker_sizes[1]
+                });
+            if let Some(chip) = existing_chip {
+                chip.clone()
+            } else {
+                inventory.next_air::<RangeTupleCheckerAir<2>>()?;
+                let chip = Arc::new(RangeTupleCheckerChipGPU::new(
+                    extension.range_tuple_checker_sizes,
+                ));
+                inventory.add_periphery_chip(chip.clone());
+                chip
+            }
+        };
+
+        inventory.next_air::<Rv32MultiplicationAir>()?;
+        let mul = Rv32MultiplicationChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            range_tuple_checker.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(mul);
+
+        inventory.next_air::<Mul64Air>()?;
+        let mul_64 = Mul64ChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            range_tuple_checker.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(mul_64);
+
         inventory.next_air::<Rv32ShiftAir>()?;
         let shift = Rv32ShiftChipGpu::new(
             range_checker.clone(),
@@ -59,7 +100,7 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(shift_64);
 
-        // TODO: Add more WOMIR GPU chips here (mul, div, etc.)
+        // TODO: Add more WOMIR GPU chips here (div, etc.)
 
         Ok(())
     }
