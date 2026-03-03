@@ -119,10 +119,10 @@ struct WomirBaseAluAdapter {
         }
 
         // Writes (at from_timestamp + 1 + 2*NUM_READ_OPS + w for w in 0..NUM_WRITE_OPS)
-        constexpr size_t write_aux_elem_size =
-            sizeof(MemoryWriteAuxCols<uint8_t, RV32_REGISTER_NUM_LIMBS>);
-        constexpr size_t prev_data_offset =
-            offsetof(MemoryWriteAuxCols<uint8_t, RV32_REGISTER_NUM_LIMBS>, prev_data);
+        // Type alias avoids commas inside offsetof/sizeof macros (preprocessor limitation).
+        using WriteAuxCols = MemoryWriteAuxCols<uint8_t, RV32_REGISTER_NUM_LIMBS>;
+        constexpr size_t write_aux_elem_size = sizeof(WriteAuxCols);
+        constexpr size_t prev_data_offset = offsetof(WriteAuxCols, prev_data);
 #pragma unroll
         for (size_t w = 0; w < NUM_WRITE_OPS; w++) {
             size_t base = offsetof(Cols<uint8_t>, writes_aux) + w * write_aux_elem_size;
