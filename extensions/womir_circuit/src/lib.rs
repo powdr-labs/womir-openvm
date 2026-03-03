@@ -11,12 +11,14 @@ use openvm_circuit::{
     system::{SystemChipInventory, SystemCpuBuilder, SystemExecutor},
 };
 use openvm_circuit_derive::{Executor, MeteredExecutor, VmConfig};
+use openvm_sdk::config::TranspilerConfig;
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     engine::StarkEngine,
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
+use openvm_transpiler::transpiler::Transpiler;
 use serde::{Deserialize, Serialize};
 
 pub mod execution;
@@ -114,6 +116,13 @@ impl WomirConfig {
             system,
             base: Default::default(),
         }
+    }
+}
+
+impl<F: PrimeField32> TranspilerConfig<F> for WomirConfig {
+    fn transpiler(&self) -> Transpiler<F> {
+        // Womir programs are lowered directly to OpenVM instructions.
+        Transpiler::default()
     }
 }
 

@@ -13,7 +13,6 @@ use metrics_util::{debugging::DebuggingRecorder, layers::Layer};
 use openvm_circuit::arch::VmState;
 use openvm_instructions::exe::VmExe;
 use openvm_sdk::StdIn;
-use openvm_sdk::config::SdkVmConfig;
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
 use powdr_openvm_common::{extraction_utils::OriginalVmConfig, program::OriginalCompiledProgram};
 use std::path::PathBuf;
@@ -260,10 +259,7 @@ fn load_wasm_original_program<'a>(
     let (module, functions) = load_wasm(wasm_bytes);
     let linked_program = LinkedProgram::new(module, functions);
     let exe = Arc::new(linked_program.program_with_entry_point(function));
-    let vm_config = OriginalVmConfig::new(autoprecompiles::WomirOpenVmConfig {
-        sdk: SdkVmConfig::riscv32(),
-        womir: WomirConfig::default(),
-    });
+    let vm_config = OriginalVmConfig::new(WomirConfig::default());
 
     OriginalCompiledProgram {
         exe,

@@ -1,19 +1,17 @@
 use std::collections::{BTreeMap, HashSet};
 
 use openvm_circuit::arch::{
-    AirInventory, ChipInventoryError, InitFileGenerator, MatrixRecordArena, SystemConfig,
-    VmBuilder, VmCircuitConfig, VmCircuitExtension, VmExecutionConfig, VmProverExtension,
+    AirInventory, ChipInventoryError, MatrixRecordArena, VmBuilder, VmCircuitExtension,
+    VmCircuitConfig, VmProverExtension,
 };
 use openvm_circuit::system::{SystemChipInventory, SystemCpuBuilder};
 use openvm_circuit_derive::{AnyEnum, Executor, MeteredExecutor, PreflightExecutor};
 use openvm_circuit_primitives::Chip;
 use openvm_instructions::{LocalOpcode, VmOpcode, instruction::Instruction};
-use openvm_sdk::config::{SdkVmConfig, TranspilerConfig};
 use openvm_stark_backend::{config::Val, p3_field::PrimeField32, prover::cpu::CpuBackend};
 use openvm_stark_sdk::{
     config::baby_bear_poseidon2::BabyBearPoseidon2Engine, p3_baby_bear::BabyBear,
 };
-use openvm_transpiler::transpiler::Transpiler;
 use openvm_womir_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode,
     Eq64Opcode, EqOpcode, HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode,
@@ -25,7 +23,6 @@ use powdr_openvm_common::{
     trace_generator::cpu::periphery::{SharedPeripheryChipsCpu, SharedPeripheryChipsCpuProverExt},
     vm::PowdrExtensionExecutor,
 };
-use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use womir_circuit::{WomirConfig, WomirConfigExecutor, WomirCpuBuilder, WomirProverExt};
 use womir_translation::LinkedProgram;
@@ -52,67 +49,17 @@ impl From<PowdrExtensionExecutor<WomirISA>> for SpecializedExecutor {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct WomirOpenVmConfig {
-    pub sdk: SdkVmConfig,
-    pub womir: WomirConfig,
-}
-
-impl TranspilerConfig<BabyBear> for WomirOpenVmConfig {
-    fn transpiler(&self) -> Transpiler<BabyBear> {
-        self.sdk.transpiler()
-    }
-}
-
-impl InitFileGenerator for WomirOpenVmConfig {}
-
-impl VmCircuitConfig<powdr_openvm_common::BabyBearSC> for WomirOpenVmConfig {
-    fn create_airs(
-        &self,
-    ) -> Result<
-        AirInventory<powdr_openvm_common::BabyBearSC>,
-        openvm_circuit::arch::AirInventoryError,
-    > {
-        self.womir.create_airs()
-    }
-}
-
-impl VmExecutionConfig<BabyBear> for WomirOpenVmConfig {
-    type Executor = WomirConfigExecutor<BabyBear>;
-
-    fn create_executors(
-        &self,
-    ) -> Result<
-        openvm_circuit::arch::ExecutorInventory<Self::Executor>,
-        openvm_circuit::arch::ExecutorInventoryError,
-    > {
-        self.womir.create_executors()
-    }
-}
-
-impl AsRef<SystemConfig> for WomirOpenVmConfig {
-    fn as_ref(&self) -> &SystemConfig {
-        self.womir.as_ref()
-    }
-}
-
-impl AsMut<SystemConfig> for WomirOpenVmConfig {
-    fn as_mut(&mut self) -> &mut SystemConfig {
-        self.womir.as_mut()
-    }
-}
-
 #[derive(Clone, Default)]
 pub struct WomirDummyBuilder;
 
 impl VmBuilder<BabyBearPoseidon2Engine> for WomirDummyBuilder {
-    type VmConfig = WomirOpenVmConfig;
+    type VmConfig = WomirConfig;
     type SystemChipInventory = SystemChipInventory<powdr_openvm_common::BabyBearSC>;
     type RecordArena = MatrixRecordArena<Val<powdr_openvm_common::BabyBearSC>>;
 
     fn create_chip_complex(
         &self,
-        config: &WomirOpenVmConfig,
+        config: &WomirConfig,
         circuit: AirInventory<powdr_openvm_common::BabyBearSC>,
     ) -> Result<
         openvm_circuit::arch::VmChipComplex<
@@ -125,7 +72,7 @@ impl VmBuilder<BabyBearPoseidon2Engine> for WomirDummyBuilder {
     > {
         <WomirCpuBuilder as VmBuilder<BabyBearPoseidon2Engine>>::create_chip_complex(
             &WomirCpuBuilder,
-            &config.womir,
+            config,
             circuit,
         )
     }
@@ -169,10 +116,10 @@ impl OpenVmISA for WomirISA {
     type Program<'a> = LinkedProgram<'a, BabyBear>;
     type RegisterAddress = ();
     type DummyExecutor = WomirConfigExecutor<BabyBear>;
-    type DummyConfig = WomirOpenVmConfig;
+    type DummyConfig = WomirConfig;
     type DummyBuilder = WomirDummyBuilder;
     type Executor = SpecializedExecutor;
-    type OriginalConfig = WomirOpenVmConfig;
+    type OriginalConfig = WomirConfig;
 
     fn lower(original: Self::OriginalConfig) -> Self::DummyConfig {
         original
@@ -184,7 +131,7 @@ impl OpenVmISA for WomirISA {
     ) -> Result<OriginalCpuChipComplex, ChipInventoryError> {
         <WomirCpuBuilder as VmBuilder<BabyBearPoseidon2Engine>>::create_chip_complex(
             &WomirCpuBuilder,
-            &config.womir,
+            config,
             airs,
         )
     }
@@ -195,19 +142,18 @@ impl OpenVmISA for WomirISA {
     ) -> OriginalCpuChipInventory {
         let dummy_config = Self::lower(config.clone());
         let mut airs = dummy_config
-            .womir
             .system
             .create_airs()
             .expect("failed to create system AIR inventory for dummy config");
         airs.start_new_extension();
         VmCircuitExtension::extend_circuit(&context, &mut airs)
             .expect("failed to extend dummy AIRs with shared periphery");
-        VmCircuitExtension::extend_circuit(&dummy_config.womir.base, &mut airs)
+        VmCircuitExtension::extend_circuit(&dummy_config.base, &mut airs)
             .expect("failed to extend dummy AIRs with womir extension");
 
         let mut chip_complex = VmBuilder::<BabyBearPoseidon2Engine>::create_chip_complex(
             &SystemCpuBuilder,
-            &dummy_config.womir.system,
+            &dummy_config.system,
             airs,
         )
         .expect("failed to create dummy chip complex");
@@ -221,7 +167,7 @@ impl OpenVmISA for WomirISA {
         .expect("failed to preload shared periphery chips into dummy inventory");
         VmProverExtension::<BabyBearPoseidon2Engine, _, _>::extend_prover(
             &WomirProverExt,
-            &dummy_config.womir.base,
+            &dummy_config.base,
             inventory,
         )
         .expect("failed to extend dummy inventory with womir chips");
