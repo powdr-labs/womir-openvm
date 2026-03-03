@@ -91,7 +91,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check GPU memory
-        run: nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | awk '{if ($1 < 16000) {print "ERROR: Less than 16GB GPU memory free (" $1 "MiB). Check for other GPU processes:"; system("nvidia-smi"); exit 1}}'
+        run: |
+          FREE_MB=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits)
+          echo "Free GPU memory: ${FREE_MB} MiB"
+          if [ "$FREE_MB" -lt 16000 ]; then
+            echo "ERROR: Less than 16GB GPU memory free. Check for other GPU processes:"
+            nvidia-smi
+            exit 1
+          fi
 
       - name: Run GPU ALU tests
         run: |
