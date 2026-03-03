@@ -1,3 +1,5 @@
+// Adapted from <openvm>/extensions/rv32im/circuit/src/base_alu/cuda.rs (import paths only)
+// Diff: https://gist.github.com/leonardoalt/09fd3d60bd571851bb656dc53cec0a4b#file-diff-base-alu-cuda-rs-diff
 use std::{mem::size_of, sync::Arc};
 
 use derive_new::new;

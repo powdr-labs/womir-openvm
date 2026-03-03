@@ -1,3 +1,6 @@
+// Adapted from <openvm>/extensions/rv32im/circuit/cuda/include/rv32im/adapters/alu.cuh
+// Main changes: adds frame pointer (fp) field, WomirExecutionState, fp_read_aux, timestamp +1 shift
+// Diff: https://gist.github.com/leonardoalt/09fd3d60bd571851bb656dc53cec0a4b#file-diff-adapters-alu-cuh-diff
 #pragma once
 
 #include "primitives/execution.h"

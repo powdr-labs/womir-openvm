@@ -1,3 +1,4 @@
+// 100% copy of <openvm>/extensions/rv32im/circuit/cuda/include/rv32im/cores/alu.cuh
 #pragma once
 
 #include "primitives/constants.h"

@@ -1,3 +1,5 @@
+// Adapted from <openvm>/extensions/rv32im/circuit/src/extension/cuda.rs (stripped to BaseAlu only)
+// Diff: https://gist.github.com/leonardoalt/09fd3d60bd571851bb656dc53cec0a4b#file-diff-extension-cuda-rs-diff
 use openvm_circuit::{
     arch::{ChipInventory, ChipInventoryError, DenseRecordArena, VmProverExtension},
     system::cuda::extensions::{get_inventory_range_checker, get_or_create_bitwise_op_lookup},
