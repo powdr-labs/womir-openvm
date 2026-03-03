@@ -90,10 +90,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check GPU memory
+        run: nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | awk '{if ($1 < 16000) {print "ERROR: Less than 16GB GPU memory free (" $1 "MiB). Check for other GPU processes:"; system("nvidia-smi"); exit 1}}'
+
       - name: Run GPU ALU tests
         run: |
-          cargo test --release --features cuda isolated_tests::tests::test_add -- --test-threads=1
-          cargo test --release --features cuda isolated_tests::tests::test_sub -- --test-threads=1
-          cargo test --release --features cuda isolated_tests::tests::test_xor -- --test-threads=1
-          cargo test --release --features cuda isolated_tests::tests::test_or -- --test-threads=1
-          cargo test --release --features cuda isolated_tests::tests::test_and -- --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_add --exact
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_sub --exact
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_xor --exact
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_or --exact
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_and --exact
