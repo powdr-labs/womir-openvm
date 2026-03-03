@@ -16,9 +16,10 @@ use openvm_stark_backend::{Chip, prover::types::AirProvingContext};
 
 use crate::{
     adapters::{
-        RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS, Rv32BaseAluAdapterCols, Rv32BaseAluAdapterRecord,
+        BaseAluAdapterCols, BaseAluAdapterRecord, RV32_CELL_BITS, RV32_REGISTER_NUM_LIMBS,
+        Rv32BaseAluAdapterCols, Rv32BaseAluAdapterRecord, W64_NUM_LIMBS, W64_REG_OPS,
     },
-    cuda_abi::alu_cuda::tracegen,
+    cuda_abi::{alu_cuda, alu64_cuda},
 };
 
 use openvm_rv32im_circuit::BaseAluCoreRecord;
@@ -50,7 +51,51 @@ impl Chip<DenseRecordArena, GpuBackend> for Rv32BaseAluChipGpu {
         let d_trace = DeviceMatrix::<F>::with_capacity(trace_height, trace_width);
 
         unsafe {
-            tracegen(
+            alu_cuda::tracegen(
+                d_trace.buffer(),
+                trace_height,
+                &d_records,
+                &self.range_checker.count,
+                self.range_checker.count.len(),
+                &self.bitwise_lookup.count,
+                RV32_CELL_BITS,
+                self.timestamp_max_bits as u32,
+            )
+            .unwrap();
+        }
+
+        AirProvingContext::simple_no_pis(d_trace)
+    }
+}
+
+#[derive(new)]
+pub struct BaseAlu64ChipGpu {
+    pub range_checker: Arc<VariableRangeCheckerChipGPU>,
+    pub bitwise_lookup: Arc<BitwiseOperationLookupChipGPU<RV32_CELL_BITS>>,
+    pub timestamp_max_bits: usize,
+}
+
+impl Chip<DenseRecordArena, GpuBackend> for BaseAlu64ChipGpu {
+    fn generate_proving_ctx(&self, arena: DenseRecordArena) -> AirProvingContext<GpuBackend> {
+        const RECORD_SIZE: usize = size_of::<(
+            BaseAluAdapterRecord<W64_REG_OPS>,
+            BaseAluCoreRecord<W64_NUM_LIMBS>,
+        )>();
+        let records = arena.allocated();
+        if records.is_empty() {
+            return get_empty_air_proving_ctx::<GpuBackend>();
+        }
+        debug_assert_eq!(records.len() % RECORD_SIZE, 0);
+
+        let trace_width = BaseAluCoreCols::<F, W64_NUM_LIMBS, RV32_CELL_BITS>::width()
+            + BaseAluAdapterCols::<F, W64_REG_OPS>::width();
+        let trace_height = next_power_of_two_or_zero(records.len() / RECORD_SIZE);
+
+        let d_records = records.to_device().unwrap();
+        let d_trace = DeviceMatrix::<F>::with_capacity(trace_height, trace_width);
+
+        unsafe {
+            alu64_cuda::tracegen(
                 d_trace.buffer(),
                 trace_height,
                 &d_records,

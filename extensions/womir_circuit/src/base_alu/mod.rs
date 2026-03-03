@@ -11,7 +11,7 @@ mod execution;
 #[cfg(feature = "cuda")]
 pub mod cuda;
 #[cfg(feature = "cuda")]
-pub use cuda::Rv32BaseAluChipGpu;
+pub use cuda::{BaseAlu64ChipGpu, Rv32BaseAluChipGpu};
 
 pub use execution::BaseAluExecutor;
 
