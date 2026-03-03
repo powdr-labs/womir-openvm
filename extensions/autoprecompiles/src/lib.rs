@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, HashSet};
 
 use openvm_circuit::arch::{
-    AirInventory, ChipInventoryError, MatrixRecordArena, VmBuilder, VmCircuitConfig,
-    VmCircuitExtension, VmProverExtension,
+    AirInventory, ChipInventoryError, VmBuilder, VmCircuitConfig, VmCircuitExtension,
+    VmProverExtension,
 };
-use openvm_circuit::system::{SystemChipInventory, SystemCpuBuilder};
+use openvm_circuit::system::SystemCpuBuilder;
 use openvm_instructions::{LocalOpcode, VmOpcode, instruction::Instruction};
-use openvm_stark_backend::{config::Val, p3_field::PrimeField32, prover::cpu::CpuBackend};
+use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_stark_sdk::{
     config::baby_bear_poseidon2::BabyBearPoseidon2Engine, p3_baby_bear::BabyBear,
 };
@@ -26,35 +26,6 @@ use womir_translation::LinkedProgram;
 
 #[derive(Clone, Default)]
 pub struct WomirISA;
-
-#[derive(Clone, Default)]
-pub struct WomirDummyBuilder;
-
-impl VmBuilder<BabyBearPoseidon2Engine> for WomirDummyBuilder {
-    type VmConfig = WomirConfig;
-    type SystemChipInventory = SystemChipInventory<powdr_openvm_common::BabyBearSC>;
-    type RecordArena = MatrixRecordArena<Val<powdr_openvm_common::BabyBearSC>>;
-
-    fn create_chip_complex(
-        &self,
-        config: &WomirConfig,
-        circuit: AirInventory<powdr_openvm_common::BabyBearSC>,
-    ) -> Result<
-        openvm_circuit::arch::VmChipComplex<
-            powdr_openvm_common::BabyBearSC,
-            Self::RecordArena,
-            CpuBackend<powdr_openvm_common::BabyBearSC>,
-            Self::SystemChipInventory,
-        >,
-        ChipInventoryError,
-    > {
-        <WomirCpuBuilder as VmBuilder<BabyBearPoseidon2Engine>>::create_chip_complex(
-            &WomirCpuBuilder,
-            config,
-            circuit,
-        )
-    }
-}
 
 fn vm_opcode_set() -> HashSet<VmOpcode> {
     let mut set = HashSet::new();
@@ -95,7 +66,7 @@ impl OpenVmISA for WomirISA {
     type RegisterAddress = ();
     type OriginalExecutor<F: PrimeField32> = WomirConfigExecutor<F>;
     type OriginalConfig = WomirConfig;
-    type OriginalBuilder = WomirDummyBuilder;
+    type OriginalBuilder = WomirCpuBuilder;
 
     fn create_original_chip_complex(
         config: &Self::OriginalConfig,

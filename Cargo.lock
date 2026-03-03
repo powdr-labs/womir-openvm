@@ -4305,6 +4305,7 @@ dependencies = [
 [[package]]
 name = "powdr-autoprecompiles"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "deepsize2",
  "derivative",
@@ -4327,6 +4328,7 @@ dependencies = [
 [[package]]
 name = "powdr-constraint-solver"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "auto_enums",
  "bitvec",
@@ -4343,6 +4345,7 @@ dependencies = [
 [[package]]
 name = "powdr-expression"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "derive_more 2.1.1",
  "num-traits",
@@ -4354,10 +4357,12 @@ dependencies = [
 [[package]]
 name = "powdr-isa-utils"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 
 [[package]]
 name = "powdr-number"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -4380,6 +4385,7 @@ dependencies = [
 [[package]]
 name = "powdr-openvm"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "cfg-if",
  "clap",
@@ -4437,6 +4443,7 @@ dependencies = [
 [[package]]
 name = "powdr-openvm-bus-interaction-handler"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "itertools 0.14.0",
  "powdr-autoprecompiles",
@@ -4449,6 +4456,7 @@ dependencies = [
 [[package]]
 name = "powdr-openvm-common"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "derive_more 2.1.1",
  "indicatif",
@@ -4478,6 +4486,7 @@ dependencies = [
 [[package]]
 name = "powdr-openvm-hints-circuit"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "crypto-bigint 0.6.1",
  "elliptic-curve",
@@ -4495,6 +4504,7 @@ dependencies = [
 [[package]]
 name = "powdr-openvm-hints-guest"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "openvm-custom-insn",
  "openvm-platform",
@@ -4505,6 +4515,7 @@ dependencies = [
 [[package]]
 name = "powdr-openvm-hints-transpiler"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "openvm-instructions",
  "openvm-instructions-derive",
@@ -4518,6 +4529,7 @@ dependencies = [
 [[package]]
 name = "powdr-riscv-elf"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "gimli 0.31.1",
  "goblin",
@@ -4534,6 +4546,7 @@ dependencies = [
 [[package]]
 name = "powdr-riscv-types"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 dependencies = [
  "powdr-isa-utils",
 ]
@@ -4541,6 +4554,7 @@ dependencies = [
 [[package]]
 name = "powdr-syscalls"
 version = "0.1.4"
+source = "git+https://github.com/powdr-labs/powdr.git?rev=ef5c35b#ef5c35b74256c70ea566387444717830646598ae"
 
 [[package]]
 name = "powerfmt"
