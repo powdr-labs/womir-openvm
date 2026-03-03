@@ -51,10 +51,11 @@ pub fn prove(
     original_program: OriginalCompiledProgram<WomirISA>,
     stdin: StdIn,
     recursion: bool,
+    apc_count: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let compiled = customize(
         original_program,
-        powdr_openvm_common::default_powdr_openvm_config(0, 0),
+        powdr_openvm_common::default_powdr_openvm_config(apc_count, 0),
         NonePgo::default(),
         EmpiricalConstraints::default(),
     );

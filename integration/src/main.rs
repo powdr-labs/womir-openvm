@@ -78,6 +78,9 @@ enum Commands {
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
+        /// Number of apcs to use
+        #[arg(long, default_value_t = 0)]
+        apc_count: u64,
     },
     /// Mock-proves execution of a function from the WASM program with the given arguments
     /// (constraint verification only, no cryptographic proof)
@@ -153,6 +156,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             function,
             args,
             recursion,
+            apc_count,
             metrics,
         } => {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
@@ -160,7 +164,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let stdin = make_stdin(&args);
 
             let prove = || -> Result<()> {
-                proving::prove(original_program, stdin, recursion)
+                proving::prove(original_program, stdin, recursion, apc_count)
                     .map_err(|e| eyre::eyre!("{e}"))?;
                 println!("Proof verified successfully.");
                 Ok(())
