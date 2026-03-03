@@ -30,17 +30,26 @@ type SC = BabyBearPoseidon2Config;
 
 static VM_PROVING_KEY: OnceLock<MultiStarkProvingKey<SC>> = OnceLock::new();
 
+/// Create a CPU engine with default FRI parameters.
+pub fn cpu_engine() -> BabyBearPoseidon2Engine {
+    let fri_params =
+        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+    BabyBearPoseidon2Engine::new(fri_params)
+}
+
+// --- Test-only backend infrastructure ---
+// These are only used by integration tests (binary crate, so `pub` alone doesn't suppress warnings).
+
 /// Proving backend selection.
-/// Used by test infrastructure to run tests on different backends.
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum Backend {
     Cpu,
     #[cfg(feature = "cuda")]
     Gpu,
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 impl Backend {
     /// Run mock proof on this backend, returning the final state.
     pub fn mock_prove(
@@ -67,7 +76,7 @@ impl Backend {
 
 /// All available backends for the current build configuration.
 /// GPU uses WomirPreparingGpuConfig which supports: BaseAlu32 + system instructions.
-#[allow(dead_code)]
+#[cfg(test)]
 pub const ALL_BACKENDS: &[Backend] = &[
     Backend::Cpu,
     #[cfg(feature = "cuda")]
@@ -75,25 +84,17 @@ pub const ALL_BACKENDS: &[Backend] = &[
 ];
 
 /// CPU-only backend (useful for tests that don't support GPU yet).
-#[allow(dead_code)]
+#[cfg(test)]
 pub const CPU_ONLY: &[Backend] = &[Backend::Cpu];
 
-/// Create a CPU engine with default FRI parameters.
-pub fn cpu_engine() -> BabyBearPoseidon2Engine {
-    let fri_params =
-        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
-    BabyBearPoseidon2Engine::new(fri_params)
-}
-
 /// Alias for backwards compatibility.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn default_engine() -> BabyBearPoseidon2Engine {
     cpu_engine()
 }
 
 /// Create a GPU engine with default FRI parameters.
-#[cfg(feature = "cuda")]
-#[allow(dead_code)]
+#[cfg(all(test, feature = "cuda"))]
 pub fn gpu_engine() -> openvm_cuda_backend::engine::GpuBabyBearPoseidon2Engine {
     let fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
@@ -213,8 +214,7 @@ pub fn mock_prove(
 /// Returns the final state after all segments have been processed.
 ///
 /// TODO: Once all WOMIR GPU chips are implemented, switch to WomirConfig+WomirGpuBuilder.
-#[cfg(feature = "cuda")]
-#[allow(dead_code)]
+#[cfg(all(test, feature = "cuda"))]
 pub fn mock_prove_gpu(
     exe: &VmExe<F>,
     init_state: VmState<F>,

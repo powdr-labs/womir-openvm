@@ -22,7 +22,6 @@ use womir_circuit::{WomirConfig, adapters::RV32_REGISTER_NUM_LIMBS, memory_confi
 
 use super::helpers;
 use crate::instruction_builder::*;
-#[allow(unused_imports)]
 use crate::proving::{ALL_BACKENDS, Backend, CPU_ONLY};
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
@@ -262,7 +261,6 @@ pub fn test_spec_with_backends(mut spec: TestSpec, backends: &[Backend]) {
 }
 
 /// Run a test spec on all available backends (CPU and GPU if available).
-#[allow(dead_code)]
 pub fn test_spec_all_backends(spec: TestSpec) {
     test_spec_with_backends(spec, ALL_BACKENDS)
 }
