@@ -37,6 +37,7 @@ test-case.workspace = true
 itertools.workspace = true
 powdr-openvm-common = { workspace = true }
 powdr-openvm = { workspace = true }
+autoprecompiles = { workspace = true }
 powdr-autoprecompiles = { workspace = true }
 powdr-number = { workspace = true }
 pretty_assertions = "1"

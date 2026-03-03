@@ -6299,6 +6299,7 @@ dependencies = [
 name = "womir-circuit"
 version = "0.0.1"
 dependencies = [
+ "autoprecompiles",
  "cfg-if",
  "derive-new 0.6.0",
  "derive_more 1.0.0",
