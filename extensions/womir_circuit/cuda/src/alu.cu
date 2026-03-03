@@ -9,18 +9,21 @@
 
 using namespace riscv;
 
+// Number of 4-byte register operations to access a 32-bit value.
+static const size_t W32_REG_OPS = 1;
+
 // Concrete type aliases for 32-bit
 using WomirBaseAluCoreRecord = BaseAluCoreRecord<RV32_REGISTER_NUM_LIMBS>;
 using WomirBaseAluCore = BaseAluCore<RV32_REGISTER_NUM_LIMBS>;
 template <typename T> using WomirBaseAluCoreCols = BaseAluCoreCols<T, RV32_REGISTER_NUM_LIMBS>;
 
 template <typename T> struct WomirBaseAluCols {
-    WomirBaseAluAdapterCols<T, 1, 1> adapter;
+    WomirBaseAluAdapterCols<T, W32_REG_OPS, W32_REG_OPS> adapter;
     WomirBaseAluCoreCols<T> core;
 };
 
 struct WomirBaseAluRecord {
-    WomirBaseAluAdapterRecord<1, 1> adapter;
+    WomirBaseAluAdapterRecord<W32_REG_OPS, W32_REG_OPS> adapter;
     WomirBaseAluCoreRecord core;
 };
 
@@ -39,7 +42,7 @@ __global__ void womir_alu_tracegen(
     if (idx < d_records.len()) {
         auto const &rec = d_records[idx];
 
-        WomirBaseAluAdapter<1, 1> adapter(
+        WomirBaseAluAdapter<W32_REG_OPS, W32_REG_OPS> adapter(
             VariableRangeChecker(d_range_checker_ptr, range_checker_bins),
             BitwiseOperationLookup(d_bitwise_lookup_ptr, bitwise_num_bits),
             timestamp_max_bits
