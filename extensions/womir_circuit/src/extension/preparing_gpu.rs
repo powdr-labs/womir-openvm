@@ -28,14 +28,16 @@ use openvm_instructions::LocalOpcode;
 use openvm_rv32im_circuit::BaseAluCoreAir;
 use openvm_stark_backend::{config::StarkGenericConfig, p3_field::PrimeField32};
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
-use openvm_womir_transpiler::BaseAluOpcode;
+use openvm_womir_transpiler::{BaseAlu64Opcode, BaseAluOpcode};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use openvm_circuit::arch::ExecutionBridge;
 
 use crate::{
-    Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32BaseAluExecutor, adapters::Rv32BaseAluAdapterAir,
+    BaseAlu64Air, BaseAlu64ChipGpu, BaseAlu64Executor, Rv32BaseAluAir, Rv32BaseAluChipGpu,
+    Rv32BaseAluExecutor,
+    adapters::{BaseAluAdapterAir, Rv32BaseAluAdapterAir, W64_NUM_LIMBS, W64_REG_OPS},
 };
 
 // ============ Extension Struct ============
@@ -52,6 +54,7 @@ pub struct WomirPreparingGpu;
 #[derive(Clone, From, AnyEnum, Executor, MeteredExecutor, PreflightExecutor)]
 pub enum WomirPreparingGpuExecutor {
     BaseAlu(Rv32BaseAluExecutor),
+    BaseAlu64(BaseAlu64Executor),
 }
 
 // ============ VmExtension Implementations ============
@@ -63,13 +66,22 @@ impl<F: PrimeField32> VmExecutionExtension<F> for WomirPreparingGpu {
         &self,
         inventory: &mut ExecutorInventoryBuilder<F, WomirPreparingGpuExecutor>,
     ) -> Result<(), ExecutorInventoryError> {
-        use crate::adapters::Rv32BaseAluAdapterExecutor;
+        use crate::adapters::{BaseAluAdapterExecutor, Rv32BaseAluAdapterExecutor};
 
         let base_alu = Rv32BaseAluExecutor::new(
             Rv32BaseAluAdapterExecutor::default(),
             BaseAluOpcode::CLASS_OFFSET,
         );
         inventory.add_executor(base_alu, BaseAluOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let base_alu_64 = BaseAlu64Executor::new(
+            BaseAluAdapterExecutor::default(),
+            BaseAlu64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(
+            base_alu_64,
+            BaseAlu64Opcode::iter().map(|x| x.global_opcode()),
+        )?;
 
         Ok(())
     }
@@ -103,6 +115,16 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for WomirPreparingGpu {
         );
         inventory.add_air(base_alu);
 
+        let base_alu_64 = BaseAlu64Air::new(
+            BaseAluAdapterAir::<W64_NUM_LIMBS, W64_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
+            BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(base_alu_64);
+
         Ok(())
     }
 }
@@ -131,6 +153,14 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, WomirPrepar
             timestamp_max_bits,
         );
         inventory.add_executor_chip(base_alu);
+
+        inventory.next_air::<BaseAlu64Air>()?;
+        let base_alu_64 = BaseAlu64ChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(base_alu_64);
 
         Ok(())
     }
