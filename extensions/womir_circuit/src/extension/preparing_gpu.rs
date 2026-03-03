@@ -5,7 +5,7 @@
 //! GPU implementations, these types will be removed and the main WomirConfig
 //! will be used for GPU proving.
 //!
-//! Currently includes: BaseAlu32
+//! Currently includes: BaseAlu32, Shift32, Shift64
 
 use derive_more::derive::From;
 use openvm_circuit::{
@@ -25,10 +25,10 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
 };
 use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::GpuBackend};
 use openvm_instructions::LocalOpcode;
-use openvm_rv32im_circuit::BaseAluCoreAir;
+use openvm_rv32im_circuit::{BaseAluCoreAir, ShiftCoreAir};
 use openvm_stark_backend::{config::StarkGenericConfig, p3_field::PrimeField32};
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
-use openvm_womir_transpiler::{BaseAlu64Opcode, BaseAluOpcode};
+use openvm_womir_transpiler::{BaseAlu64Opcode, BaseAluOpcode, Shift64Opcode, ShiftOpcode};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
@@ -36,7 +36,8 @@ use openvm_circuit::arch::ExecutionBridge;
 
 use crate::{
     BaseAlu64Air, BaseAlu64ChipGpu, BaseAlu64Executor, Rv32BaseAluAir, Rv32BaseAluChipGpu,
-    Rv32BaseAluExecutor,
+    Rv32BaseAluExecutor, Rv32ShiftAir, Rv32ShiftChipGpu, Rv32ShiftExecutor, Shift64Air,
+    Shift64ChipGpu, Shift64Executor,
     adapters::{BaseAluAdapterAir, Rv32BaseAluAdapterAir, W64_NUM_LIMBS, W64_REG_OPS},
 };
 
@@ -55,6 +56,8 @@ pub struct WomirPreparingGpu;
 pub enum WomirPreparingGpuExecutor {
     BaseAlu(Rv32BaseAluExecutor),
     BaseAlu64(BaseAlu64Executor),
+    Shift(Rv32ShiftExecutor),
+    Shift64(Shift64Executor),
 }
 
 // ============ VmExtension Implementations ============
@@ -83,6 +86,18 @@ impl<F: PrimeField32> VmExecutionExtension<F> for WomirPreparingGpu {
             BaseAlu64Opcode::iter().map(|x| x.global_opcode()),
         )?;
 
+        let shift = Rv32ShiftExecutor::new(
+            Rv32BaseAluAdapterExecutor::default(),
+            ShiftOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(shift, ShiftOpcode::iter().map(|x| x.global_opcode()))?;
+
+        let shift_64 = Shift64Executor::new(
+            BaseAluAdapterExecutor::default(),
+            Shift64Opcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(shift_64, Shift64Opcode::iter().map(|x| x.global_opcode()))?;
+
         Ok(())
     }
 }
@@ -96,6 +111,7 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for WomirPreparingGpu {
         } = inventory.system().port();
 
         let exec_bridge = ExecutionBridge::new(execution_bus, program_bus);
+        let range_checker = inventory.range_checker().bus;
 
         let bitwise_lu = {
             let existing_air = inventory.find_air::<BitwiseOperationLookupAir<8>>().next();
@@ -124,6 +140,22 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for WomirPreparingGpu {
             BaseAluCoreAir::new(bitwise_lu, BaseAlu64Opcode::CLASS_OFFSET),
         );
         inventory.add_air(base_alu_64);
+
+        let shift = Rv32ShiftAir::new(
+            Rv32BaseAluAdapterAir::new(exec_bridge, memory_bridge, bitwise_lu),
+            ShiftCoreAir::new(bitwise_lu, range_checker, ShiftOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(shift);
+
+        let shift_64 = Shift64Air::new(
+            BaseAluAdapterAir::<W64_NUM_LIMBS, W64_REG_OPS>::new(
+                exec_bridge,
+                memory_bridge,
+                bitwise_lu,
+            ),
+            ShiftCoreAir::new(bitwise_lu, range_checker, Shift64Opcode::CLASS_OFFSET),
+        );
+        inventory.add_air(shift_64);
 
         Ok(())
     }
@@ -161,6 +193,22 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, WomirPrepar
             timestamp_max_bits,
         );
         inventory.add_executor_chip(base_alu_64);
+
+        inventory.next_air::<Rv32ShiftAir>()?;
+        let shift = Rv32ShiftChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(shift);
+
+        inventory.next_air::<Shift64Air>()?;
+        let shift_64 = Shift64ChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(shift_64);
 
         Ok(())
     }

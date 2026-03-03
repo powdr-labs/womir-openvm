@@ -7,7 +7,10 @@ use openvm_circuit::{
 use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::GpuBackend};
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 
-use crate::{BaseAlu64Air, BaseAlu64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu};
+use crate::{
+    BaseAlu64Air, BaseAlu64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32ShiftAir,
+    Rv32ShiftChipGpu, Shift64Air, Shift64ChipGpu,
+};
 
 use super::Womir;
 
@@ -39,6 +42,22 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
             timestamp_max_bits,
         );
         inventory.add_executor_chip(base_alu_64);
+
+        inventory.next_air::<Rv32ShiftAir>()?;
+        let shift = Rv32ShiftChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(shift);
+
+        inventory.next_air::<Shift64Air>()?;
+        let shift_64 = Shift64ChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(shift_64);
 
         // TODO: Add more WOMIR GPU chips here (mul, div, etc.)
 
