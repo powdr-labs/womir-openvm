@@ -9,7 +9,7 @@ fn run_openvm_guest(guest: &str, args: &[u32]) -> Result<(), Box<dyn std::error:
 
     let original = powdr_openvm::compile_openvm(guest_str, powdr_openvm::GuestOptions::default())?;
 
-    let config = powdr_openvm::default_powdr_openvm_config(0, 0);
+    let config = powdr_openvm_common::default_powdr_openvm_config(0, 0);
     let compiled = powdr_openvm::compile_exe(
         original,
         config,

@@ -144,7 +144,7 @@ impl OpenVmISA for WomirISA {
 
 #[cfg(test)]
 mod tests {
-    use powdr_openvm_common::extraction_utils::{OriginalAirs, OriginalVmConfig};
+    use powdr_openvm_common::extraction_utils::OriginalVmConfig;
 
     use super::*;
 
