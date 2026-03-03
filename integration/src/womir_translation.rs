@@ -735,17 +735,9 @@ impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMS
                     "fd_close" | "fd_fdstat_set_flags" | "fd_sync" | "sched_yield" => {
                         set_output_const(&mut directives, &outputs, 0); // ESUCCESS
                     }
-                    // fd_fdstat_get(fd, buf) -> errno
-                    // Write 6 zero words (24 bytes) to buf.
-                    "fd_fdstat_get" => {
-                        let buf = inputs[1].as_register().unwrap().start as usize;
-                        for i in 0..6u32 {
-                            store_const_to_mem(c, &mut directives, buf, mem_start + i * 4, 0);
-                        }
-                        set_output_const(&mut directives, &outputs, 0);
-                    }
                     // Return EBADF (8) for unsupported fd operations.
-                    "fd_seek"
+                    "fd_fdstat_get"
+                    | "fd_seek"
                     | "fd_prestat_get"
                     | "fd_prestat_dir_name"
                     | "fd_filestat_get"
