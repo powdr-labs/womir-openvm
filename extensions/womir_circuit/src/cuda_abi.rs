@@ -407,6 +407,84 @@ pub mod eq64_cuda {
     }
 }
 
+pub mod loadstore_cuda {
+    use super::*;
+    unsafe extern "C" {
+        fn _womir_load_store_tracegen(
+            d_trace: *mut F,
+            height: usize,
+            width: usize,
+            d_records: DeviceBufferView,
+            pointer_max_bits: usize,
+            d_range_checker: *mut u32,
+            range_checker_num_bins: u32,
+            timestamp_max_bits: u32,
+        ) -> i32;
+    }
+
+    pub unsafe fn tracegen(
+        d_trace: &DeviceBuffer<F>,
+        height: usize,
+        width: usize,
+        d_records: &DeviceBuffer<u8>,
+        pointer_max_bits: usize,
+        d_range_checker: &DeviceBuffer<F>,
+        timestamp_max_bits: u32,
+    ) -> Result<(), CudaError> {
+        unsafe {
+            CudaError::from_result(_womir_load_store_tracegen(
+                d_trace.as_mut_ptr(),
+                height,
+                width,
+                d_records.view(),
+                pointer_max_bits,
+                d_range_checker.as_mut_ptr() as *mut u32,
+                d_range_checker.len() as u32,
+                timestamp_max_bits,
+            ))
+        }
+    }
+}
+
+pub mod load_sign_extend_cuda {
+    use super::*;
+    unsafe extern "C" {
+        fn _womir_load_sign_extend_tracegen(
+            d_trace: *mut F,
+            height: usize,
+            width: usize,
+            d_records: DeviceBufferView,
+            pointer_max_bits: usize,
+            d_range_checker: *mut u32,
+            range_checker_num_bins: u32,
+            timestamp_max_bits: u32,
+        ) -> i32;
+    }
+
+    pub unsafe fn tracegen(
+        d_trace: &DeviceBuffer<F>,
+        height: usize,
+        width: usize,
+        d_records: &DeviceBuffer<u8>,
+        pointer_max_bits: usize,
+        d_range_checker: &DeviceBuffer<F>,
+        timestamp_max_bits: u32,
+    ) -> Result<(), CudaError> {
+        unsafe {
+            CudaError::from_result(_womir_load_sign_extend_tracegen(
+                d_trace.as_mut_ptr(),
+                height,
+                width,
+                d_records.view(),
+                pointer_max_bits,
+                d_range_checker.as_mut_ptr() as *mut u32,
+                d_range_checker.len() as u32,
+                timestamp_max_bits,
+            ))
+        }
+    }
+}
+
 pub mod divrem64_cuda {
     use super::*;
     unsafe extern "C" {
