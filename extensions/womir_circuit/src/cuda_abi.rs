@@ -610,6 +610,64 @@ pub mod const32_cuda {
     }
 }
 
+pub mod hintstore_cuda {
+    use super::*;
+    unsafe extern "C" {
+        fn _womir_hintstore_tracegen(
+            d_trace: *mut F,
+            height: usize,
+            width: usize,
+            d_records: *const u8,
+            d_record_offsets: *const u32,
+            d_row_offsets: *const u32,
+            num_instructions: u32,
+            total_rows: u32,
+            pointer_max_bits: u32,
+            d_range_checker: *mut u32,
+            range_checker_num_bins: u32,
+            d_bitwise_lookup: *mut u32,
+            bitwise_num_bits: usize,
+            timestamp_max_bits: u32,
+        ) -> i32;
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn tracegen(
+        d_trace: &DeviceBuffer<F>,
+        height: usize,
+        width: usize,
+        d_records: &DeviceBuffer<u8>,
+        d_record_offsets: &DeviceBuffer<u8>,
+        d_row_offsets: &DeviceBuffer<u8>,
+        num_instructions: u32,
+        total_rows: u32,
+        pointer_max_bits: u32,
+        d_range_checker: &DeviceBuffer<F>,
+        d_bitwise_lookup: &DeviceBuffer<F>,
+        bitwise_num_bits: usize,
+        timestamp_max_bits: u32,
+    ) -> Result<(), CudaError> {
+        unsafe {
+            CudaError::from_result(_womir_hintstore_tracegen(
+                d_trace.as_mut_ptr(),
+                height,
+                width,
+                d_records.as_ptr(),
+                d_record_offsets.as_ptr() as *const u32,
+                d_row_offsets.as_ptr() as *const u32,
+                num_instructions,
+                total_rows,
+                pointer_max_bits,
+                d_range_checker.as_mut_ptr() as *mut u32,
+                d_range_checker.len() as u32,
+                d_bitwise_lookup.as_mut_ptr() as *mut u32,
+                bitwise_num_bits,
+                timestamp_max_bits,
+            ))
+        }
+    }
+}
+
 pub mod divrem64_cuda {
     use super::*;
     unsafe extern "C" {
