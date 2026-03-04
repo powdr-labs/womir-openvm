@@ -2,16 +2,10 @@
 // Uses WomirBaseAluAdapter with W64_REG_OPS and DivRemCore with W64_NUM_LIMBS.
 #include "launcher.cuh"
 #include "primitives/buffer_view.cuh"
-#include "primitives/constants.h"
 #include "primitives/trace_access.h"
+#include "womir/constants.cuh"
 #include "womir/adapters/alu.cuh"
 #include "rv32im/cores/divrem.cuh"
-
-using namespace riscv;
-
-// 64-bit constants
-static const size_t W64_NUM_LIMBS = 2 * RV32_REGISTER_NUM_LIMBS;
-static const size_t W64_REG_OPS = 2;
 
 // Concrete type aliases for 64-bit
 using WomirDivRem64CoreRecord = DivRemCoreRecords<W64_NUM_LIMBS>;
