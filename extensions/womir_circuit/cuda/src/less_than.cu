@@ -21,29 +21,29 @@ struct WomirLessThanRecord {
 };
 
 __global__ void womir_less_than_tracegen(
-    Fp *d_trace,
+    Fp *trace,
     size_t height,
-    DeviceBufferConstView<WomirLessThanRecord> d_records,
-    uint32_t *d_range_checker_ptr,
-    size_t range_checker_bins,
-    uint32_t *d_bitwise_lookup_ptr,
-    size_t bitwise_num_bits,
+    DeviceBufferConstView<WomirLessThanRecord> records,
+    uint32_t *range_checker_ptr,
+    uint32_t range_checker_num_bins,
+    uint32_t *bitwise_lookup_ptr,
+    uint32_t bitwise_num_bits,
     uint32_t timestamp_max_bits
 ) {
     uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    RowSlice row(d_trace + idx, height);
-    if (idx < d_records.len()) {
-        auto const &rec = d_records[idx];
+    RowSlice row(trace + idx, height);
+    if (idx < records.len()) {
+        auto const &record = records[idx];
 
-        WomirBaseAluAdapter<W32_REG_OPS, W32_REG_OPS> adapter(
-            VariableRangeChecker(d_range_checker_ptr, range_checker_bins),
-            BitwiseOperationLookup(d_bitwise_lookup_ptr, bitwise_num_bits),
+        auto adapter = WomirBaseAluAdapter<W32_REG_OPS, W32_REG_OPS>(
+            VariableRangeChecker(range_checker_ptr, range_checker_num_bins),
+            BitwiseOperationLookup(bitwise_lookup_ptr, bitwise_num_bits),
             timestamp_max_bits
         );
-        adapter.fill_trace_row(row, rec.adapter);
+        adapter.fill_trace_row(row, record.adapter);
 
-        WomirLessThanCore core(BitwiseOperationLookup(d_bitwise_lookup_ptr, bitwise_num_bits));
-        core.fill_trace_row(row.slice_from(COL_INDEX(WomirLessThanCols, core)), rec.core);
+        auto core = WomirLessThanCore(BitwiseOperationLookup(bitwise_lookup_ptr, bitwise_num_bits));
+        core.fill_trace_row(row.slice_from(COL_INDEX(WomirLessThanCols, core)), record.core);
     } else {
         row.fill_zero(0, sizeof(WomirLessThanCols<uint8_t>));
     }
@@ -54,10 +54,10 @@ extern "C" int _womir_less_than_tracegen(
     size_t height,
     size_t width,
     DeviceBufferConstView<WomirLessThanRecord> d_records,
-    uint32_t *d_range_checker_ptr,
-    size_t range_checker_bins,
-    uint32_t *d_bitwise_lookup_ptr,
-    size_t bitwise_num_bits,
+    uint32_t *d_range_checker,
+    uint32_t range_checker_num_bins,
+    uint32_t *d_bitwise_lookup,
+    uint32_t bitwise_num_bits,
     uint32_t timestamp_max_bits
 ) {
     assert((height & (height - 1)) == 0);
@@ -68,9 +68,9 @@ extern "C" int _womir_less_than_tracegen(
         d_trace,
         height,
         d_records,
-        d_range_checker_ptr,
-        range_checker_bins,
-        d_bitwise_lookup_ptr,
+        d_range_checker,
+        range_checker_num_bins,
+        d_bitwise_lookup,
         bitwise_num_bits,
         timestamp_max_bits
     );

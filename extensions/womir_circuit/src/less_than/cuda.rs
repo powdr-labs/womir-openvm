@@ -40,8 +40,8 @@ impl Chip<DenseRecordArena, GpuBackend> for Rv32LessThanChipGpu {
         }
         debug_assert_eq!(records.len() % RECORD_SIZE, 0);
 
-        let trace_width = LessThanCoreCols::<F, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>::width()
-            + Rv32BaseAluAdapterCols::<F>::width();
+        let trace_width = Rv32BaseAluAdapterCols::<F>::width()
+            + LessThanCoreCols::<F, RV32_REGISTER_NUM_LIMBS, RV32_CELL_BITS>::width();
         let trace_height = next_power_of_two_or_zero(records.len() / RECORD_SIZE);
 
         let d_records = records.to_device().unwrap();
@@ -53,7 +53,6 @@ impl Chip<DenseRecordArena, GpuBackend> for Rv32LessThanChipGpu {
                 trace_height,
                 &d_records,
                 &self.range_checker.count,
-                self.range_checker.count.len(),
                 &self.bitwise_lookup.count,
                 RV32_CELL_BITS,
                 self.timestamp_max_bits as u32,
@@ -84,8 +83,9 @@ impl Chip<DenseRecordArena, GpuBackend> for LessThan64ChipGpu {
         }
         debug_assert_eq!(records.len() % RECORD_SIZE, 0);
 
-        let trace_width = LessThanCoreCols::<F, W64_NUM_LIMBS, RV32_CELL_BITS>::width()
-            + BaseAluAdapterColsDifferentInputsOutputs::<F, W64_REG_OPS, W32_REG_OPS>::width();
+        let trace_width =
+            BaseAluAdapterColsDifferentInputsOutputs::<F, W64_REG_OPS, W32_REG_OPS>::width()
+                + LessThanCoreCols::<F, W64_NUM_LIMBS, RV32_CELL_BITS>::width();
         let trace_height = next_power_of_two_or_zero(records.len() / RECORD_SIZE);
 
         let d_records = records.to_device().unwrap();
@@ -97,7 +97,6 @@ impl Chip<DenseRecordArena, GpuBackend> for LessThan64ChipGpu {
                 trace_height,
                 &d_records,
                 &self.range_checker.count,
-                self.range_checker.count.len(),
                 &self.bitwise_lookup.count,
                 RV32_CELL_BITS,
                 self.timestamp_max_bits as u32,
