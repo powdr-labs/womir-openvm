@@ -1354,7 +1354,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1371,7 +1371,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1388,7 +1388,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1405,7 +1405,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1422,7 +1422,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1439,7 +1439,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     // ==================== Eq64 Tests ====================
@@ -1462,7 +1462,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1483,7 +1483,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1504,7 +1504,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1525,7 +1525,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     // ==================== Eq64 output width tests ====================
@@ -1556,7 +1556,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1581,7 +1581,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1606,7 +1606,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1626,7 +1626,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1646,7 +1646,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     // ==================== Shift Tests ====================
