@@ -12,11 +12,13 @@ using namespace program;
 
 // Core structs inlined from OpenVM (unchanged)
 template <typename T, size_t NUM_CELLS> struct LoadSignExtendCoreCols {
+    /// This chip treats loadb with 0 shift and loadb with 1 shift as different instructions
     T opcode_loadb_flag0;
     T opcode_loadb_flag1;
     T opcode_loadh_flag;
 
     T shift_most_sig_bit;
+    // The bit that is extended to the remaining bits
     T data_most_sig_bit;
 
     T shifted_read_data[NUM_CELLS];
@@ -59,6 +61,7 @@ template <size_t NUM_CELLS> struct LoadSignExtendCore {
 
         if ((shift & 2) != 0) {
             COL_WRITE_VALUE(row, Cols, shift_most_sig_bit, 1);
+            // Shift the read data by 2 places to the left
 #pragma unroll
             for (size_t i = 0; i < NUM_CELLS - 2; i++) {
                 COL_WRITE_VALUE(row, Cols, shifted_read_data[i], record.read_data[i + 2]);
@@ -92,7 +95,7 @@ __global__ void womir_load_sign_extend_tracegen(
     DeviceBufferConstView<WomirLoadSignExtendRecord> records,
     size_t pointer_max_bits,
     uint32_t *range_checker_ptr,
-    size_t range_checker_num_bins,
+    uint32_t range_checker_num_bins,
     uint32_t timestamp_max_bits
 ) {
     uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -123,7 +126,7 @@ extern "C" int _womir_load_sign_extend_tracegen(
     DeviceBufferConstView<WomirLoadSignExtendRecord> d_records,
     size_t pointer_max_bits,
     uint32_t *__restrict__ d_range_checker,
-    size_t range_checker_num_bins,
+    uint32_t range_checker_num_bins,
     uint32_t timestamp_max_bits
 ) {
     assert((height & (height - 1)) == 0);

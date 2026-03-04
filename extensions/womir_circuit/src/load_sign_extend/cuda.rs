@@ -36,15 +36,16 @@ impl Chip<DenseRecordArena, GpuBackend> for Rv32LoadSignExtendChipGpu {
 
         let trace_width = Rv32LoadStoreAdapterCols::<F>::width()
             + LoadSignExtendCoreCols::<F, RV32_REGISTER_NUM_LIMBS>::width();
-        let trace_height = next_power_of_two_or_zero(records.len() / RECORD_SIZE);
+        let padded_height = next_power_of_two_or_zero(records.len() / RECORD_SIZE);
 
         let d_records = records.to_device().unwrap();
-        let d_trace = DeviceMatrix::<F>::with_capacity(trace_height, trace_width);
+        let d_trace = DeviceMatrix::<F>::with_capacity(padded_height, trace_width);
 
         unsafe {
             load_sign_extend_cuda::tracegen(
                 d_trace.buffer(),
-                trace_height,
+                padded_height,
+                trace_width,
                 &d_records,
                 self.pointer_max_bits,
                 &self.range_checker.count,

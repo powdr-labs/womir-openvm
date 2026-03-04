@@ -335,7 +335,7 @@ pub mod loadstore_cuda {
             d_records: DeviceBufferView,
             pointer_max_bits: usize,
             d_range_checker: *mut u32,
-            range_checker_num_bins: usize,
+            range_checker_num_bins: u32,
             timestamp_max_bits: u32,
         ) -> i32;
     }
@@ -343,12 +343,12 @@ pub mod loadstore_cuda {
     pub unsafe fn tracegen(
         d_trace: &DeviceBuffer<F>,
         height: usize,
+        width: usize,
         d_records: &DeviceBuffer<u8>,
         pointer_max_bits: usize,
         d_range_checker: &DeviceBuffer<F>,
         timestamp_max_bits: u32,
     ) -> Result<(), CudaError> {
-        let width = d_trace.len() / height;
         unsafe {
             CudaError::from_result(_womir_load_store_tracegen(
                 d_trace.as_mut_ptr(),
@@ -357,7 +357,7 @@ pub mod loadstore_cuda {
                 d_records.view(),
                 pointer_max_bits,
                 d_range_checker.as_mut_ptr() as *mut u32,
-                d_range_checker.len(),
+                d_range_checker.len() as u32,
                 timestamp_max_bits,
             ))
         }
@@ -374,7 +374,7 @@ pub mod load_sign_extend_cuda {
             d_records: DeviceBufferView,
             pointer_max_bits: usize,
             d_range_checker: *mut u32,
-            range_checker_num_bins: usize,
+            range_checker_num_bins: u32,
             timestamp_max_bits: u32,
         ) -> i32;
     }
@@ -382,12 +382,12 @@ pub mod load_sign_extend_cuda {
     pub unsafe fn tracegen(
         d_trace: &DeviceBuffer<F>,
         height: usize,
+        width: usize,
         d_records: &DeviceBuffer<u8>,
         pointer_max_bits: usize,
         d_range_checker: &DeviceBuffer<F>,
         timestamp_max_bits: u32,
     ) -> Result<(), CudaError> {
-        let width = d_trace.len() / height;
         unsafe {
             CudaError::from_result(_womir_load_sign_extend_tracegen(
                 d_trace.as_mut_ptr(),
@@ -396,7 +396,7 @@ pub mod load_sign_extend_cuda {
                 d_records.view(),
                 pointer_max_bits,
                 d_range_checker.as_mut_ptr() as *mut u32,
-                d_range_checker.len(),
+                d_range_checker.len() as u32,
                 timestamp_max_bits,
             ))
         }

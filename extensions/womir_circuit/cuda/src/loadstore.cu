@@ -13,11 +13,14 @@ using namespace program;
 // Core structs inlined from OpenVM (unchanged)
 template <typename T, size_t NUM_CELLS> struct LoadStoreCoreCols {
     T flags[4];
+    /// we need to keep the degree of is_valid and is_load to 1
     T is_valid;
     T is_load;
 
     T read_data[NUM_CELLS];
     T prev_data[NUM_CELLS];
+    /// write_data will be constrained against read_data and prev_data
+    /// depending on the opcode and the shift amount
     T write_data[NUM_CELLS];
 };
 
@@ -25,16 +28,19 @@ template <size_t NUM_CELLS> struct LoadStoreCoreRecord {
     uint8_t local_opcode;
     uint8_t shift_amount;
     uint8_t read_data[NUM_CELLS];
+    // Note: `prev_data` can be from native address space, so we need to use u32
     uint32_t prev_data[NUM_CELLS];
 };
 
 enum Rv32LoadStoreOpcode {
     LOADW,
+    /// LOADBU, LOADHU are unsigned extend opcodes, implemented in the same chip with LOADW
     LOADBU,
     LOADHU,
     STOREW,
     STOREH,
     STOREB,
+    /// The following are signed extend opcodes
     LOADB,
     LOADH,
 };
@@ -168,7 +174,7 @@ __global__ void womir_load_store_tracegen(
     DeviceBufferConstView<WomirLoadStoreRecord> records,
     size_t pointer_max_bits,
     uint32_t *range_checker_ptr,
-    size_t range_checker_num_bins,
+    uint32_t range_checker_num_bins,
     uint32_t timestamp_max_bits
 ) {
     uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -197,7 +203,7 @@ extern "C" int _womir_load_store_tracegen(
     DeviceBufferConstView<WomirLoadStoreRecord> d_records,
     size_t pointer_max_bits,
     uint32_t *d_range_checker,
-    size_t range_checker_num_bins,
+    uint32_t range_checker_num_bins,
     uint32_t timestamp_max_bits
 ) {
     assert((height & (height - 1)) == 0);
