@@ -181,8 +181,6 @@ impl<F: PrimeField32> VmExecutionExtension<F> for WomirPreparingGpu {
         );
         inventory.add_executor(divrem_64, DivRem64Opcode::iter().map(|x| x.global_opcode()))?;
 
-        use crate::adapters::BaseAluAdapterExecutorDifferentInputsOutputs;
-
         let eq = Rv32EqExecutor::new(
             Rv32BaseAluAdapterExecutor::default(),
             EqOpcode::CLASS_OFFSET,
