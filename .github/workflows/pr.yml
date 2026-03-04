@@ -110,3 +110,6 @@ jobs:
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_shl --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_shr --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_mul --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_div --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_divu --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_rem --test-threads=1
