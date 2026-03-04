@@ -7,15 +7,9 @@
 #include "primitives/trace_access.h"
 #include "system/memory/controller.cuh"
 #include "system/memory/offline_checker.cuh"
+#include "womir/execution.cuh"
 
 using namespace riscv;
-
-// WOMIR ExecutionState includes frame pointer (fp) between pc and timestamp.
-template <typename T> struct WomirExecutionState {
-    T pc;
-    T fp;
-    T timestamp;
-};
 
 template <typename T, size_t NUM_READ_OPS, size_t NUM_WRITE_OPS>
 struct WomirBaseAluAdapterCols {
