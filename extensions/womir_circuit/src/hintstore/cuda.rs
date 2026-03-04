@@ -16,7 +16,7 @@ use crate::{adapters::RV32_CELL_BITS, cuda_abi::hintstore_cuda};
 
 /// Reinterpret a `&[u32]` slice as `&[u8]` for GPU transfer.
 fn as_u8_slice(v: &[u32]) -> &[u8] {
-    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * size_of::<u32>()) }
+    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, std::mem::size_of_val(v)) }
 }
 
 #[derive(new)]

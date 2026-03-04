@@ -3764,7 +3764,8 @@ mod tests {
             stdin,
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        // This test uses `call` which requires chips not yet on GPU.
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Non-TestSpec Tests ====================

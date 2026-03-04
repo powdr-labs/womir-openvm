@@ -28,7 +28,7 @@ use openvm_circuit_primitives::{
     range_tuple::{RangeTupleCheckerAir, RangeTupleCheckerBus, RangeTupleCheckerChipGPU},
 };
 use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::GpuBackend};
-use openvm_instructions::LocalOpcode;
+use openvm_instructions::{LocalOpcode, PhantomDiscriminant};
 use openvm_rv32im_circuit::{
     BaseAluCoreAir, DivRemCoreAir, LessThanCoreAir, LoadSignExtendCoreAir, LoadStoreCoreAir,
     MultiplicationCoreAir, ShiftCoreAir,
@@ -38,7 +38,7 @@ use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 use openvm_womir_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode, Eq64Opcode,
     EqOpcode, HintStoreOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode,
-    MulOpcode, Shift64Opcode, ShiftOpcode,
+    MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -221,6 +221,32 @@ impl<F: PrimeField32> VmExecutionExtension<F> for WomirPreparingGpu {
         inventory.add_executor(
             hint_store,
             HintStoreOpcode::iter().map(|x| x.global_opcode()),
+        )?;
+
+        // Register phantom sub-executors for hint stream operations
+        inventory.add_phantom_sub_executor(
+            super::phantom::HintInputSubEx,
+            PhantomDiscriminant(Phantom::HintInput as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            super::phantom::PrintStrSubEx,
+            PhantomDiscriminant(Phantom::PrintStr as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            super::phantom::HintRandomSubEx,
+            PhantomDiscriminant(Phantom::HintRandom as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            super::phantom::HintLoadByKeySubEx,
+            PhantomDiscriminant(Phantom::HintLoadByKey as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            super::phantom::TraceSyscallSubEx::new(),
+            PhantomDiscriminant(Phantom::TraceSyscall as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            super::phantom::ClockTimeGetSubEx::new(),
+            PhantomDiscriminant(Phantom::ClockTimeGet as u16),
         )?;
 
         Ok(())
