@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build-and-test:
     name: Build and Test
-    runs-on: warp-ubuntu-2404-x64-16x
+    runs-on: warp-ubuntu-2404-x64-64x
 
     steps:
       - name: Checkout code
