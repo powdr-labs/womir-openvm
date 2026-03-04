@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use openvm_circuit::arch::{
     AirInventory, ChipInventoryError, VmBuilder, VmCircuitConfig, VmCircuitExtension,
@@ -136,9 +136,12 @@ impl OpenVmISA for WomirISA {
         format!("{instruction:?}")
     }
 
-    fn get_labels(program: &OriginalCompiledProgram<Self>) -> BTreeMap<u64, Vec<String>> {
-        // TODO: is this correct?
-        program.elf.labels()
+    fn get_labels_debug<'a>(program: &Self::Program<'a>) -> BTreeMap<u64, Vec<String>> {
+        program.labels()
+    }
+
+    fn get_jump_destinations(original_program: &OriginalCompiledProgram<Self>) -> BTreeSet<u64> {
+        original_program.elf.labels().into_keys().collect()
     }
 }
 
