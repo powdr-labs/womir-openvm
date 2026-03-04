@@ -3401,7 +3401,7 @@ mod tests {
             expected_registers: vec![(10, 0x42), (12, 0x42), (13, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3415,7 +3415,7 @@ mod tests {
             expected_registers: vec![(10, 0x42), (11, 0), (12, 0x42)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== I64Load / I64Load32U anti-dependency tests ====================
@@ -3447,7 +3447,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3470,7 +3470,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3494,7 +3494,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3514,7 +3514,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Call Tests ====================
