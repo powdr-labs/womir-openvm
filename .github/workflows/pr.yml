@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build-and-test:
     name: Build and Test
-    runs-on: warp-ubuntu-2404-x64-16x
+    runs-on: warp-ubuntu-2404-x64-32x
 
     steps:
       - name: Checkout code
@@ -135,6 +135,25 @@ jobs:
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_lt_u_64_preserves_rd_high_word --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_lt_s_64_preserves_rd_high_word --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_lt_u_64_false_preserves_rd_high_word --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_eq_true --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_eq_false --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_neq_true --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_neq_false --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_eq_imm --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_neq_imm --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_eq_64_true --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_eq_64_false --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_neq_64_true --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_neq_64_false --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_eq_64_preserves_rd_high_word --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_neq_64_preserves_rd_high_word --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_eq_64_false_preserves_rd_high_word --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_eq_imm_64 --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_neq_imm_64 --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_const32_small --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_const32_large --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_const32_zero --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_const32_max --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_jump --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_jump_if_true --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_jump_if_false --exact --test-threads=1
