@@ -23,22 +23,22 @@ struct Const32Record {
 };
 
 // Column layout must match Rust Const32AdapterAirCol exactly.
-template <typename T, size_t NUM_LIMBS = RV32_REGISTER_NUM_LIMBS>
+template <typename T>
 struct Const32Cols {
     T is_valid;
     WomirExecutionState<T> from_state;
     T rd_ptr;
-    T imm_limbs[NUM_LIMBS];
+    T imm_limbs[RV32_REGISTER_NUM_LIMBS];
     MemoryReadAuxCols<T> fp_read_aux;
-    MemoryWriteAuxCols<T, NUM_LIMBS> write_aux;
+    MemoryWriteAuxCols<T, RV32_REGISTER_NUM_LIMBS> write_aux;
 };
 
 struct Const32TraceFiller {
     MemoryAuxColsFactory mem_helper;
     BitwiseOperationLookup bitwise_lookup;
 
-    template <typename T, size_t NUM_LIMBS = RV32_REGISTER_NUM_LIMBS>
-    using Cols = Const32Cols<T, NUM_LIMBS>;
+    template <typename T>
+    using Cols = Const32Cols<T>;
 
     __device__ Const32TraceFiller(
         VariableRangeChecker range_checker,
