@@ -1284,7 +1284,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_all_backends(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1310,7 +1310,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_all_backends(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1335,7 +1335,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_all_backends(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     // ==================== Eq Tests ====================
