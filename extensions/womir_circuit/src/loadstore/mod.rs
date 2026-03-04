@@ -9,6 +9,11 @@ use crate::{
 
 pub mod execution;
 
+#[cfg(feature = "cuda")]
+mod cuda;
+#[cfg(feature = "cuda")]
+pub use cuda::Rv32LoadStoreChipGpu;
+
 pub type Rv32LoadStoreAir =
     VmAirWrapper<Rv32LoadStoreAdapterAir, LoadStoreCoreAir<RV32_REGISTER_NUM_LIMBS>>;
 pub type Rv32LoadStoreExecutor = LoadStoreExecutor<RV32_REGISTER_NUM_LIMBS>;

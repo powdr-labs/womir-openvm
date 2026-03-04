@@ -5,7 +5,8 @@
 //! GPU implementations, these types will be removed and the main WomirConfig
 //! will be used for GPU proving.
 //!
-//! Currently includes: BaseAlu32, BaseAlu64, Shift32, Shift64, Mul32, Mul64, DivRem32, DivRem64
+//! Currently includes: BaseAlu32, BaseAlu64, Shift32, Shift64, Mul32, Mul64, DivRem32, DivRem64,
+//! LoadStore, LoadSignExtend
 
 use std::sync::Arc;
 
@@ -28,12 +29,15 @@ use openvm_circuit_primitives::{
 };
 use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::GpuBackend};
 use openvm_instructions::LocalOpcode;
-use openvm_rv32im_circuit::{BaseAluCoreAir, DivRemCoreAir, MultiplicationCoreAir, ShiftCoreAir};
+use openvm_rv32im_circuit::{
+    BaseAluCoreAir, DivRemCoreAir, LoadSignExtendCoreAir, LoadStoreCoreAir, MultiplicationCoreAir,
+    ShiftCoreAir,
+};
 use openvm_stark_backend::{config::StarkGenericConfig, p3_field::PrimeField32};
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, DivRem64Opcode, DivRemOpcode, Mul64Opcode, MulOpcode,
-    Shift64Opcode, ShiftOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, DivRem64Opcode, DivRemOpcode, LoadStoreOpcode, Mul64Opcode,
+    MulOpcode, Shift64Opcode, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -44,9 +48,14 @@ use crate::{
     BaseAlu64Air, BaseAlu64ChipGpu, BaseAlu64Executor, DivRem64Air, DivRem64ChipGpu,
     DivRem64Executor, Mul64Air, Mul64ChipGpu, Mul64Executor, Rv32BaseAluAir, Rv32BaseAluChipGpu,
     Rv32BaseAluExecutor, Rv32DivRemAir, Rv32DivRemChipGpu, Rv32DivRemExecutor,
-    Rv32MultiplicationAir, Rv32MultiplicationChipGpu, Rv32MultiplicationExecutor, Rv32ShiftAir,
-    Rv32ShiftChipGpu, Rv32ShiftExecutor, Shift64Air, Shift64ChipGpu, Shift64Executor,
-    adapters::{BaseAluAdapterAir, Rv32BaseAluAdapterAir, W64_NUM_LIMBS, W64_REG_OPS},
+    Rv32LoadSignExtendAir, Rv32LoadSignExtendChipGpu, Rv32LoadSignExtendExecutor, Rv32LoadStoreAir,
+    Rv32LoadStoreChipGpu, Rv32LoadStoreExecutor, Rv32MultiplicationAir, Rv32MultiplicationChipGpu,
+    Rv32MultiplicationExecutor, Rv32ShiftAir, Rv32ShiftChipGpu, Rv32ShiftExecutor, Shift64Air,
+    Shift64ChipGpu, Shift64Executor,
+    adapters::{
+        BaseAluAdapterAir, Rv32BaseAluAdapterAir, Rv32LoadStoreAdapterAir, W64_NUM_LIMBS,
+        W64_REG_OPS,
+    },
 };
 
 // ============ Extension Struct ============
@@ -80,6 +89,8 @@ pub enum WomirPreparingGpuExecutor {
     Shift64(Shift64Executor),
     DivRem(Rv32DivRemExecutor),
     DivRem64(DivRem64Executor),
+    LoadStore(Rv32LoadStoreExecutor),
+    LoadSignExtend(Rv32LoadSignExtendExecutor),
 }
 
 // ============ VmExtension Implementations ============
@@ -91,7 +102,11 @@ impl<F: PrimeField32> VmExecutionExtension<F> for WomirPreparingGpu {
         &self,
         inventory: &mut ExecutorInventoryBuilder<F, WomirPreparingGpuExecutor>,
     ) -> Result<(), ExecutorInventoryError> {
-        use crate::adapters::{BaseAluAdapterExecutor, Rv32BaseAluAdapterExecutor};
+        use crate::adapters::{
+            BaseAluAdapterExecutor, Rv32BaseAluAdapterExecutor, Rv32LoadStoreAdapterExecutor,
+        };
+
+        let pointer_max_bits = inventory.pointer_max_bits();
 
         let base_alu = Rv32BaseAluExecutor::new(
             Rv32BaseAluAdapterExecutor::default(),
@@ -142,6 +157,24 @@ impl<F: PrimeField32> VmExecutionExtension<F> for WomirPreparingGpu {
         );
         inventory.add_executor(divrem_64, DivRem64Opcode::iter().map(|x| x.global_opcode()))?;
 
+        let load_store = Rv32LoadStoreExecutor::new(
+            Rv32LoadStoreAdapterExecutor::new(pointer_max_bits),
+            LoadStoreOpcode::CLASS_OFFSET,
+        );
+        inventory.add_executor(
+            load_store,
+            LoadStoreOpcode::iter()
+                .take(LoadStoreOpcode::STOREB as usize + 1)
+                .map(|x| x.global_opcode()),
+        )?;
+
+        let load_sign_extend =
+            Rv32LoadSignExtendExecutor::new(Rv32LoadStoreAdapterExecutor::new(pointer_max_bits));
+        inventory.add_executor(
+            load_sign_extend,
+            [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
+        )?;
+
         Ok(())
     }
 }
@@ -156,6 +189,7 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for WomirPreparingGpu {
 
         let exec_bridge = ExecutionBridge::new(execution_bus, program_bus);
         let range_checker = inventory.range_checker().bus;
+        let pointer_max_bits = inventory.pointer_max_bits();
 
         let bitwise_lu = {
             let existing_air = inventory.find_air::<BitwiseOperationLookupAir<8>>().next();
@@ -248,6 +282,28 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for WomirPreparingGpu {
         );
         inventory.add_air(divrem_64);
 
+        let load_store = Rv32LoadStoreAir::new(
+            Rv32LoadStoreAdapterAir::new(
+                memory_bridge,
+                exec_bridge,
+                range_checker,
+                pointer_max_bits,
+            ),
+            LoadStoreCoreAir::new(LoadStoreOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(load_store);
+
+        let load_sign_extend = Rv32LoadSignExtendAir::new(
+            Rv32LoadStoreAdapterAir::new(
+                memory_bridge,
+                exec_bridge,
+                range_checker,
+                pointer_max_bits,
+            ),
+            LoadSignExtendCoreAir::new(range_checker),
+        );
+        inventory.add_air(load_sign_extend);
+
         Ok(())
     }
 }
@@ -265,6 +321,7 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, WomirPrepar
         inventory: &mut ChipInventory<BabyBearPoseidon2Config, DenseRecordArena, GpuBackend>,
     ) -> Result<(), ChipInventoryError> {
         let timestamp_max_bits = inventory.timestamp_max_bits();
+        let pointer_max_bits = inventory.airs().pointer_max_bits();
 
         let range_checker = get_inventory_range_checker(inventory);
         let bitwise_lu = get_or_create_bitwise_op_lookup(inventory)?;
@@ -355,6 +412,19 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, WomirPrepar
             timestamp_max_bits,
         );
         inventory.add_executor_chip(divrem_64);
+
+        inventory.next_air::<Rv32LoadStoreAir>()?;
+        let load_store =
+            Rv32LoadStoreChipGpu::new(range_checker.clone(), pointer_max_bits, timestamp_max_bits);
+        inventory.add_executor_chip(load_store);
+
+        inventory.next_air::<Rv32LoadSignExtendAir>()?;
+        let load_sign_extend = Rv32LoadSignExtendChipGpu::new(
+            range_checker.clone(),
+            pointer_max_bits,
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(load_sign_extend);
 
         Ok(())
     }
