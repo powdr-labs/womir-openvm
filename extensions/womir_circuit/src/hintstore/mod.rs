@@ -46,7 +46,7 @@ mod execution;
 #[cfg(feature = "cuda")]
 mod cuda;
 #[cfg(feature = "cuda")]
-pub use cuda::Rv32HintStoreChipGpu;
+pub use cuda::{OffsetInfo, Rv32HintStoreChipGpu};
 
 #[repr(C)]
 #[derive(AlignedBorrow, Debug, StructReflection)]

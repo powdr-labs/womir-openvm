@@ -1,7 +1,10 @@
-use std::{mem::size_of, sync::Arc};
+use std::sync::Arc;
 
 use derive_new::new;
-use openvm_circuit::{arch::DenseRecordArena, utils::next_power_of_two_or_zero};
+use openvm_circuit::{
+    arch::{DenseRecordArena, RecordSeeker},
+    utils::next_power_of_two_or_zero,
+};
 use openvm_circuit_primitives::{
     bitwise_op_lookup::BitwiseOperationLookupChipGPU, var_range::VariableRangeCheckerChipGPU,
 };
@@ -11,13 +14,10 @@ use openvm_cuda_backend::{
 use openvm_cuda_common::copy::MemCopyH2D;
 use openvm_stark_backend::{Chip, prover::types::AirProvingContext};
 
-use super::{Rv32HintStoreCols, Rv32HintStoreRecordHeader, Rv32HintStoreVar};
-use crate::{adapters::RV32_CELL_BITS, cuda_abi::hintstore_cuda};
-
-/// Reinterpret a `&[u32]` slice as `&[u8]` for GPU transfer.
-fn as_u8_slice(v: &[u32]) -> &[u8] {
-    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, std::mem::size_of_val(v)) }
-}
+use crate::{
+    Rv32HintStoreCols, Rv32HintStoreLayout, Rv32HintStoreRecordMut, adapters::RV32_CELL_BITS,
+    cuda_abi::hintstore_cuda::tracegen,
+};
 
 #[derive(new)]
 pub struct Rv32HintStoreChipGpu {
@@ -27,62 +27,54 @@ pub struct Rv32HintStoreChipGpu {
     pub timestamp_max_bits: usize,
 }
 
+// This is the info needed by each row to do parallel tracegen
+#[repr(C)]
+#[derive(new)]
+pub struct OffsetInfo {
+    pub record_offset: u32,
+    pub local_idx: u32,
+}
+
 impl Chip<DenseRecordArena, GpuBackend> for Rv32HintStoreChipGpu {
-    fn generate_proving_ctx(&self, arena: DenseRecordArena) -> AirProvingContext<GpuBackend> {
-        let records = arena.allocated();
+    fn generate_proving_ctx(&self, mut arena: DenseRecordArena) -> AirProvingContext<GpuBackend> {
+        let width = Rv32HintStoreCols::<u8>::width();
+        let records = arena.allocated_mut();
         if records.is_empty() {
             return get_empty_air_proving_ctx::<GpuBackend>();
         }
 
-        // Parse variable-size records to compute offsets and total rows.
-        // Record layout: [Header (padded to Var alignment)] [Var * num_words]
-        let header_size = size_of::<Rv32HintStoreRecordHeader>();
-        let var_size = size_of::<Rv32HintStoreVar>();
-        let aligned_header = header_size.next_multiple_of(align_of::<Rv32HintStoreVar>());
-
-        let mut record_offsets: Vec<u32> = Vec::new();
-        let mut row_offsets: Vec<u32> = Vec::new();
-        let mut total_rows: u32 = 0;
-        let mut offset = 0usize;
+        let mut offsets = Vec::<OffsetInfo>::new();
+        let mut offset = 0;
 
         while offset < records.len() {
-            record_offsets.push(offset as u32);
-            row_offsets.push(total_rows);
-
-            // SAFETY: the executor wrote valid Rv32HintStoreRecordHeader at this offset
-            let header: &Rv32HintStoreRecordHeader =
-                unsafe { &*(records[offset..].as_ptr() as *const Rv32HintStoreRecordHeader) };
-            let num_words = header.num_words;
-            debug_assert!(num_words > 0);
-            total_rows += num_words;
-
-            offset += aligned_header + var_size * num_words as usize;
+            let prev_offset = offset;
+            let record = RecordSeeker::<
+                DenseRecordArena,
+                Rv32HintStoreRecordMut,
+                Rv32HintStoreLayout,
+            >::get_record_at(&mut offset, records);
+            for idx in 0..record.inner.num_words {
+                offsets.push(OffsetInfo::new(prev_offset as u32, idx));
+            }
         }
-        debug_assert_eq!(offset, records.len());
 
-        let trace_width = Rv32HintStoreCols::<F>::width();
-        let padded_height = next_power_of_two_or_zero(total_rows as usize);
-
-        // Copy data to GPU
         let d_records = records.to_device().unwrap();
-        let d_record_offsets = as_u8_slice(&record_offsets).to_device().unwrap();
-        let d_row_offsets = as_u8_slice(&row_offsets).to_device().unwrap();
-        let d_trace = DeviceMatrix::<F>::with_capacity(padded_height, trace_width);
+        let d_record_offsets = offsets.to_device().unwrap();
+
+        let trace_height = next_power_of_two_or_zero(offsets.len());
+        let d_trace = DeviceMatrix::<F>::with_capacity(trace_height, width);
 
         unsafe {
-            hintstore_cuda::tracegen(
+            tracegen(
                 d_trace.buffer(),
-                padded_height,
-                trace_width,
+                trace_height,
                 &d_records,
+                offsets.len(),
                 &d_record_offsets,
-                &d_row_offsets,
-                record_offsets.len() as u32,
-                total_rows,
                 self.pointer_max_bits as u32,
                 &self.range_checker.count,
                 &self.bitwise_lookup.count,
-                RV32_CELL_BITS,
+                RV32_CELL_BITS as u32,
                 self.timestamp_max_bits as u32,
             )
             .unwrap();
