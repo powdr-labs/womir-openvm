@@ -8,6 +8,11 @@ use super::adapters::{
 
 mod execution;
 
+#[cfg(feature = "cuda")]
+mod cuda;
+#[cfg(feature = "cuda")]
+pub use cuda::{Mul64ChipGpu, Rv32MultiplicationChipGpu};
+
 pub use execution::MultiplicationExecutor;
 
 // 32-bit type aliases

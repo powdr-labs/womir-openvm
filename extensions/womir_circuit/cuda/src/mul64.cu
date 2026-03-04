@@ -3,31 +3,33 @@
 #include "primitives/trace_access.h"
 #include "womir/constants.cuh"
 #include "womir/adapters/alu.cuh"
-#include "rv32im/cores/shift.cuh"
+#include "rv32im/cores/mul.cuh"
 
-// Concrete type aliases for 32-bit
-using WomirShiftCoreRecord = ShiftCoreRecord<RV32_REGISTER_NUM_LIMBS>;
-using WomirShiftCore = ShiftCore<RV32_REGISTER_NUM_LIMBS>;
-template <typename T> using WomirShiftCoreCols = ShiftCoreCols<T, RV32_REGISTER_NUM_LIMBS>;
+// Concrete type aliases for 64-bit
+using WomirMul64CoreRecord = MultiplicationCoreRecord<W64_NUM_LIMBS>;
+using WomirMul64Core = MultiplicationCore<W64_NUM_LIMBS>;
+template <typename T> using WomirMul64CoreCols = MultiplicationCoreCols<T, W64_NUM_LIMBS>;
 
-template <typename T> struct WomirShiftCols {
-    WomirBaseAluAdapterCols<T, W32_REG_OPS, W32_REG_OPS> adapter;
-    WomirShiftCoreCols<T> core;
+template <typename T> struct WomirMul64Cols {
+    WomirBaseAluAdapterCols<T, W64_REG_OPS, W64_REG_OPS> adapter;
+    WomirMul64CoreCols<T> core;
 };
 
-struct WomirShiftRecord {
-    WomirBaseAluAdapterRecord<W32_REG_OPS, W32_REG_OPS> adapter;
-    WomirShiftCoreRecord core;
+struct WomirMul64Record {
+    WomirBaseAluAdapterRecord<W64_REG_OPS, W64_REG_OPS> adapter;
+    WomirMul64CoreRecord core;
 };
 
-__global__ void womir_shift_tracegen(
+__global__ void womir_mul64_tracegen(
     Fp *d_trace,
     size_t height,
-    DeviceBufferConstView<WomirShiftRecord> d_records,
+    DeviceBufferConstView<WomirMul64Record> d_records,
     uint32_t *d_range_checker_ptr,
     size_t range_checker_bins,
     uint32_t *d_bitwise_lookup_ptr,
     size_t bitwise_num_bits,
+    uint32_t *d_range_tuple_ptr,
+    uint2 range_tuple_sizes,
     uint32_t timestamp_max_bits
 ) {
     uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -35,39 +37,41 @@ __global__ void womir_shift_tracegen(
     if (idx < d_records.len()) {
         auto const &rec = d_records[idx];
 
-        WomirBaseAluAdapter<W32_REG_OPS, W32_REG_OPS> adapter(
+        WomirBaseAluAdapter<W64_REG_OPS, W64_REG_OPS> adapter(
             VariableRangeChecker(d_range_checker_ptr, range_checker_bins),
             BitwiseOperationLookup(d_bitwise_lookup_ptr, bitwise_num_bits),
             timestamp_max_bits
         );
         adapter.fill_trace_row(row, rec.adapter);
 
-        WomirShiftCore core(
-            BitwiseOperationLookup(d_bitwise_lookup_ptr, bitwise_num_bits),
-            VariableRangeChecker(d_range_checker_ptr, range_checker_bins)
+        RangeTupleChecker<2> range_tuple_checker(
+            d_range_tuple_ptr, (uint32_t[2]){range_tuple_sizes.x, range_tuple_sizes.y}
         );
-        core.fill_trace_row(row.slice_from(COL_INDEX(WomirShiftCols, core)), rec.core);
+        WomirMul64Core core(range_tuple_checker);
+        core.fill_trace_row(row.slice_from(COL_INDEX(WomirMul64Cols, core)), rec.core);
     } else {
-        row.fill_zero(0, sizeof(WomirShiftCols<uint8_t>));
+        row.fill_zero(0, sizeof(WomirMul64Cols<uint8_t>));
     }
 }
 
-extern "C" int _womir_shift_tracegen(
+extern "C" int _womir_mul64_tracegen(
     Fp *d_trace,
     size_t height,
     size_t width,
-    DeviceBufferConstView<WomirShiftRecord> d_records,
+    DeviceBufferConstView<WomirMul64Record> d_records,
     uint32_t *d_range_checker_ptr,
     size_t range_checker_bins,
     uint32_t *d_bitwise_lookup_ptr,
     size_t bitwise_num_bits,
+    uint32_t *d_range_tuple_ptr,
+    uint2 range_tuple_sizes,
     uint32_t timestamp_max_bits
 ) {
     assert((height & (height - 1)) == 0);
     assert(height >= d_records.len());
-    assert(width == sizeof(WomirShiftCols<uint8_t>));
+    assert(width == sizeof(WomirMul64Cols<uint8_t>));
     auto [grid, block] = kernel_launch_params(height);
-    womir_shift_tracegen<<<grid, block>>>(
+    womir_mul64_tracegen<<<grid, block>>>(
         d_trace,
         height,
         d_records,
@@ -75,6 +79,8 @@ extern "C" int _womir_shift_tracegen(
         range_checker_bins,
         d_bitwise_lookup_ptr,
         bitwise_num_bits,
+        d_range_tuple_ptr,
+        range_tuple_sizes,
         timestamp_max_bits
     );
     return CHECK_KERNEL();
