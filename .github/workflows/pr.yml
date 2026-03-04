@@ -102,14 +102,16 @@ jobs:
 
       - name: Run GPU ALU tests
         run: |
-          cargo test --release --features cuda -- tests::isolated_tests::tests::test_add --test-threads=1
-          cargo test --release --features cuda -- tests::isolated_tests::tests::test_sub --test-threads=1
-          cargo test --release --features cuda -- tests::isolated_tests::tests::test_xor --test-threads=1
-          cargo test --release --features cuda -- tests::isolated_tests::tests::test_or --test-threads=1
-          cargo test --release --features cuda -- tests::isolated_tests::tests::test_and --test-threads=1
-          cargo test --release --features cuda -- tests::isolated_tests::tests::test_shl --test-threads=1
-          cargo test --release --features cuda -- tests::isolated_tests::tests::test_shr --test-threads=1
-          cargo test --release --features cuda -- tests::isolated_tests::tests::test_mul --test-threads=1
-          cargo test --release --features cuda -- tests::isolated_tests::tests::test_div --test-threads=1
-          cargo test --release --features cuda -- tests::isolated_tests::tests::test_divu --test-threads=1
-          cargo test --release --features cuda -- tests::isolated_tests::tests::test_rem --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_add --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_sub --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_xor --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_or --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_and --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_shl --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_shr_u --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_shr_s_imm --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_mul --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_div --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_divu --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_rems --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_remu --exact --test-threads=1
