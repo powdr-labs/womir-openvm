@@ -276,3 +276,101 @@ pub mod mul64_cuda {
         }
     }
 }
+
+pub mod divrem_cuda {
+    use super::*;
+    unsafe extern "C" {
+        fn _womir_divrem_tracegen(
+            d_trace: *mut F,
+            height: usize,
+            width: usize,
+            d_records: DeviceBufferView,
+            d_range_checker: *mut u32,
+            range_checker_bins: usize,
+            d_bitwise_lookup: *mut u32,
+            bitwise_num_bits: usize,
+            d_range_tuple: *mut u32,
+            range_tuple_sizes: UInt2,
+            timestamp_max_bits: u32,
+        ) -> i32;
+    }
+
+    pub unsafe fn tracegen(
+        d_trace: &DeviceBuffer<F>,
+        height: usize,
+        d_records: &DeviceBuffer<u8>,
+        d_range_checker: &DeviceBuffer<F>,
+        range_bins: usize,
+        d_bitwise_lookup: &DeviceBuffer<F>,
+        bitwise_num_bits: usize,
+        d_range_tuple: &DeviceBuffer<F>,
+        range_tuple_sizes: UInt2,
+        timestamp_max_bits: u32,
+    ) -> Result<(), CudaError> {
+        let width = d_trace.len() / height;
+        unsafe {
+            CudaError::from_result(_womir_divrem_tracegen(
+                d_trace.as_mut_ptr(),
+                height,
+                width,
+                d_records.view(),
+                d_range_checker.as_mut_ptr() as *mut u32,
+                range_bins,
+                d_bitwise_lookup.as_mut_ptr() as *mut u32,
+                bitwise_num_bits,
+                d_range_tuple.as_mut_ptr() as *mut u32,
+                range_tuple_sizes,
+                timestamp_max_bits,
+            ))
+        }
+    }
+}
+
+pub mod divrem64_cuda {
+    use super::*;
+    unsafe extern "C" {
+        fn _womir_divrem64_tracegen(
+            d_trace: *mut F,
+            height: usize,
+            width: usize,
+            d_records: DeviceBufferView,
+            d_range_checker: *mut u32,
+            range_checker_bins: usize,
+            d_bitwise_lookup: *mut u32,
+            bitwise_num_bits: usize,
+            d_range_tuple: *mut u32,
+            range_tuple_sizes: UInt2,
+            timestamp_max_bits: u32,
+        ) -> i32;
+    }
+
+    pub unsafe fn tracegen(
+        d_trace: &DeviceBuffer<F>,
+        height: usize,
+        d_records: &DeviceBuffer<u8>,
+        d_range_checker: &DeviceBuffer<F>,
+        range_bins: usize,
+        d_bitwise_lookup: &DeviceBuffer<F>,
+        bitwise_num_bits: usize,
+        d_range_tuple: &DeviceBuffer<F>,
+        range_tuple_sizes: UInt2,
+        timestamp_max_bits: u32,
+    ) -> Result<(), CudaError> {
+        let width = d_trace.len() / height;
+        unsafe {
+            CudaError::from_result(_womir_divrem64_tracegen(
+                d_trace.as_mut_ptr(),
+                height,
+                width,
+                d_records.view(),
+                d_range_checker.as_mut_ptr() as *mut u32,
+                range_bins,
+                d_bitwise_lookup.as_mut_ptr() as *mut u32,
+                bitwise_num_bits,
+                d_range_tuple.as_mut_ptr() as *mut u32,
+                range_tuple_sizes,
+                timestamp_max_bits,
+            ))
+        }
+    }
+}
