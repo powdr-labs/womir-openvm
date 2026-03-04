@@ -2,15 +2,10 @@
 // Diff: https://gist.github.com/leonardoalt/09fd3d60bd571851bb656dc53cec0a4b#file-diff-alu-cu-diff
 #include "launcher.cuh"
 #include "primitives/buffer_view.cuh"
-#include "primitives/constants.h"
 #include "primitives/trace_access.h"
+#include "womir/constants.cuh"
 #include "womir/adapters/alu.cuh"
 #include "womir/cores/alu.cuh"
-
-using namespace riscv;
-
-// Number of 4-byte register operations to access a 32-bit value.
-static const size_t W32_REG_OPS = 1;
 
 // Concrete type aliases for 32-bit
 using WomirBaseAluCoreRecord = BaseAluCoreRecord<RV32_REGISTER_NUM_LIMBS>;
