@@ -6,7 +6,7 @@
 //! will be used for GPU proving.
 //!
 //! Currently includes: BaseAlu32, BaseAlu64, Shift32, Shift64, Mul32, Mul64, DivRem32, DivRem64,
-//! LoadStore, LoadSignExtend
+//! LoadStore, LoadSignExtend, Const32
 
 use std::sync::Arc;
 
@@ -36,8 +36,8 @@ use openvm_rv32im_circuit::{
 use openvm_stark_backend::{config::StarkGenericConfig, p3_field::PrimeField32};
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 use openvm_womir_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, DivRem64Opcode, DivRemOpcode, LoadStoreOpcode, Mul64Opcode,
-    MulOpcode, Shift64Opcode, ShiftOpcode,
+    BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode, LoadStoreOpcode,
+    Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -45,13 +45,13 @@ use strum::IntoEnumIterator;
 use openvm_circuit::arch::ExecutionBridge;
 
 use crate::{
-    BaseAlu64Air, BaseAlu64ChipGpu, BaseAlu64Executor, DivRem64Air, DivRem64ChipGpu,
-    DivRem64Executor, Mul64Air, Mul64ChipGpu, Mul64Executor, Rv32BaseAluAir, Rv32BaseAluChipGpu,
-    Rv32BaseAluExecutor, Rv32DivRemAir, Rv32DivRemChipGpu, Rv32DivRemExecutor,
-    Rv32LoadSignExtendAir, Rv32LoadSignExtendChipGpu, Rv32LoadSignExtendExecutor, Rv32LoadStoreAir,
-    Rv32LoadStoreChipGpu, Rv32LoadStoreExecutor, Rv32MultiplicationAir, Rv32MultiplicationChipGpu,
-    Rv32MultiplicationExecutor, Rv32ShiftAir, Rv32ShiftChipGpu, Rv32ShiftExecutor, Shift64Air,
-    Shift64ChipGpu, Shift64Executor,
+    BaseAlu64Air, BaseAlu64ChipGpu, BaseAlu64Executor, Const32Air, Const32ChipGpu, Const32Executor,
+    DivRem64Air, DivRem64ChipGpu, DivRem64Executor, Mul64Air, Mul64ChipGpu, Mul64Executor,
+    Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32BaseAluExecutor, Rv32DivRemAir, Rv32DivRemChipGpu,
+    Rv32DivRemExecutor, Rv32LoadSignExtendAir, Rv32LoadSignExtendChipGpu,
+    Rv32LoadSignExtendExecutor, Rv32LoadStoreAir, Rv32LoadStoreChipGpu, Rv32LoadStoreExecutor,
+    Rv32MultiplicationAir, Rv32MultiplicationChipGpu, Rv32MultiplicationExecutor, Rv32ShiftAir,
+    Rv32ShiftChipGpu, Rv32ShiftExecutor, Shift64Air, Shift64ChipGpu, Shift64Executor,
     adapters::{
         BaseAluAdapterAir, Rv32BaseAluAdapterAir, Rv32LoadStoreAdapterAir, W64_NUM_LIMBS,
         W64_REG_OPS,
@@ -91,6 +91,7 @@ pub enum WomirPreparingGpuExecutor {
     DivRem64(DivRem64Executor),
     LoadStore(Rv32LoadStoreExecutor),
     LoadSignExtend(Rv32LoadSignExtendExecutor),
+    Const32(Const32Executor),
 }
 
 // ============ VmExtension Implementations ============
@@ -174,6 +175,9 @@ impl<F: PrimeField32> VmExecutionExtension<F> for WomirPreparingGpu {
             load_sign_extend,
             [LoadStoreOpcode::LOADB, LoadStoreOpcode::LOADH].map(|x| x.global_opcode()),
         )?;
+
+        let const32 = Const32Executor::new(ConstOpcodes::CLASS_OFFSET);
+        inventory.add_executor(const32, ConstOpcodes::iter().map(|x| x.global_opcode()))?;
 
         Ok(())
     }
@@ -304,6 +308,14 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for WomirPreparingGpu {
         );
         inventory.add_air(load_sign_extend);
 
+        let const32 = Const32Air::new(
+            bitwise_lu,
+            ConstOpcodes::CLASS_OFFSET,
+            exec_bridge,
+            memory_bridge,
+        );
+        inventory.add_air(const32);
+
         Ok(())
     }
 }
@@ -425,6 +437,14 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, WomirPrepar
             timestamp_max_bits,
         );
         inventory.add_executor_chip(load_sign_extend);
+
+        inventory.next_air::<Const32Air>()?;
+        let const32 = Const32ChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(const32);
 
         Ok(())
     }
