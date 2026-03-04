@@ -154,3 +154,5 @@ jobs:
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_const32_large --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_const32_zero --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_const32_max --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_input_hint --exact --test-threads=1
+          cargo test --release --features cuda -- tests::isolated_tests::tests::test_input_hint_with_frame_jump_and_xor --exact --test-threads=1
