@@ -12,7 +12,8 @@ use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 
 use crate::{
     BaseAlu64Air, BaseAlu64ChipGpu, DivRem64Air, DivRem64ChipGpu, Mul64Air, Mul64ChipGpu,
-    Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32DivRemAir, Rv32DivRemChipGpu, Rv32MultiplicationAir,
+    Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32DivRemAir, Rv32DivRemChipGpu, Rv32LoadSignExtendAir,
+    Rv32LoadSignExtendChipGpu, Rv32LoadStoreAir, Rv32LoadStoreChipGpu, Rv32MultiplicationAir,
     Rv32MultiplicationChipGpu, Rv32ShiftAir, Rv32ShiftChipGpu, Shift64Air, Shift64ChipGpu,
 };
 
@@ -27,6 +28,7 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         inventory: &mut ChipInventory<BabyBearPoseidon2Config, DenseRecordArena, GpuBackend>,
     ) -> Result<(), ChipInventoryError> {
         let timestamp_max_bits = inventory.timestamp_max_bits();
+        let pointer_max_bits = inventory.airs().pointer_max_bits();
 
         let range_checker = get_inventory_range_checker(inventory);
         let bitwise_lu = get_or_create_bitwise_op_lookup(inventory)?;
@@ -117,6 +119,19 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
             timestamp_max_bits,
         );
         inventory.add_executor_chip(divrem_64);
+
+        inventory.next_air::<Rv32LoadStoreAir>()?;
+        let load_store =
+            Rv32LoadStoreChipGpu::new(range_checker.clone(), pointer_max_bits, timestamp_max_bits);
+        inventory.add_executor_chip(load_store);
+
+        inventory.next_air::<Rv32LoadSignExtendAir>()?;
+        let load_sign_extend = Rv32LoadSignExtendChipGpu::new(
+            range_checker.clone(),
+            pointer_max_bits,
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(load_sign_extend);
 
         // TODO: Add more WOMIR GPU chips here (less_than, eq, etc.)
 
