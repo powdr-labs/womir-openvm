@@ -121,9 +121,6 @@ jobs:
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_loadh --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_storeb --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_storeh --exact --test-threads=1
-
-      - name: Run GPU Const32 tests
-        run: |
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_const32_small --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_const32_large --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_const32_zero --exact --test-threads=1
