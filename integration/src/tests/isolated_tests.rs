@@ -888,7 +888,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -905,7 +905,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -922,7 +922,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -939,7 +939,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -956,7 +956,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -971,7 +971,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -986,7 +986,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1001,7 +1001,7 @@ mod tests {
             expected_registers: vec![(12, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1016,7 +1016,7 @@ mod tests {
             expected_registers: vec![(12, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1031,7 +1031,7 @@ mod tests {
             expected_registers: vec![(12, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1046,7 +1046,7 @@ mod tests {
             expected_registers: vec![(12, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1061,7 +1061,7 @@ mod tests {
             expected_registers: vec![(12, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1076,7 +1076,7 @@ mod tests {
             expected_registers: vec![(12, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1094,7 +1094,7 @@ mod tests {
             expected_registers: vec![(13, 1), (14, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1117,7 +1117,7 @@ mod tests {
             expected_registers: vec![(12, 1), (15, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1136,7 +1136,7 @@ mod tests {
             expected_registers: vec![(14, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1158,7 +1158,7 @@ mod tests {
             expected_registers: vec![(14, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
     // ==================== LessThan64 Tests ====================
 
@@ -1180,7 +1180,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1201,7 +1201,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1222,7 +1222,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1237,7 +1237,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1252,7 +1252,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     // ==================== LessThan64 output width tests ====================
@@ -1284,7 +1284,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1310,7 +1310,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -1335,7 +1335,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     // ==================== Eq Tests ====================
