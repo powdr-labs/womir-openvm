@@ -87,6 +87,10 @@ pub const ALL_BACKENDS: &[Backend] = &[
 #[cfg(test)]
 pub const CPU_ONLY: &[Backend] = &[Backend::Cpu];
 
+/// GPU-only backend (useful for negative tests targeting GPU-specific behavior).
+#[cfg(all(test, feature = "cuda"))]
+pub const GPU_ONLY: &[Backend] = &[Backend::Gpu];
+
 /// Alias for backwards compatibility.
 #[cfg(test)]
 pub fn default_engine() -> BabyBearPoseidon2Engine {

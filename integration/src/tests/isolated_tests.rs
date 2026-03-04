@@ -3791,4 +3791,78 @@ mod tests {
             Ok(_) => panic!("Expected execution error, but succeeded"),
         }
     }
+
+    // ==================== GPU Negative Tests ====================
+    // These tests verify that the GPU backend correctly rejects invalid inputs.
+    // They require the `cuda` feature and are skipped on CPU-only builds.
+
+    /// GPU proving should fail when the program uses a chip not included in WomirPreparingGpuConfig.
+    /// CALL is not GPU-ready, so mock_prove_gpu should error during metered execution
+    /// (the executor cannot find a handler for the CallOpcode).
+    #[test]
+    #[cfg(feature = "cuda")]
+    #[should_panic]
+    fn test_gpu_unsupported_chip_call() {
+        use crate::proving::GPU_ONLY;
+
+        setup_tracing_with_log_level(Level::WARN);
+
+        // CALL is not implemented in WomirPreparingGpuConfig.
+        // The GPU mock prover should fail because the executor doesn't know about CallOpcode.
+        let spec = TestSpec {
+            program: vec![
+                call(10, 11, 12, 120), // CALL: not in GPU config
+                halt(),
+            ],
+            start_fp: 20,
+            ..Default::default()
+        };
+
+        // test_prove calls mock_prove_gpu which creates a WomirPreparingGpuConfig VM.
+        // The metered execution should fail because CallOpcode is not registered.
+        test_prove(&spec, GPU_ONLY).unwrap();
+    }
+
+    /// GPU proving should produce correct results that match CPU execution.
+    /// If we verify against wrong expected values, the state check should fail,
+    /// confirming the GPU pipeline computes faithfully.
+    #[test]
+    #[cfg(feature = "cuda")]
+    fn test_gpu_wrong_expected_output() {
+        use crate::proving::GPU_ONLY;
+
+        setup_tracing_with_log_level(Level::WARN);
+
+        // Run a simple add on GPU: reg[2] = reg[0] + reg[1] = 10 + 20 = 30
+        let correct_spec = TestSpec {
+            program: vec![add(2, 0, 1), halt()],
+            start_fp: 200,
+            start_registers: vec![(200, 10), (201, 20)],
+            expected_registers: vec![(202, 30)],
+            ..Default::default()
+        };
+
+        // GPU should produce the correct result.
+        test_prove(&correct_spec, GPU_ONLY).unwrap();
+
+        // Now verify that a wrong expectation is caught.
+        let wrong_spec = TestSpec {
+            program: vec![add(2, 0, 1), halt()],
+            start_fp: 200,
+            start_registers: vec![(200, 10), (201, 20)],
+            expected_registers: vec![(202, 31)], // WRONG: 10 + 20 = 30, not 31
+            ..Default::default()
+        };
+
+        let err = test_prove(&wrong_spec, GPU_ONLY);
+        assert!(
+            err.is_err(),
+            "Expected verify_state to catch wrong output on GPU"
+        );
+        let msg = err.unwrap_err().to_string();
+        assert!(
+            msg.contains("expected 31, got 30"),
+            "Error should mention the mismatch, got: {msg}"
+        );
+    }
 }
