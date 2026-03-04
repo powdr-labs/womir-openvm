@@ -36,7 +36,8 @@ impl Chip<DenseRecordArena, GpuBackend> for Rv32LoadSignExtendChipGpu {
 
         let trace_width = Rv32LoadStoreAdapterCols::<F>::width()
             + LoadSignExtendCoreCols::<F, RV32_REGISTER_NUM_LIMBS>::width();
-        let padded_height = next_power_of_two_or_zero(records.len() / RECORD_SIZE);
+        let height = records.len() / RECORD_SIZE;
+        let padded_height = next_power_of_two_or_zero(height);
 
         let d_records = records.to_device().unwrap();
         let d_trace = DeviceMatrix::<F>::with_capacity(padded_height, trace_width);

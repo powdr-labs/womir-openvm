@@ -6,18 +6,12 @@
 #include "primitives/execution.h"
 #include "primitives/trace_access.h"
 #include "system/memory/controller.cuh"
+#include "womir/execution.cuh"
 
 using namespace riscv;
 
-// WOMIR ExecutionState includes frame pointer (fp) between pc and timestamp.
-template <typename T> struct WomirLoadStoreExecutionState {
-    T pc;
-    T fp;
-    T timestamp;
-};
-
 template <typename T> struct WomirLoadStoreAdapterCols {
-    WomirLoadStoreExecutionState<T> from_state;
+    WomirExecutionState<T> from_state;
     T rs1_ptr;
     T rs1_data[RV32_REGISTER_NUM_LIMBS];
     MemoryReadAuxCols<T> fp_read_aux;
