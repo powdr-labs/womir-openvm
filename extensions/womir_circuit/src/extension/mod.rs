@@ -83,16 +83,15 @@ impl Default for Womir {
 }
 
 /// Default range tuple checker sizes, must be large enough for the widest
-/// DivRem variant (64-bit, NUM_LIMBS = 8).
+/// operation. DivRem has two rounds of carry checks (b = c*q + r requires
+/// checking both the multiplication carries and the sign-extension carries),
+/// so sizes[1] must be doubled compared to multiplication alone.
 ///
-/// The range tuple checker verifies (limb, carry) pairs produced during
-/// limb-by-limb multiplication `b = c * q + r`:
 /// - sizes[0] = 1 << LIMB_BITS: each limb must fit in LIMB_BITS (= 8) bits.
-/// - sizes[1] = 2 * NUM_LIMBS * (1 << LIMB_BITS): upper bound on the carry
-///   at any limb position. The carry at position i is the sum of up to i+1
-///   products of LIMB_BITS-bit values, so it grows linearly with NUM_LIMBS.
+/// - sizes[1] = 4 * NUM_LIMBS * (1 << LIMB_BITS): upper bound on the carry
+///   at any limb position across both DivRem carry loops.
 fn default_range_tuple_checker_sizes() -> [u32; 2] {
-    [1 << RV32_CELL_BITS, 2 * 8 * (1 << RV32_CELL_BITS)]
+    [1 << RV32_CELL_BITS, 4 * 8 * (1 << RV32_CELL_BITS)]
 }
 
 // ============ Executor and Periphery Enums for Extension ============

@@ -11,9 +11,9 @@ use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::Gp
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 
 use crate::{
-    BaseAlu64Air, BaseAlu64ChipGpu, Mul64Air, Mul64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu,
-    Rv32MultiplicationAir, Rv32MultiplicationChipGpu, Rv32ShiftAir, Rv32ShiftChipGpu, Shift64Air,
-    Shift64ChipGpu,
+    BaseAlu64Air, BaseAlu64ChipGpu, DivRem64Air, DivRem64ChipGpu, Mul64Air, Mul64ChipGpu,
+    Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32DivRemAir, Rv32DivRemChipGpu, Rv32MultiplicationAir,
+    Rv32MultiplicationChipGpu, Rv32ShiftAir, Rv32ShiftChipGpu, Shift64Air, Shift64ChipGpu,
 };
 
 use super::Womir;
@@ -100,7 +100,25 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(shift_64);
 
-        // TODO: Add more WOMIR GPU chips here (div, etc.)
+        inventory.next_air::<Rv32DivRemAir>()?;
+        let divrem = Rv32DivRemChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            range_tuple_checker.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(divrem);
+
+        inventory.next_air::<DivRem64Air>()?;
+        let divrem_64 = DivRem64ChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            range_tuple_checker.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(divrem_64);
+
+        // TODO: Add more WOMIR GPU chips here (less_than, eq, etc.)
 
         Ok(())
     }
