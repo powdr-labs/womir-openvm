@@ -11,12 +11,12 @@ use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::Gp
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 
 use crate::{
-    BaseAlu64Air, BaseAlu64ChipGpu, CallAir, CallChipGpu, DivRem64Air, DivRem64ChipGpu, Eq64Air,
-    Eq64ChipGpu, LessThan64Air, LessThan64ChipGpu, Mul64Air, Mul64ChipGpu, Rv32BaseAluAir,
-    Rv32BaseAluChipGpu, Rv32DivRemAir, Rv32DivRemChipGpu, Rv32EqAir, Rv32EqChipGpu,
-    Rv32LessThanAir, Rv32LessThanChipGpu, Rv32LoadSignExtendAir, Rv32LoadSignExtendChipGpu,
-    Rv32LoadStoreAir, Rv32LoadStoreChipGpu, Rv32MultiplicationAir, Rv32MultiplicationChipGpu,
-    Rv32ShiftAir, Rv32ShiftChipGpu, Shift64Air, Shift64ChipGpu,
+    BaseAlu64Air, BaseAlu64ChipGpu, CallAir, CallChipGpu, Const32Air, Const32ChipGpu, DivRem64Air,
+    DivRem64ChipGpu, Eq64Air, Eq64ChipGpu, LessThan64Air, LessThan64ChipGpu, Mul64Air,
+    Mul64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32DivRemAir, Rv32DivRemChipGpu, Rv32EqAir,
+    Rv32EqChipGpu, Rv32LessThanAir, Rv32LessThanChipGpu, Rv32LoadSignExtendAir,
+    Rv32LoadSignExtendChipGpu, Rv32LoadStoreAir, Rv32LoadStoreChipGpu, Rv32MultiplicationAir,
+    Rv32MultiplicationChipGpu, Rv32ShiftAir, Rv32ShiftChipGpu, Shift64Air, Shift64ChipGpu,
 };
 
 use super::Womir;
@@ -171,7 +171,13 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         let call = CallChipGpu::new(range_checker.clone(), pointer_max_bits, timestamp_max_bits);
         inventory.add_executor_chip(call);
 
-        // TODO: Add more WOMIR GPU chips here
+        inventory.next_air::<Const32Air>()?;
+        let const32 = Const32ChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(const32);
 
         Ok(())
     }
