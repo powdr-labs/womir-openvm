@@ -6,11 +6,16 @@ use crate::{
 };
 
 mod core;
+#[cfg(feature = "cuda")]
+pub mod cuda;
 pub mod execution;
 pub mod tracegen;
 
 pub use self::core::{CallCoreAir, CallCoreCols, CallCoreRecord};
 pub use execution::CallExecutor;
+
+#[cfg(feature = "cuda")]
+pub use cuda::CallChipGpu;
 
 pub type Rv32CallExecutor = CallExecutor<CallAdapterExecutor>;
 pub type CallAir = VmAirWrapper<CallAdapterAir, CallCoreAir>;
