@@ -6,7 +6,7 @@
 //! will be used for GPU proving.
 //!
 //! Currently includes: BaseAlu32, BaseAlu64, Shift32, Shift64, Mul32, Mul64, DivRem32, DivRem64,
-//! LessThan32, LessThan64, Eq32, Eq64, LoadStore, LoadSignExtend, Const32, HintStore
+//! LessThan32, LessThan64, Eq32, Eq64, LoadStore, LoadSignExtend, Const32, HintStore, Jump
 
 use std::sync::Arc;
 
@@ -37,8 +37,8 @@ use openvm_stark_backend::{config::StarkGenericConfig, p3_field::PrimeField32};
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 use openvm_womir_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode, Eq64Opcode,
-    EqOpcode, HintStoreOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode, Mul64Opcode,
-    MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
+    EqOpcode, HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
+    Mul64Opcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -48,17 +48,18 @@ use openvm_circuit::arch::ExecutionBridge;
 use crate::{
     BaseAlu64Air, BaseAlu64ChipGpu, BaseAlu64Executor, Const32Air, Const32ChipGpu, Const32Executor,
     DivRem64Air, DivRem64ChipGpu, DivRem64Executor, Eq64Air, Eq64ChipGpu, Eq64Executor, EqCoreAir,
-    LessThan64Air, LessThan64ChipGpu, LessThan64Executor, Mul64Air, Mul64ChipGpu, Mul64Executor,
-    Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32BaseAluExecutor, Rv32DivRemAir, Rv32DivRemChipGpu,
-    Rv32DivRemExecutor, Rv32EqAir, Rv32EqChipGpu, Rv32EqExecutor, Rv32HintStoreAir,
-    Rv32HintStoreChipGpu, Rv32HintStoreExecutor, Rv32LessThanAir, Rv32LessThanChipGpu,
-    Rv32LessThanExecutor, Rv32LoadSignExtendAir, Rv32LoadSignExtendChipGpu,
+    JumpAir, JumpChipGpu, JumpExecutor, LessThan64Air, LessThan64ChipGpu, LessThan64Executor,
+    Mul64Air, Mul64ChipGpu, Mul64Executor, Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32BaseAluExecutor,
+    Rv32DivRemAir, Rv32DivRemChipGpu, Rv32DivRemExecutor, Rv32EqAir, Rv32EqChipGpu, Rv32EqExecutor,
+    Rv32HintStoreAir, Rv32HintStoreChipGpu, Rv32HintStoreExecutor, Rv32LessThanAir,
+    Rv32LessThanChipGpu, Rv32LessThanExecutor, Rv32LoadSignExtendAir, Rv32LoadSignExtendChipGpu,
     Rv32LoadSignExtendExecutor, Rv32LoadStoreAir, Rv32LoadStoreChipGpu, Rv32LoadStoreExecutor,
     Rv32MultiplicationAir, Rv32MultiplicationChipGpu, Rv32MultiplicationExecutor, Rv32ShiftAir,
     Rv32ShiftChipGpu, Rv32ShiftExecutor, Shift64Air, Shift64ChipGpu, Shift64Executor,
     adapters::{
-        BaseAluAdapterAir, BaseAluAdapterAirDifferentInputsOutputs, Rv32BaseAluAdapterAir,
-        Rv32LoadStoreAdapterAir, W32_REG_OPS, W64_NUM_LIMBS, W64_REG_OPS,
+        BaseAluAdapterAir, BaseAluAdapterAirDifferentInputsOutputs, JumpAdapterAir,
+        JumpAdapterExecutor, Rv32BaseAluAdapterAir, Rv32LoadStoreAdapterAir, W32_REG_OPS,
+        W64_NUM_LIMBS, W64_REG_OPS,
     },
 };
 
@@ -101,6 +102,7 @@ pub enum WomirPreparingGpuExecutor {
     LoadSignExtend(Rv32LoadSignExtendExecutor),
     Const32(Const32Executor),
     HintStore(Rv32HintStoreExecutor),
+    Jump(JumpExecutor),
 }
 
 // ============ VmExtension Implementations ============
@@ -222,6 +224,9 @@ impl<F: PrimeField32> VmExecutionExtension<F> for WomirPreparingGpu {
             hint_store,
             HintStoreOpcode::iter().map(|x| x.global_opcode()),
         )?;
+
+        let jump = JumpExecutor::new(JumpAdapterExecutor::default(), JumpOpcode::CLASS_OFFSET);
+        inventory.add_executor(jump, JumpOpcode::iter().map(|x| x.global_opcode()))?;
 
         // Register phantom sub-executors for hint stream operations
         inventory.add_phantom_sub_executor(
@@ -423,6 +428,12 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for WomirPreparingGpu {
         );
         inventory.add_air(hint_store);
 
+        let jump = JumpAir::new(
+            JumpAdapterAir::new(exec_bridge, memory_bridge),
+            crate::jump::core::JumpCoreAir::new(JumpOpcode::CLASS_OFFSET),
+        );
+        inventory.add_air(jump);
+
         Ok(())
     }
 }
@@ -593,6 +604,10 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, WomirPrepar
             timestamp_max_bits,
         );
         inventory.add_executor_chip(hint_store);
+
+        inventory.next_air::<JumpAir>()?;
+        let jump = JumpChipGpu::new(range_checker.clone(), timestamp_max_bits);
+        inventory.add_executor_chip(jump);
 
         Ok(())
     }
