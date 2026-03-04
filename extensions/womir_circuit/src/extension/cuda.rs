@@ -12,10 +12,10 @@ use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 
 use crate::{
     BaseAlu64Air, BaseAlu64ChipGpu, Const32Air, Const32ChipGpu, DivRem64Air, DivRem64ChipGpu,
-    Mul64Air, Mul64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32DivRemAir, Rv32DivRemChipGpu,
-    Rv32LoadSignExtendAir, Rv32LoadSignExtendChipGpu, Rv32LoadStoreAir, Rv32LoadStoreChipGpu,
-    Rv32MultiplicationAir, Rv32MultiplicationChipGpu, Rv32ShiftAir, Rv32ShiftChipGpu, Shift64Air,
-    Shift64ChipGpu,
+    LessThan64Air, LessThan64ChipGpu, Mul64Air, Mul64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu,
+    Rv32DivRemAir, Rv32DivRemChipGpu, Rv32LessThanAir, Rv32LessThanChipGpu, Rv32LoadSignExtendAir,
+    Rv32LoadSignExtendChipGpu, Rv32LoadStoreAir, Rv32LoadStoreChipGpu, Rv32MultiplicationAir,
+    Rv32MultiplicationChipGpu, Rv32ShiftAir, Rv32ShiftChipGpu, Shift64Air, Shift64ChipGpu,
 };
 
 use super::Womir;
@@ -87,6 +87,22 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(mul_64);
 
+        inventory.next_air::<Rv32LessThanAir>()?;
+        let less_than = Rv32LessThanChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(less_than);
+
+        inventory.next_air::<LessThan64Air>()?;
+        let less_than_64 = LessThan64ChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(less_than_64);
+
         inventory.next_air::<Rv32ShiftAir>()?;
         let shift = Rv32ShiftChipGpu::new(
             range_checker.clone(),
@@ -134,7 +150,7 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(load_sign_extend);
 
-        // TODO: Add more WOMIR GPU chips here (less_than, eq, etc.)
+        // TODO: Add more WOMIR GPU chips here (eq, etc.)
 
         inventory.next_air::<Const32Air>()?;
         let const32 = Const32ChipGpu::new(

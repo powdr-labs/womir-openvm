@@ -179,6 +179,88 @@ pub mod shift64_cuda {
     }
 }
 
+pub mod less_than_cuda {
+    use super::*;
+    unsafe extern "C" {
+        fn _womir_less_than_tracegen(
+            d_trace: *mut F,
+            height: usize,
+            width: usize,
+            d_records: DeviceBufferView,
+            d_range_checker: *mut u32,
+            range_checker_num_bins: u32,
+            d_bitwise_lookup: *mut u32,
+            bitwise_num_bits: u32,
+            timestamp_max_bits: u32,
+        ) -> i32;
+    }
+
+    pub unsafe fn tracegen(
+        d_trace: &DeviceBuffer<F>,
+        height: usize,
+        d_records: &DeviceBuffer<u8>,
+        d_range_checker: &DeviceBuffer<F>,
+        d_bitwise_lookup: &DeviceBuffer<F>,
+        bitwise_num_bits: usize,
+        timestamp_max_bits: u32,
+    ) -> Result<(), CudaError> {
+        unsafe {
+            CudaError::from_result(_womir_less_than_tracegen(
+                d_trace.as_mut_ptr(),
+                height,
+                d_trace.len() / height,
+                d_records.view(),
+                d_range_checker.as_mut_ptr() as *mut u32,
+                d_range_checker.len() as u32,
+                d_bitwise_lookup.as_mut_ptr() as *mut u32,
+                bitwise_num_bits as u32,
+                timestamp_max_bits,
+            ))
+        }
+    }
+}
+
+pub mod less_than64_cuda {
+    use super::*;
+    unsafe extern "C" {
+        fn _womir_less_than64_tracegen(
+            d_trace: *mut F,
+            height: usize,
+            width: usize,
+            d_records: DeviceBufferView,
+            d_range_checker: *mut u32,
+            range_checker_num_bins: u32,
+            d_bitwise_lookup: *mut u32,
+            bitwise_num_bits: u32,
+            timestamp_max_bits: u32,
+        ) -> i32;
+    }
+
+    pub unsafe fn tracegen(
+        d_trace: &DeviceBuffer<F>,
+        height: usize,
+        d_records: &DeviceBuffer<u8>,
+        d_range_checker: &DeviceBuffer<F>,
+        d_bitwise_lookup: &DeviceBuffer<F>,
+        bitwise_num_bits: usize,
+        timestamp_max_bits: u32,
+    ) -> Result<(), CudaError> {
+        unsafe {
+            CudaError::from_result(_womir_less_than64_tracegen(
+                d_trace.as_mut_ptr(),
+                height,
+                d_trace.len() / height,
+                d_records.view(),
+                d_range_checker.as_mut_ptr() as *mut u32,
+                d_range_checker.len() as u32,
+                d_bitwise_lookup.as_mut_ptr() as *mut u32,
+                bitwise_num_bits as u32,
+                timestamp_max_bits,
+            ))
+        }
+    }
+}
+
 pub mod mul_cuda {
     use super::*;
     unsafe extern "C" {
