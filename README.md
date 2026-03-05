@@ -18,7 +18,7 @@ cargo run -r -- print sample-programs/fib_loop.wasm
 
 ```bash
 # Fibonacci: fib(10) = 55
-cargo run -r -- run sample-programs/fib_loop.wasm fib --args 10
+cargo run -r -- run sample-programs/fib_loop.wasm fib --input 10
 
 # Keccak (build first, then run):
 cargo build --manifest-path sample-programs/keccak_with_inputs/Cargo.toml \
@@ -30,18 +30,20 @@ cargo build --manifest-path sample-programs/keccak_with_inputs/Cargo.toml \
 # 41: the first byte of the resulting hash (from the guest logic).
 cargo run -r -- run \
     sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm \
-    main --args 0 --args 0 --args 1 --args 41
+    main --input 0 --input 0 --input 1 --input 41
 ```
+
+Each `--input` is either a u32 literal or `file:<path>` for binary file contents, given in the order the guest reads them.
 
 ### Mock proof (constraint verification only)
 
 ```bash
-cargo run -r -- mock-prove sample-programs/fib_loop.wasm fib --args 10
+cargo run -r -- mock-prove sample-programs/fib_loop.wasm fib --input 10
 ```
 
 ### Prove (full cryptographic proof)
 
 ```bash
-cargo run -r -- prove sample-programs/fib_loop.wasm fib --args 10
+cargo run -r -- prove sample-programs/fib_loop.wasm fib --input 10
 ```
 
