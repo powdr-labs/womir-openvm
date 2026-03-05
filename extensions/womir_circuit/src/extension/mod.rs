@@ -49,11 +49,6 @@ use crate::{
 
 mod phantom;
 
-#[cfg(feature = "cuda")]
-pub mod preparing_gpu;
-#[cfg(feature = "cuda")]
-pub use preparing_gpu::{WomirPreparingGpu, WomirPreparingGpuExecutor, WomirPreparingGpuProverExt};
-
 cfg_if::cfg_if! {
     if #[cfg(feature = "cuda")] {
         #[path = "cuda.rs"]
