@@ -11,14 +11,28 @@ concurrency:
 
 jobs:
   benchmark:
-    name: Keccak Benchmark
-    runs-on: warp-ubuntu-2404-x64-16x
+    name: Keccak Benchmark (${{ matrix.backend }})
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: cpu
+            runner: warp-ubuntu-2404-x64-16x
+            cuda_flag: ""
+            cargo_features: ""
+          - backend: gpu
+            runner: [self-hosted, gpu-womir]
+            cuda_flag: "--cuda"
+            cargo_features: "--features cuda"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Cache cargo registry
+        if: matrix.backend == 'cpu'
         uses: actions/cache@v4
         with:
           path: |
@@ -28,18 +42,32 @@ jobs:
           key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install system dependencies
+        if: matrix.backend == 'cpu'
         run: sudo apt-get update && sudo apt-get install -y wabt
 
       - name: Install Rust toolchain 1.91.0 (stable)
+        if: matrix.backend == 'cpu'
         run: |
           rustup install 1.91.0
           rustup +1.91.0 component add rust-src
 
       - name: Install WebAssembly target
+        if: matrix.backend == 'cpu'
         run: rustup target add wasm32-unknown-unknown
 
+      - name: Check GPU memory
+        if: matrix.backend == 'gpu'
+        run: |
+          FREE_MB=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits)
+          echo "Free GPU memory: ${FREE_MB} MiB"
+          if [ "$FREE_MB" -lt 16000 ]; then
+            echo "ERROR: Less than 16GB GPU memory free. Check for other GPU processes:"
+            nvidia-smi
+            exit 1
+          fi
+
       - name: Build project
-        run: cargo build --release
+        run: cargo build --release ${{ matrix.cargo_features }}
 
       - name: Build keccak WASM target
         run: |
@@ -55,7 +83,7 @@ jobs:
         run: pip install -r scripts/requirements.txt
 
       - name: Run benchmarks
-        run: bash scripts/run_guest_benches.sh
+        run: bash scripts/run_guest_benches.sh ${{ matrix.cuda_flag }}
 
       - name: Post results to job summary
         if: always()
@@ -65,5 +93,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results
+          name: benchmark-results-${{ matrix.backend }}
           path: results/
