@@ -73,6 +73,9 @@ enum Commands {
         /// Arguments (u32 values)
         #[arg(long)]
         args: Vec<String>,
+        /// Files to be read as bytes.
+        #[arg(long)]
+        binary_input_files: Vec<String>,
         /// Also run aggregation (inner recursion) after the app proof
         #[arg(long, default_value_t = false)]
         recursion: bool,
@@ -90,6 +93,9 @@ enum Commands {
         /// Arguments (u32 values)
         #[arg(long)]
         args: Vec<String>,
+        /// Files to be read as bytes.
+        #[arg(long)]
+        binary_input_files: Vec<String>,
     },
     /// Proves execution of a function from the RISC-V program with the given arguments.
     /// Even though not the main goal of this crate, this is useful for benchmarking against
@@ -153,11 +159,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             function,
             args,
+            binary_input_files,
             recursion,
             metrics,
         } => {
             let exe = load_wasm_exe(&program, &function);
-            let stdin = make_stdin(&args);
+            let mut stdin = make_stdin(&args);
+            for binary_input_file in &binary_input_files {
+                stdin.write_bytes(&fs::read(binary_input_file).unwrap());
+            }
 
             let prove = || -> Result<()> {
                 proving::prove(&exe, stdin, recursion).map_err(|e| eyre::eyre!("{e}"))?;
@@ -178,9 +188,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             function,
             args,
+            binary_input_files,
         } => {
             let exe = load_wasm_exe(&program, &function);
-            let stdin = make_stdin(&args);
+            let mut stdin = make_stdin(&args);
+            for binary_input_file in &binary_input_files {
+                stdin.write_bytes(&fs::read(binary_input_file).unwrap());
+            }
             let vm_config = WomirConfig::default();
 
             let initial_state = VmState::initial(
