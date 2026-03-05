@@ -53,6 +53,13 @@ cuda = [
   "powdr-openvm/cuda",
   "dep:openvm-cuda-backend",
 ]
+touchemall = [
+  "cuda",
+  "womir-circuit/touchemall",
+  "openvm-circuit/touchemall",
+  "openvm-native-circuit/touchemall",
+  "openvm-cuda-backend/touchemall",
+]
 
 [dependencies.openvm-cuda-backend]
 workspace = true
