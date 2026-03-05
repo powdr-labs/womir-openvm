@@ -32,7 +32,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Cache cargo registry
-        if: matrix.backend == 'cpu'
         uses: actions/cache@v4
         with:
           path: |
