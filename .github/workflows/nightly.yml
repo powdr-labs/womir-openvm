@@ -41,14 +41,17 @@ jobs:
           key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install system dependencies
+        if: matrix.backend == 'cpu'
         run: sudo apt-get update && sudo apt-get install -y wabt
 
       - name: Install Rust toolchain 1.91.0 (stable)
+        if: matrix.backend == 'cpu'
         run: |
           rustup install 1.91.0
           rustup +1.91.0 component add rust-src
 
       - name: Install WebAssembly target
+        if: matrix.backend == 'cpu'
         run: rustup target add wasm32-unknown-unknown
 
       - name: Check GPU memory
