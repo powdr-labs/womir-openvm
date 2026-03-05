@@ -8,14 +8,14 @@ members = ["integration", "extensions/transpiler", "extensions/womir_circuit", "
 resolver = "2"
 
 [workspace.dependencies]
-powdr-openvm-common = { git = "https://github.com/powdr-labs/powdr.git", rev = "b007dec", default-features = false, features = [
+powdr-openvm-common = { git = "https://github.com/powdr-labs/powdr.git", rev = "e6742c5", default-features = false, features = [
   "metrics",
 ] }
-powdr-openvm = { git = "https://github.com/powdr-labs/powdr.git", rev = "b007dec", default-features = false, features = [
+powdr-openvm = { git = "https://github.com/powdr-labs/powdr.git", rev = "e6742c5", default-features = false, features = [
   "metrics",
 ] }
-powdr-autoprecompiles = { git = "https://github.com/powdr-labs/powdr.git", rev = "b007dec", default-features = false }
-powdr-number = { git = "https://github.com/powdr-labs/powdr.git", rev = "b007dec", default-features = false }
+powdr-autoprecompiles = { git = "https://github.com/powdr-labs/powdr.git", rev = "e6742c5", default-features = false }
+powdr-number = { git = "https://github.com/powdr-labs/powdr.git", rev = "e6742c5", default-features = false }
 
 openvm-womir-transpiler = { path = "extensions/transpiler" }
 
