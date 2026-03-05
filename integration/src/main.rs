@@ -96,12 +96,6 @@ enum Commands {
         /// Files to be read as bytes.
         #[arg(long)]
         binary_input_files: Vec<String>,
-        /// Use GPU for tracegen (requires cuda feature)
-        #[arg(long, default_value_t = false)]
-        gpu: bool,
-        /// Only debug a specific segment (1-indexed). Skips constraint checking for other segments.
-        #[arg(long)]
-        target_segment: Option<usize>,
     },
     /// Proves execution of a function from the RISC-V program with the given arguments.
     /// Even though not the main goal of this crate, this is useful for benchmarking against
@@ -195,8 +189,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             function,
             args,
             binary_input_files,
-            gpu,
-            target_segment,
         } => {
             let exe = load_wasm_exe(&program, &function);
             let mut stdin = make_stdin(&args);
@@ -212,33 +204,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 stdin.clone(),
             );
 
-            if gpu {
-                #[cfg(feature = "cuda")]
-                {
-                    proving::mock_prove_with_target(
-                        proving::gpu_engine(),
-                        womir_circuit::WomirGpuBuilder,
-                        &exe,
-                        initial_state,
-                        target_segment,
-                    )
-                    .map_err(|e| eyre::eyre!("{e}"))?;
-                    println!("GPU mock proof verified successfully.");
-                }
-                #[cfg(not(feature = "cuda"))]
-                {
-                    let _ = target_segment;
-                    return Err("GPU mock proving requires the 'cuda' feature".into());
-                }
-            } else {
-                proving::mock_prove_with_target(
-                    proving::cpu_engine(),
-                    womir_circuit::WomirCpuBuilder,
-                    &exe,
-                    initial_state,
-                    target_segment,
-                )
-                .map_err(|e| eyre::eyre!("{e}"))?;
+            #[cfg(feature = "cuda")]
+            {
+                proving::mock_prove_gpu(&exe, initial_state).map_err(|e| eyre::eyre!("{e}"))?;
+                println!("GPU mock proof verified successfully.");
+            }
+            #[cfg(not(feature = "cuda"))]
+            {
+                proving::mock_prove(&exe, initial_state).map_err(|e| eyre::eyre!("{e}"))?;
                 println!("Mock proof verified successfully.");
             }
         }

@@ -152,31 +152,11 @@ pub fn prove(
 
 /// Mock proof with constraint verification (all segments) using a specific engine and builder.
 /// Returns the final state after all segments have been processed.
-#[cfg(test)]
 pub fn mock_prove_with<E, VB>(
     engine: E,
     builder: VB,
     exe: &VmExe<F>,
     init_state: VmState<F>,
-) -> Result<VmState<F>, Box<dyn std::error::Error>>
-where
-    E: StarkEngine<SC = SC>,
-    VB: VmBuilder<E, VmConfig = WomirConfig> + Clone,
-    Val<E::SC>: PrimeField32,
-    <WomirConfig as VmExecutionConfig<Val<E::SC>>>::Executor: Executor<Val<E::SC>>
-        + MeteredExecutor<Val<E::SC>>
-        + PreflightExecutor<Val<E::SC>, VB::RecordArena>,
-{
-    mock_prove_with_target(engine, builder, exe, init_state, None)
-}
-
-/// Mock proof with constraint verification, optionally targeting a specific segment (1-indexed).
-pub fn mock_prove_with_target<E, VB>(
-    engine: E,
-    builder: VB,
-    exe: &VmExe<F>,
-    init_state: VmState<F>,
-    target_segment: Option<usize>,
 ) -> Result<VmState<F>, Box<dyn std::error::Error>>
 where
     E: StarkEngine<SC = SC>,
@@ -203,20 +183,7 @@ where
     // Preflight + constraint verification per segment.
     let mut preflight_interpreter = vm.preflight_interpreter(exe)?;
     let mut state = init_state;
-    for (seg_idx, segment) in segments.iter().enumerate() {
-        let seg_num = seg_idx + 1; // 1-indexed
-        let should_debug = target_segment.is_none() || target_segment == Some(seg_num);
-        println!(
-            "=== {} segment {}/{} (num_insns={}) ===",
-            if should_debug {
-                "Mock proving"
-            } else {
-                "Skipping debug for"
-            },
-            seg_num,
-            segments.len(),
-            segment.num_insns
-        );
+    for segment in &segments {
         vm.transport_init_memory_to_device(&state.memory);
         let preflight_output = vm.execute_preflight(
             &mut preflight_interpreter,
@@ -230,10 +197,7 @@ where
             preflight_output.system_records,
             preflight_output.record_arenas,
         )?;
-        if should_debug {
-            debug_proving_ctx(&vm, pk, &ctx);
-            println!("=== Segment {}/{} passed ===", seg_num, segments.len());
-        }
+        debug_proving_ctx(&vm, pk, &ctx);
     }
 
     Ok(state)
@@ -241,7 +205,6 @@ where
 
 /// Mock proof with constraint verification (all segments) using CPU engine.
 /// Returns the final state after all segments have been processed.
-#[cfg(test)]
 pub fn mock_prove(
     exe: &VmExe<F>,
     init_state: VmState<F>,
@@ -252,7 +215,7 @@ pub fn mock_prove(
 /// Mock proof with constraint verification (all segments) using GPU engine.
 /// Uses the same WomirConfig as CPU but with WomirGpuBuilder for GPU tracegen.
 /// Returns the final state after all segments have been processed.
-#[cfg(all(test, feature = "cuda"))]
+#[cfg(feature = "cuda")]
 pub fn mock_prove_gpu(
     exe: &VmExe<F>,
     init_state: VmState<F>,
