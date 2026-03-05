@@ -90,7 +90,7 @@ pub fn default_engine() -> BabyBearPoseidon2Engine {
 }
 
 /// Create a GPU engine with default FRI parameters.
-#[cfg(all(test, feature = "cuda"))]
+#[cfg(feature = "cuda")]
 pub fn gpu_engine() -> openvm_cuda_backend::engine::GpuBabyBearPoseidon2Engine {
     let fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
@@ -152,11 +152,31 @@ pub fn prove(
 
 /// Mock proof with constraint verification (all segments) using a specific engine and builder.
 /// Returns the final state after all segments have been processed.
+#[cfg(test)]
 pub fn mock_prove_with<E, VB>(
     engine: E,
     builder: VB,
     exe: &VmExe<F>,
     init_state: VmState<F>,
+) -> Result<VmState<F>, Box<dyn std::error::Error>>
+where
+    E: StarkEngine<SC = SC>,
+    VB: VmBuilder<E, VmConfig = WomirConfig> + Clone,
+    Val<E::SC>: PrimeField32,
+    <WomirConfig as VmExecutionConfig<Val<E::SC>>>::Executor: Executor<Val<E::SC>>
+        + MeteredExecutor<Val<E::SC>>
+        + PreflightExecutor<Val<E::SC>, VB::RecordArena>,
+{
+    mock_prove_with_target(engine, builder, exe, init_state, None)
+}
+
+/// Mock proof with constraint verification, optionally targeting a specific segment (1-indexed).
+pub fn mock_prove_with_target<E, VB>(
+    engine: E,
+    builder: VB,
+    exe: &VmExe<F>,
+    init_state: VmState<F>,
+    target_segment: Option<usize>,
 ) -> Result<VmState<F>, Box<dyn std::error::Error>>
 where
     E: StarkEngine<SC = SC>,
@@ -183,7 +203,20 @@ where
     // Preflight + constraint verification per segment.
     let mut preflight_interpreter = vm.preflight_interpreter(exe)?;
     let mut state = init_state;
-    for segment in &segments {
+    for (seg_idx, segment) in segments.iter().enumerate() {
+        let seg_num = seg_idx + 1; // 1-indexed
+        let should_debug = target_segment.is_none() || target_segment == Some(seg_num);
+        println!(
+            "=== {} segment {}/{} (num_insns={}) ===",
+            if should_debug {
+                "Mock proving"
+            } else {
+                "Skipping debug for"
+            },
+            seg_num,
+            segments.len(),
+            segment.num_insns
+        );
         vm.transport_init_memory_to_device(&state.memory);
         let preflight_output = vm.execute_preflight(
             &mut preflight_interpreter,
@@ -197,7 +230,10 @@ where
             preflight_output.system_records,
             preflight_output.record_arenas,
         )?;
-        debug_proving_ctx(&vm, pk, &ctx);
+        if should_debug {
+            debug_proving_ctx(&vm, pk, &ctx);
+            println!("=== Segment {}/{} passed ===", seg_num, segments.len());
+        }
     }
 
     Ok(state)
@@ -205,6 +241,7 @@ where
 
 /// Mock proof with constraint verification (all segments) using CPU engine.
 /// Returns the final state after all segments have been processed.
+#[cfg(test)]
 pub fn mock_prove(
     exe: &VmExe<F>,
     init_state: VmState<F>,
