@@ -22,7 +22,7 @@ use womir_circuit::{WomirConfig, adapters::RV32_REGISTER_NUM_LIMBS, memory_confi
 
 use super::helpers;
 use crate::instruction_builder::*;
-use crate::proving::{ALL_BACKENDS, Backend, CPU_ONLY};
+use crate::proving::{ALL_BACKENDS, Backend};
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -226,10 +226,10 @@ pub fn test_prove(spec: &TestSpec, backends: &[Backend]) -> Result<(), Box<dyn s
     Ok(())
 }
 
-/// Run a test spec through all stages (execution, metered, preflight, prove).
-/// Uses CPU_ONLY for proving by default.
+/// Run a test spec through all stages (execution, metered, preflight, prove)
+/// on all available backends.
 fn test_spec(spec: TestSpec) {
-    test_spec_with_backends(spec, CPU_ONLY)
+    test_spec_with_backends(spec, ALL_BACKENDS)
 }
 
 /// Run a test spec through all stages with specified proving backends.
@@ -258,11 +258,6 @@ pub fn test_spec_with_backends(mut spec: TestSpec, backends: &[Backend]) {
     }
 
     assert!(!is_error)
-}
-
-/// Run a test spec on all available backends (CPU and GPU if available).
-pub fn test_spec_all_backends(spec: TestSpec) {
-    test_spec_with_backends(spec, ALL_BACKENDS)
 }
 
 #[cfg(test)]
@@ -325,12 +320,6 @@ mod tests {
         test_spec(rebase_spec(&spec, REG_BASE_FITS_3_BYTES));
     }
 
-    fn test_spec_for_all_register_bases_all_backends(spec: TestSpec) {
-        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_1_BYTE));
-        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_2_BYTES));
-        test_spec_all_backends(rebase_spec(&spec, REG_BASE_FITS_3_BYTES));
-    }
-
     // ==================== BaseAlu Tests ====================
 
     #[test]
@@ -344,7 +333,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -362,7 +351,7 @@ mod tests {
         };
 
         // Test all register bases on all backends (CPU + GPU)
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -379,7 +368,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -396,7 +385,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -413,7 +402,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -430,7 +419,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -447,7 +436,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -464,7 +453,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -481,7 +470,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -498,7 +487,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -515,7 +504,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     // ==================== LoadStore and LoadSignExtend Tests ====================
@@ -535,7 +524,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -553,7 +542,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -570,7 +559,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -587,7 +576,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -605,7 +594,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -623,7 +612,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -641,7 +630,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -659,7 +648,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -677,7 +666,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -695,7 +684,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -713,7 +702,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -731,7 +720,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -753,7 +742,7 @@ mod tests {
             expected_ram: vec![(500, 0x00003434)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -775,7 +764,7 @@ mod tests {
             expected_ram: vec![(600, 0x22221111)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
     // ==================== LoadB/LoadH large immediate tests ====================
 
@@ -800,7 +789,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -821,7 +810,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -842,7 +831,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -869,7 +858,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== LessThan Tests ====================
@@ -888,7 +877,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -905,7 +894,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -922,7 +911,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -939,7 +928,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -956,7 +945,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -971,7 +960,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -986,7 +975,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1001,7 +990,7 @@ mod tests {
             expected_registers: vec![(12, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1016,7 +1005,7 @@ mod tests {
             expected_registers: vec![(12, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1031,7 +1020,7 @@ mod tests {
             expected_registers: vec![(12, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1046,7 +1035,7 @@ mod tests {
             expected_registers: vec![(12, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1061,7 +1050,7 @@ mod tests {
             expected_registers: vec![(12, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1076,7 +1065,7 @@ mod tests {
             expected_registers: vec![(12, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1094,7 +1083,7 @@ mod tests {
             expected_registers: vec![(13, 1), (14, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1117,7 +1106,7 @@ mod tests {
             expected_registers: vec![(12, 1), (15, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1136,7 +1125,7 @@ mod tests {
             expected_registers: vec![(14, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1158,7 +1147,7 @@ mod tests {
             expected_registers: vec![(14, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
     // ==================== LessThan64 Tests ====================
 
@@ -1180,7 +1169,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1201,7 +1190,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1222,7 +1211,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1237,7 +1226,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1252,7 +1241,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== LessThan64 output width tests ====================
@@ -1284,7 +1273,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1310,7 +1299,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1335,7 +1324,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Eq Tests ====================
@@ -1354,7 +1343,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1371,7 +1360,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1388,7 +1377,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1405,7 +1394,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1422,7 +1411,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1439,7 +1428,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Eq64 Tests ====================
@@ -1462,7 +1451,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1483,7 +1472,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1504,7 +1493,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1525,7 +1514,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Eq64 output width tests ====================
@@ -1556,7 +1545,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1581,7 +1570,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1606,7 +1595,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1626,7 +1615,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1646,7 +1635,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Shift Tests ====================
@@ -1665,7 +1654,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1682,7 +1671,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1699,7 +1688,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1714,7 +1703,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1731,7 +1720,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1748,7 +1737,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1765,7 +1754,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Shift64 Tests ====================
@@ -1788,7 +1777,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1803,7 +1792,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1824,7 +1813,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1839,7 +1828,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1858,7 +1847,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1878,7 +1867,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== add_64 ====================
@@ -1896,7 +1885,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1913,7 +1902,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1929,7 +1918,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1950,7 +1939,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1971,7 +1960,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -1992,7 +1981,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== sub_64 ====================
@@ -2015,7 +2004,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2037,7 +2026,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2058,7 +2047,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2075,7 +2064,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== xor_64 ====================
@@ -2098,7 +2087,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2114,7 +2103,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== or_64 ====================
@@ -2137,7 +2126,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2153,7 +2142,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== and_64 ====================
@@ -2176,7 +2165,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2192,7 +2181,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Mul Tests ====================
@@ -2211,7 +2200,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2228,7 +2217,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2244,7 +2233,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2265,7 +2254,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -2286,7 +2275,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -2307,7 +2296,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -2323,7 +2312,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec);
+        test_spec_for_all_register_bases(spec);
     }
 
     #[test]
@@ -2338,7 +2327,7 @@ mod tests {
             expected_registers: vec![(12, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2353,7 +2342,7 @@ mod tests {
             expected_registers: vec![(12, 999)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2368,7 +2357,7 @@ mod tests {
             expected_registers: vec![(12, 4294049777u32)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2383,7 +2372,7 @@ mod tests {
             expected_registers: vec![(12, 0xFFFFFFFF)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2398,7 +2387,7 @@ mod tests {
             expected_registers: vec![(12, (-15_i32) as u32)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2413,7 +2402,7 @@ mod tests {
             expected_registers: vec![(12, (-24_i32) as u32)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2428,7 +2417,7 @@ mod tests {
             expected_registers: vec![(12, 21)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2443,7 +2432,7 @@ mod tests {
             expected_registers: vec![(12, (-42_i32) as u32)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2458,7 +2447,7 @@ mod tests {
             expected_registers: vec![(12, 0x80000000)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2477,7 +2466,7 @@ mod tests {
             expected_registers: vec![(14, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2495,7 +2484,7 @@ mod tests {
             expected_registers: vec![(14, 30)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Jump Tests ====================
@@ -2513,7 +2502,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2531,7 +2520,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2546,7 +2535,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2564,7 +2553,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2579,7 +2568,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2597,7 +2586,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Const32 Tests ====================
@@ -2614,7 +2603,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2630,7 +2619,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2646,7 +2635,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2661,7 +2650,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== DivRem Tests ====================
@@ -2679,7 +2668,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2695,7 +2684,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2711,7 +2700,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2727,7 +2716,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2743,7 +2732,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2760,7 +2749,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2776,7 +2765,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2792,7 +2781,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2808,7 +2797,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2824,7 +2813,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2839,7 +2828,7 @@ mod tests {
             expected_registers: vec![(12, 999)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2854,7 +2843,7 @@ mod tests {
             expected_registers: vec![(12, 1)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2869,7 +2858,7 @@ mod tests {
             expected_registers: vec![(12, 3)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2884,7 +2873,7 @@ mod tests {
             expected_registers: vec![(12, 0)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2899,7 +2888,7 @@ mod tests {
             expected_registers: vec![(12, 256000)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2914,7 +2903,7 @@ mod tests {
             expected_registers: vec![(12, 16)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2929,7 +2918,7 @@ mod tests {
             expected_registers: vec![(12, 4)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2947,7 +2936,7 @@ mod tests {
             expected_registers: vec![(14, 20)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -2965,7 +2954,7 @@ mod tests {
             expected_registers: vec![(13, 98)],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== DivRem 64-bit Tests ====================
@@ -2988,7 +2977,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3009,7 +2998,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3030,7 +3019,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3051,7 +3040,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3072,7 +3061,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3093,7 +3082,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3114,7 +3103,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3137,7 +3126,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3158,7 +3147,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3174,7 +3163,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3190,7 +3179,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3213,7 +3202,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3234,7 +3223,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3255,7 +3244,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== DivRem Immediate Tests ====================
@@ -3273,7 +3262,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3289,7 +3278,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3305,7 +3294,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3321,7 +3310,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3337,7 +3326,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3353,7 +3342,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3369,7 +3358,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3385,7 +3374,7 @@ mod tests {
             ..Default::default()
         };
 
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Cross-width tests ====================
@@ -3571,7 +3560,7 @@ mod tests {
             fp_value_registers: vec![61],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3610,7 +3599,7 @@ mod tests {
             fp_value_registers: vec![61],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3651,7 +3640,7 @@ mod tests {
             fp_value_registers: vec![61],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3696,7 +3685,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Hint/Stdin Tests ====================
@@ -3720,7 +3709,7 @@ mod tests {
             stdin,
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     #[test]
@@ -3764,7 +3753,7 @@ mod tests {
             stdin,
             ..Default::default()
         };
-        test_spec_for_all_register_bases_all_backends(spec)
+        test_spec_for_all_register_bases(spec)
     }
 
     // ==================== Non-TestSpec Tests ====================
