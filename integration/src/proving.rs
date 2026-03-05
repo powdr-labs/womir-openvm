@@ -7,6 +7,7 @@ use openvm_circuit::arch::{
     VmExecutionConfig, VmState, debug_proving_ctx,
 };
 use openvm_instructions::exe::VmExe;
+#[cfg(not(feature = "cuda"))]
 use openvm_native_circuit::NativeCpuBuilder;
 use openvm_sdk::GenericSdk;
 use openvm_sdk::StdIn;
@@ -107,7 +108,15 @@ pub fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
     })
 }
 
+#[cfg(not(feature = "cuda"))]
 type WomirSdk = GenericSdk<BabyBearPoseidon2Engine, WomirCpuBuilder, NativeCpuBuilder>;
+
+#[cfg(feature = "cuda")]
+type WomirSdk = GenericSdk<
+    openvm_cuda_backend::engine::GpuBabyBearPoseidon2Engine,
+    womir_circuit::WomirGpuBuilder,
+    openvm_native_circuit::NativeGpuBuilder,
+>;
 
 /// Generate and verify a real cryptographic proof, with optional recursion.
 pub fn prove(
