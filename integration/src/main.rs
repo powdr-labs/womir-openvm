@@ -6,8 +6,6 @@ mod proving;
 mod tests;
 mod womir_translation;
 
-use std::fs;
-
 use clap::{Parser, Subcommand};
 use eyre::Result;
 use itertools::Itertools;
@@ -56,12 +54,10 @@ enum Commands {
         program: String,
         /// Function name
         function: String,
-        /// Arguments (u32 values)
+        /// Guest inputs in the order the guest reads them.
+        /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
-        args: Vec<String>,
-        /// Files to be read as bytes.
-        #[arg(long)]
-        binary_input_files: Vec<String>,
+        input: Vec<String>,
     },
     /// Proves execution of a function from the WASM program with the given arguments
     /// (generates and verifies a full cryptographic proof)
@@ -70,12 +66,10 @@ enum Commands {
         program: String,
         /// Function name
         function: String,
-        /// Arguments (u32 values)
+        /// Guest inputs in the order the guest reads them.
+        /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
-        args: Vec<String>,
-        /// Files to be read as bytes.
-        #[arg(long)]
-        binary_input_files: Vec<String>,
+        input: Vec<String>,
         /// Also run aggregation (inner recursion) after the app proof
         #[arg(long, default_value_t = false)]
         recursion: bool,
@@ -90,12 +84,10 @@ enum Commands {
         program: String,
         /// Function name
         function: String,
-        /// Arguments (u32 values)
+        /// Guest inputs in the order the guest reads them.
+        /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
-        args: Vec<String>,
-        /// Files to be read as bytes.
-        #[arg(long)]
-        binary_input_files: Vec<String>,
+        input: Vec<String>,
     },
     /// Proves execution of a function from the RISC-V program with the given arguments.
     /// Even though not the main goal of this crate, this is useful for benchmarking against
@@ -103,9 +95,10 @@ enum Commands {
     ProveRiscv {
         /// Path to the Rust crate
         program: String,
-        /// Arguments (u32 values)
+        /// Guest inputs in the order the guest reads them.
+        /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
-        args: Vec<String>,
+        input: Vec<String>,
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
@@ -132,25 +125,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Run {
             program,
             function,
-            args,
-            binary_input_files,
+            input,
         } => {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let (module, functions) = load_wasm(&wasm_bytes);
 
             // Create and execute program
             let mut linked_program = LinkedProgram::new(module, functions);
-
-            let mut stdin = StdIn::default();
-            for arg in args {
-                let val = arg.parse::<u32>().unwrap();
-                stdin.write(&val);
-            }
-
-            for binary_input_file in &binary_input_files {
-                stdin.write_bytes(&fs::read(binary_input_file).unwrap());
-            }
-
+            let stdin = make_stdin(&input);
             let output = linked_program.execute(WomirConfig::default(), &function, stdin)?;
 
             println!("output: {output:?}");
@@ -158,16 +140,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Prove {
             program,
             function,
-            args,
-            binary_input_files,
+            input,
             recursion,
             metrics,
         } => {
             let exe = load_wasm_exe(&program, &function);
-            let mut stdin = make_stdin(&args);
-            for binary_input_file in &binary_input_files {
-                stdin.write_bytes(&fs::read(binary_input_file).unwrap());
-            }
+            let stdin = make_stdin(&input);
 
             let prove = || -> Result<()> {
                 proving::prove(&exe, stdin, recursion).map_err(|e| eyre::eyre!("{e}"))?;
@@ -187,14 +165,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::MockProve {
             program,
             function,
-            args,
-            binary_input_files,
+            input,
         } => {
             let exe = load_wasm_exe(&program, &function);
-            let mut stdin = make_stdin(&args);
-            for binary_input_file in &binary_input_files {
-                stdin.write_bytes(&fs::read(binary_input_file).unwrap());
-            }
+            let stdin = make_stdin(&input);
             let vm_config = WomirConfig::default();
 
             let initial_state = VmState::initial(
@@ -217,7 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::ProveRiscv {
             program,
-            args,
+            input,
             metrics,
         } => {
             let prove = || -> Result<()> {
@@ -241,12 +215,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .map_err(|e| eyre::eyre!("{e}"))?;
 
-                let mut stdin = StdIn::default();
-                for arg in &args {
-                    let val = arg.parse::<u32>().unwrap();
-                    stdin.write(&val);
-                }
-
+                let stdin = make_stdin(&input);
                 powdr_openvm::prove(&compiled, false, true, stdin, None)
                     .map_err(|e| eyre::eyre!("{e}"))?;
                 println!("RISC-V proof verified successfully.");
@@ -274,11 +243,22 @@ fn load_wasm_exe(program: &str, function: &str) -> VmExe<F> {
     linked_program.program_with_entry_point(function)
 }
 
-fn make_stdin(args: &[String]) -> StdIn {
+/// Build StdIn from `--input` values. Each value is either:
+/// - a u32 literal (e.g. "42")
+/// - `file:<path>` to include raw file bytes
+fn make_stdin(inputs: &[String]) -> StdIn {
     let mut stdin = StdIn::default();
-    for arg in args {
-        let val = arg.parse::<u32>().unwrap();
-        stdin.write(&val);
+    for input in inputs {
+        if let Some(path) = input.strip_prefix("file:") {
+            stdin.write_bytes(
+                &std::fs::read(path).unwrap_or_else(|e| panic!("Failed to read {path}: {e}")),
+            );
+        } else {
+            let val: u32 = input
+                .parse()
+                .unwrap_or_else(|e| panic!("Invalid u32 input '{input}': {e}"));
+            stdin.write(&val);
+        }
     }
     stdin
 }
