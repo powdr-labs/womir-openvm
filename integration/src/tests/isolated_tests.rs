@@ -3571,7 +3571,7 @@ mod tests {
             fp_value_registers: vec![61],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -3610,7 +3610,7 @@ mod tests {
             fp_value_registers: vec![61],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -3651,7 +3651,7 @@ mod tests {
             fp_value_registers: vec![61],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -3696,7 +3696,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     // ==================== Hint/Stdin Tests ====================
@@ -3764,8 +3764,7 @@ mod tests {
             stdin,
             ..Default::default()
         };
-        // This test uses `call` which requires chips not yet on GPU.
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     // ==================== Non-TestSpec Tests ====================

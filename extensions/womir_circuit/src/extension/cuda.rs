@@ -11,13 +11,13 @@ use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::Gp
 use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
 
 use crate::{
-    BaseAlu64Air, BaseAlu64ChipGpu, Const32Air, Const32ChipGpu, DivRem64Air, DivRem64ChipGpu,
-    Eq64Air, Eq64ChipGpu, JumpAir, JumpChipGpu, LessThan64Air, LessThan64ChipGpu, Mul64Air,
-    Mul64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32DivRemAir, Rv32DivRemChipGpu, Rv32EqAir,
-    Rv32EqChipGpu, Rv32HintStoreAir, Rv32HintStoreChipGpu, Rv32LessThanAir, Rv32LessThanChipGpu,
-    Rv32LoadSignExtendAir, Rv32LoadSignExtendChipGpu, Rv32LoadStoreAir, Rv32LoadStoreChipGpu,
-    Rv32MultiplicationAir, Rv32MultiplicationChipGpu, Rv32ShiftAir, Rv32ShiftChipGpu, Shift64Air,
-    Shift64ChipGpu,
+    BaseAlu64Air, BaseAlu64ChipGpu, CallAir, CallChipGpu, Const32Air, Const32ChipGpu, DivRem64Air,
+    DivRem64ChipGpu, Eq64Air, Eq64ChipGpu, JumpAir, JumpChipGpu, LessThan64Air, LessThan64ChipGpu,
+    Mul64Air, Mul64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32DivRemAir, Rv32DivRemChipGpu,
+    Rv32EqAir, Rv32EqChipGpu, Rv32HintStoreAir, Rv32HintStoreChipGpu, Rv32LessThanAir,
+    Rv32LessThanChipGpu, Rv32LoadSignExtendAir, Rv32LoadSignExtendChipGpu, Rv32LoadStoreAir,
+    Rv32LoadStoreChipGpu, Rv32MultiplicationAir, Rv32MultiplicationChipGpu, Rv32ShiftAir,
+    Rv32ShiftChipGpu, Shift64Air, Shift64ChipGpu,
 };
 
 use super::Womir;
@@ -168,6 +168,10 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(load_sign_extend);
 
+        inventory.next_air::<CallAir>()?;
+        let call = CallChipGpu::new(range_checker.clone(), pointer_max_bits, timestamp_max_bits);
+        inventory.add_executor_chip(call);
+
         inventory.next_air::<JumpAir>()?;
         let jump = JumpChipGpu::new(range_checker.clone(), timestamp_max_bits);
         inventory.add_executor_chip(jump);
@@ -188,8 +192,6 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
             timestamp_max_bits,
         );
         inventory.add_executor_chip(hint_store);
-
-        // TODO: Add more WOMIR GPU chips here (call)
 
         Ok(())
     }
