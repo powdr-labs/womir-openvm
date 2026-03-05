@@ -3796,30 +3796,37 @@ mod tests {
     // These tests verify that the GPU backend correctly rejects invalid inputs.
     // They require the `cuda` feature and are skipped on CPU-only builds.
 
-    /// GPU proving should fail when the program uses a chip not included in WomirPreparingGpuConfig.
-    /// CALL is not GPU-ready, so mock_prove_gpu should error during metered execution
-    /// (the executor cannot find a handler for the CallOpcode).
+    /// GPU proving should fail when the program contains an unrecognized opcode.
+    /// The executor has no handler for opcode 0xFFFF, so mock_prove_gpu should fail
+    /// during metered execution.
     #[test]
     #[cfg(feature = "cuda")]
     #[should_panic]
-    fn test_gpu_unsupported_chip_call() {
+    fn test_gpu_unrecognized_opcode() {
         use crate::proving::GPU_ONLY;
+        use openvm_instructions::VmOpcode;
 
         setup_tracing_with_log_level(Level::WARN);
 
-        // CALL is not implemented in WomirPreparingGpuConfig.
-        // The GPU mock prover should fail because the executor doesn't know about CallOpcode.
+        // Build an instruction with a bogus opcode that no chip handles.
+        let bogus_instr = Instruction::new(
+            VmOpcode::from_usize(0xFFFF),
+            F::ZERO,
+            F::ZERO,
+            F::ZERO,
+            F::ZERO,
+            F::ZERO,
+            F::ZERO,
+            F::ZERO,
+        );
+
         let spec = TestSpec {
-            program: vec![
-                call(10, 11, 12, 120), // CALL: not in GPU config
-                halt(),
-            ],
+            program: vec![bogus_instr, halt()],
             start_fp: 20,
             ..Default::default()
         };
 
-        // test_prove calls mock_prove_gpu which creates a WomirPreparingGpuConfig VM.
-        // The metered execution should fail because CallOpcode is not registered.
+        // The GPU mock prover should fail because no executor handles opcode 0xFFFF.
         test_prove(&spec, GPU_ONLY).unwrap();
     }
 
