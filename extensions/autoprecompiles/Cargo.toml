@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [features]
+default = []
+cuda = ["powdr-openvm-common/cuda"]
 tco = []
 
 [dependencies]

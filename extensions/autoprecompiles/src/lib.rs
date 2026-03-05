@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use openvm_circuit::arch::{
-    AirInventory, ChipInventoryError, VmBuilder, VmCircuitConfig, VmCircuitExtension,
-    VmProverExtension,
+    AirInventory, AirInventoryError, ChipInventoryError, VmBuilder, VmCircuitConfig,
+    VmCircuitExtension, VmProverExtension,
 };
 use openvm_circuit::system::SystemCpuBuilder;
 use openvm_instructions::{LocalOpcode, SystemOpcode, VmOpcode, instruction::Instruction, riscv};
@@ -15,13 +15,14 @@ use openvm_womir_transpiler::{
     Eq64Opcode, EqOpcode, HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode,
     LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
+use powdr_openvm_common::BabyBearSC;
 use powdr_openvm_common::program::OriginalCompiledProgram;
 use powdr_openvm_common::{
-    isa::{OpenVmISA, OriginalCpuChipComplex, OriginalCpuChipInventory},
+    isa::{OpenVmISA, OriginalCpuChipComplex},
     trace_generator::cpu::periphery::{SharedPeripheryChipsCpu, SharedPeripheryChipsCpuProverExt},
 };
 use strum::IntoEnumIterator;
-use womir_circuit::{WomirConfig, WomirConfigExecutor, WomirCpuBuilder, WomirProverExt};
+use womir_circuit::{WomirConfig, WomirConfigExecutor, WomirCpuBuilder, WomirCpuProverExt};
 use womir_translation::LinkedProgram;
 
 #[derive(Clone, Default)]
@@ -301,55 +302,17 @@ impl OpenVmISA for WomirISA {
     type RegisterAddress = ();
     type OriginalExecutor<F: PrimeField32> = WomirConfigExecutor<F>;
     type OriginalConfig = WomirConfig;
-    type OriginalBuilder = WomirCpuBuilder;
+    type OriginalBuilderCpu = WomirCpuBuilder;
 
     fn create_original_chip_complex(
         config: &Self::OriginalConfig,
-        airs: AirInventory<powdr_openvm_common::BabyBearSC>,
+        airs: AirInventory<BabyBearSC>,
     ) -> Result<OriginalCpuChipComplex, ChipInventoryError> {
         <WomirCpuBuilder as VmBuilder<BabyBearPoseidon2Engine>>::create_chip_complex(
             &WomirCpuBuilder,
             config,
             airs,
         )
-    }
-
-    fn create_dummy_inventory(
-        config: &Self::OriginalConfig,
-        context: SharedPeripheryChipsCpu<Self>,
-    ) -> OriginalCpuChipInventory {
-        let mut airs = config
-            .system
-            .create_airs()
-            .expect("failed to create system AIR inventory for dummy config");
-        airs.start_new_extension();
-        VmCircuitExtension::extend_circuit(&context, &mut airs)
-            .expect("failed to extend dummy AIRs with shared periphery");
-        VmCircuitExtension::extend_circuit(&config.base, &mut airs)
-            .expect("failed to extend dummy AIRs with womir extension");
-
-        let mut chip_complex = VmBuilder::<BabyBearPoseidon2Engine>::create_chip_complex(
-            &SystemCpuBuilder,
-            &config.system,
-            airs,
-        )
-        .expect("failed to create dummy chip complex");
-
-        let inventory = &mut chip_complex.inventory;
-        VmProverExtension::<BabyBearPoseidon2Engine, _, _>::extend_prover(
-            &SharedPeripheryChipsCpuProverExt,
-            &context,
-            inventory,
-        )
-        .expect("failed to preload shared periphery chips into dummy inventory");
-        VmProverExtension::<BabyBearPoseidon2Engine, _, _>::extend_prover(
-            &WomirProverExt,
-            &config.base,
-            inventory,
-        )
-        .expect("failed to extend dummy inventory with womir chips");
-
-        chip_complex.inventory
     }
 
     fn is_branching(opcode: VmOpcode) -> bool {
@@ -378,6 +341,53 @@ impl OpenVmISA for WomirISA {
 
     fn get_jump_destinations(original_program: &OriginalCompiledProgram<Self>) -> BTreeSet<u64> {
         original_program.elf.labels().into_keys().collect()
+    }
+
+    fn create_dummy_airs<E: VmCircuitExtension<BabyBearSC>>(
+        config: &Self::OriginalConfig,
+        shared_chips: E,
+    ) -> Result<AirInventory<BabyBearSC>, AirInventoryError> {
+        let mut inventory = config.system.create_airs()?;
+        inventory.start_new_extension();
+        VmCircuitExtension::extend_circuit(&shared_chips, &mut inventory)?;
+        VmCircuitExtension::extend_circuit(&config.base, &mut inventory)?;
+        Ok(inventory)
+    }
+
+    fn create_dummy_chip_complex_cpu(
+        config: &Self::OriginalConfig,
+        circuit: AirInventory<BabyBearSC>,
+        shared_chips: SharedPeripheryChipsCpu<Self>,
+    ) -> Result<OriginalCpuChipComplex, ChipInventoryError> {
+        let mut chip_complex = VmBuilder::<BabyBearPoseidon2Engine>::create_chip_complex(
+            &SystemCpuBuilder,
+            &config.system,
+            circuit,
+        )?;
+        let inventory = &mut chip_complex.inventory;
+
+        VmProverExtension::<BabyBearPoseidon2Engine, _, _>::extend_prover(
+            &SharedPeripheryChipsCpuProverExt,
+            &shared_chips,
+            inventory,
+        )?;
+
+        VmProverExtension::<BabyBearPoseidon2Engine, _, _>::extend_prover(
+            &WomirCpuProverExt,
+            &config.base,
+            inventory,
+        )?;
+
+        Ok(chip_complex)
+    }
+
+    #[cfg(feature = "cuda")]
+    fn create_dummy_chip_complex_gpu(
+        config: &Self::OriginalConfig,
+        circuit: AirInventory<BabyBearSC>,
+        shared_chips: SharedPeripheryChipsGpu<Self>,
+    ) -> Result<OriginalGpuChipComplex, ChipInventoryError> {
+        todo!()
     }
 }
 
