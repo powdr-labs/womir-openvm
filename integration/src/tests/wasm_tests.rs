@@ -341,9 +341,16 @@ fn run_wasm_test_function_raw(
     println!("  Preflight");
     helpers::test_preflight(&exe, initial_state.clone())?;
 
-    // Mock proof
-    println!("  Mock proof");
-    mock_prove(&exe, initial_state)?;
+    // Mock proof (CPU)
+    println!("  Mock proof (CPU)");
+    mock_prove(&exe, initial_state.clone())?;
+
+    // Mock proof (GPU)
+    #[cfg(feature = "cuda")]
+    {
+        println!("  Mock proof (GPU)");
+        crate::proving::mock_prove_gpu(&exe, initial_state)?;
+    }
 
     Ok(output)
 }

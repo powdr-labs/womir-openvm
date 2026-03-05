@@ -1,5 +1,3 @@
-// Adapted from <openvm>/extensions/rv32im/circuit/src/extension/cuda.rs (stripped to BaseAlu only)
-// Diff: https://gist.github.com/leonardoalt/09fd3d60bd571851bb656dc53cec0a4b#file-diff-extension-cuda-rs-diff
 use std::sync::Arc;
 
 use openvm_circuit::{
@@ -35,6 +33,9 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
 
         let range_checker = get_inventory_range_checker(inventory);
         let bitwise_lu = get_or_create_bitwise_op_lookup(inventory)?;
+
+        // NOTE: The order of next_air() calls must match the order of add_air()
+        // calls in Womir::extend_circuit (extension/mod.rs).
 
         inventory.next_air::<Rv32BaseAluAir>()?;
         let base_alu = Rv32BaseAluChipGpu::new(
@@ -105,22 +106,6 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(less_than_64);
 
-        inventory.next_air::<Rv32ShiftAir>()?;
-        let shift = Rv32ShiftChipGpu::new(
-            range_checker.clone(),
-            bitwise_lu.clone(),
-            timestamp_max_bits,
-        );
-        inventory.add_executor_chip(shift);
-
-        inventory.next_air::<Shift64Air>()?;
-        let shift_64 = Shift64ChipGpu::new(
-            range_checker.clone(),
-            bitwise_lu.clone(),
-            timestamp_max_bits,
-        );
-        inventory.add_executor_chip(shift_64);
-
         inventory.next_air::<Rv32DivRemAir>()?;
         let divrem = Rv32DivRemChipGpu::new(
             range_checker.clone(),
@@ -155,6 +140,22 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(eq_64);
 
+        inventory.next_air::<Rv32ShiftAir>()?;
+        let shift = Rv32ShiftChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(shift);
+
+        inventory.next_air::<Shift64Air>()?;
+        let shift_64 = Shift64ChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(shift_64);
+
         inventory.next_air::<Rv32LoadStoreAir>()?;
         let load_store =
             Rv32LoadStoreChipGpu::new(range_checker.clone(), pointer_max_bits, timestamp_max_bits);
@@ -168,10 +169,6 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(load_sign_extend);
 
-        inventory.next_air::<CallAir>()?;
-        let call = CallChipGpu::new(range_checker.clone(), pointer_max_bits, timestamp_max_bits);
-        inventory.add_executor_chip(call);
-
         inventory.next_air::<JumpAir>()?;
         let jump = JumpChipGpu::new(range_checker.clone(), timestamp_max_bits);
         inventory.add_executor_chip(jump);
@@ -183,6 +180,10 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
             timestamp_max_bits,
         );
         inventory.add_executor_chip(const32);
+
+        inventory.next_air::<CallAir>()?;
+        let call = CallChipGpu::new(range_checker.clone(), pointer_max_bits, timestamp_max_bits);
+        inventory.add_executor_chip(call);
 
         inventory.next_air::<Rv32HintStoreAir>()?;
         let hint_store = Rv32HintStoreChipGpu::new(

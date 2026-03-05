@@ -9,6 +9,13 @@
 
 set -e
 
+# Parse --cuda flag
+CUDA_FLAGS=""
+if [[ "$1" == "--cuda" ]]; then
+    CUDA_FLAGS="--features cuda"
+    shift
+fi
+
 SCRIPT_PATH=$(realpath "${BASH_SOURCE[0]}")
 SCRIPTS_DIR=$(dirname "$SCRIPT_PATH")
 
@@ -42,7 +49,7 @@ run_bench_wasm() {
     local args_flags
     args_flags=($(make_args_flags "$input"))
 
-    cargo run -r -- prove --recursion "$guest" "main" "${args_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
+    cargo run -r $CUDA_FLAGS -- prove --recursion "$guest" "main" "${args_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
 
     python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
 }
@@ -61,7 +68,7 @@ run_bench_riscv() {
     local args_flags
     args_flags=($(make_args_flags "$input"))
 
-    cargo run -r -- prove-riscv "$guest" "${args_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
+    cargo run -r $CUDA_FLAGS -- prove-riscv "$guest" "${args_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
 
     python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
 

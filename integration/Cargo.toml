@@ -49,6 +49,8 @@ default = []
 cuda = [
   "womir-circuit/cuda",
   "openvm-circuit/cuda",
+  "openvm-native-circuit/cuda",
+  "powdr-openvm/cuda",
   "dep:openvm-cuda-backend",
 ]
 

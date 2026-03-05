@@ -166,3 +166,7 @@ jobs:
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_jump_if_zero_true --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_jump_if_zero_false --exact --test-threads=1
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_skip --exact --test-threads=1
+
+      - name: Run GPU keccak test
+        run: |
+          cargo test --release --features cuda -- tests::wasm_tests::test_keccak_rust_womir_1 --exact --test-threads=1
