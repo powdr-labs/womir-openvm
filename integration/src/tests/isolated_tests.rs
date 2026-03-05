@@ -3720,7 +3720,7 @@ mod tests {
             stdin,
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     #[test]
@@ -3764,7 +3764,7 @@ mod tests {
             stdin,
             ..Default::default()
         };
-        test_spec_for_all_register_bases(spec)
+        test_spec_for_all_register_bases_all_backends(spec)
     }
 
     // ==================== Non-TestSpec Tests ====================

@@ -14,9 +14,10 @@ use crate::{
     BaseAlu64Air, BaseAlu64ChipGpu, CallAir, CallChipGpu, Const32Air, Const32ChipGpu, DivRem64Air,
     DivRem64ChipGpu, Eq64Air, Eq64ChipGpu, JumpAir, JumpChipGpu, LessThan64Air, LessThan64ChipGpu,
     Mul64Air, Mul64ChipGpu, Rv32BaseAluAir, Rv32BaseAluChipGpu, Rv32DivRemAir, Rv32DivRemChipGpu,
-    Rv32EqAir, Rv32EqChipGpu, Rv32LessThanAir, Rv32LessThanChipGpu, Rv32LoadSignExtendAir,
-    Rv32LoadSignExtendChipGpu, Rv32LoadStoreAir, Rv32LoadStoreChipGpu, Rv32MultiplicationAir,
-    Rv32MultiplicationChipGpu, Rv32ShiftAir, Rv32ShiftChipGpu, Shift64Air, Shift64ChipGpu,
+    Rv32EqAir, Rv32EqChipGpu, Rv32HintStoreAir, Rv32HintStoreChipGpu, Rv32LessThanAir,
+    Rv32LessThanChipGpu, Rv32LoadSignExtendAir, Rv32LoadSignExtendChipGpu, Rv32LoadStoreAir,
+    Rv32LoadStoreChipGpu, Rv32MultiplicationAir, Rv32MultiplicationChipGpu, Rv32ShiftAir,
+    Rv32ShiftChipGpu, Shift64Air, Shift64ChipGpu,
 };
 
 use super::Womir;
@@ -183,7 +184,14 @@ impl VmProverExtension<GpuBabyBearPoseidon2Engine, DenseRecordArena, Womir> for 
         );
         inventory.add_executor_chip(const32);
 
-        // TODO: Add more WOMIR GPU chips here
+        inventory.next_air::<Rv32HintStoreAir>()?;
+        let hint_store = Rv32HintStoreChipGpu::new(
+            range_checker.clone(),
+            bitwise_lu.clone(),
+            pointer_max_bits,
+            timestamp_max_bits,
+        );
+        inventory.add_executor_chip(hint_store);
 
         Ok(())
     }

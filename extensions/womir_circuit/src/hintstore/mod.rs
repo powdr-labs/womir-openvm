@@ -43,6 +43,11 @@ use struct_reflection::{StructReflection, StructReflectionHelper};
 
 mod execution;
 
+#[cfg(feature = "cuda")]
+mod cuda;
+#[cfg(feature = "cuda")]
+pub use cuda::{OffsetInfo, Rv32HintStoreChipGpu};
+
 #[repr(C)]
 #[derive(AlignedBorrow, Debug, StructReflection)]
 pub struct Rv32HintStoreCols<T> {
