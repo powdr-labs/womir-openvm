@@ -53,7 +53,7 @@ fn test_cli_run_fib() {
             "run",
             sample_program("fib_loop.wasm").to_str().unwrap(),
             "fib",
-            "--args",
+            "--input",
             "10",
         ])
         .output()
@@ -78,9 +78,9 @@ fn test_cli_run_n_first_sum() {
             "run",
             sample_program("n_first_sum.wasm").to_str().unwrap(),
             "n_first_sum",
-            "--args",
+            "--input",
             "42",
-            "--args",
+            "--input",
             "0",
         ])
         .output()
@@ -106,13 +106,13 @@ fn test_cli_run_keccak() {
             "run",
             wasm.to_str().unwrap(),
             "main",
-            "--args",
+            "--input",
             "0",
-            "--args",
+            "--input",
             "0",
-            "--args",
+            "--input",
             "1",
-            "--args",
+            "--input",
             "41",
         ])
         .output()
@@ -135,13 +135,13 @@ fn test_cli_run_keccak_wrong_output_fails() {
             "run",
             wasm.to_str().unwrap(),
             "main",
-            "--args",
+            "--input",
             "0",
-            "--args",
+            "--input",
             "0",
-            "--args",
+            "--input",
             "1",
-            "--args",
+            "--input",
             "42",
         ])
         .output()
@@ -163,13 +163,13 @@ fn test_cli_prove_keccak_wrong_output_fails() {
             "prove",
             wasm.to_str().unwrap(),
             "main",
-            "--args",
+            "--input",
             "0",
-            "--args",
+            "--input",
             "0",
-            "--args",
+            "--input",
             "1",
-            "--args",
+            "--input",
             "42",
         ])
         .output()
@@ -187,7 +187,7 @@ fn test_cli_prove_fib() {
             "prove",
             sample_program("fib_loop.wasm").to_str().unwrap(),
             "fib",
-            "--args",
+            "--input",
             "10",
         ])
         .output()
@@ -211,7 +211,7 @@ fn test_cli_mock_prove_fib() {
             "mock-prove",
             sample_program("fib_loop.wasm").to_str().unwrap(),
             "fib",
-            "--args",
+            "--input",
             "10",
         ])
         .output()
