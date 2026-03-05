@@ -529,7 +529,8 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         let mut timestamp = record.from_timestamp + 5;
 
         // 5. FP write (native32 cell type: prev_data is a field element)
-        adapter_row.fp_write_aux.prev_data = [F::from_canonical_u32(record.fp_write_aux.prev_data[0])];
+        adapter_row.fp_write_aux.prev_data =
+            [F::from_canonical_u32(record.fp_write_aux.prev_data[0])];
         mem_helper.fill(
             record.fp_write_aux.prev_timestamp,
             timestamp,
