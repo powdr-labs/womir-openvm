@@ -50,8 +50,8 @@ struct WomirCallAdapterRecord {
     MemoryReadAuxRecord to_pc_read_aux;
     MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS> save_fp_write_aux;
     MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS> save_pc_write_aux;
-    // FP_AS write: prev_data is a single field element (native32 cell type)
-    MemoryWriteAuxRecord<Fp, 1> fp_write_aux;
+    // FP_AS write: prev_data stored as canonical u32 (not Montgomery-encoded Fp)
+    MemoryWriteAuxRecord<uint32_t, 1> fp_write_aux;
 };
 
 struct WomirCallAdapter {
@@ -89,11 +89,14 @@ struct WomirCallAdapter {
         // Fill in reverse timestamp order to match Rust filler
 
         // 5. FP write (native32 cell type: prev_data is a single field element)
+        // Record stores canonical u32; must convert to Montgomery Fp for the trace.
         {
             uint32_t timestamp = record.from_timestamp + 5;
-            COL_WRITE_ARRAY(row, Cols, fp_write_aux.prev_data, record.fp_write_aux.prev_data);
+            size_t base = COL_INDEX(Cols, fp_write_aux);
+            using FpWriteAux = MemoryWriteAuxCols<uint8_t, 1>;
+            row.write(base + offsetof(FpWriteAux, prev_data), Fp(record.fp_write_aux.prev_data[0]));
             mem_helper.fill(
-                row.slice_from(COL_INDEX(Cols, fp_write_aux)),
+                row.slice_from(base),
                 record.fp_write_aux.prev_timestamp,
                 timestamp
             );

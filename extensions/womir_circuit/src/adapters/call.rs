@@ -9,7 +9,7 @@ use openvm_circuit::{
         MemoryAuxColsFactory,
         offline_checker::{
             MemoryBridge, MemoryReadAuxCols, MemoryReadAuxRecord, MemoryWriteAuxCols,
-            MemoryWriteBytesAuxRecord,
+            MemoryWriteAuxRecord, MemoryWriteBytesAuxRecord,
         },
         online::TracingMemory,
     },
@@ -342,15 +342,6 @@ impl<AB: InteractionBuilder> VmAdapterAir<AB> for CallAdapterAir {
 #[derive(Clone, Default)]
 pub struct CallAdapterExecutor;
 
-/// Record for the FP_AS write. The prev_data is a single u32 (stored as field element
-/// in FP_AS which uses native32 cell type).
-#[repr(C)]
-#[derive(AlignedBytesBorrow, Debug, Clone, Copy)]
-pub struct FpWriteAuxRecord {
-    pub prev_timestamp: u32,
-    pub prev_fp: u32,
-}
-
 #[repr(C)]
 #[derive(AlignedBytesBorrow, Debug)]
 pub struct CallAdapterRecord {
@@ -371,7 +362,8 @@ pub struct CallAdapterRecord {
     pub to_pc_read_aux: MemoryReadAuxRecord,
     pub save_fp_write_aux: MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>,
     pub save_pc_write_aux: MemoryWriteBytesAuxRecord<RV32_REGISTER_NUM_LIMBS>,
-    pub fp_write_aux: FpWriteAuxRecord,
+    /// FP_AS write: prev_data is a single u32 (field element in native32 cell type)
+    pub fp_write_aux: MemoryWriteAuxRecord<u32, 1>,
 }
 
 impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
@@ -495,7 +487,7 @@ impl<F: PrimeField32> AdapterTraceExecutor<F> for CallAdapterExecutor {
         // SAFETY: FP_AS uses native32 cell type (F), block size 1, align 1.
         let (t_prev, prev_data) = unsafe { memory.write::<F, 1, 1>(FP_AS, 0, [new_fp_field]) };
         record.fp_write_aux.prev_timestamp = t_prev;
-        record.fp_write_aux.prev_fp = prev_data[0].as_canonical_u32();
+        record.fp_write_aux.prev_data[0] = prev_data[0].as_canonical_u32();
     }
 }
 
@@ -537,7 +529,7 @@ impl<F: PrimeField32> AdapterTraceFiller<F> for CallAdapterFiller {
         let mut timestamp = record.from_timestamp + 5;
 
         // 5. FP write (native32 cell type: prev_data is a field element)
-        adapter_row.fp_write_aux.prev_data = [F::from_canonical_u32(record.fp_write_aux.prev_fp)];
+        adapter_row.fp_write_aux.prev_data = [F::from_canonical_u32(record.fp_write_aux.prev_data[0])];
         mem_helper.fill(
             record.fp_write_aux.prev_timestamp,
             timestamp,
