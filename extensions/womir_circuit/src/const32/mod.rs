@@ -6,6 +6,11 @@ mod execution;
 pub use execution::{Const32Filler, Const32Record};
 use openvm_circuit::arch::VmChipWrapper;
 
+#[cfg(feature = "cuda")]
+mod cuda;
+#[cfg(feature = "cuda")]
+pub use cuda::Const32ChipGpu;
+
 pub type Const32Air = Const32AdapterAir<RV32_REGISTER_NUM_LIMBS>;
 pub type Const32Executor = execution::Const32Executor<RV32_REGISTER_NUM_LIMBS>;
 pub type Const32Chip<F> = VmChipWrapper<F, Const32Filler<RV32_REGISTER_NUM_LIMBS>>;
