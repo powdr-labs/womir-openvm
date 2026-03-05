@@ -204,6 +204,12 @@ struct WomirCallAdapter {
             range_checker.add_count((uint32_t)offset_hi, pointer_max_bits - 16);
             range_checker.add_count((uint32_t)new_fp_lo, 16);
             range_checker.add_count((uint32_t)new_fp_hi, pointer_max_bits - 16);
+        } else {
+            // RET: zero out offset_limbs and new_fp_limbs (not constrained but
+            // must be zero so they don't corrupt the trace polynomial).
+            uint16_t zeros[2] = { 0, 0 };
+            COL_WRITE_ARRAY(row, Cols, offset_limbs, zeros);
+            COL_WRITE_ARRAY(row, Cols, new_fp_limbs, zeros);
         }
     }
 };

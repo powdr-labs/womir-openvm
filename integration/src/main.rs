@@ -204,8 +204,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 stdin.clone(),
             );
 
-            proving::mock_prove(&exe, initial_state).map_err(|e| eyre::eyre!("{e}"))?;
-            println!("Mock proof verified successfully.");
+            #[cfg(feature = "cuda")]
+            {
+                proving::mock_prove_gpu(&exe, initial_state).map_err(|e| eyre::eyre!("{e}"))?;
+                println!("GPU mock proof verified successfully.");
+            }
+            #[cfg(not(feature = "cuda"))]
+            {
+                proving::mock_prove(&exe, initial_state).map_err(|e| eyre::eyre!("{e}"))?;
+                println!("Mock proof verified successfully.");
+            }
         }
         Commands::ProveRiscv {
             program,

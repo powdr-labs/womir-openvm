@@ -90,7 +90,7 @@ pub fn default_engine() -> BabyBearPoseidon2Engine {
 }
 
 /// Create a GPU engine with default FRI parameters.
-#[cfg(all(test, feature = "cuda"))]
+#[cfg(feature = "cuda")]
 pub fn gpu_engine() -> openvm_cuda_backend::engine::GpuBabyBearPoseidon2Engine {
     let fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
@@ -215,7 +215,7 @@ pub fn mock_prove(
 /// Mock proof with constraint verification (all segments) using GPU engine.
 /// Uses the same WomirConfig as CPU but with WomirGpuBuilder for GPU tracegen.
 /// Returns the final state after all segments have been processed.
-#[cfg(all(test, feature = "cuda"))]
+#[cfg(feature = "cuda")]
 pub fn mock_prove_gpu(
     exe: &VmExe<F>,
     init_state: VmState<F>,
