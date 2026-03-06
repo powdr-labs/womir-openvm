@@ -6,11 +6,11 @@ license.workspace = true
 
 [features]
 default = []
-cuda = ["powdr-openvm-common/cuda"]
+cuda = ["powdr-openvm/cuda"]
 tco = []
 
 [dependencies]
-powdr-openvm-common.workspace = true
+powdr-openvm.workspace = true
 derive_more.workspace = true
 openvm-circuit.workspace = true
 openvm-circuit-derive.workspace = true

@@ -87,7 +87,7 @@ pub struct WomirConfig {
     pub base: Womir,
 }
 
-// This seems trivial but it's tricky to put into powdr-openvm-common because of some From implementation issues.
+// This seems trivial but it's tricky to put into powdr-openvm because of some From implementation issues.
 impl<F: PrimeField32, ISA: OpenVmISA<OriginalExecutor<F> = WomirConfigExecutor<F>>>
     From<WomirConfigExecutor<F>> for SpecializedExecutor<F, ISA>
 {

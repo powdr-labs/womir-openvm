@@ -28,14 +28,13 @@ cfg-if.workspace = true
 itertools.workspace = true
 serde = { workspace = true, features = ["derive", "std"] }
 struct-reflection.workspace = true
-powdr-openvm-common.workspace = true
+powdr-openvm.workspace = true
 
 [dev-dependencies]
 openvm-stark-sdk = { workspace = true }
 openvm-circuit = { workspace = true, features = ["test-utils"] }
 test-case.workspace = true
 itertools.workspace = true
-powdr-openvm-common = { workspace = true }
 powdr-openvm = { workspace = true }
 autoprecompiles = { workspace = true }
 powdr-autoprecompiles = { workspace = true }
