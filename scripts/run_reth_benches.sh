@@ -9,14 +9,21 @@
 
 set -e
 
-# Parse --cuda flag
+# Parse flags
 CUDA_FLAGS=""
-if [[ "$1" == "--cuda" ]]; then
-    CUDA_FLAGS="--features cuda"
-    shift
-fi
+BLOCK=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --cuda) CUDA_FLAGS="--features cuda"; shift ;;
+        --block-number) BLOCK="$2"; shift 2 ;;
+        *) echo "Unknown arg: $1"; exit 1 ;;
+    esac
+done
 
-BLOCK="${1:-24171384}"
+if [[ -z "$BLOCK" ]]; then
+    echo "Usage: $0 [--cuda] --block-number <number>"
+    exit 1
+fi
 
 SCRIPT_PATH=$(realpath "${BASH_SOURCE[0]}")
 SCRIPTS_DIR=$(dirname "$SCRIPT_PATH")

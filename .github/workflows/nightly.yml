@@ -84,7 +84,7 @@ jobs:
 
       - name: Run reth benchmarks
         if: matrix.backend == 'gpu'
-        run: bash scripts/run_reth_benches.sh ${{ matrix.cuda_flag }}
+        run: bash scripts/run_reth_benches.sh ${{ matrix.cuda_flag }} --block-number 24171384
 
       - name: Post results to job summary
         if: always()
