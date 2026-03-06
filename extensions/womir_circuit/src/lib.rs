@@ -11,12 +11,15 @@ use openvm_circuit::{
     system::{SystemChipInventory, SystemCpuBuilder, SystemExecutor},
 };
 use openvm_circuit_derive::{Executor, MeteredExecutor, VmConfig};
+use openvm_sdk::config::TranspilerConfig;
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     engine::StarkEngine,
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
+use openvm_transpiler::transpiler::Transpiler;
+use powdr_openvm::{SpecializedExecutor, isa::OpenVmISA};
 use serde::{Deserialize, Serialize};
 
 pub mod execution;
@@ -85,6 +88,15 @@ pub struct WomirConfig {
     pub base: Womir,
 }
 
+// This seems trivial but it's tricky to put into powdr-openvm because of some From implementation issues.
+impl<F: PrimeField32, ISA: OpenVmISA<Executor<F> = WomirConfigExecutor<F>>>
+    From<WomirConfigExecutor<F>> for SpecializedExecutor<F, ISA>
+{
+    fn from(value: WomirConfigExecutor<F>) -> Self {
+        Self::OriginalExecutor(value)
+    }
+}
+
 // Default implementation uses no init file
 impl InitFileGenerator for WomirConfig {}
 
@@ -115,6 +127,13 @@ impl WomirConfig {
             system,
             base: Default::default(),
         }
+    }
+}
+
+impl<F: PrimeField32> TranspilerConfig<F> for WomirConfig {
+    fn transpiler(&self) -> Transpiler<F> {
+        // Womir programs are lowered directly to OpenVM instructions.
+        Transpiler::default()
     }
 }
 
