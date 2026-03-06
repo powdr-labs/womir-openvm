@@ -211,7 +211,7 @@ fn test_cli_prove_fib_with_1_apc() {
             "prove",
             sample_program("fib_loop.wasm").to_str().unwrap(),
             "fib",
-            "--args",
+            "--input",
             "10",
             "--apc-count",
             "1",
