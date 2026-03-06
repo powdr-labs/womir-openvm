@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashSet};
 
 use openvm_circuit::arch::{
     AirInventory, AirInventoryError, ChipInventoryError, VmBuilder, VmCircuitConfig,
@@ -22,20 +22,18 @@ use openvm_womir_transpiler::{
     Eq64Opcode, EqOpcode, HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode,
     LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
-use powdr_openvm_common::BabyBearSC;
-use powdr_openvm_common::program::OriginalCompiledProgram;
+use powdr_openvm::BabyBearSC;
+use powdr_openvm::isa::{OpenVmISA, OriginalCpuChipComplex};
+use powdr_openvm::powdr_extension::trace_generator::SharedPeripheryChipsCpu;
+use powdr_openvm::powdr_extension::trace_generator::cpu::SharedPeripheryChipsCpuProverExt;
+use powdr_openvm::program::OriginalCompiledProgram;
 #[cfg(feature = "cuda")]
 use powdr_openvm_common::{
-    isa::OriginalGpuChipComplex,
-    trace_generator::cuda::periphery::{
-        SharedPeripheryChipsGpu, SharedPeripheryChipsGpuProverExt,
-    },
     GpuBabyBearPoseidon2Engine,
+    isa::OriginalGpuChipComplex,
+    trace_generator::cuda::periphery::{SharedPeripheryChipsGpu, SharedPeripheryChipsGpuProverExt},
 };
-use powdr_openvm_common::{
-    isa::{OpenVmISA, OriginalCpuChipComplex},
-    trace_generator::cpu::periphery::{SharedPeripheryChipsCpu, SharedPeripheryChipsCpuProverExt},
-};
+use powdr_riscv_elf::debug_info::SymbolTable;
 use strum::IntoEnumIterator;
 use womir_circuit::{WomirConfig, WomirConfigExecutor, WomirCpuBuilder, WomirCpuProverExt};
 use womir_translation::LinkedProgram;
@@ -345,15 +343,14 @@ fn womir_instruction_formatter<F: PrimeField32>(instruction: &Instruction<F>) ->
 
 impl OpenVmISA for WomirISA {
     type Program<'a> = LinkedProgram<'a, BabyBear>;
-    type RegisterAddress = ();
-    type OriginalExecutor<F: PrimeField32> = WomirConfigExecutor<F>;
-    type OriginalConfig = WomirConfig;
-    type OriginalBuilderCpu = WomirCpuBuilder;
+    type Executor<F: PrimeField32> = WomirConfigExecutor<F>;
+    type Config = WomirConfig;
+    type CpuBuilder = WomirCpuBuilder;
     #[cfg(feature = "cuda")]
     type OriginalBuilderGpu = WomirGpuBuilder;
 
     fn create_original_chip_complex(
-        config: &Self::OriginalConfig,
+        config: &Self::Config,
         airs: AirInventory<BabyBearSC>,
     ) -> Result<OriginalCpuChipComplex, ChipInventoryError> {
         <WomirCpuBuilder as VmBuilder<BabyBearPoseidon2Engine>>::create_chip_complex(
@@ -363,28 +360,26 @@ impl OpenVmISA for WomirISA {
         )
     }
 
-    fn is_branching(opcode: VmOpcode) -> bool {
-        branch_opcodes().contains(&opcode)
+    fn branching_opcodes() -> HashSet<VmOpcode> {
+        branch_opcodes()
     }
 
-    fn instruction_allowlist() -> HashSet<VmOpcode> {
+    fn allowed_opcodes() -> HashSet<VmOpcode> {
         vm_opcode_set()
-    }
-
-    fn get_register_value(_: &Self::RegisterAddress) -> u32 {
-        unimplemented!("execution constraints are currently unused")
-    }
-
-    fn value_limb(_: u32, _: usize) -> u32 {
-        unimplemented!("execution constraints are currently unused")
     }
 
     fn format<F: PrimeField32>(instruction: &Instruction<F>) -> String {
         womir_instruction_formatter(instruction)
     }
 
-    fn get_labels_debug<'a>(program: &Self::Program<'a>) -> BTreeMap<u64, Vec<String>> {
-        program.labels()
+    fn get_symbol_table<'a>(program: &Self::Program<'a>) -> SymbolTable {
+        SymbolTable::from_table(
+            program
+                .labels()
+                .into_iter()
+                .map(|(key, values)| (key.try_into().unwrap(), values))
+                .collect(),
+        )
     }
 
     fn get_jump_destinations(original_program: &OriginalCompiledProgram<Self>) -> BTreeSet<u64> {
@@ -392,7 +387,7 @@ impl OpenVmISA for WomirISA {
     }
 
     fn create_dummy_airs<E: VmCircuitExtension<BabyBearSC>>(
-        config: &Self::OriginalConfig,
+        config: &Self::Config,
         shared_chips: E,
     ) -> Result<AirInventory<BabyBearSC>, AirInventoryError> {
         let mut inventory = config.system.create_airs()?;
@@ -403,7 +398,7 @@ impl OpenVmISA for WomirISA {
     }
 
     fn create_dummy_chip_complex_cpu(
-        config: &Self::OriginalConfig,
+        config: &Self::Config,
         circuit: AirInventory<BabyBearSC>,
         shared_chips: SharedPeripheryChipsCpu<Self>,
     ) -> Result<OriginalCpuChipComplex, ChipInventoryError> {
@@ -452,13 +447,13 @@ impl OpenVmISA for WomirISA {
 
 #[cfg(test)]
 mod tests {
-    use powdr_openvm_common::extraction_utils::OriginalVmConfig;
+    use powdr_openvm::extraction_utils::OriginalVmConfig;
 
     use super::*;
 
     #[test]
     fn machine_extraction() {
-        let powdr_config = powdr_openvm_common::default_powdr_openvm_config(0, 0);
+        let powdr_config = powdr_openvm::default_powdr_openvm_config(0, 0);
         let original_config = OriginalVmConfig::<WomirISA>::new(WomirConfig::default());
         let _ = original_config.airs(powdr_config.degree_bound).unwrap();
     }

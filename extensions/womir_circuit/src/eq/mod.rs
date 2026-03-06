@@ -9,6 +9,11 @@ use super::adapters::{
 pub(crate) mod core;
 mod execution;
 
+#[cfg(feature = "cuda")]
+mod cuda;
+#[cfg(feature = "cuda")]
+pub use cuda::{Eq64ChipGpu, Rv32EqChipGpu};
+
 pub use self::core::{EqCoreAir, EqFiller};
 pub use execution::EqExecutor;
 

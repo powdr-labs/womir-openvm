@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 powdr-openvm = { workspace = true }
+powdr-openvm-riscv = { workspace = true }
 powdr-autoprecompiles = { workspace = true }
 serde.workspace = true
 eyre.workspace = true
@@ -45,3 +46,24 @@ metrics-util = "0.17.0"
 
 [dev-dependencies]
 postcard = { version = "1.1", features = ["alloc"] }
+
+[features]
+default = []
+cuda = [
+  "womir-circuit/cuda",
+  "openvm-circuit/cuda",
+  "openvm-native-circuit/cuda",
+  "powdr-openvm/cuda",
+  "dep:openvm-cuda-backend",
+]
+touchemall = [
+  "cuda",
+  "womir-circuit/touchemall",
+  "openvm-circuit/touchemall",
+  "openvm-native-circuit/touchemall",
+  "openvm-cuda-backend/touchemall",
+]
+
+[dependencies.openvm-cuda-backend]
+workspace = true
+optional = true

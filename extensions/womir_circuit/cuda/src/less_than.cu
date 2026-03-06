@@ -1,33 +1,29 @@
 #include "launcher.cuh"
 #include "primitives/buffer_view.cuh"
-#include "primitives/constants.h"
-#include "primitives/histogram.cuh"
 #include "primitives/trace_access.h"
-#include "rv32im/adapters/alu.cuh"
+#include "womir/constants.cuh"
+#include "womir/adapters/alu.cuh"
 #include "rv32im/cores/less_than.cuh"
 
-using namespace riscv;
-using namespace program;
-
 // Concrete type aliases for 32-bit
-using Rv32LessThanCoreRecord = LessThanCoreRecord<RV32_REGISTER_NUM_LIMBS>;
-using Rv32LessThanCore = LessThanCore<RV32_REGISTER_NUM_LIMBS>;
-template <typename T> using Rv32LessThanCoreCols = LessThanCoreCols<T, RV32_REGISTER_NUM_LIMBS>;
+using WomirLessThanCoreRecord = LessThanCoreRecord<RV32_REGISTER_NUM_LIMBS>;
+using WomirLessThanCore = LessThanCore<RV32_REGISTER_NUM_LIMBS>;
+template <typename T> using WomirLessThanCoreCols = LessThanCoreCols<T, RV32_REGISTER_NUM_LIMBS>;
 
-template <typename T> struct LessThanCols {
-    Rv32BaseAluAdapterCols<T> adapter;
-    Rv32LessThanCoreCols<T> core;
+template <typename T> struct WomirLessThanCols {
+    WomirBaseAluAdapterCols<T, W32_REG_OPS, W32_REG_OPS> adapter;
+    WomirLessThanCoreCols<T> core;
 };
 
-struct LessThanRecord {
-    Rv32BaseAluAdapterRecord adapter;
-    Rv32LessThanCoreRecord core;
+struct WomirLessThanRecord {
+    WomirBaseAluAdapterRecord<W32_REG_OPS, W32_REG_OPS> adapter;
+    WomirLessThanCoreRecord core;
 };
 
-__global__ void rv32_less_than_tracegen(
+__global__ void womir_less_than_tracegen(
     Fp *trace,
     size_t height,
-    DeviceBufferConstView<LessThanRecord> records,
+    DeviceBufferConstView<WomirLessThanRecord> records,
     uint32_t *range_checker_ptr,
     uint32_t range_checker_num_bins,
     uint32_t *bitwise_lookup_ptr,
@@ -39,38 +35,36 @@ __global__ void rv32_less_than_tracegen(
     if (idx < records.len()) {
         auto const &record = records[idx];
 
-        auto adapter = Rv32BaseAluAdapter(
+        auto adapter = WomirBaseAluAdapter<W32_REG_OPS, W32_REG_OPS>(
             VariableRangeChecker(range_checker_ptr, range_checker_num_bins),
             BitwiseOperationLookup(bitwise_lookup_ptr, bitwise_num_bits),
             timestamp_max_bits
         );
         adapter.fill_trace_row(row, record.adapter);
 
-        auto core = Rv32LessThanCore(BitwiseOperationLookup(bitwise_lookup_ptr, bitwise_num_bits));
-        core.fill_trace_row(row.slice_from(COL_INDEX(LessThanCols, core)), record.core);
+        auto core = WomirLessThanCore(BitwiseOperationLookup(bitwise_lookup_ptr, bitwise_num_bits));
+        core.fill_trace_row(row.slice_from(COL_INDEX(WomirLessThanCols, core)), record.core);
     } else {
-        row.fill_zero(0, sizeof(LessThanCols<uint8_t>));
+        row.fill_zero(0, sizeof(WomirLessThanCols<uint8_t>));
     }
 }
 
-extern "C" int _rv32_less_than_tracegen(
+extern "C" int _womir_less_than_tracegen(
     Fp *d_trace,
     size_t height,
     size_t width,
-    DeviceBufferConstView<LessThanRecord> d_records,
+    DeviceBufferConstView<WomirLessThanRecord> d_records,
     uint32_t *d_range_checker,
     uint32_t range_checker_num_bins,
     uint32_t *d_bitwise_lookup,
     uint32_t bitwise_num_bits,
     uint32_t timestamp_max_bits
 ) {
-    // We require the height to be a power of two for the tracegen to work
     assert((height & (height - 1)) == 0);
     assert(height >= d_records.len());
-    assert(width == sizeof(LessThanCols<uint8_t>));
+    assert(width == sizeof(WomirLessThanCols<uint8_t>));
     auto [grid, block] = kernel_launch_params(height);
-
-    rv32_less_than_tracegen<<<grid, block>>>(
+    womir_less_than_tracegen<<<grid, block>>>(
         d_trace,
         height,
         d_records,

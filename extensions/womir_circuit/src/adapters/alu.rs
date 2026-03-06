@@ -1,6 +1,6 @@
 use std::{
     borrow::{Borrow, BorrowMut},
-    cell::RefCell,
+    sync::{Arc, Mutex},
 };
 
 use openvm_circuit::{
@@ -248,7 +248,7 @@ pub struct BaseAluAdapterExecutorDifferentInputsOutputs<
 > {
     /// Hack: This flag is used so that we fetch the frame pointer exactly once per instruction execution,
     ///       BEFORE the first read.
-    has_fetched_fp: RefCell<bool>,
+    has_fetched_fp: Arc<Mutex<bool>>,
 }
 
 impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usize> Default
@@ -256,7 +256,7 @@ impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usi
 {
     fn default() -> Self {
         Self {
-            has_fetched_fp: RefCell::new(false),
+            has_fetched_fp: Arc::new(Mutex::new(false)),
         }
     }
 }
@@ -301,14 +301,21 @@ impl<const NUM_LIMBS: usize, const NUM_READ_OPS: usize, const NUM_WRITE_OPS: usi
         memory: &mut TracingMemory,
         record: &mut BaseAluAdapterRecordDifferentInputsOutputs<NUM_READ_OPS, NUM_WRITE_OPS>,
     ) {
-        if !*self.has_fetched_fp.borrow() {
+        let mut has_fetched_fp = self
+            .has_fetched_fp
+            .lock()
+            .expect("has_fetched_fp mutex poisoned");
+        if !*has_fetched_fp {
             record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
-            *self.has_fetched_fp.borrow_mut() = true;
+            *has_fetched_fp = true;
         }
     }
 
     fn finalize_instruction(&self) {
-        *self.has_fetched_fp.borrow_mut() = false;
+        *self
+            .has_fetched_fp
+            .lock()
+            .expect("has_fetched_fp mutex poisoned") = false;
     }
 }
 

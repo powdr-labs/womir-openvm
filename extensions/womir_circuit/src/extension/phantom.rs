@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+
 use eyre::bail;
 use openvm_circuit::{
     arch::{PhantomSubExecutor, Streams},
@@ -158,4 +160,91 @@ fn hint_load_by_key_decode<F: PrimeField32>(value: &[u8]) -> Vec<Vec<F>> {
 
 fn extract_u32(value: &[u8], offset: usize) -> u32 {
     u32::from_le_bytes(value[offset..offset + 4].try_into().unwrap())
+}
+
+/// ClockTimeGet: fills hint stream with 8 bytes of an incrementing nanosecond
+/// timestamp. Starts at 1 second and increments by 1 ms per call.
+/// Go's runtime expects monotonically increasing values from clock_time_get;
+/// returning a constant causes infinite loops in time-based scheduling.
+pub struct ClockTimeGetSubEx {
+    counter: AtomicU64,
+}
+
+impl ClockTimeGetSubEx {
+    pub fn new() -> Self {
+        Self {
+            counter: AtomicU64::new(1_000_000_000),
+        }
+    }
+}
+
+impl<F: PrimeField32> PhantomSubExecutor<F> for ClockTimeGetSubEx {
+    fn phantom_execute(
+        &self,
+        _: &GuestMemory,
+        streams: &mut Streams<F>,
+        _: &mut StdRng,
+        _: PhantomDiscriminant,
+        _: u32,
+        _: u32,
+        _: u16,
+    ) -> eyre::Result<()> {
+        let ns = self.counter.fetch_add(1_000_000, Ordering::Relaxed);
+        streams.hint_stream.clear();
+        streams
+            .hint_stream
+            .extend(ns.to_le_bytes().iter().map(|&b| F::from_canonical_u8(b)));
+        Ok(())
+    }
+}
+
+/// TraceSyscall: prints a WASI syscall name with sequence number to stderr.
+pub struct TraceSyscallSubEx {
+    counter: AtomicU32,
+}
+
+impl TraceSyscallSubEx {
+    pub fn new() -> Self {
+        Self {
+            counter: AtomicU32::new(0),
+        }
+    }
+}
+
+impl<F: Field> PhantomSubExecutor<F> for TraceSyscallSubEx {
+    fn phantom_execute(
+        &self,
+        _: &GuestMemory,
+        _: &mut Streams<F>,
+        _: &mut StdRng,
+        _: PhantomDiscriminant,
+        _: u32,
+        _: u32,
+        c_upper: u16,
+    ) -> eyre::Result<()> {
+        let seq = self.counter.fetch_add(1, Ordering::Relaxed);
+        let name = match c_upper {
+            0 => "args_sizes_get",
+            1 => "args_get",
+            2 => "environ_sizes_get",
+            3 => "environ_get",
+            4 => "fd_write",
+            5 => "fd_read",
+            6 => "fd_close",
+            7 => "fd_fdstat_get",
+            8 => "fd_fdstat_set_flags",
+            9 => "fd_prestat_get",
+            10 => "clock_time_get",
+            11 => "random_get",
+            12 => "proc_exit",
+            13 => "poll_oneoff",
+            14 => "fd_seek",
+            15 => "fd_sync",
+            16 => "sched_yield",
+            17 => "path_open",
+            _ => "unknown",
+        };
+        eprintln!("[wasi] #{seq} {name}");
+        Ok(())
+    }
 }

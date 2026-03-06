@@ -1,13 +1,16 @@
+// Adapted from <openvm>/extensions/rv32im/circuit/cuda/src/loadstore.cu
+// Uses WomirLoadStoreAdapter (with frame pointer) instead of Rv32LoadStoreAdapter
 #include "launcher.cuh"
 #include "primitives/buffer_view.cuh"
 #include "primitives/constants.h"
 #include "primitives/histogram.cuh"
 #include "primitives/trace_access.h"
-#include "rv32im/adapters/loadstore.cuh"
+#include "womir/adapters/loadstore.cuh"
 
 using namespace riscv;
 using namespace program;
 
+// Core structs inlined from OpenVM (unchanged)
 template <typename T, size_t NUM_CELLS> struct LoadStoreCoreCols {
     T flags[4];
     /// we need to keep the degree of is_valid and is_load to 1
@@ -154,21 +157,21 @@ template <size_t NUM_CELLS> struct LoadStoreCore {
 };
 
 // [Adapter + Core] columns and record
-template <typename T> struct Rv32LoadStoreCols {
-    Rv32LoadStoreAdapterCols<T> adapter;
+template <typename T> struct WomirLoadStoreCols {
+    WomirLoadStoreAdapterCols<T> adapter;
     LoadStoreCoreCols<T, RV32_REGISTER_NUM_LIMBS> core;
 };
 
-struct Rv32LoadStoreRecord {
-    Rv32LoadStoreAdapterRecord adapter;
+struct WomirLoadStoreRecord {
+    WomirLoadStoreAdapterRecord adapter;
     LoadStoreCoreRecord<RV32_REGISTER_NUM_LIMBS> core;
 };
 
-__global__ void rv32_load_store_tracegen(
+__global__ void womir_load_store_tracegen(
     Fp *trace,
     size_t height,
     size_t width,
-    DeviceBufferConstView<Rv32LoadStoreRecord> records,
+    DeviceBufferConstView<WomirLoadStoreRecord> records,
     size_t pointer_max_bits,
     uint32_t *range_checker_ptr,
     uint32_t range_checker_num_bins,
@@ -179,7 +182,7 @@ __global__ void rv32_load_store_tracegen(
     if (idx < records.len()) {
         auto const &record = records[idx];
 
-        auto adapter = Rv32LoadStoreAdapter(
+        auto adapter = WomirLoadStoreAdapter(
             pointer_max_bits,
             VariableRangeChecker(range_checker_ptr, range_checker_num_bins),
             timestamp_max_bits
@@ -187,27 +190,27 @@ __global__ void rv32_load_store_tracegen(
         adapter.fill_trace_row(row, record.adapter);
 
         auto core = LoadStoreCore<RV32_REGISTER_NUM_LIMBS>();
-        core.fill_trace_row(row.slice_from(COL_INDEX(Rv32LoadStoreCols, core)), record.core);
+        core.fill_trace_row(row.slice_from(COL_INDEX(WomirLoadStoreCols, core)), record.core);
     } else {
-        row.fill_zero(0, sizeof(Rv32LoadStoreCols<uint8_t>));
+        row.fill_zero(0, sizeof(WomirLoadStoreCols<uint8_t>));
     }
 }
 
-extern "C" int _rv32_load_store_tracegen(
+extern "C" int _womir_load_store_tracegen(
     Fp *d_trace,
     size_t height,
     size_t width,
-    DeviceBufferConstView<Rv32LoadStoreRecord> d_records,
+    DeviceBufferConstView<WomirLoadStoreRecord> d_records,
     size_t pointer_max_bits,
     uint32_t *d_range_checker,
     uint32_t range_checker_num_bins,
     uint32_t timestamp_max_bits
 ) {
     assert((height & (height - 1)) == 0);
-    assert(width == sizeof(Rv32LoadStoreCols<uint8_t>));
+    assert(width == sizeof(WomirLoadStoreCols<uint8_t>));
     auto [grid, block] = kernel_launch_params(height);
 
-    rv32_load_store_tracegen<<<grid, block>>>(
+    womir_load_store_tracegen<<<grid, block>>>(
         d_trace,
         height,
         width,

@@ -19,7 +19,7 @@ use openvm_stark_backend::{
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use openvm_transpiler::transpiler::Transpiler;
-use powdr_openvm_common::isa::{OpenVmISA, SpecializedExecutor};
+use powdr_openvm::{SpecializedExecutor, isa::OpenVmISA};
 use serde::{Deserialize, Serialize};
 
 pub mod execution;
@@ -65,13 +65,14 @@ cfg_if::cfg_if! {
         use openvm_cuda_backend::{engine::GpuBabyBearPoseidon2Engine, prover_backend::GpuBackend};
         use openvm_stark_sdk::config::baby_bear_poseidon2::BabyBearPoseidon2Config;
         pub(crate) mod cuda_abi;
-        pub use self::{
-            WomirGpuBuilder as WomirBuilder,
-        };
+    }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "cuda")] {
+        pub use self::WomirGpuBuilder as WomirBuilder;
     } else {
-        pub use self::{
-            WomirCpuBuilder as WomirBuilder,
-        };
+        pub use self::WomirCpuBuilder as WomirBuilder;
     }
 }
 
@@ -88,7 +89,7 @@ pub struct WomirConfig {
 }
 
 // This seems trivial but it's tricky to put into powdr-openvm because of some From implementation issues.
-impl<F: PrimeField32, ISA: OpenVmISA<OriginalExecutor<F> = WomirConfigExecutor<F>>>
+impl<F: PrimeField32, ISA: OpenVmISA<Executor<F> = WomirConfigExecutor<F>>>
     From<WomirConfigExecutor<F>> for SpecializedExecutor<F, ISA>
 {
     fn from(value: WomirConfigExecutor<F>) -> Self {
@@ -167,4 +168,42 @@ where
 
 pub fn system_config() -> SystemConfig {
     SystemConfig::default_from_memory(memory_config_with_fp())
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Clone, Default)]
+pub struct WomirGpuBuilder;
+
+#[cfg(feature = "cuda")]
+impl VmBuilder<GpuBabyBearPoseidon2Engine> for WomirGpuBuilder {
+    type VmConfig = WomirConfig;
+    type SystemChipInventory = SystemChipInventoryGPU;
+    type RecordArena = DenseRecordArena;
+
+    fn create_chip_complex(
+        &self,
+        config: &WomirConfig,
+        circuit: AirInventory<BabyBearPoseidon2Config>,
+    ) -> Result<
+        VmChipComplex<
+            BabyBearPoseidon2Config,
+            Self::RecordArena,
+            GpuBackend,
+            Self::SystemChipInventory,
+        >,
+        ChipInventoryError,
+    > {
+        let mut chip_complex = VmBuilder::<GpuBabyBearPoseidon2Engine>::create_chip_complex(
+            &SystemGpuBuilder,
+            &config.system,
+            circuit,
+        )?;
+        let inventory = &mut chip_complex.inventory;
+        VmProverExtension::<GpuBabyBearPoseidon2Engine, _, _>::extend_prover(
+            &WomirGpuProverExt,
+            &config.base,
+            inventory,
+        )?;
+        Ok(chip_complex)
+    }
 }

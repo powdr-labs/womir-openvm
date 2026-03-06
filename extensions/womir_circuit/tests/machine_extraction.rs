@@ -8,7 +8,7 @@ use std::{fs, io, path::Path};
 
 use autoprecompiles::WomirISA;
 use itertools::Itertools;
-use powdr_openvm_common::{DEFAULT_DEGREE_BOUND, extraction_utils::OriginalVmConfig};
+use powdr_openvm::{DEFAULT_DEGREE_BOUND, extraction_utils::OriginalVmConfig};
 use womir_circuit::WomirConfig;
 
 /// Compare rendered output against snapshot file, creating it if it doesn't exist.

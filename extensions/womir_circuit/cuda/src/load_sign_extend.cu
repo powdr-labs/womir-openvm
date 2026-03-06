@@ -1,13 +1,16 @@
+// Adapted from <openvm>/extensions/rv32im/circuit/cuda/src/load_sign_extend.cu
+// Uses WomirLoadStoreAdapter (with frame pointer) instead of Rv32LoadStoreAdapter
 #include "launcher.cuh"
 #include "primitives/buffer_view.cuh"
 #include "primitives/constants.h"
 #include "primitives/histogram.cuh"
 #include "primitives/trace_access.h"
-#include "rv32im/adapters/loadstore.cuh"
+#include "womir/adapters/loadstore.cuh"
 
 using namespace riscv;
 using namespace program;
 
+// Core structs inlined from OpenVM (unchanged)
 template <typename T, size_t NUM_CELLS> struct LoadSignExtendCoreCols {
     /// This chip treats loadb with 0 shift and loadb with 1 shift as different instructions
     T opcode_loadb_flag0;
@@ -75,21 +78,21 @@ template <size_t NUM_CELLS> struct LoadSignExtendCore {
 };
 
 // [Adapter + Core] columns and record
-template <typename T> struct Rv32LoadSignExtendCols {
-    Rv32LoadStoreAdapterCols<T> adapter;
+template <typename T> struct WomirLoadSignExtendCols {
+    WomirLoadStoreAdapterCols<T> adapter;
     LoadSignExtendCoreCols<T, RV32_REGISTER_NUM_LIMBS> core;
 };
 
-struct Rv32LoadSignExtendRecord {
-    Rv32LoadStoreAdapterRecord adapter;
+struct WomirLoadSignExtendRecord {
+    WomirLoadStoreAdapterRecord adapter;
     LoadSignExtendCoreRecord<RV32_REGISTER_NUM_LIMBS> core;
 };
 
-__global__ void rv32_load_sign_extend_tracegen(
+__global__ void womir_load_sign_extend_tracegen(
     Fp *trace,
     size_t height,
     size_t width,
-    DeviceBufferConstView<Rv32LoadSignExtendRecord> records,
+    DeviceBufferConstView<WomirLoadSignExtendRecord> records,
     size_t pointer_max_bits,
     uint32_t *range_checker_ptr,
     uint32_t range_checker_num_bins,
@@ -100,7 +103,7 @@ __global__ void rv32_load_sign_extend_tracegen(
     if (idx < records.len()) {
         auto const &record = records[idx];
 
-        auto adapter = Rv32LoadStoreAdapter(
+        auto adapter = WomirLoadStoreAdapter(
             pointer_max_bits,
             VariableRangeChecker(range_checker_ptr, range_checker_num_bins),
             timestamp_max_bits
@@ -110,27 +113,27 @@ __global__ void rv32_load_sign_extend_tracegen(
         auto core = LoadSignExtendCore<RV32_REGISTER_NUM_LIMBS>(
             VariableRangeChecker(range_checker_ptr, range_checker_num_bins)
         );
-        core.fill_trace_row(row.slice_from(COL_INDEX(Rv32LoadSignExtendCols, core)), record.core);
+        core.fill_trace_row(row.slice_from(COL_INDEX(WomirLoadSignExtendCols, core)), record.core);
     } else {
-        row.fill_zero(0, sizeof(Rv32LoadSignExtendCols<uint8_t>));
+        row.fill_zero(0, sizeof(WomirLoadSignExtendCols<uint8_t>));
     }
 }
 
-extern "C" int _rv32_load_sign_extend_tracegen(
+extern "C" int _womir_load_sign_extend_tracegen(
     Fp *__restrict__ d_trace,
     size_t height,
     size_t width,
-    DeviceBufferConstView<Rv32LoadSignExtendRecord> d_records,
+    DeviceBufferConstView<WomirLoadSignExtendRecord> d_records,
     size_t pointer_max_bits,
     uint32_t *__restrict__ d_range_checker,
     uint32_t range_checker_num_bins,
     uint32_t timestamp_max_bits
 ) {
     assert((height & (height - 1)) == 0);
-    assert(width == sizeof(Rv32LoadSignExtendCols<uint8_t>));
+    assert(width == sizeof(WomirLoadSignExtendCols<uint8_t>));
     auto [grid, block] = kernel_launch_params(height, 512);
 
-    rv32_load_sign_extend_tracegen<<<grid, block>>>(
+    womir_load_sign_extend_tracegen<<<grid, block>>>(
         d_trace,
         height,
         width,

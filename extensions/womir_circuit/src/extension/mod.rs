@@ -49,7 +49,16 @@ use crate::{
 
 mod phantom;
 
-pub use self::WomirCpuProverExt as WomirProverExt;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "cuda")] {
+        #[path = "cuda.rs"]
+        mod womir_cuda;
+        pub use womir_cuda::WomirGpuProverExt;
+        pub use self::WomirGpuProverExt as WomirProverExt;
+    } else {
+        pub use self::WomirCpuProverExt as WomirProverExt;
+    }
+}
 
 // ============ Extension Struct Definitions ============
 
@@ -250,6 +259,14 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Womir {
         inventory.add_phantom_sub_executor(
             phantom::HintLoadByKeySubEx,
             PhantomDiscriminant(Phantom::HintLoadByKey as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            phantom::TraceSyscallSubEx::new(),
+            PhantomDiscriminant(Phantom::TraceSyscall as u16),
+        )?;
+        inventory.add_phantom_sub_executor(
+            phantom::ClockTimeGetSubEx::new(),
+            PhantomDiscriminant(Phantom::ClockTimeGet as u16),
         )?;
 
         Ok(())

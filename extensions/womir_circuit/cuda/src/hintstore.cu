@@ -1,11 +1,12 @@
 #include "launcher.cuh"
 #include "primitives/constants.h"
-#include "primitives/execution.h"
+#include "primitives/histogram.cuh"
 #include "primitives/trace_access.h"
 #include "system/memory/controller.cuh"
+#include "system/memory/offline_checker.cuh"
+#include "womir/execution.cuh"
 
 using namespace riscv;
-using namespace program;
 
 template <typename T> struct Rv32HintStoreCols {
     // common
@@ -15,7 +16,8 @@ template <typename T> struct Rv32HintStoreCols {
     // should be 1 for single
     T rem_words_limbs[RV32_REGISTER_NUM_LIMBS];
 
-    ExecutionState<T> from_state;
+    WomirExecutionState<T> from_state;
+    MemoryReadAuxCols<T> fp_read_aux;
     T mem_ptr_ptr;
     T mem_ptr_limbs[RV32_REGISTER_NUM_LIMBS];
     MemoryReadAuxCols<T> mem_ptr_aux_cols;
@@ -35,6 +37,9 @@ struct Rv32HintStoreRecordHeader {
 
     uint32_t from_pc;
     uint32_t timestamp;
+
+    uint32_t fp;
+    MemoryReadAuxRecord fp_read_aux;
 
     uint32_t mem_ptr_ptr;
     uint32_t mem_ptr;
@@ -72,7 +77,8 @@ struct Rv32HintStore {
         uint32_t local_idx
     ) {
         bool is_single = record.num_words_ptr == UINT32_MAX;
-        uint32_t timestamp = record.timestamp + local_idx * 3;
+        // Timestamp delta is 4 per row: fp_read=+0, mem_ptr_read=+1, num_words_read=+2, write=+3
+        uint32_t timestamp = record.timestamp + local_idx * 4;
         uint32_t rem_words = record.num_words - local_idx;
         uint32_t mem_ptr = record.mem_ptr + local_idx * (uint32_t)RV32_REGISTER_NUM_LIMBS;
         auto rem_words_limbs = reinterpret_cast<uint8_t *>(&rem_words);
@@ -82,6 +88,7 @@ struct Rv32HintStore {
         COL_WRITE_VALUE(row, Rv32HintStoreCols, is_buffer, !is_single);
         COL_WRITE_ARRAY(row, Rv32HintStoreCols, rem_words_limbs, rem_words_limbs);
         COL_WRITE_VALUE(row, Rv32HintStoreCols, from_state.pc, record.from_pc);
+        COL_WRITE_VALUE(row, Rv32HintStoreCols, from_state.fp, record.fp);
         COL_WRITE_VALUE(row, Rv32HintStoreCols, from_state.timestamp, timestamp);
         COL_WRITE_VALUE(row, Rv32HintStoreCols, mem_ptr_ptr, record.mem_ptr_ptr);
         COL_WRITE_ARRAY(row, Rv32HintStoreCols, mem_ptr_limbs, mem_ptr_limbs);
@@ -94,11 +101,17 @@ struct Rv32HintStore {
                 (record.num_words >> msl_rshift) << msl_lshift
             );
             mem_helper.fill(
-                row.slice_from(COL_INDEX(Rv32HintStoreCols, mem_ptr_aux_cols)),
-                record.mem_ptr_aux_record.prev_timestamp,
+                row.slice_from(COL_INDEX(Rv32HintStoreCols, fp_read_aux)),
+                record.fp_read_aux.prev_timestamp,
                 timestamp
             );
+            mem_helper.fill(
+                row.slice_from(COL_INDEX(Rv32HintStoreCols, mem_ptr_aux_cols)),
+                record.mem_ptr_aux_record.prev_timestamp,
+                timestamp + 1
+            );
         } else {
+            mem_helper.fill_zero(row.slice_from(COL_INDEX(Rv32HintStoreCols, fp_read_aux)));
             mem_helper.fill_zero(row.slice_from(COL_INDEX(Rv32HintStoreCols, mem_ptr_aux_cols)));
         }
 
@@ -106,7 +119,7 @@ struct Rv32HintStore {
             mem_helper.fill(
                 row.slice_from(COL_INDEX(Rv32HintStoreCols, num_words_aux_cols)),
                 record.num_words_read.prev_timestamp,
-                timestamp + 1
+                timestamp + 2
             );
             COL_WRITE_VALUE(row, Rv32HintStoreCols, is_buffer_start, 1);
             COL_WRITE_VALUE(row, Rv32HintStoreCols, num_words_ptr, record.num_words_ptr);
@@ -120,7 +133,7 @@ struct Rv32HintStore {
         mem_helper.fill(
             row.slice_from(COL_INDEX(Rv32HintStoreCols, write_aux)),
             write.write_aux.prev_timestamp,
-            timestamp + 2
+            timestamp + 3
         );
 
         COL_WRITE_ARRAY(row, Rv32HintStoreCols, data, write.data);
@@ -136,7 +149,7 @@ struct OffsetInfo {
     uint32_t local_idx;
 };
 
-__global__ void hintstore_tracegen(
+__global__ void womir_hintstore_tracegen(
     Fp *trace,
     size_t height,
     uint8_t *records,
@@ -174,7 +187,7 @@ __global__ void hintstore_tracegen(
     }
 }
 
-extern "C" int _hintstore_tracegen(
+extern "C" int _womir_hintstore_tracegen(
     Fp *__restrict__ d_trace,
     size_t height,
     size_t width,
@@ -191,7 +204,7 @@ extern "C" int _hintstore_tracegen(
     assert(width == sizeof(Rv32HintStoreCols<uint8_t>));
     auto [grid, block] = kernel_launch_params(height, 512);
 
-    hintstore_tracegen<<<grid, block>>>(
+    womir_hintstore_tracegen<<<grid, block>>>(
         d_trace,
         height,
         d_records,

@@ -8,6 +8,11 @@ use super::adapters::{
 
 mod execution;
 
+#[cfg(feature = "cuda")]
+mod cuda;
+#[cfg(feature = "cuda")]
+pub use cuda::{DivRem64ChipGpu, Rv32DivRemChipGpu};
+
 pub use execution::DivRemExecutor;
 
 // 32-bit type aliases
