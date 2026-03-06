@@ -76,6 +76,14 @@ enum Commands {
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
+        /// Directory with cached proving keys (from `keygen` command)
+        #[arg(long)]
+        cache_dir: Option<PathBuf>,
+    },
+    /// Generate and cache proving keys to a directory (for use with `prove --cache-dir`)
+    Keygen {
+        /// Directory to write cached proving keys to
+        cache_dir: PathBuf,
     },
     /// Mock-proves execution of a function from the WASM program with the given arguments
     /// (constraint verification only, no cryptographic proof)
@@ -143,12 +151,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             input,
             recursion,
             metrics,
+            cache_dir,
         } => {
             let exe = load_wasm_exe(&program, &function);
             let stdin = make_stdin(&input);
 
             let prove = || -> Result<()> {
-                proving::prove(&exe, stdin, recursion).map_err(|e| eyre::eyre!("{e}"))?;
+                proving::prove(&exe, stdin, recursion, cache_dir.as_deref())
+                    .map_err(|e| eyre::eyre!("{e}"))?;
                 println!("Proof verified successfully.");
                 Ok(())
             };
@@ -161,6 +171,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 prove()?;
             }
+        }
+        Commands::Keygen { cache_dir } => {
+            proving::keygen_to_disk(&cache_dir)?;
+            println!("Keys written to {}", cache_dir.display());
         }
         Commands::MockProve {
             program,
