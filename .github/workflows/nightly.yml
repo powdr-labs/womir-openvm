@@ -23,7 +23,7 @@ jobs:
             cuda_flag: ""
             cargo_features: ""
           - backend: gpu
-            runner: [self-hosted, gpu-womir]
+            runner: [self-hosted, gpu-shared]
             cuda_flag: "--cuda"
             cargo_features: "--features cuda"
 
