@@ -131,7 +131,7 @@ pub fn prove(
         println!(
             "Selected APC #{idx}: name={}, opcode={}, start_pcs={start_pcs:?}, instructions={instruction_count}",
             precompile.name,
-            precompile.opcode.global_opcode_usize()
+            precompile.opcode.global_opcode(),
         );
         println!("{}", precompile.apc.block);
     }
