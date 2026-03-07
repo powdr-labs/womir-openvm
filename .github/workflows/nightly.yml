@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   benchmark:
-    name: Keccak Benchmark (${{ matrix.backend }})
+    name: Benchmark (${{ matrix.backend }})
     runs-on: ${{ matrix.runner }}
 
     strategy:
@@ -79,12 +79,16 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r scripts/requirements.txt
 
-      - name: Run benchmarks
+      - name: Run keccak benchmarks
         run: bash scripts/run_guest_benches.sh ${{ matrix.cuda_flag }}
+
+      - name: Run reth benchmarks
+        if: matrix.backend == 'gpu'
+        run: bash scripts/run_reth_benches.sh ${{ matrix.cuda_flag }} --block-number 24171384
 
       - name: Post results to job summary
         if: always()
-        run: python3 scripts/render_summary.py results/keccak_* >> "$GITHUB_STEP_SUMMARY"
+        run: python3 scripts/render_summary.py results/*/ >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark results
         if: always()
