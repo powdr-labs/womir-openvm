@@ -39,6 +39,14 @@ dir="results/reth_${BLOCK}"
 
 ROOT_DIR=$(pwd)
 
+CACHE_DIR="$ROOT_DIR/.cache/womir-keys"
+
+# Generate and cache proving keys (not included in benchmark metrics)
+echo ""
+echo "==== Keygen ===="
+echo ""
+cargo run -r $CUDA_FLAGS -- keygen "$CACHE_DIR"
+
 mkdir -p "$dir"
 pushd "$dir"
 
@@ -54,6 +62,7 @@ cargo run -r $CUDA_FLAGS -- prove \
     --input 0 --input 0 --input "file:$ROOT_DIR/sample-programs/eth-block/${BLOCK}.bin" \
     --metrics "${run_name}/metrics.json" \
     --recursion \
+    --cache-dir "$CACHE_DIR" \
     &> "${run_name}/log.txt"
 
 python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt

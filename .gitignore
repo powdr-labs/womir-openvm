@@ -31,3 +31,6 @@ wast_target/
 **/__pycache__
 
 sample-programs/**/Cargo.lock
+
+# Cached proving keys
+.cache/

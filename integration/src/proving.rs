@@ -1,5 +1,6 @@
 //! Proving infrastructure: engine setup, cached proving key, mock proof, and real proof.
 
+use std::path::Path;
 use std::sync::OnceLock;
 
 use openvm_circuit::arch::{
@@ -12,6 +13,7 @@ use openvm_native_circuit::NativeCpuBuilder;
 use openvm_sdk::GenericSdk;
 use openvm_sdk::StdIn;
 use openvm_sdk::config::{AppConfig, DEFAULT_APP_LOG_BLOWUP};
+use openvm_sdk::keygen::{AggProvingKey, AppProvingKey};
 use openvm_sdk::prover::verify_app_proof;
 use openvm_stark_backend::{config::Val, p3_field::PrimeField32};
 use openvm_stark_sdk::{
@@ -118,17 +120,68 @@ type WomirSdk = GenericSdk<
     openvm_native_circuit::NativeGpuBuilder,
 >;
 
+const APP_PK_FILE: &str = "app_pk.bin";
+const AGG_PK_FILE: &str = "agg_pk.bin";
+
+fn default_app_config() -> AppConfig<WomirConfig> {
+    let vm_config = WomirConfig::default();
+    let app_fri_params =
+        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+    AppConfig::new(app_fri_params, vm_config)
+}
+
+/// Generate app and aggregation proving keys and write them to `cache_dir`.
+pub fn keygen_to_disk(cache_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(cache_dir)?;
+
+    let app_config = default_app_config();
+    let sdk = WomirSdk::new_without_transpiler(app_config)?;
+
+    tracing::info!("Generating app proving key...");
+    let app_pk = sdk.app_pk();
+    let app_pk_bytes = bincode::serialize(app_pk)?;
+    std::fs::write(cache_dir.join(APP_PK_FILE), &app_pk_bytes)?;
+    tracing::info!("Wrote app_pk ({:.1} MB)", app_pk_bytes.len() as f64 / 1e6);
+
+    tracing::info!("Generating aggregation proving key...");
+    let agg_pk = sdk.agg_pk();
+    let agg_pk_bytes = bincode::serialize(agg_pk)?;
+    std::fs::write(cache_dir.join(AGG_PK_FILE), &agg_pk_bytes)?;
+    tracing::info!("Wrote agg_pk ({:.1} MB)", agg_pk_bytes.len() as f64 / 1e6);
+
+    Ok(())
+}
+
+fn build_sdk(cache_dir: Option<&Path>) -> Result<WomirSdk, Box<dyn std::error::Error>> {
+    let app_config = default_app_config();
+    let sdk = WomirSdk::new_without_transpiler(app_config)?;
+
+    if let Some(dir) = cache_dir {
+        let app_pk_path = dir.join(APP_PK_FILE);
+        tracing::info!("Loading cached app_pk from {}", app_pk_path.display());
+        let app_pk: AppProvingKey<WomirConfig> =
+            bincode::deserialize(&std::fs::read(&app_pk_path)?)?;
+        sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
+
+        let agg_pk_path = dir.join(AGG_PK_FILE);
+        if agg_pk_path.exists() {
+            tracing::info!("Loading cached agg_pk from {}", agg_pk_path.display());
+            let agg_pk: AggProvingKey = bincode::deserialize(&std::fs::read(&agg_pk_path)?)?;
+            sdk.set_agg_pk(agg_pk).map_err(|_| "agg_pk already set")?;
+        }
+    }
+
+    Ok(sdk)
+}
+
 /// Generate and verify a real cryptographic proof, with optional recursion.
 pub fn prove(
     exe: &VmExe<F>,
     stdin: StdIn,
     recursion: bool,
+    cache_dir: Option<&Path>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let vm_config = WomirConfig::default();
-    let app_fri_params =
-        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
-    let app_config = AppConfig::new(app_fri_params, vm_config);
-    let sdk = WomirSdk::new_without_transpiler(app_config)?;
+    let sdk = build_sdk(cache_dir)?;
 
     let mut app_prover = sdk.app_prover(exe.clone())?;
     let app_proof = app_prover.prove(stdin)?;
