@@ -58,6 +58,9 @@ enum Commands {
         /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
         input: Vec<String>,
+        /// Path to output metrics JSON file
+        #[arg(long)]
+        metrics: Option<PathBuf>,
     },
     /// Proves execution of a function from the WASM program with the given arguments
     /// (generates and verifies a full cryptographic proof)
@@ -134,6 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             function,
             input,
+            metrics,
         } => {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let (module, functions) = load_wasm(&wasm_bytes);
@@ -141,9 +145,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Create and execute program
             let mut linked_program = LinkedProgram::new(module, functions);
             let stdin = make_stdin(&input);
-            let output = linked_program.execute(WomirConfig::default(), &function, stdin)?;
 
-            println!("output: {output:?}");
+            let run = || -> Result<()> {
+                let output = linked_program.execute(WomirConfig::default(), &function, stdin)?;
+                println!("output: {output:?}");
+                Ok(())
+            };
+
+            if let Some(metrics_path) = metrics {
+                run_with_metric_collection_to_file(
+                    std::fs::File::create(metrics_path).expect("Failed to create metrics file"),
+                    run,
+                )?;
+            } else {
+                run()?;
+            }
         }
         Commands::Prove {
             program,
