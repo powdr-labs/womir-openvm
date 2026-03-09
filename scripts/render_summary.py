@@ -53,12 +53,28 @@ def render_bench(bench_dir: str) -> str:
     return "\n".join(lines)
 
 
+def group_label(bench_dir: str) -> str:
+    """Derive a human-readable group label from the directory name prefix."""
+    name = os.path.basename(bench_dir.rstrip("/"))
+    prefix = name.split("_")[0]
+    labels = {
+        "keccak": "Keccak",
+        "reth": "Reth (eth-block)",
+    }
+    return labels.get(prefix, prefix.capitalize())
+
+
 def main():
     parser = argparse.ArgumentParser(description="Render a Markdown summary from benchmark result directories.")
     parser.add_argument("bench_dirs", nargs="+", help="Benchmark result directories (e.g. results/keccak_*)")
     args = parser.parse_args()
 
+    current_group = None
     for bench_dir in sorted(args.bench_dirs):
+        group = group_label(bench_dir)
+        if group != current_group:
+            print(f"# {group}\n")
+            current_group = group
         print(render_bench(bench_dir))
 
 

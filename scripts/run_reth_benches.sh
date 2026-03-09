@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to benchmark Reth (eth-block) via WOMIR (and later RISC-V).
+# Script to benchmark Reth (eth-block) via WOMIR and RISC-V.
 # Mostly for CI usage, but can be easily modified for manual tests.
 
 # NOTE: The script expects the python environment to be set up with the required
@@ -12,17 +12,24 @@ set -e
 # Parse flags
 CUDA_FLAGS=""
 BLOCK=""
+RETH_BENCH_DIR=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --cuda) CUDA_FLAGS="--features cuda"; shift ;;
         --block-number) BLOCK="$2"; shift 2 ;;
+        --reth-bench-dir) RETH_BENCH_DIR="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
 
 if [[ -z "$BLOCK" ]]; then
-    echo "Usage: $0 [--cuda] --block-number <number>"
+    echo "Usage: $0 [--cuda] --block-number <number> [--reth-bench-dir <path>]"
     exit 1
+fi
+
+CUDA_FLAG=""
+if [[ -n "$CUDA_FLAGS" ]]; then
+    CUDA_FLAG="--cuda"
 fi
 
 SCRIPT_PATH=$(realpath "${BASH_SOURCE[0]}")
@@ -41,15 +48,16 @@ ROOT_DIR=$(pwd)
 
 CACHE_DIR="$ROOT_DIR/.cache/womir-keys"
 
-# Generate and cache proving keys (not included in benchmark metrics)
+# Generate and cache WOMIR proving keys (not included in benchmark metrics)
 echo ""
-echo "==== Keygen ===="
+echo "==== WOMIR Keygen ===="
 echo ""
 cargo run -r $CUDA_FLAGS -- keygen "$CACHE_DIR"
 
 mkdir -p "$dir"
 pushd "$dir"
 
+### WOMIR benchmark
 run_name="womir"
 echo ""
 echo "==== ${run_name} ===="
@@ -67,7 +75,27 @@ cargo run -r $CUDA_FLAGS -- prove \
 
 python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
 
-# TODO: Add RISC-V bench here later
+### RISC-V benchmark (via openvm-reth-benchmark)
+if [[ -n "$RETH_BENCH_DIR" ]]; then
+    run_name="riscv"
+    echo ""
+    echo "==== ${run_name} ===="
+    echo ""
+
+    mkdir -p "${run_name}"
+
+    # Compile (keygen) first so it doesn't appear in prove metrics
+    pushd "$RETH_BENCH_DIR"
+    ./run.sh --no-precompiles $CUDA_FLAG --mode compile --block-number "$BLOCK" &> "$OLDPWD/${run_name}/compile_log.txt"
+    # Prove
+    ./run.sh --no-precompiles $CUDA_FLAG --mode prove-stark --block-number "$BLOCK" &> "$OLDPWD/${run_name}/log.txt"
+    cp metrics.json "$OLDPWD/${run_name}/metrics.json"
+    popd
+
+    python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
+
+    python3 "$SCRIPTS_DIR"/womir_vs_riscv.py "womir/metrics.json" "riscv/metrics.json" > womir_vs_riscv.txt
+fi
 
 python3 "$SCRIPTS_DIR"/basic_metrics.py summary-table --csv */metrics.json > basic_metrics.csv
 popd
