@@ -17,8 +17,7 @@ use std::fs;
 use std::path::Path;
 use womir_circuit::WomirConfig;
 
-#[allow(dead_code)]
-pub fn compile(superblock: SuperBlock<Instruction<BabyBear>>) -> String {
+fn compile(superblock: SuperBlock<Instruction<BabyBear>>) -> String {
     let original_config = OriginalVmConfig::<WomirISA>::new(WomirConfig::default());
     let degree_bound = DEFAULT_DEGREE_BOUND;
     let airs = original_config.airs(degree_bound).unwrap();
@@ -63,7 +62,6 @@ pub fn compile(superblock: SuperBlock<Instruction<BabyBear>>) -> String {
     )
 }
 
-#[allow(dead_code)]
 pub fn assert_machine_output(
     program: SuperBlock<Instruction<BabyBear>>,
     module_name: &str,
