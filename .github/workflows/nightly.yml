@@ -85,6 +85,7 @@ jobs:
       - name: Clone openvm-reth-benchmark
         if: matrix.backend == 'gpu'
         run: |
+          rm -rf /tmp/openvm-reth-benchmark
           git clone --branch no-precompiles-v2 --depth 1 \
             https://github.com/powdr-labs/openvm-reth-benchmark.git \
             /tmp/openvm-reth-benchmark
