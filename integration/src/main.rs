@@ -251,10 +251,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map_err(|e| eyre::eyre!("{e}"))?;
 
                 let config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
+                let pgo_config = if apc_count > 0 {
+                    let stdin = make_stdin(&input);
+                    let execution_profile =
+                        powdr_openvm::execution_profile_from_guest(&original, stdin);
+                    powdr_openvm_riscv::PgoConfig::Cell(execution_profile, None)
+                } else {
+                    powdr_openvm_riscv::PgoConfig::None
+                };
                 let compiled = powdr_openvm_riscv::compile_exe(
                     original,
                     config,
-                    powdr_openvm_riscv::PgoConfig::None,
+                    pgo_config,
                     powdr_autoprecompiles::empirical_constraints::EmpiricalConstraints::default(),
                 )
                 .map_err(|e| eyre::eyre!("{e}"))?;

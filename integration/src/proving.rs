@@ -24,11 +24,16 @@ use openvm_stark_sdk::{
         keygen::types::MultiStarkProvingKey, prover::hal::DeviceDataTransporter,
     },
 };
-use powdr_autoprecompiles::{empirical_constraints::EmpiricalConstraints, pgo::NonePgo};
+use powdr_autoprecompiles::{
+    empirical_constraints::EmpiricalConstraints,
+    pgo::{CellPgo, NonePgo},
+};
 use powdr_openvm::extraction_utils::OriginalVmConfig;
 use powdr_openvm::{DEFAULT_DEGREE_BOUND, SpecializedConfig};
 use powdr_openvm::{
-    customize_exe::customize, default_powdr_openvm_config, program::OriginalCompiledProgram,
+    customize_exe::{OpenVmApcCandidate, customize},
+    default_powdr_openvm_config, execution_profile_from_guest,
+    program::OriginalCompiledProgram,
 };
 use womir_circuit::{WomirConfig, WomirCpuBuilder};
 
@@ -188,12 +193,25 @@ pub fn prove(
     apc_count: u64,
     cache_dir: Option<&Path>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let compiled = customize(
-        original_program,
-        default_powdr_openvm_config(apc_count, 0),
-        NonePgo::default(),
-        EmpiricalConstraints::default(),
-    );
+    let compiled = if apc_count > 0 {
+        let execution_profile = execution_profile_from_guest(&original_program, stdin.clone());
+        customize(
+            original_program,
+            default_powdr_openvm_config(apc_count, 0),
+            CellPgo::<_, OpenVmApcCandidate<WomirISA>>::with_pgo_data_and_max_columns(
+                execution_profile,
+                None,
+            ),
+            EmpiricalConstraints::default(),
+        )
+    } else {
+        customize(
+            original_program,
+            default_powdr_openvm_config(apc_count, 0),
+            NonePgo::default(),
+            EmpiricalConstraints::default(),
+        )
+    };
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
     let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
