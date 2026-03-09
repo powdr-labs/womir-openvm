@@ -82,9 +82,19 @@ jobs:
       - name: Run keccak benchmarks
         run: bash scripts/run_guest_benches.sh ${{ matrix.cuda_flag }}
 
+      - name: Clone openvm-reth-benchmark
+        if: matrix.backend == 'gpu'
+        run: |
+          git clone --branch no-precompiles-v2 --depth 1 \
+            https://github.com/powdr-labs/openvm-reth-benchmark.git \
+            /tmp/openvm-reth-benchmark
+
       - name: Run reth benchmarks
         if: matrix.backend == 'gpu'
-        run: bash scripts/run_reth_benches.sh ${{ matrix.cuda_flag }} --block-number 24171384
+        run: |
+          bash scripts/run_reth_benches.sh ${{ matrix.cuda_flag }} \
+            --block-number 24171384 \
+            --reth-bench-dir /tmp/openvm-reth-benchmark
 
       - name: Post results to job summary
         if: always()
