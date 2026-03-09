@@ -1,5 +1,5 @@
 Instructions:
-  LOADW r1, [r0 + 0x8]
+  0: LOADW r1, [r0 + 0x8]
 
 APC advantage:
   - Main columns: 45 -> 25 (1.80x reduction)

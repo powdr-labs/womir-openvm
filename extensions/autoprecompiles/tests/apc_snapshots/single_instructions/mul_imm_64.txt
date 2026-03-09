@@ -1,5 +1,5 @@
 Instructions:
-  MUL_64 r2, r0, 5
+  0: MUL_64 r2, r0, 5
 
 APC advantage:
   - Main columns: 61 -> 37 (1.65x reduction)

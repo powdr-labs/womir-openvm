@@ -1,5 +1,5 @@
 Instructions:
-  AND r1, r0, 255
+  0: AND r1, r0, 255
 
 APC advantage:
   - Main columns: 40 -> 17 (2.35x reduction)

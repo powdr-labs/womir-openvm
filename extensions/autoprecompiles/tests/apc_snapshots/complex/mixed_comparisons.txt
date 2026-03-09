@@ -1,6 +1,6 @@
 Instructions:
-  SLTU r2, r1, r0
-  SLT r5, r4, r3
+  0: SLTU r2, r1, r0
+  4: SLT r5, r4, r3
 
 APC advantage:
   - Main columns: 82 -> 55 (1.49x reduction)

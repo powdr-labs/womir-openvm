@@ -1,5 +1,5 @@
 Instructions:
-  JUMP_IF cond=r2, target_pc=8
+  0: JUMP_IF cond=r2, target_pc=8
 
 APC advantage:
   - Main columns: 25 -> 13 (1.92x reduction)

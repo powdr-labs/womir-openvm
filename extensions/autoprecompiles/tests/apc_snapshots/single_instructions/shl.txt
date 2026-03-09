@@ -1,5 +1,5 @@
 Instructions:
-  SLL r2, r0, r1
+  0: SLL r2, r0, r1
 
 APC advantage:
   - Main columns: 57 -> 42 (1.36x reduction)

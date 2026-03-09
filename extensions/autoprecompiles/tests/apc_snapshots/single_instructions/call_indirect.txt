@@ -1,5 +1,5 @@
 Instructions:
-  CALL_INDIRECT save_pc=r10, save_fp=r11, target_pc=r12, fp_offset=120
+  0: CALL_INDIRECT save_pc=r10, save_fp=r11, target_pc=r12, fp_offset=120
 
 APC advantage:
   - Main columns: 57 -> 30 (1.90x reduction)

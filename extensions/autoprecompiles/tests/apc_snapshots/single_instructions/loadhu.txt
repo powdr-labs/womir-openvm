@@ -1,5 +1,5 @@
 Instructions:
-  LOADHU r1, [r0 + 0x0]
+  0: LOADHU r1, [r0 + 0x0]
 
 APC advantage:
   - Main columns: 45 -> 29 (1.55x reduction)

@@ -1,6 +1,6 @@
 Instructions:
-  LOADW r0, [r1 + 0x0]
-  CONST32 r1, 0x00000000
+  0: LOADW r0, [r1 + 0x0]
+  4: CONST32 r1, 0x00000000
 
 APC advantage:
   - Main columns: 64 -> 25 (2.56x reduction)

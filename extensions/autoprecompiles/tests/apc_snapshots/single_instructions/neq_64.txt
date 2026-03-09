@@ -1,5 +1,5 @@
 Instructions:
-  NEQ_64 r4, r0, r2
+  0: NEQ_64 r4, r0, r2
 
 APC advantage:
   - Main columns: 56 -> 37 (1.51x reduction)

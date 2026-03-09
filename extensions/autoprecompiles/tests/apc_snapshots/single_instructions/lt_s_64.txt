@@ -1,5 +1,5 @@
 Instructions:
-  SLT_64 r4, r0, r2
+  0: SLT_64 r4, r0, r2
 
 APC advantage:
   - Main columns: 59 -> 47 (1.26x reduction)

@@ -1,5 +1,5 @@
 Instructions:
-  STOREH [r1 + 0x0], r0
+  0: STOREH [r1 + 0x0], r0
 
 APC advantage:
   - Main columns: 45 -> 31 (1.45x reduction)

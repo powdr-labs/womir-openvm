@@ -1,5 +1,5 @@
 Instructions:
-  CONST32 r1, 0x0000002a
+  0: CONST32 r1, 0x0000002a
 
 APC advantage:
   - Main columns: 19 -> 11 (1.73x reduction)

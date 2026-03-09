@@ -1,5 +1,5 @@
 Instructions:
-  EQ_64 r2, r0, 42
+  0: EQ_64 r2, r0, 42
 
 APC advantage:
   - Main columns: 56 -> 25 (2.24x reduction)

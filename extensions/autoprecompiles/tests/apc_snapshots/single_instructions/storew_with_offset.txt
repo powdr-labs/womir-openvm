@@ -1,5 +1,5 @@
 Instructions:
-  STOREW [r1 + 0x4], r0
+  0: STOREW [r1 + 0x4], r0
 
 APC advantage:
   - Main columns: 45 -> 25 (1.80x reduction)

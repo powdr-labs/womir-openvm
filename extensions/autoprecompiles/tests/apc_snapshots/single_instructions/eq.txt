@@ -1,5 +1,5 @@
 Instructions:
-  EQ r2, r0, r1
+  0: EQ r2, r0, r1
 
 APC advantage:
   - Main columns: 38 -> 25 (1.52x reduction)

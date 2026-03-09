@@ -1,9 +1,9 @@
 Instructions:
-  STOREH [r2 + 0x0], r0
-  STOREH [r2 + 0x2], r1
-  LOADHU r3, [r2 + 0x0]
-  LOADHU r4, [r2 + 0x2]
-  ADD r5, r3, r4
+   0: STOREH [r2 + 0x0], r0
+   4: STOREH [r2 + 0x2], r1
+   8: LOADHU r3, [r2 + 0x0]
+  12: LOADHU r4, [r2 + 0x2]
+  16: ADD r5, r3, r4
 
 APC advantage:
   - Main columns: 220 -> 127 (1.73x reduction)

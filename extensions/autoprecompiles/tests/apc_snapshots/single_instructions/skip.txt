@@ -1,5 +1,5 @@
 Instructions:
-  SKIP offset_reg=r2
+  0: SKIP offset_reg=r2
 
 APC advantage:
   - Main columns: 25 -> 13 (1.92x reduction)

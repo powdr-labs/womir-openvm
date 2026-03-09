@@ -1,5 +1,5 @@
 Instructions:
-  SRL r2, r0, 3
+  0: SRL r2, r0, 3
 
 APC advantage:
   - Main columns: 57 -> 21 (2.71x reduction)

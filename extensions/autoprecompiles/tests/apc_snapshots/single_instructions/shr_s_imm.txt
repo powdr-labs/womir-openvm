@@ -1,5 +1,5 @@
 Instructions:
-  SRA r2, r0, 3
+  0: SRA r2, r0, 3
 
 APC advantage:
   - Main columns: 57 -> 22 (2.59x reduction)

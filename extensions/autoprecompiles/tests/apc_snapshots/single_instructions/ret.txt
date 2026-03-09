@@ -1,5 +1,5 @@
 Instructions:
-  RET to_pc=r10, to_fp=r11
+  0: RET to_pc=r10, to_fp=r11
 
 APC advantage:
   - Main columns: 57 -> 17 (3.35x reduction)

@@ -1,5 +1,5 @@
 Instructions:
-  ADD r2, r0, r1
+  0: ADD r2, r0, r1
 
 APC advantage:
   - Main columns: 40 -> 27 (1.48x reduction)

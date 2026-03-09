@@ -1,5 +1,5 @@
 Instructions:
-  CALL save_pc=r10, save_fp=r11, target_pc=12, fp_offset=120
+  0: CALL save_pc=r10, save_fp=r11, target_pc=12, fp_offset=120
 
 APC advantage:
   - Main columns: 57 -> 24 (2.38x reduction)

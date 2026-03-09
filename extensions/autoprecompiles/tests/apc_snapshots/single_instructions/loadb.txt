@@ -1,5 +1,5 @@
 Instructions:
-  LOADB r1, [r0 + 0x0]
+  0: LOADB r1, [r0 + 0x0]
 
 APC advantage:
   - Main columns: 40 -> 28 (1.43x reduction)

@@ -1,5 +1,5 @@
 Instructions:
-  NEQ r1, r0, 42
+  0: NEQ r1, r0, 42
 
 APC advantage:
   - Main columns: 38 -> 19 (2.00x reduction)

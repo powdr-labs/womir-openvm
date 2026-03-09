@@ -1,9 +1,9 @@
 Instructions:
-  STOREB [r1 + 0x0], r0
-  STOREB [r1 + 0x1], r0
-  LOADBU r2, [r1 + 0x0]
-  LOADBU r3, [r1 + 0x1]
-  ADD r4, r2, r3
+   0: STOREB [r1 + 0x0], r0
+   4: STOREB [r1 + 0x1], r0
+   8: LOADBU r2, [r1 + 0x0]
+  12: LOADBU r3, [r1 + 0x1]
+  16: ADD r4, r2, r3
 
 APC advantage:
   - Main columns: 220 -> 133 (1.65x reduction)

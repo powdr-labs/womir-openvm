@@ -30,11 +30,14 @@ pub fn compile(superblock: SuperBlock<Instruction<BabyBear>>) -> String {
         bus_map: bus_map.clone(),
     };
 
+    let superblock = superblock.map_instructions(Instr::<BabyBear, WomirISA>::from);
+    // for aligning the output
+    let max_pc_digits = superblock.pcs().max().unwrap().max(1).ilog10() as usize + 1;
     let superblock_str = superblock
         .instructions()
-        .map(|inst| format!("  {}", WomirISA::format(inst)))
+        .zip(superblock.pcs())
+        .map(|(inst, pc)| format!("  {pc:>max_pc_digits$}: {}", WomirISA::format(&inst.inner)))
         .join("\n");
-    let superblock = superblock.map_instructions(Instr::<BabyBear, WomirISA>::from);
 
     let export_path = std::env::var("APC_EXPORT_PATH").ok();
     let export_level = std::env::var("APC_EXPORT_LEVEL").ok();
