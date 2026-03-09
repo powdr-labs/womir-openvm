@@ -1,10 +1,7 @@
 mod builtin_functions;
-mod const_collapse;
-mod instruction_builder;
 mod proving;
 #[cfg(test)]
 mod tests;
-mod womir_translation;
 
 use clap::{Parser, Subcommand};
 use eyre::Result;
@@ -15,7 +12,9 @@ use openvm_circuit::arch::VmState;
 use openvm_instructions::exe::VmExe;
 use openvm_sdk::StdIn;
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
+use powdr_openvm::{extraction_utils::OriginalVmConfig, program::OriginalCompiledProgram};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 use std::sync::mpsc::channel;
 use std::sync::{Mutex, RwLock};
@@ -31,7 +30,7 @@ use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use crate::builtin_functions::BuiltinFunction;
-use crate::womir_translation::{Directive, LinkedProgram, OpenVMSettings};
+use womir_translation::{Directive, LinkedProgram, OpenVMSettings};
 
 use womir_circuit::WomirConfig;
 
@@ -79,6 +78,9 @@ enum Commands {
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
+        /// Number of apcs to use
+        #[arg(long, default_value_t = 0)]
+        apc_count: u64,
         /// Directory with cached proving keys (from `keygen` command)
         #[arg(long)]
         cache_dir: Option<PathBuf>,
@@ -166,15 +168,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             function,
             input,
             recursion,
+            apc_count,
             metrics,
             cache_dir,
         } => {
-            let exe = load_wasm_exe(&program, &function);
+            let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
+            let original_program = load_wasm_original_program(&wasm_bytes, &function);
             let stdin = make_stdin(&input);
 
             let prove = || -> Result<()> {
-                proving::prove(&exe, stdin, recursion, cache_dir.as_deref())
-                    .map_err(|e| eyre::eyre!("{e}"))?;
+                proving::prove(
+                    original_program,
+                    stdin,
+                    recursion,
+                    apc_count,
+                    cache_dir.as_deref(),
+                )
+                .map_err(|e| eyre::eyre!("{e}"))?;
                 println!("Proof verified successfully.");
                 Ok(())
             };
@@ -230,23 +240,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     std::fs::canonicalize(&program).expect("Failed to resolve program path");
                 let program_str = program_abs.to_str().unwrap();
 
-                let original = powdr_openvm::compile_openvm(
+                let original = powdr_openvm_riscv::compile_openvm(
                     program_str,
-                    powdr_openvm::GuestOptions::default(),
+                    powdr_openvm_riscv::GuestOptions::default(),
                 )
                 .map_err(|e| eyre::eyre!("{e}"))?;
 
-                let config = powdr_openvm::default_powdr_openvm_config(0, 0);
-                let compiled = powdr_openvm::compile_exe(
+                let config = powdr_openvm_riscv::default_powdr_openvm_config(0, 0);
+                let compiled = powdr_openvm_riscv::compile_exe(
                     original,
                     config,
-                    powdr_openvm::PgoConfig::None,
+                    powdr_openvm_riscv::PgoConfig::None,
                     powdr_autoprecompiles::empirical_constraints::EmpiricalConstraints::default(),
                 )
                 .map_err(|e| eyre::eyre!("{e}"))?;
 
                 let stdin = make_stdin(&input);
-                powdr_openvm::prove(&compiled, false, true, stdin, None)
+                powdr_openvm_riscv::prove(&compiled, false, true, stdin, None)
                     .map_err(|e| eyre::eyre!("{e}"))?;
                 println!("RISC-V proof verified successfully.");
                 Ok(())
@@ -271,6 +281,22 @@ fn load_wasm_exe(program: &str, function: &str) -> VmExe<F> {
     let (module, functions) = load_wasm(&wasm_bytes);
     let linked_program = LinkedProgram::new(module, functions);
     linked_program.program_with_entry_point(function)
+}
+
+fn load_wasm_original_program<'a>(
+    wasm_bytes: &'a [u8],
+    function: &str,
+) -> OriginalCompiledProgram<'a, autoprecompiles::WomirISA> {
+    let (module, functions) = load_wasm(wasm_bytes);
+    let linked_program = LinkedProgram::new(module, functions);
+    let exe = Arc::new(linked_program.program_with_entry_point(function));
+    let vm_config = OriginalVmConfig::new(WomirConfig::default());
+
+    OriginalCompiledProgram {
+        exe,
+        vm_config,
+        elf: linked_program,
+    }
 }
 
 /// Build StdIn from `--input` values. Each value is either:

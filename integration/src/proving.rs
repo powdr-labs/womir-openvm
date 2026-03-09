@@ -3,14 +3,12 @@
 use std::path::Path;
 use std::sync::OnceLock;
 
+use autoprecompiles::WomirISA;
 use openvm_circuit::arch::{
     Executor, MeteredExecutor, PreflightExecutor, VirtualMachine, VmBuilder, VmCircuitConfig,
     VmExecutionConfig, VmState, debug_proving_ctx,
 };
 use openvm_instructions::exe::VmExe;
-#[cfg(not(feature = "cuda"))]
-use openvm_native_circuit::NativeCpuBuilder;
-use openvm_sdk::GenericSdk;
 use openvm_sdk::StdIn;
 use openvm_sdk::config::{AppConfig, DEFAULT_APP_LOG_BLOWUP};
 use openvm_sdk::keygen::{AggProvingKey, AppProvingKey};
@@ -25,6 +23,12 @@ use openvm_stark_sdk::{
     openvm_stark_backend::{
         keygen::types::MultiStarkProvingKey, prover::hal::DeviceDataTransporter,
     },
+};
+use powdr_autoprecompiles::{empirical_constraints::EmpiricalConstraints, pgo::NonePgo};
+use powdr_openvm::extraction_utils::OriginalVmConfig;
+use powdr_openvm::{DEFAULT_DEGREE_BOUND, SpecializedConfig};
+use powdr_openvm::{
+    customize_exe::customize, default_powdr_openvm_config, program::OriginalCompiledProgram,
 };
 use womir_circuit::{WomirConfig, WomirCpuBuilder};
 
@@ -111,30 +115,32 @@ pub fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
 }
 
 #[cfg(not(feature = "cuda"))]
-type WomirSdk = GenericSdk<BabyBearPoseidon2Engine, WomirCpuBuilder, NativeCpuBuilder>;
+type WomirSdk = powdr_openvm::PowdrSdkCpu<WomirISA>;
 
 #[cfg(feature = "cuda")]
-type WomirSdk = GenericSdk<
-    openvm_cuda_backend::engine::GpuBabyBearPoseidon2Engine,
-    womir_circuit::WomirGpuBuilder,
-    openvm_native_circuit::NativeGpuBuilder,
->;
+type WomirSdk = powdr_openvm::PowdrSdkGpu<WomirISA>;
 
 const APP_PK_FILE: &str = "app_pk.bin";
 const AGG_PK_FILE: &str = "agg_pk.bin";
 
-fn default_app_config() -> AppConfig<WomirConfig> {
+fn default_app_config_without_apcs() -> AppConfig<SpecializedConfig<WomirISA>> {
     let vm_config = WomirConfig::default();
+    let app_config = powdr_openvm::SpecializedConfig::<WomirISA>::new(
+        OriginalVmConfig::new(vm_config),
+        vec![],
+        DEFAULT_DEGREE_BOUND,
+    );
+
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
-    AppConfig::new(app_fri_params, vm_config)
+    AppConfig::new(app_fri_params, app_config)
 }
 
 /// Generate app and aggregation proving keys and write them to `cache_dir`.
 pub fn keygen_to_disk(cache_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(cache_dir)?;
 
-    let app_config = default_app_config();
+    let app_config = default_app_config_without_apcs();
     let sdk = WomirSdk::new_without_transpiler(app_config)?;
 
     tracing::info!("Generating app proving key...");
@@ -153,13 +159,13 @@ pub fn keygen_to_disk(cache_dir: &Path) -> Result<(), Box<dyn std::error::Error>
 }
 
 fn build_sdk(cache_dir: Option<&Path>) -> Result<WomirSdk, Box<dyn std::error::Error>> {
-    let app_config = default_app_config();
+    let app_config = default_app_config_without_apcs();
     let sdk = WomirSdk::new_without_transpiler(app_config)?;
 
     if let Some(dir) = cache_dir {
         let app_pk_path = dir.join(APP_PK_FILE);
         tracing::info!("Loading cached app_pk from {}", app_pk_path.display());
-        let app_pk: AppProvingKey<WomirConfig> =
+        let app_pk: AppProvingKey<SpecializedConfig<WomirISA>> =
             bincode::deserialize(&std::fs::read(&app_pk_path)?)?;
         sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
 
@@ -176,21 +182,35 @@ fn build_sdk(cache_dir: Option<&Path>) -> Result<WomirSdk, Box<dyn std::error::E
 
 /// Generate and verify a real cryptographic proof, with optional recursion.
 pub fn prove(
-    exe: &VmExe<F>,
+    original_program: OriginalCompiledProgram<WomirISA>,
     stdin: StdIn,
     recursion: bool,
+    apc_count: u64,
     cache_dir: Option<&Path>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sdk = build_sdk(cache_dir)?;
+    let compiled = customize(
+        original_program,
+        default_powdr_openvm_config(apc_count, 0),
+        NonePgo::default(),
+        EmpiricalConstraints::default(),
+    );
+    let app_fri_params =
+        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+    let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
+    let sdk = if apc_count == 0 {
+        build_sdk(cache_dir)?
+    } else {
+        WomirSdk::new_without_transpiler(app_config)?
+    };
 
-    let mut app_prover = sdk.app_prover(exe.clone())?;
+    let mut app_prover = sdk.app_prover(compiled.exe.clone())?;
     let app_proof = app_prover.prove(stdin)?;
 
     let app_vk = sdk.app_pk().get_app_vk();
     verify_app_proof(&app_vk, &app_proof)?;
 
     if recursion {
-        let mut agg_prover = sdk.prover(exe.clone())?.agg_prover;
+        let mut agg_prover = sdk.prover(compiled.exe.clone())?.agg_prover;
 
         // Note that this proof is not verified. We assume that any valid app proof
         // (verified above) also leads to a valid aggregation proof.

@@ -1,4 +1,5 @@
 use openvm_sdk::StdIn;
+use powdr_openvm_riscv::{GuestOptions, PgoConfig};
 
 /// Compile and execute an OpenVM RISC-V guest program via powdr-openvm.
 fn run_openvm_guest(guest: &str, args: &[u32]) -> Result<(), Box<dyn std::error::Error>> {
@@ -7,13 +8,13 @@ fn run_openvm_guest(guest: &str, args: &[u32]) -> Result<(), Box<dyn std::error:
     let guest_abs = std::fs::canonicalize(guest)?;
     let guest_str = guest_abs.to_str().unwrap();
 
-    let original = powdr_openvm::compile_openvm(guest_str, powdr_openvm::GuestOptions::default())?;
+    let original = powdr_openvm_riscv::compile_openvm(guest_str, GuestOptions::default())?;
 
     let config = powdr_openvm::default_powdr_openvm_config(0, 0);
-    let compiled = powdr_openvm::compile_exe(
+    let compiled = powdr_openvm_riscv::compile_exe(
         original,
         config,
-        powdr_openvm::PgoConfig::None,
+        PgoConfig::None,
         powdr_autoprecompiles::empirical_constraints::EmpiricalConstraints::default(),
     )?;
 

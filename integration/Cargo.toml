@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 powdr-openvm = { workspace = true }
+powdr-openvm-riscv = { workspace = true }
 powdr-autoprecompiles = { workspace = true }
 serde.workspace = true
 eyre.workspace = true
@@ -14,6 +15,8 @@ derive-new.workspace = true
 derive_more.workspace = true
 
 womir-circuit = { workspace = true }
+autoprecompiles = { workspace = true }
+womir-translation = { workspace = true }
 
 openvm-womir-transpiler = { workspace = true }
 openvm-sdk = { workspace = true }
@@ -52,6 +55,7 @@ cuda = [
   "openvm-circuit/cuda",
   "openvm-native-circuit/cuda",
   "powdr-openvm/cuda",
+  "powdr-openvm-riscv/cuda",
   "dep:openvm-cuda-backend",
 ]
 touchemall = [

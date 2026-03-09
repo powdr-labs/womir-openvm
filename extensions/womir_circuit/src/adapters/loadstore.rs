@@ -1,7 +1,7 @@
 use std::{
     borrow::{Borrow, BorrowMut},
-    cell::RefCell,
     marker::PhantomData,
+    sync::{Arc, Mutex},
 };
 
 use openvm_circuit::{
@@ -321,14 +321,14 @@ pub struct Rv32LoadStoreAdapterRecord {
 #[derive(Clone)]
 pub struct Rv32LoadStoreAdapterExecutor {
     pointer_max_bits: usize,
-    has_fetched_fp: RefCell<bool>,
+    has_fetched_fp: Arc<Mutex<bool>>,
 }
 
 impl Rv32LoadStoreAdapterExecutor {
     pub fn new(pointer_max_bits: usize) -> Self {
         Self {
             pointer_max_bits,
-            has_fetched_fp: RefCell::new(false),
+            has_fetched_fp: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -338,14 +338,21 @@ impl Rv32LoadStoreAdapterExecutor {
         memory: &mut TracingMemory,
         record: &mut Rv32LoadStoreAdapterRecord,
     ) {
-        if !*self.has_fetched_fp.borrow() {
+        let mut has_fetched_fp = self
+            .has_fetched_fp
+            .lock()
+            .expect("has_fetched_fp mutex poisoned");
+        if !*has_fetched_fp {
             record.fp = tracing_read_fp::<F>(memory, &mut record.fp_read_aux.prev_timestamp);
-            *self.has_fetched_fp.borrow_mut() = true;
+            *has_fetched_fp = true;
         }
     }
 
     fn finalize_instruction(&self) {
-        *self.has_fetched_fp.borrow_mut() = false;
+        *self
+            .has_fetched_fp
+            .lock()
+            .expect("has_fetched_fp mutex poisoned") = false;
     }
 }
 

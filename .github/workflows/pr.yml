@@ -100,6 +100,9 @@ jobs:
             exit 1
           fi
 
+      - name: Build project
+        run: cargo build --release --features cuda
+
       - name: Run GPU ALU tests
         run: |
           cargo test --release --features cuda -- tests::isolated_tests::tests::test_add --exact --test-threads=1
@@ -170,3 +173,7 @@ jobs:
       - name: Run GPU keccak test
         run: |
           cargo test --release --features cuda -- tests::wasm_tests::test_keccak_rust_womir_1 --exact --test-threads=1
+      
+      - name: Run GPU apc test
+        run: |
+          cargo test --release --features cuda test_cli_prove_fib_with_1_apc

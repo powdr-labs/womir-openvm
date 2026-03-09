@@ -21,8 +21,8 @@ use openvm_sdk::StdIn;
 use womir_circuit::{WomirConfig, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory};
 
 use super::helpers;
-use crate::instruction_builder::*;
 use crate::proving::{ALL_BACKENDS, Backend};
+use womir_translation::instruction_builder::*;
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -3762,7 +3762,7 @@ mod tests {
 
     #[test]
     fn test_trap() {
-        use crate::womir_translation::ERROR_CODE_OFFSET;
+        use womir_translation::ERROR_CODE_OFFSET;
 
         setup_tracing_with_log_level(Level::WARN);
 
