@@ -96,7 +96,7 @@ jobs:
           rustup install nightly-2025-08-19
           rustup +nightly-2025-08-19 component add rust-src
           # cargo-openvm for guest build
-          cargo install cargo-openvm --git https://github.com/powdr-labs/openvm.git --tag v1.4.2-powdr-rc.1 --locked
+          cargo install cargo-openvm --git https://github.com/powdr-labs/openvm.git --tag v1.4.2-powdr-rc.3 --locked
           # .env with RPC endpoint for rpc-cache
           echo "RPC_1=${{ secrets.RPC_1 }}" > /tmp/openvm-reth-benchmark/.env
           # KZG params dir (not used for compile/prove-stark, but run.sh passes it)
