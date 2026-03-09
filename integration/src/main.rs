@@ -57,6 +57,9 @@ enum Commands {
         /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
         input: Vec<String>,
+        /// Path to output metrics JSON file
+        #[arg(long)]
+        metrics: Option<PathBuf>,
     },
     /// Proves execution of a function from the WASM program with the given arguments
     /// (generates and verifies a full cryptographic proof)
@@ -78,6 +81,14 @@ enum Commands {
         /// Number of apcs to use
         #[arg(long, default_value_t = 0)]
         apc_count: u64,
+        /// Directory with cached proving keys (from `keygen` command)
+        #[arg(long)]
+        cache_dir: Option<PathBuf>,
+    },
+    /// Generate and cache proving keys to a directory (for use with `prove --cache-dir`)
+    Keygen {
+        /// Directory to write cached proving keys to
+        cache_dir: PathBuf,
     },
     /// Mock-proves execution of a function from the WASM program with the given arguments
     /// (constraint verification only, no cryptographic proof)
@@ -128,6 +139,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             function,
             input,
+            metrics,
         } => {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let (module, functions) = load_wasm(&wasm_bytes);
@@ -135,9 +147,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Create and execute program
             let mut linked_program = LinkedProgram::new(module, functions);
             let stdin = make_stdin(&input);
-            let output = linked_program.execute(WomirConfig::default(), &function, stdin)?;
 
-            println!("output: {output:?}");
+            let run = || -> Result<()> {
+                let output = linked_program.execute(WomirConfig::default(), &function, stdin)?;
+                println!("output: {output:?}");
+                Ok(())
+            };
+
+            if let Some(metrics_path) = metrics {
+                run_with_metric_collection_to_file(
+                    std::fs::File::create(metrics_path).expect("Failed to create metrics file"),
+                    run,
+                )?;
+            } else {
+                run()?;
+            }
         }
         Commands::Prove {
             program,
@@ -146,14 +170,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             recursion,
             apc_count,
             metrics,
+            cache_dir,
         } => {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let original_program = load_wasm_original_program(&wasm_bytes, &function);
             let stdin = make_stdin(&input);
 
             let prove = || -> Result<()> {
-                proving::prove(original_program, stdin, recursion, apc_count)
-                    .map_err(|e| eyre::eyre!("{e}"))?;
+                proving::prove(
+                    original_program,
+                    stdin,
+                    recursion,
+                    apc_count,
+                    cache_dir.as_deref(),
+                )
+                .map_err(|e| eyre::eyre!("{e}"))?;
                 println!("Proof verified successfully.");
                 Ok(())
             };
@@ -166,6 +197,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 prove()?;
             }
+        }
+        Commands::Keygen { cache_dir } => {
+            proving::keygen_to_disk(&cache_dir)?;
+            println!("Keys written to {}", cache_dir.display());
         }
         Commands::MockProve {
             program,
