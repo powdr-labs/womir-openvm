@@ -86,7 +86,7 @@ if [[ -n "$RETH_BENCH_DIR" ]]; then
 
     # Compile (keygen) first so it doesn't appear in prove metrics
     pushd "$RETH_BENCH_DIR"
-    ./run.sh --no-precompiles $CUDA_FLAG --mode compile --block-number "$BLOCK" &> /dev/null
+    ./run.sh --no-precompiles $CUDA_FLAG --mode compile --block-number "$BLOCK" &> "$OLDPWD/${run_name}/compile_log.txt"
     # Prove
     ./run.sh --no-precompiles $CUDA_FLAG --mode prove-stark --block-number "$BLOCK" &> "$OLDPWD/${run_name}/log.txt"
     cp metrics.json "$OLDPWD/${run_name}/metrics.json"

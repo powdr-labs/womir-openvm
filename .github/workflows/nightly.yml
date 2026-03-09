@@ -89,12 +89,27 @@ jobs:
             https://github.com/powdr-labs/openvm-reth-benchmark.git \
             /tmp/openvm-reth-benchmark
 
+      - name: Set up RISC-V benchmark environment
+        if: matrix.backend == 'gpu'
+        run: |
+          # Nightly toolchain required by openvm-reth-benchmark (via its rust-toolchain.toml)
+          rustup install nightly-2025-08-19
+          rustup +nightly-2025-08-19 component add rust-src
+          # cargo-openvm for guest build
+          cargo install cargo-openvm --git https://github.com/powdr-labs/openvm.git --tag v1.4.2-powdr-rc.1 --locked
+          # .env with RPC endpoint for rpc-cache
+          echo "RPC_1=${{ secrets.RPC_1 }}" > /tmp/openvm-reth-benchmark/.env
+          # KZG params dir (not used for compile/prove-stark, but run.sh passes it)
+          mkdir -p ~/.openvm/params
+
       - name: Run reth benchmarks
         if: matrix.backend == 'gpu'
         run: |
           bash scripts/run_reth_benches.sh ${{ matrix.cuda_flag }} \
             --block-number 24171384 \
             --reth-bench-dir /tmp/openvm-reth-benchmark
+        env:
+          POWDR_OPENVM_SEGMENT_DELTA: "50000"
 
       - name: Post results to job summary
         if: always()
