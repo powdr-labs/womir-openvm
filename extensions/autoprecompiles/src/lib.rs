@@ -23,16 +23,16 @@ use openvm_womir_transpiler::{
     LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 use powdr_openvm::BabyBearSC;
+#[cfg(feature = "cuda")]
+use powdr_openvm::GpuBabyBearPoseidon2Engine;
+#[cfg(feature = "cuda")]
+use powdr_openvm::isa::OriginalGpuChipComplex;
 use powdr_openvm::isa::{OpenVmISA, OriginalCpuChipComplex};
 use powdr_openvm::powdr_extension::trace_generator::SharedPeripheryChipsCpu;
+#[cfg(feature = "cuda")]
+use powdr_openvm::powdr_extension::trace_generator::SharedPeripheryChipsGpu;
 use powdr_openvm::powdr_extension::trace_generator::cpu::SharedPeripheryChipsCpuProverExt;
 use powdr_openvm::program::OriginalCompiledProgram;
-#[cfg(feature = "cuda")]
-use powdr_openvm_common::{
-    GpuBabyBearPoseidon2Engine,
-    isa::OriginalGpuChipComplex,
-    trace_generator::cuda::periphery::{SharedPeripheryChipsGpu, SharedPeripheryChipsGpuProverExt},
-};
 use powdr_riscv_elf::debug_info::SymbolTable;
 use strum::IntoEnumIterator;
 use womir_circuit::{WomirConfig, WomirConfigExecutor, WomirCpuBuilder, WomirCpuProverExt};
@@ -347,7 +347,7 @@ impl OpenVmISA for WomirISA {
     type Config = WomirConfig;
     type CpuBuilder = WomirCpuBuilder;
     #[cfg(feature = "cuda")]
-    type OriginalBuilderGpu = WomirGpuBuilder;
+    type GpuBuilder = WomirGpuBuilder;
 
     fn create_original_chip_complex(
         config: &Self::Config,
@@ -426,10 +426,12 @@ impl OpenVmISA for WomirISA {
 
     #[cfg(feature = "cuda")]
     fn create_dummy_chip_complex_gpu(
-        config: &Self::OriginalConfig,
+        config: &Self::Config,
         circuit: AirInventory<BabyBearSC>,
         shared_chips: SharedPeripheryChipsGpu<Self>,
     ) -> Result<OriginalGpuChipComplex, ChipInventoryError> {
+        use powdr_openvm::powdr_extension::trace_generator::cuda::SharedPeripheryChipsGpuProverExt;
+
         let mut chip_complex = VmBuilder::<GpuBabyBearPoseidon2Engine>::create_chip_complex(
             &SystemGpuBuilder,
             &config.system,

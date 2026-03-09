@@ -54,6 +54,7 @@ cuda = [
   "openvm-circuit/cuda",
   "openvm-native-circuit/cuda",
   "powdr-openvm/cuda",
+  "powdr-openvm-riscv/cuda",
   "dep:openvm-cuda-backend",
 ]
 touchemall = [
