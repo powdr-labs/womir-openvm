@@ -29,8 +29,7 @@ use powdr_autoprecompiles::{empirical_constraints::EmpiricalConstraints, pgo::No
 use powdr_openvm::extraction_utils::OriginalVmConfig;
 use powdr_openvm::{DEFAULT_DEGREE_BOUND, SpecializedConfig};
 use powdr_openvm::{
-    PowdrSdkCpu, customize_exe::customize, default_powdr_openvm_config,
-    program::OriginalCompiledProgram,
+    customize_exe::customize, default_powdr_openvm_config, program::OriginalCompiledProgram,
 };
 use womir_circuit::{WomirConfig, WomirCpuBuilder};
 
@@ -117,10 +116,10 @@ pub fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
 }
 
 #[cfg(not(feature = "cuda"))]
-type WomirSdk = PowdrSdkCpu<WomirISA>;
+type WomirSdk = powdr_openvm::PowdrSdkCpu<WomirISA>;
 
 #[cfg(feature = "cuda")]
-type WomirSdk = PowdrSdkGpu<WomirISA>;
+type WomirSdk = powdr_openvm::PowdrSdkGpu<WomirISA>;
 
 const APP_PK_FILE: &str = "app_pk.bin";
 const AGG_PK_FILE: &str = "agg_pk.bin";
