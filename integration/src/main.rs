@@ -112,6 +112,9 @@ enum Commands {
         /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
         input: Vec<String>,
+        /// Number of apcs to use
+        #[arg(long, default_value_t = 0)]
+        apc_count: u64,
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
@@ -232,6 +235,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::ProveRiscv {
             program,
             input,
+            apc_count,
             metrics,
         } => {
             let prove = || -> Result<()> {
@@ -246,7 +250,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .map_err(|e| eyre::eyre!("{e}"))?;
 
-                let config = powdr_openvm_riscv::default_powdr_openvm_config(0, 0);
+                let config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
                 let compiled = powdr_openvm_riscv::compile_exe(
                     original,
                     config,
