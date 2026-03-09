@@ -73,7 +73,7 @@ itertools = "0.14"
 rrs-lib = "0.1.0"
 tracing = "0.1.40"
 
-womir = { git = "https://github.com/powdr-labs/womir.git", rev = "ef0be00" }
+womir = { git = "https://github.com/powdr-labs/womir.git", branch = "block_out_removal" }
 wasmparser = { version = "0.235", default-features = false }
 
 # Uncomment for local development with path patches:
