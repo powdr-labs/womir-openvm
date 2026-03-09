@@ -8,7 +8,6 @@ use openvm_circuit::arch::{
     Executor, MeteredExecutor, PreflightExecutor, VirtualMachine, VmBuilder, VmCircuitConfig,
     VmExecutionConfig, VmState, debug_proving_ctx,
 };
-use openvm_instructions::LocalOpcode;
 use openvm_instructions::exe::VmExe;
 use openvm_sdk::StdIn;
 use openvm_sdk::config::{AppConfig, DEFAULT_APP_LOG_BLOWUP};
@@ -195,17 +194,6 @@ pub fn prove(
         NonePgo::default(),
         EmpiricalConstraints::default(),
     );
-    for (idx, precompile) in compiled.vm_config.powdr.precompiles.iter().enumerate() {
-        let start_pcs = precompile.apc.start_pcs();
-        let instruction_count = precompile.apc.instructions().count();
-        println!(
-            "Selected APC #{idx}: name={}, opcode={}, start_pcs={start_pcs:?}, instructions={instruction_count}",
-            precompile.name,
-            precompile.opcode.global_opcode(),
-        );
-        println!("{}", precompile.apc.block);
-    }
-
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
     let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());

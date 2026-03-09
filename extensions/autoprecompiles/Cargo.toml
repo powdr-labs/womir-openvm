@@ -6,7 +6,7 @@ license.workspace = true
 
 [features]
 default = []
-cuda = ["powdr-openvm/cuda"]
+cuda = ["powdr-openvm/cuda", "womir-circuit/cuda"]
 tco = []
 
 [dependencies]
