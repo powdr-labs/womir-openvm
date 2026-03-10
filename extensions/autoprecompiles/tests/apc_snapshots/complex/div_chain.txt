@@ -241,8 +241,8 @@ lt_marker__0_1 * (r_prime__1_1 * (2 * c_sign_1 - 1) + c__1_1 * (1 - 2 * c_sign_1
 lt_marker__1_1 * (lt_diff_1 - (r_prime__1_1 * (2 * c_sign_1 - 1) + c__1_1 * (1 - 2 * c_sign_1))) = 0
 lt_marker__0_1 * (lt_marker__0_1 - 1) = 0
 lt_marker__0_1 * (lt_diff_1 - (r_prime__0_1 * (2 * c_sign_1 - 1) + c__0_1 * (1 - 2 * c_sign_1))) = 0
-r_zero_0 * (r__0_0 + r__1_0 + r__2_0 + r__3_0) = 0
 zero_divisor_0 * (c__0_0 + c__1_0 + c__2_0 + c__3_0) = 0
+r_zero_0 * (r__0_0 + r__1_0 + r__2_0 + r__3_0) = 0
 zero_divisor_1 * (c__0_1 + c__1_1 + c__2_1 + c__3_1) = 0
 r_zero_1 * (r__0_1 + r__1_1 + r__2_1 + r__3_1) = 0
 is_valid * (is_valid - 1) = 0

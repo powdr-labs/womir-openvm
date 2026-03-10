@@ -4,7 +4,7 @@ Instructions:
 APC advantage:
   - Main columns: 90 -> 72 (1.25x reduction)
   - Bus interactions: 46 -> 43 (1.07x reduction)
-  - Constraints: 184 -> 69 (2.67x reduction)
+  - Constraints: 184 -> 68 (2.71x reduction)
 
 Symbolic machine using 72 unique main columns:
   from_state__fp_0
@@ -192,12 +192,11 @@ limb_shift_marker__6_0 * (a__0_0 * bit_multiplier_right_0 + bit_shift_carry__6_0
 limb_shift_marker__6_0 * (a__1_0 * bit_multiplier_right_0 + bit_shift_carry__7_0 - b__7_0) = 0
 (1 - (limb_shift_marker__0_0 + limb_shift_marker__1_0 + limb_shift_marker__2_0 + limb_shift_marker__3_0 + limb_shift_marker__4_0 + limb_shift_marker__5_0 + limb_shift_marker__6_0)) * (limb_shift_marker__0_0 + limb_shift_marker__1_0 + limb_shift_marker__2_0 + limb_shift_marker__3_0 + limb_shift_marker__4_0 + limb_shift_marker__5_0 + limb_shift_marker__6_0) = 0
 (1 - (limb_shift_marker__0_0 + limb_shift_marker__1_0 + limb_shift_marker__2_0 + limb_shift_marker__3_0 + limb_shift_marker__4_0 + limb_shift_marker__5_0 + limb_shift_marker__6_0)) * (a__0_0 * bit_multiplier_right_0 + bit_shift_carry__7_0 - b__7_0) = 0
-limb_shift_marker__5_0 * (a__5_0 + a__6_0) = 0
-(1 - (limb_shift_marker__0_0 + limb_shift_marker__1_0 + limb_shift_marker__2_0 + limb_shift_marker__3_0 + limb_shift_marker__4_0 + limb_shift_marker__5_0 + limb_shift_marker__6_0)) * (a__1_0 + a__2_0) = 0
 a__6_0 * (1 - (limb_shift_marker__0_0 + limb_shift_marker__1_0 + limb_shift_marker__4_0 + limb_shift_marker__5_0)) = 0
-(a__5_0 + a__7_0) * (1 - (limb_shift_marker__0_0 + limb_shift_marker__1_0 + limb_shift_marker__2_0 + limb_shift_marker__4_0 + limb_shift_marker__5_0 + limb_shift_marker__6_0)) = 0
-(a__3_0 + a__4_0) * (1 - (limb_shift_marker__0_0 + limb_shift_marker__1_0 + limb_shift_marker__2_0 + limb_shift_marker__3_0 + limb_shift_marker__4_0 + limb_shift_marker__6_0)) = 0
-limb_shift_marker__6_0 * (a__2_0 + a__3_0 + a__4_0 + a__5_0) = 0
-limb_shift_marker__4_0 * (a__4_0 + a__5_0 + a__6_0 + a__7_0) = 0
 a__7_0 * (limb_shift_marker__1_0 + limb_shift_marker__2_0 + limb_shift_marker__5_0 + limb_shift_marker__6_0) = 0
+(a__5_0 + a__7_0) * (1 - (limb_shift_marker__0_0 + limb_shift_marker__1_0 + limb_shift_marker__2_0 + limb_shift_marker__4_0 + limb_shift_marker__5_0 + limb_shift_marker__6_0)) = 0
+limb_shift_marker__4_0 * (a__4_0 + a__5_0 + a__6_0 + a__7_0) = 0
+limb_shift_marker__5_0 * (a__3_0 + a__4_0 + a__5_0 + a__6_0) = 0
+limb_shift_marker__6_0 * (a__2_0 + a__3_0 + a__4_0 + a__5_0) = 0
+(1 - (limb_shift_marker__0_0 + limb_shift_marker__1_0 + limb_shift_marker__2_0 + limb_shift_marker__3_0 + limb_shift_marker__4_0 + limb_shift_marker__5_0 + limb_shift_marker__6_0)) * (a__1_0 + a__2_0 + a__3_0 + a__4_0) = 0
 is_valid * (is_valid - 1) = 0
