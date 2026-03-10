@@ -34,7 +34,6 @@ wasmparser = { workspace = true }
 womir = { workspace = true }
 serde_json = { workspace = true }
 bincode = "1"
-rmp-serde = "1"
 clap = { version = "4.5.43", features = ["derive"] }
 itertools = { workspace = true }
 arrayvec = "0.7"

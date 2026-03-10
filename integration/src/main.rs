@@ -1,4 +1,5 @@
 mod builtin_functions;
+mod compile;
 mod proving;
 #[cfg(test)]
 mod tests;
@@ -220,7 +221,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let original_program = load_wasm_original_program(&wasm_bytes, &function);
             let stdin = make_stdin(&input);
-            proving::compile_womir_to_disk(original_program, stdin, apc_count, &output_dir)
+            compile::compile_womir_to_disk(original_program, stdin, apc_count, &output_dir)
                 .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled to {}", output_dir.display());
         }
@@ -231,7 +232,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             output_dir,
         } => {
             let stdin = make_stdin(&input);
-            proving::compile_riscv_to_disk(&program, stdin, apc_count, &output_dir)
+            compile::compile_riscv_to_disk(&program, stdin, apc_count, &output_dir)
                 .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled RISC-V to {}", output_dir.display());
         }
@@ -249,7 +250,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let prove = || -> Result<()> {
                 if let Some(compiled_dir) = compiled_dir {
-                    proving::prove_from_compiled(&compiled_dir, stdin, recursion)
+                    compile::prove_from_compiled(&compiled_dir, stdin, recursion)
                         .map_err(|e| eyre::eyre!("{e}"))?;
                 } else {
                     let program =
@@ -321,7 +322,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let prove = || -> Result<()> {
                 if let Some(compiled_dir) = compiled_dir {
                     let stdin = make_stdin(&input);
-                    proving::prove_riscv_from_compiled(&compiled_dir, stdin, true)
+                    compile::prove_riscv_from_compiled(&compiled_dir, stdin, true)
                         .map_err(|e| eyre::eyre!("{e}"))?;
                 } else {
                     let program =
