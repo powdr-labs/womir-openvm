@@ -1172,6 +1172,11 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
 ) -> Option<Tree<Directive<F>>> {
     use openvm_instructions::LocalOpcode;
 
+    if let Some(divrem_directives) = translate_divrem_with_wasm_trap(c, module, op, inputs, output)
+    {
+        return Some(divrem_directives);
+    }
+
     Some(match op {
         Op::I32GeS
         | Op::I32GeU
@@ -1338,6 +1343,146 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
         }
         _ => return None,
     })
+}
+
+fn translate_divrem_with_wasm_trap<'a, F: PrimeField32>(
+    c: &mut Ctx<'a, '_>,
+    module: &Module<'a>,
+    op: &Op,
+    inputs: &[WasmOpInput],
+    output: &Range<u32>,
+) -> Option<Tree<Directive<F>>> {
+    use openvm_instructions::LocalOpcode;
+
+    let (opcode, is_signed, is_64) = match op {
+        Op::I32DivS => (DivRemOpcode::DIV.global_opcode().as_usize(), true, false),
+        Op::I32DivU => (DivRemOpcode::DIVU.global_opcode().as_usize(), false, false),
+        Op::I32RemS => (DivRemOpcode::REM.global_opcode().as_usize(), true, false),
+        Op::I32RemU => (DivRemOpcode::REMU.global_opcode().as_usize(), false, false),
+        Op::I64DivS => (DivRem64Opcode::DIV.global_opcode().as_usize(), true, true),
+        Op::I64DivU => (DivRem64Opcode::DIVU.global_opcode().as_usize(), false, true),
+        Op::I64RemS => (DivRem64Opcode::REM.global_opcode().as_usize(), true, true),
+        Op::I64RemU => (DivRem64Opcode::REMU.global_opcode().as_usize(), false, true),
+        _ => return None,
+    };
+
+    let [lhs, rhs] = inputs else {
+        unreachable!("combination of inputs not possible for div/rem op")
+    };
+
+    let val_type = if is_64 { ValType::I64 } else { ValType::I32 };
+
+    let mut directives = Vec::new();
+
+    let lhs_start = match lhs {
+        WasmOpInput::Register(r) => r.start,
+        WasmOpInput::Constant(value) => {
+            let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(val_type);
+            directives.extend(const_wasm_value(module, value, tmp.clone()));
+            tmp.start
+        }
+    };
+
+    let rhs_start = match rhs {
+        WasmOpInput::Register(r) => r.start,
+        WasmOpInput::Constant(value) => {
+            let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(val_type);
+            directives.extend(const_wasm_value(module, value, tmp.clone()));
+            tmp.start
+        }
+    };
+
+    let trap_label = c.new_label(LabelType::Local);
+    let continuation_label = c.new_label(LabelType::Local);
+    let is_zero = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+
+    if is_64 {
+        directives.push(Directive::Instruction(ib::eq_imm_64(
+            is_zero,
+            rhs_start as usize,
+            0i16,
+        )));
+    } else {
+        directives.push(Directive::Instruction(ib::eq_imm(
+            is_zero,
+            rhs_start as usize,
+            0i16,
+        )));
+    }
+
+    directives.push(Directive::JumpIf {
+        target: trap_label.clone(),
+        condition_reg: is_zero as u32,
+    });
+
+    if is_signed {
+        let rs2_is_neg_one = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+        if is_64 {
+            directives.push(Directive::Instruction(ib::eq_imm_64(
+                rs2_is_neg_one,
+                rhs_start as usize,
+                -1i16,
+            )));
+
+            let rs1_lo_is_zero =
+                c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+            let rs1_hi_is_min =
+                c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+            let min_hi = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+            let rs1_is_min = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+            let is_overflow = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+
+            directives.extend([
+                Directive::Instruction(ib::eq_imm(rs1_lo_is_zero, lhs_start as usize, 0i16)),
+                Directive::Instruction(ib::const_32_imm(min_hi, 0, 0x8000)),
+                Directive::Instruction(ib::eq(rs1_hi_is_min, lhs_start as usize + 1, min_hi)),
+                Directive::Instruction(ib::and(rs1_is_min, rs1_lo_is_zero, rs1_hi_is_min)),
+                Directive::Instruction(ib::and(is_overflow, rs1_is_min, rs2_is_neg_one)),
+                Directive::JumpIf {
+                    target: trap_label.clone(),
+                    condition_reg: is_overflow as u32,
+                },
+            ]);
+        } else {
+            let min_reg = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+            let rs1_is_min = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+            let is_overflow = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+
+            directives.extend([
+                Directive::Instruction(ib::eq_imm(rs2_is_neg_one, rhs_start as usize, -1i16)),
+                Directive::Instruction(ib::const_32_imm(min_reg, 0, 0x8000)),
+                Directive::Instruction(ib::eq(rs1_is_min, lhs_start as usize, min_reg)),
+                Directive::Instruction(ib::and(is_overflow, rs1_is_min, rs2_is_neg_one)),
+                Directive::JumpIf {
+                    target: trap_label.clone(),
+                    condition_reg: is_overflow as u32,
+                },
+            ]);
+        }
+    }
+
+    directives.extend([
+        Directive::Instruction(ib::instr_r(
+            opcode,
+            output.start as usize,
+            lhs_start as usize,
+            rhs_start as usize,
+        )),
+        Directive::Jump {
+            target: continuation_label.clone(),
+        },
+        Directive::Label {
+            id: trap_label,
+            frame_size: None,
+        },
+        Directive::Instruction(ib::trap(TrapReason::UnreachableInstruction as u32 as usize)),
+        Directive::Label {
+            id: continuation_label,
+            frame_size: None,
+        },
+    ]);
+
+    Some(directives.into())
 }
 
 /// Returns a mutable reference to the [`MemArg`] of a WASM memory operator, if any.
