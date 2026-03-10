@@ -54,7 +54,7 @@ pub fn compile_womir_to_disk(
 
     // Serialize compiled program
     tracing::info!("Serializing compiled program...");
-    let compiled_bytes = bincode::serialize(&compiled)?;
+    let compiled_bytes = rmp_serde::to_vec(&compiled)?;
     std::fs::write(output_dir.join(COMPILED_PROGRAM_FILE), &compiled_bytes)?;
     tracing::info!(
         "Wrote compiled_program ({:.1} MB)",
@@ -69,13 +69,13 @@ pub fn compile_womir_to_disk(
 
     tracing::info!("Generating app proving key...");
     let app_pk = sdk.app_pk();
-    let app_pk_bytes = bincode::serialize(app_pk)?;
+    let app_pk_bytes = rmp_serde::to_vec(app_pk)?;
     std::fs::write(output_dir.join(APP_PK_FILE), &app_pk_bytes)?;
     tracing::info!("Wrote app_pk ({:.1} MB)", app_pk_bytes.len() as f64 / 1e6);
 
     tracing::info!("Generating aggregation proving key...");
     let agg_pk = sdk.agg_pk();
-    let agg_pk_bytes = bincode::serialize(agg_pk)?;
+    let agg_pk_bytes = rmp_serde::to_vec(agg_pk)?;
     std::fs::write(output_dir.join(AGG_PK_FILE), &agg_pk_bytes)?;
     tracing::info!("Wrote agg_pk ({:.1} MB)", agg_pk_bytes.len() as f64 / 1e6);
 
@@ -90,7 +90,7 @@ pub fn prove_from_compiled(
 ) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Loading compiled program...");
     let compiled: CompiledProgram<WomirISA> =
-        bincode::deserialize(&std::fs::read(compiled_dir.join(COMPILED_PROGRAM_FILE))?)?;
+        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(COMPILED_PROGRAM_FILE))?)?;
 
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
@@ -99,13 +99,13 @@ pub fn prove_from_compiled(
 
     tracing::info!("Loading cached app_pk...");
     let app_pk: AppProvingKey<SpecializedConfig<WomirISA>> =
-        bincode::deserialize(&std::fs::read(compiled_dir.join(APP_PK_FILE))?)?;
+        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(APP_PK_FILE))?)?;
     sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
 
     if recursion {
         tracing::info!("Loading cached agg_pk...");
         let agg_pk: AggProvingKey =
-            bincode::deserialize(&std::fs::read(compiled_dir.join(AGG_PK_FILE))?)?;
+            rmp_serde::from_slice(&std::fs::read(compiled_dir.join(AGG_PK_FILE))?)?;
         sdk.set_agg_pk(agg_pk).map_err(|_| "agg_pk already set")?;
     }
 
@@ -162,7 +162,7 @@ pub fn compile_riscv_to_disk(
 
     // Serialize compiled program
     tracing::info!("Serializing compiled RISC-V program...");
-    let compiled_bytes = bincode::serialize(&compiled)?;
+    let compiled_bytes = rmp_serde::to_vec(&compiled)?;
     std::fs::write(output_dir.join(COMPILED_PROGRAM_FILE), &compiled_bytes)?;
     tracing::info!(
         "Wrote compiled_program ({:.1} MB)",
@@ -177,13 +177,13 @@ pub fn compile_riscv_to_disk(
 
     tracing::info!("Generating app proving key...");
     let app_pk = sdk.app_pk();
-    let app_pk_bytes = bincode::serialize(app_pk)?;
+    let app_pk_bytes = rmp_serde::to_vec(app_pk)?;
     std::fs::write(output_dir.join(APP_PK_FILE), &app_pk_bytes)?;
     tracing::info!("Wrote app_pk ({:.1} MB)", app_pk_bytes.len() as f64 / 1e6);
 
     tracing::info!("Generating aggregation proving key...");
     let agg_pk = sdk.agg_pk();
-    let agg_pk_bytes = bincode::serialize(agg_pk)?;
+    let agg_pk_bytes = rmp_serde::to_vec(agg_pk)?;
     std::fs::write(output_dir.join(AGG_PK_FILE), &agg_pk_bytes)?;
     tracing::info!("Wrote agg_pk ({:.1} MB)", agg_pk_bytes.len() as f64 / 1e6);
 
@@ -198,7 +198,7 @@ pub fn prove_riscv_from_compiled(
 ) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Loading compiled RISC-V program...");
     let compiled: CompiledProgram<powdr_openvm_riscv::RiscvISA> =
-        bincode::deserialize(&std::fs::read(compiled_dir.join(COMPILED_PROGRAM_FILE))?)?;
+        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(COMPILED_PROGRAM_FILE))?)?;
 
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
@@ -207,7 +207,7 @@ pub fn prove_riscv_from_compiled(
 
     tracing::info!("Loading cached app_pk...");
     let app_pk: AppProvingKey<SpecializedConfig<powdr_openvm_riscv::RiscvISA>> =
-        bincode::deserialize(&std::fs::read(compiled_dir.join(APP_PK_FILE))?)?;
+        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(APP_PK_FILE))?)?;
     sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
 
     let mut app_prover = sdk.app_prover(compiled.exe.clone())?;
@@ -219,7 +219,7 @@ pub fn prove_riscv_from_compiled(
     if recursion {
         tracing::info!("Loading cached agg_pk...");
         let agg_pk: AggProvingKey =
-            bincode::deserialize(&std::fs::read(compiled_dir.join(AGG_PK_FILE))?)?;
+            rmp_serde::from_slice(&std::fs::read(compiled_dir.join(AGG_PK_FILE))?)?;
         sdk.set_agg_pk(agg_pk).map_err(|_| "agg_pk already set")?;
 
         let mut agg_prover = sdk.prover(compiled.exe.clone())?.agg_prover;
