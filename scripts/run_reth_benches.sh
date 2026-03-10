@@ -12,18 +12,20 @@ set -e
 # Parse flags
 CUDA_FLAGS=""
 BLOCK=""
+APC_COUNT="0"
 RETH_BENCH_DIR=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --cuda) CUDA_FLAGS="--features cuda"; shift ;;
         --block-number) BLOCK="$2"; shift 2 ;;
+        --apc-count) APC_COUNT="$2"; shift 2 ;;
         --reth-bench-dir) RETH_BENCH_DIR="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
 
 if [[ -z "$BLOCK" ]]; then
-    echo "Usage: $0 [--cuda] --block-number <number> [--reth-bench-dir <path>]"
+    echo "Usage: $0 [--cuda] --block-number <number> [--apc-count <apcs>] [--reth-bench-dir <path>]"
     exit 1
 fi
 
@@ -81,7 +83,7 @@ mkdir -p "$dir"
 pushd "$dir"
 
 ### WOMIR benchmark
-run_name="womir"
+run_name="womir_apc_${APC_COUNT}"
 mkdir -p "${run_name}"
 wall_times="${run_name}/wall_times.json"
 
@@ -89,7 +91,7 @@ timed "$wall_times" "compile" \
     cargo run -r $CUDA_FLAGS -- compile \
     "$ROOT_DIR/sample-programs/eth-block/openvm-client-eth.wasm" "main" \
     --input 0 --input 0 --input "file:$ROOT_DIR/sample-programs/eth-block/${BLOCK}.bin" \
-    --output-dir "$COMPILED_DIR" &> "${run_name}/compile_log.txt"
+    --apc-count "$APC_COUNT" --output-dir "$COMPILED_DIR" &> "${run_name}/compile_log.txt"
 
 echo ""
 echo "==== ${run_name} ===="
@@ -110,7 +112,7 @@ python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${r
 
 ### RISC-V benchmark (via openvm-reth-benchmark)
 if [[ -n "$RETH_BENCH_DIR" ]]; then
-    run_name="riscv"
+    run_name="riscv_apc_${APC_COUNT}"
     echo ""
     echo "==== ${run_name} ===="
     echo ""
@@ -121,7 +123,7 @@ if [[ -n "$RETH_BENCH_DIR" ]]; then
     # Compile (keygen) first so it doesn't appear in prove metrics
     pushd "$RETH_BENCH_DIR"
     timed "$OLDPWD/$riscv_wall_times" "compile" \
-        ./run.sh --no-precompiles $CUDA_FLAG --mode compile --block-number "$BLOCK" &> "$OLDPWD/${run_name}/compile_log.txt"
+        ./run.sh --no-precompiles $CUDA_FLAG --apcs "$APC_COUNT" --mode compile --block-number "$BLOCK" &> "$OLDPWD/${run_name}/compile_log.txt"
     # Prove
     timed "$OLDPWD/$riscv_wall_times" "prove" \
         ./run.sh --no-precompiles $CUDA_FLAG --mode prove-stark --block-number "$BLOCK" &> "$OLDPWD/${run_name}/log.txt"
