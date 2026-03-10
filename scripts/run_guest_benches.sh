@@ -35,6 +35,7 @@ make_input_flags() {
     echo "${flags[@]}"
 }
 
+# Compile+prove pipeline: compile is excluded from metrics, prove is measured.
 run_bench_wasm() {
     local guest="$1"
     local input="$2"
@@ -50,7 +51,13 @@ run_bench_wasm() {
     local input_flags
     input_flags=($(make_input_flags "$input"))
 
-    cargo run -r $CUDA_FLAGS -- prove --apc-count "$apc_count" --recursion "$guest" "main" "${input_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
+    local compiled_dir="${run_name}/compiled"
+
+    # Compile step (not included in metrics)
+    cargo run -r $CUDA_FLAGS -- compile --apc-count "$apc_count" --output-dir "$compiled_dir" "$guest" "main" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
+
+    # Prove step (metrics captured here)
+    cargo run -r $CUDA_FLAGS -- prove --compiled-dir "$compiled_dir" --recursion "${input_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
 
     python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
 }
@@ -70,7 +77,13 @@ run_bench_riscv() {
     local input_flags
     input_flags=($(make_input_flags "$input"))
 
-    cargo run -r $CUDA_FLAGS -- prove-riscv --apc-count "$apc_count" "$guest" "${input_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
+    local compiled_dir="${run_name}/compiled"
+
+    # Compile step (not included in metrics)
+    cargo run -r $CUDA_FLAGS -- compile-riscv --apc-count "$apc_count" --output-dir "$compiled_dir" "$guest" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
+
+    # Prove step (metrics captured here)
+    cargo run -r $CUDA_FLAGS -- prove-riscv --compiled-dir "$compiled_dir" "${input_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
 
     python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
 
@@ -94,10 +107,13 @@ pushd "$dir"
 
 run_bench_riscv "$ROOT_DIR/sample-programs/keccak_with_inputs" "$input_riscv" "riscv" "0"
 run_bench_riscv "$ROOT_DIR/sample-programs/keccak_with_inputs" "$input_riscv" "riscv_apc_1" "1"
+run_bench_riscv "$ROOT_DIR/sample-programs/keccak_with_inputs" "$input_riscv" "riscv_apc_10" "10"
 run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "womir" "0"
 run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "womir_apc_1" "1"
+run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "womir_apc_10" "10"
 
 python3 "$SCRIPTS_DIR"/basic_metrics.py summary-table --csv */metrics.json > basic_metrics.csv
 python3 "$SCRIPTS_DIR"/womir_vs_riscv.py "womir/metrics.json" "riscv/metrics.json" > womir_apc_0_vs_riscv.txt
 python3 "$SCRIPTS_DIR"/womir_vs_riscv.py "womir_apc_1/metrics.json" "riscv_apc_1/metrics.json" > womir_apc_1_vs_riscv_apc_1.txt
+python3 "$SCRIPTS_DIR"/womir_vs_riscv.py "womir_apc_10/metrics.json" "riscv_apc_10/metrics.json" > womir_apc_10_vs_riscv_apc_10.txt
 popd
