@@ -250,7 +250,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let prove = || -> Result<()> {
                 if let Some(compiled_dir) = compiled_dir {
-                    compile::prove_from_compiled(&compiled_dir, stdin, recursion)
+                    proving::prove_from_compiled(&compiled_dir, stdin, recursion)
                         .map_err(|e| eyre::eyre!("{e}"))?;
                 } else {
                     let program =
@@ -322,7 +322,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let prove = || -> Result<()> {
                 if let Some(compiled_dir) = compiled_dir {
                     let stdin = make_stdin(&input);
-                    compile::prove_riscv_from_compiled(&compiled_dir, stdin, true)
+                    proving::prove_riscv_from_compiled(&compiled_dir, stdin, true)
                         .map_err(|e| eyre::eyre!("{e}"))?;
                 } else {
                     let program =
