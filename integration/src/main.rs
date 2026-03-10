@@ -299,7 +299,7 @@ fn load_wasm_original_program<'a>(
     OriginalCompiledProgram {
         exe,
         vm_config,
-        elf: linked_program,
+        linked_program,
     }
 }
 

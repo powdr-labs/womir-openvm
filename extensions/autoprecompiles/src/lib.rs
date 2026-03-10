@@ -40,7 +40,7 @@ use formatter::womir_instruction_formatter;
 pub struct WomirISA;
 
 impl OpenVmISA for WomirISA {
-    type Program<'a> = LinkedProgram<'a, BabyBear>;
+    type LinkedProgram<'a> = LinkedProgram<'a, BabyBear>;
     type Executor<F: PrimeField32> = WomirConfigExecutor<F>;
     type Config = WomirConfig;
     type CpuBuilder = WomirCpuBuilder;
@@ -95,7 +95,7 @@ impl OpenVmISA for WomirISA {
         womir_instruction_formatter(instruction)
     }
 
-    fn get_symbol_table<'a>(program: &Self::Program<'a>) -> SymbolTable {
+    fn get_symbol_table<'a>(program: &Self::LinkedProgram<'a>) -> SymbolTable {
         SymbolTable::from_table(
             program
                 .labels()
@@ -106,7 +106,11 @@ impl OpenVmISA for WomirISA {
     }
 
     fn get_jump_destinations(original_program: &OriginalCompiledProgram<Self>) -> BTreeSet<u64> {
-        original_program.elf.labels().into_keys().collect()
+        original_program
+            .linked_program
+            .labels()
+            .into_keys()
+            .collect()
     }
 
     fn create_dummy_airs<E: VmCircuitExtension<BabyBearSC>>(
