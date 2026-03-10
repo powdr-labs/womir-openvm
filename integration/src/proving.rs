@@ -24,11 +24,17 @@ use openvm_stark_sdk::{
         keygen::types::MultiStarkProvingKey, prover::hal::DeviceDataTransporter,
     },
 };
-use powdr_autoprecompiles::{empirical_constraints::EmpiricalConstraints, pgo::NonePgo};
+use powdr_autoprecompiles::{
+    empirical_constraints::EmpiricalConstraints,
+    pgo::{CellPgo, NonePgo},
+};
 use powdr_openvm::extraction_utils::OriginalVmConfig;
+use powdr_openvm::program::CompiledProgram;
 use powdr_openvm::{DEFAULT_DEGREE_BOUND, SpecializedConfig};
 use powdr_openvm::{
-    customize_exe::customize, default_powdr_openvm_config, program::OriginalCompiledProgram,
+    customize_exe::{OpenVmApcCandidate, customize},
+    default_powdr_openvm_config, execution_profile_from_guest,
+    program::OriginalCompiledProgram,
 };
 use womir_circuit::{WomirConfig, WomirCpuBuilder};
 
@@ -115,13 +121,20 @@ pub fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
 }
 
 #[cfg(not(feature = "cuda"))]
-type WomirSdk = powdr_openvm::PowdrSdkCpu<WomirISA>;
+pub(crate) type WomirSdk = powdr_openvm::PowdrSdkCpu<WomirISA>;
 
 #[cfg(feature = "cuda")]
-type WomirSdk = powdr_openvm::PowdrSdkGpu<WomirISA>;
+pub(crate) type WomirSdk = powdr_openvm::PowdrSdkGpu<WomirISA>;
 
-const APP_PK_FILE: &str = "app_pk.bin";
-const AGG_PK_FILE: &str = "agg_pk.bin";
+#[cfg(not(feature = "cuda"))]
+pub(crate) type RiscvSdk = powdr_openvm::PowdrSdkCpu<powdr_openvm_riscv::RiscvISA>;
+
+#[cfg(feature = "cuda")]
+pub(crate) type RiscvSdk = powdr_openvm::PowdrSdkGpu<powdr_openvm_riscv::RiscvISA>;
+
+pub(crate) const APP_PK_FILE: &str = "app_pk.bin";
+pub(crate) const AGG_PK_FILE: &str = "agg_pk.bin";
+pub(crate) const COMPILED_PROGRAM_FILE: &str = "compiled_program.bin";
 
 fn default_app_config_without_apcs() -> AppConfig<SpecializedConfig<WomirISA>> {
     let vm_config = WomirConfig::default();
@@ -145,13 +158,13 @@ pub fn keygen_to_disk(cache_dir: &Path) -> Result<(), Box<dyn std::error::Error>
 
     tracing::info!("Generating app proving key...");
     let app_pk = sdk.app_pk();
-    let app_pk_bytes = bincode::serialize(app_pk)?;
+    let app_pk_bytes = rmp_serde::to_vec(app_pk)?;
     std::fs::write(cache_dir.join(APP_PK_FILE), &app_pk_bytes)?;
     tracing::info!("Wrote app_pk ({:.1} MB)", app_pk_bytes.len() as f64 / 1e6);
 
     tracing::info!("Generating aggregation proving key...");
     let agg_pk = sdk.agg_pk();
-    let agg_pk_bytes = bincode::serialize(agg_pk)?;
+    let agg_pk_bytes = rmp_serde::to_vec(agg_pk)?;
     std::fs::write(cache_dir.join(AGG_PK_FILE), &agg_pk_bytes)?;
     tracing::info!("Wrote agg_pk ({:.1} MB)", agg_pk_bytes.len() as f64 / 1e6);
 
@@ -166,13 +179,13 @@ fn build_sdk(cache_dir: Option<&Path>) -> Result<WomirSdk, Box<dyn std::error::E
         let app_pk_path = dir.join(APP_PK_FILE);
         tracing::info!("Loading cached app_pk from {}", app_pk_path.display());
         let app_pk: AppProvingKey<SpecializedConfig<WomirISA>> =
-            bincode::deserialize(&std::fs::read(&app_pk_path)?)?;
+            rmp_serde::from_slice(&std::fs::read(&app_pk_path)?)?;
         sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
 
         let agg_pk_path = dir.join(AGG_PK_FILE);
         if agg_pk_path.exists() {
             tracing::info!("Loading cached agg_pk from {}", agg_pk_path.display());
-            let agg_pk: AggProvingKey = bincode::deserialize(&std::fs::read(&agg_pk_path)?)?;
+            let agg_pk: AggProvingKey = rmp_serde::from_slice(&std::fs::read(&agg_pk_path)?)?;
             sdk.set_agg_pk(agg_pk).map_err(|_| "agg_pk already set")?;
         }
     }
@@ -188,12 +201,25 @@ pub fn prove(
     apc_count: u64,
     cache_dir: Option<&Path>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let compiled = customize(
-        original_program,
-        default_powdr_openvm_config(apc_count, 0),
-        NonePgo::default(),
-        EmpiricalConstraints::default(),
-    );
+    let compiled = if apc_count > 0 {
+        let execution_profile = execution_profile_from_guest(&original_program, stdin.clone());
+        customize(
+            original_program,
+            default_powdr_openvm_config(apc_count, 0),
+            CellPgo::<_, OpenVmApcCandidate<WomirISA>>::with_pgo_data_and_max_columns(
+                execution_profile,
+                None,
+            ),
+            EmpiricalConstraints::default(),
+        )
+    } else {
+        customize(
+            original_program,
+            default_powdr_openvm_config(apc_count, 0),
+            NonePgo::default(),
+            EmpiricalConstraints::default(),
+        )
+    };
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
     let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
@@ -299,4 +325,88 @@ pub fn mock_prove_gpu(
         exe,
         init_state,
     )
+}
+
+/// Prove from a pre-compiled WOMIR artifact directory.
+pub fn prove_from_compiled(
+    compiled_dir: &Path,
+    stdin: StdIn,
+    recursion: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    tracing::info!("Loading compiled program...");
+    let compiled: CompiledProgram<WomirISA> =
+        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(COMPILED_PROGRAM_FILE))?)?;
+
+    let app_fri_params =
+        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+    let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
+    let sdk = WomirSdk::new_without_transpiler(app_config)?;
+
+    tracing::info!("Loading cached app_pk...");
+    let app_pk: AppProvingKey<SpecializedConfig<WomirISA>> =
+        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(APP_PK_FILE))?)?;
+    sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
+
+    if recursion {
+        tracing::info!("Loading cached agg_pk...");
+        let agg_pk: AggProvingKey =
+            rmp_serde::from_slice(&std::fs::read(compiled_dir.join(AGG_PK_FILE))?)?;
+        sdk.set_agg_pk(agg_pk).map_err(|_| "agg_pk already set")?;
+    }
+
+    let mut app_prover = sdk.app_prover(compiled.exe.clone())?;
+    let app_proof = app_prover.prove(stdin)?;
+
+    let app_vk = sdk.app_pk().get_app_vk();
+    verify_app_proof(&app_vk, &app_proof)?;
+
+    if recursion {
+        let mut agg_prover = sdk.prover(compiled.exe.clone())?.agg_prover;
+        let start = std::time::Instant::now();
+        let _ = agg_prover.generate_root_verifier_input(app_proof)?;
+        tracing::info!("Agg proof (inner recursion) took {:?}", start.elapsed());
+    }
+
+    Ok(())
+}
+
+/// Prove from a pre-compiled RISC-V artifact directory.
+pub fn prove_riscv_from_compiled(
+    compiled_dir: &Path,
+    stdin: StdIn,
+    recursion: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    tracing::info!("Loading compiled RISC-V program...");
+    let compiled: CompiledProgram<powdr_openvm_riscv::RiscvISA> =
+        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(COMPILED_PROGRAM_FILE))?)?;
+
+    let app_fri_params =
+        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+    let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
+    let sdk = RiscvSdk::new_without_transpiler(app_config)?;
+
+    tracing::info!("Loading cached app_pk...");
+    let app_pk: AppProvingKey<SpecializedConfig<powdr_openvm_riscv::RiscvISA>> =
+        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(APP_PK_FILE))?)?;
+    sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
+
+    let mut app_prover = sdk.app_prover(compiled.exe.clone())?;
+    let app_proof = app_prover.prove(stdin)?;
+
+    let app_vk = sdk.app_pk().get_app_vk();
+    verify_app_proof(&app_vk, &app_proof)?;
+
+    if recursion {
+        tracing::info!("Loading cached agg_pk...");
+        let agg_pk: AggProvingKey =
+            rmp_serde::from_slice(&std::fs::read(compiled_dir.join(AGG_PK_FILE))?)?;
+        sdk.set_agg_pk(agg_pk).map_err(|_| "agg_pk already set")?;
+
+        let mut agg_prover = sdk.prover(compiled.exe.clone())?.agg_prover;
+        let start = std::time::Instant::now();
+        let _ = agg_prover.generate_root_verifier_input(app_proof)?;
+        tracing::info!("Agg proof (inner recursion) took {:?}", start.elapsed());
+    }
+
+    Ok(())
 }

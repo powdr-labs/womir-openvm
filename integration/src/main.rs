@@ -1,4 +1,5 @@
 mod builtin_functions;
+mod compile;
 mod proving;
 #[cfg(test)]
 mod tests;
@@ -61,13 +62,49 @@ enum Commands {
         #[arg(long)]
         metrics: Option<PathBuf>,
     },
-    /// Proves execution of a function from the WASM program with the given arguments
-    /// (generates and verifies a full cryptographic proof)
-    Prove {
+    /// Compile a WASM program: WASM loading, PGO, APC generation, and keygen.
+    /// Outputs a compiled artifact directory that can be used by `prove` or `prove-riscv`.
+    Compile {
         /// Path to the WASM program
         program: String,
-        /// Function name
+        /// Function name (entry point)
         function: String,
+        /// Guest inputs for PGO profiling (needed when apc_count > 0).
+        /// Each value is either a u32 literal or file:<path> for binary file contents.
+        #[arg(long)]
+        input: Vec<String>,
+        /// Number of APCs to generate
+        #[arg(long, default_value_t = 0)]
+        apc_count: u64,
+        /// Directory to write the compiled artifact to
+        #[arg(long)]
+        output_dir: PathBuf,
+    },
+    /// Compile a RISC-V program: Rust compilation, PGO, APC generation, and keygen.
+    /// Outputs a compiled artifact directory that can be used by `prove-riscv`.
+    CompileRiscv {
+        /// Path to the Rust crate
+        program: String,
+        /// Guest inputs for PGO profiling (needed when apc_count > 0).
+        /// Each value is either a u32 literal or file:<path> for binary file contents.
+        #[arg(long)]
+        input: Vec<String>,
+        /// Number of APCs to generate
+        #[arg(long, default_value_t = 0)]
+        apc_count: u64,
+        /// Directory to write the compiled artifact to
+        #[arg(long)]
+        output_dir: PathBuf,
+    },
+    /// Proves execution of a function from the WASM program with the given arguments
+    /// (generates and verifies a full cryptographic proof).
+    /// Can either take a WASM program directly (convenience mode) or a pre-compiled
+    /// artifact directory from `compile` (benchmark mode, excludes compile overhead from metrics).
+    Prove {
+        /// Path to the WASM program (convenience mode)
+        program: Option<String>,
+        /// Function name (required in convenience mode)
+        function: Option<String>,
         /// Guest inputs in the order the guest reads them.
         /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
@@ -78,12 +115,15 @@ enum Commands {
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
-        /// Number of apcs to use
+        /// Number of apcs to use (convenience mode only)
         #[arg(long, default_value_t = 0)]
         apc_count: u64,
-        /// Directory with cached proving keys (from `keygen` command)
+        /// Directory with cached proving keys (from `keygen` command, convenience mode only)
         #[arg(long)]
         cache_dir: Option<PathBuf>,
+        /// Directory with pre-compiled artifact (from `compile` command)
+        #[arg(long)]
+        compiled_dir: Option<PathBuf>,
     },
     /// Generate and cache proving keys to a directory (for use with `prove --cache-dir`)
     Keygen {
@@ -105,19 +145,24 @@ enum Commands {
     /// Proves execution of a function from the RISC-V program with the given arguments.
     /// Even though not the main goal of this crate, this is useful for benchmarking against
     /// womir-openvm.
+    /// Can either take a Rust crate directly (convenience mode) or a pre-compiled
+    /// artifact directory from `compile-riscv` (benchmark mode).
     ProveRiscv {
-        /// Path to the Rust crate
-        program: String,
+        /// Path to the Rust crate (convenience mode)
+        program: Option<String>,
         /// Guest inputs in the order the guest reads them.
         /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
         input: Vec<String>,
-        /// Number of apcs to use
+        /// Number of apcs to use (convenience mode only)
         #[arg(long, default_value_t = 0)]
         apc_count: u64,
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
+        /// Directory with pre-compiled artifact (from `compile-riscv` command)
+        #[arg(long)]
+        compiled_dir: Option<PathBuf>,
     },
 }
 
@@ -166,6 +211,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 run()?;
             }
         }
+        Commands::Compile {
+            program,
+            function,
+            input,
+            apc_count,
+            output_dir,
+        } => {
+            let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
+            let original_program = load_wasm_original_program(&wasm_bytes, &function);
+            let stdin = make_stdin(&input);
+            compile::compile_womir_to_disk(original_program, stdin, apc_count, &output_dir)
+                .map_err(|e| eyre::eyre!("{e}"))?;
+            println!("Compiled to {}", output_dir.display());
+        }
+        Commands::CompileRiscv {
+            program,
+            input,
+            apc_count,
+            output_dir,
+        } => {
+            let stdin = make_stdin(&input);
+            compile::compile_riscv_to_disk(&program, stdin, apc_count, &output_dir)
+                .map_err(|e| eyre::eyre!("{e}"))?;
+            println!("Compiled RISC-V to {}", output_dir.display());
+        }
         Commands::Prove {
             program,
             function,
@@ -174,20 +244,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             apc_count,
             metrics,
             cache_dir,
+            compiled_dir,
         } => {
-            let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
-            let original_program = load_wasm_original_program(&wasm_bytes, &function);
             let stdin = make_stdin(&input);
 
             let prove = || -> Result<()> {
-                proving::prove(
-                    original_program,
-                    stdin,
-                    recursion,
-                    apc_count,
-                    cache_dir.as_deref(),
-                )
-                .map_err(|e| eyre::eyre!("{e}"))?;
+                if let Some(compiled_dir) = compiled_dir {
+                    proving::prove_from_compiled(&compiled_dir, stdin, recursion)
+                        .map_err(|e| eyre::eyre!("{e}"))?;
+                } else {
+                    let program =
+                        program.expect("program is required when --compiled-dir is not provided");
+                    let function =
+                        function.expect("function is required when --compiled-dir is not provided");
+                    let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
+                    let original_program = load_wasm_original_program(&wasm_bytes, &function);
+                    proving::prove(
+                        original_program,
+                        stdin,
+                        recursion,
+                        apc_count,
+                        cache_dir.as_deref(),
+                    )
+                    .map_err(|e| eyre::eyre!("{e}"))?;
+                }
                 println!("Proof verified successfully.");
                 Ok(())
             };
@@ -237,31 +317,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             input,
             apc_count,
             metrics,
+            compiled_dir,
         } => {
             let prove = || -> Result<()> {
-                // Resolve to absolute so compile_openvm finds the right crate
-                let program_abs =
-                    std::fs::canonicalize(&program).expect("Failed to resolve program path");
-                let program_str = program_abs.to_str().unwrap();
+                if let Some(compiled_dir) = compiled_dir {
+                    let stdin = make_stdin(&input);
+                    proving::prove_riscv_from_compiled(&compiled_dir, stdin, true)
+                        .map_err(|e| eyre::eyre!("{e}"))?;
+                } else {
+                    let program =
+                        program.expect("program is required when --compiled-dir is not provided");
+                    // Resolve to absolute so compile_openvm finds the right crate
+                    let program_abs =
+                        std::fs::canonicalize(&program).expect("Failed to resolve program path");
+                    let program_str = program_abs.to_str().unwrap();
 
-                let original = powdr_openvm_riscv::compile_openvm(
-                    program_str,
-                    powdr_openvm_riscv::GuestOptions::default(),
-                )
-                .map_err(|e| eyre::eyre!("{e}"))?;
-
-                let config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
-                let compiled = powdr_openvm_riscv::compile_exe(
-                    original,
-                    config,
-                    powdr_openvm_riscv::PgoConfig::None,
-                    powdr_autoprecompiles::empirical_constraints::EmpiricalConstraints::default(),
-                )
-                .map_err(|e| eyre::eyre!("{e}"))?;
-
-                let stdin = make_stdin(&input);
-                powdr_openvm_riscv::prove(&compiled, false, true, stdin, None)
+                    let original = powdr_openvm_riscv::compile_openvm(
+                        program_str,
+                        powdr_openvm_riscv::GuestOptions::default(),
+                    )
                     .map_err(|e| eyre::eyre!("{e}"))?;
+
+                    let config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
+                    let pgo_config = if apc_count > 0 {
+                        let stdin = make_stdin(&input);
+                        let execution_profile =
+                            powdr_openvm::execution_profile_from_guest(&original, stdin);
+                        powdr_openvm_riscv::PgoConfig::Cell(execution_profile, None)
+                    } else {
+                        powdr_openvm_riscv::PgoConfig::None
+                    };
+                    let compiled = powdr_openvm_riscv::compile_exe(
+                        original,
+                        config,
+                        pgo_config,
+                        powdr_autoprecompiles::empirical_constraints::EmpiricalConstraints::default(
+                        ),
+                    )
+                    .map_err(|e| eyre::eyre!("{e}"))?;
+
+                    let stdin = make_stdin(&input);
+                    powdr_openvm_riscv::prove(&compiled, false, true, stdin, None)
+                        .map_err(|e| eyre::eyre!("{e}"))?;
+                }
                 println!("RISC-V proof verified successfully.");
                 Ok(())
             };
