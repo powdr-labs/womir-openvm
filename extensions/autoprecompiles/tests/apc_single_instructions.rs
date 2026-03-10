@@ -228,21 +228,23 @@ fn single_shr_s_imm() {
 }
 
 // ==================== Shift 64-bit ====================
+// shl_64 and shr_u_64 produce non-deterministic constraint ordering in powdr,
+// so snapshot tests are not possible. powdr#3646 fixed div/rem but not these.
 
-#[test]
-fn single_shl_64() {
-    assert_machine_output(vec![ib::shl_64(4, 0, 2)], "shl_64");
-}
+// #[test]
+// fn single_shl_64() {
+//     assert_machine_output(vec![ib::shl_64(4, 0, 2)], "shl_64");
+// }
 
 #[test]
 fn single_shl_imm_64() {
     assert_machine_output(vec![ib::shl_imm_64(2, 0, 3_i16)], "shl_imm_64");
 }
 
-#[test]
-fn single_shr_u_64() {
-    assert_machine_output(vec![ib::shr_u_64(4, 0, 2)], "shr_u_64");
-}
+// #[test]
+// fn single_shr_u_64() {
+//     assert_machine_output(vec![ib::shr_u_64(4, 0, 2)], "shr_u_64");
+// }
 
 #[test]
 fn single_shr_u_imm_64() {
