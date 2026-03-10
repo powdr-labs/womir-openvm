@@ -89,7 +89,7 @@ input_wasm="0 0 1000 39"
 
 ROOT_DIR=$(pwd)
 
-#mkdir -p "$dir"
+mkdir -p "$dir"
 pushd "$dir"
 
 run_bench_riscv "$ROOT_DIR/sample-programs/keccak_with_inputs" "$input_riscv" "riscv" "0"
