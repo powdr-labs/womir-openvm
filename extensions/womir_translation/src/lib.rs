@@ -221,6 +221,24 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
 
         labels
     }
+
+    pub fn labels_prefixed_by_namespace(&self) -> BTreeMap<u64, Vec<String>> {
+        let mut labels = BTreeMap::<u64, Vec<String>>::new();
+
+        for (name, value) in &self.label_map {
+            let prefixed = match value.namespace.as_deref() {
+                Some(namespace) if !namespace.is_empty() => format!("{namespace}::{name}"),
+                _ => name.clone(),
+            };
+            labels.entry(value.pc as u64).or_default().push(prefixed);
+        }
+
+        for names in labels.values_mut() {
+            names.sort();
+        }
+
+        labels
+    }
 }
 
 fn create_startup_code<F>(ctx: &Module, entry_point: &LabelValue) -> Vec<Instruction<F>>
