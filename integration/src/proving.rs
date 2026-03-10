@@ -1,6 +1,6 @@
 //! Proving infrastructure: engine setup, cached proving key, mock proof, and real proof.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use autoprecompiles::WomirISA;
@@ -191,13 +191,18 @@ pub fn prove(
     stdin: StdIn,
     recursion: bool,
     apc_count: u64,
+    apc_candidates_dir: Option<PathBuf>,
     cache_dir: Option<&Path>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let mut powdr_config = default_powdr_openvm_config(apc_count, 0);
+    if let Some(apc_candidates_dir) = apc_candidates_dir {
+        powdr_config = powdr_config.with_apc_candidates_dir(apc_candidates_dir);
+    }
     let compiled = if apc_count > 0 {
         let execution_profile = execution_profile_from_guest(&original_program, stdin.clone());
         customize(
             original_program,
-            default_powdr_openvm_config(apc_count, 0),
+            powdr_config,
             CellPgo::<_, OpenVmApcCandidate<WomirISA>>::with_pgo_data_and_max_columns(
                 execution_profile,
                 None,
@@ -207,7 +212,7 @@ pub fn prove(
     } else {
         customize(
             original_program,
-            default_powdr_openvm_config(apc_count, 0),
+            powdr_config,
             NonePgo::default(),
             EmpiricalConstraints::default(),
         )

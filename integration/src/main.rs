@@ -81,6 +81,9 @@ enum Commands {
         /// Number of apcs to use
         #[arg(long, default_value_t = 0)]
         apc_count: u64,
+        /// Directory to persist all APC candidates + a metrics summary
+        #[arg(long)]
+        apc_candidates_dir: Option<PathBuf>,
         /// Directory with cached proving keys (from `keygen` command)
         #[arg(long)]
         cache_dir: Option<PathBuf>,
@@ -115,6 +118,9 @@ enum Commands {
         /// Number of apcs to use
         #[arg(long, default_value_t = 0)]
         apc_count: u64,
+        /// Directory to persist all APC candidates + a metrics summary
+        #[arg(long)]
+        apc_candidates_dir: Option<PathBuf>,
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
@@ -172,6 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             input,
             recursion,
             apc_count,
+            apc_candidates_dir,
             metrics,
             cache_dir,
         } => {
@@ -185,6 +192,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     stdin,
                     recursion,
                     apc_count,
+                    apc_candidates_dir,
                     cache_dir.as_deref(),
                 )
                 .map_err(|e| eyre::eyre!("{e}"))?;
@@ -236,6 +244,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             input,
             apc_count,
+            apc_candidates_dir,
             metrics,
         } => {
             let prove = || -> Result<()> {
@@ -250,7 +259,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .map_err(|e| eyre::eyre!("{e}"))?;
 
-                let config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
+                let mut config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
+                if let Some(apc_candidates_dir) = apc_candidates_dir {
+                    config = config.with_apc_candidates_dir(apc_candidates_dir);
+                }
                 let pgo_config = if apc_count > 0 {
                     let stdin = make_stdin(&input);
                     let execution_profile =
