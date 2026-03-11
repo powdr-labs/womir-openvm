@@ -158,3 +158,25 @@ fn i64load32u() {
         "i64load32u",
     );
 }
+
+// ==================== Reproduce suboptimal APCs ====================
+
+#[test]
+fn same_register_not_optimized() {
+    assert_machine_output(
+        // Stores a constant in a register, then stores it into memory.
+        //
+        // This test showcases an inefficiency in the current combination of WOMIR and the APC optimizer:
+        // - In the load/store chip, the flags cannot be solved at compile time because they encode BOTH the
+        //   opcode (known at compile time) and the alignment offset (only known at runtime).
+        // - The flags change the address going to RAM, but not the address going to register memory.
+        // - This is not removed though, the register address is:
+        //   `from_state__fp_0 + 12 + <some expression depending on the flags>`
+        // - In practice, the only valid assignment to the flags is such that the expression is 0, but the
+        //   optimizer doesn't know that, so it leaves the flags as symbolic.
+        // - When the second instruction accesses the same register as the first, the memory optimizer sees the symbolic
+        //   flags and doesn't realize that the register address is actually the same as in the first instruction.
+        vec![ib::const_32_imm(3, 123, 0), ib::storeb(3, 1, 0)],
+        "same_register_not_optimized",
+    );
+}
