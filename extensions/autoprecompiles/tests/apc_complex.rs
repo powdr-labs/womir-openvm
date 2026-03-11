@@ -159,12 +159,13 @@ fn i64load32u() {
     );
 }
 
-// ==================== Load/Store sequences ====================
+// ==================== Reproduce suboptimal APCs ====================
 
 #[test]
-fn copy_byte() {
+fn same_register_not_optimized() {
     assert_machine_output(
-        // Copies a byte from memory address in r0 to memory address in r1, using r3 as a temporary register.
+        // Stores a constant in a register, then stores it into memory.
+        //
         // This test showcases an inefficiency in the current combination of WOMIR and the APC optimizer:
         // - In the load/store chip, the flags cannot be solved at compile time because they encode BOTH the
         //   opcode (known at compile time) and the alignment offset (only known at runtime).
@@ -173,9 +174,9 @@ fn copy_byte() {
         //   `from_state__fp_0 + 12 + <some expression depending on the flags>`
         // - In practice, the only valid assignment to the flags is such that the expression is 0, but the
         //   optimizer doesn't know that, so it leaves the flags as symbolic.
-        // - When the second instruction accesses the same register, the memory optimizer sees the symbolic
+        // - When the second instruction accesses the same register as the first, the memory optimizer sees the symbolic
         //   flags and doesn't realize that the register address is actually the same as in the first instruction.
-        vec![ib::loadbu(3, 0, 0), ib::storeb(3, 1, 0)],
-        "copy_byte",
+        vec![ib::const_32_imm(3, 123, 0), ib::storeb(3, 1, 0)],
+        "same_register_not_optimized",
     );
 }
