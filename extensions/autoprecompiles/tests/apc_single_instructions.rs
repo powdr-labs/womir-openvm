@@ -228,8 +228,8 @@ fn single_shr_s_imm() {
 }
 
 // ==================== Shift 64-bit ====================
-// TODO(powdr-labs/powdr#3646): Uncomment shl_64 and shr_u_64 once upstream
-// non-deterministic constraint ordering is fixed.
+// shl_64 and shr_u_64 produce non-deterministic constraint ordering in powdr,
+// so snapshot tests are not possible. powdr#3646 fixed div/rem but not these.
 
 // #[test]
 // fn single_shl_64() {
@@ -257,92 +257,88 @@ fn single_shr_s_imm_64() {
 }
 
 // ==================== DivRem 32-bit ====================
-// TODO(powdr-labs/powdr#3646): Uncomment once upstream non-deterministic
-// constraint ordering is fixed.
 
-// #[test]
-// fn single_div() {
-//     assert_machine_output(vec![ib::div(2, 0, 1)], "div");
-// }
-//
-// #[test]
-// fn single_divu() {
-//     assert_machine_output(vec![ib::divu(2, 0, 1)], "divu");
-// }
-//
-// #[test]
-// fn single_rems() {
-//     assert_machine_output(vec![ib::rems(2, 0, 1)], "rems");
-// }
-//
-// #[test]
-// fn single_remu() {
-//     assert_machine_output(vec![ib::remu(2, 0, 1)], "remu");
-// }
-//
-// #[test]
-// fn single_div_imm() {
-//     assert_machine_output(vec![ib::div_imm(1, 0, 7_i16)], "div_imm");
-// }
-//
-// #[test]
-// fn single_divu_imm() {
-//     assert_machine_output(vec![ib::divu_imm(1, 0, 7_i16)], "divu_imm");
-// }
-//
-// #[test]
-// fn single_rems_imm() {
-//     assert_machine_output(vec![ib::rems_imm(1, 0, 7_i16)], "rems_imm");
-// }
-//
-// #[test]
-// fn single_remu_imm() {
-//     assert_machine_output(vec![ib::remu_imm(1, 0, 7_i16)], "remu_imm");
-// }
+#[test]
+fn single_div() {
+    assert_machine_output(vec![ib::div(2, 0, 1)], "div");
+}
+
+#[test]
+fn single_divu() {
+    assert_machine_output(vec![ib::divu(2, 0, 1)], "divu");
+}
+
+#[test]
+fn single_rems() {
+    assert_machine_output(vec![ib::rems(2, 0, 1)], "rems");
+}
+
+#[test]
+fn single_remu() {
+    assert_machine_output(vec![ib::remu(2, 0, 1)], "remu");
+}
+
+#[test]
+fn single_div_imm() {
+    assert_machine_output(vec![ib::div_imm(1, 0, 7_i16)], "div_imm");
+}
+
+#[test]
+fn single_divu_imm() {
+    assert_machine_output(vec![ib::divu_imm(1, 0, 7_i16)], "divu_imm");
+}
+
+#[test]
+fn single_rems_imm() {
+    assert_machine_output(vec![ib::rems_imm(1, 0, 7_i16)], "rems_imm");
+}
+
+#[test]
+fn single_remu_imm() {
+    assert_machine_output(vec![ib::remu_imm(1, 0, 7_i16)], "remu_imm");
+}
 
 // ==================== DivRem 64-bit ====================
-// TODO(powdr-labs/powdr#3646): Uncomment once upstream non-deterministic
-// constraint ordering is fixed.
 
-// #[test]
-// fn single_div_64() {
-//     assert_machine_output(vec![ib::div_64(4, 0, 2)], "div_64");
-// }
-//
-// #[test]
-// fn single_divu_64() {
-//     assert_machine_output(vec![ib::divu_64(4, 0, 2)], "divu_64");
-// }
-//
-// #[test]
-// fn single_rems_64() {
-//     assert_machine_output(vec![ib::rems_64(4, 0, 2)], "rems_64");
-// }
-//
-// #[test]
-// fn single_remu_64() {
-//     assert_machine_output(vec![ib::remu_64(4, 0, 2)], "remu_64");
-// }
-//
-// #[test]
-// fn single_div_imm_64() {
-//     assert_machine_output(vec![ib::div_imm_64(2, 0, 7_i16)], "div_imm_64");
-// }
-//
-// #[test]
-// fn single_divu_imm_64() {
-//     assert_machine_output(vec![ib::divu_imm_64(2, 0, 7_i16)], "divu_imm_64");
-// }
-//
-// #[test]
-// fn single_rems_imm_64() {
-//     assert_machine_output(vec![ib::rems_imm_64(2, 0, 7_i16)], "rems_imm_64");
-// }
-//
-// #[test]
-// fn single_remu_imm_64() {
-//     assert_machine_output(vec![ib::remu_imm_64(2, 0, 7_i16)], "remu_imm_64");
-// }
+#[test]
+fn single_div_64() {
+    assert_machine_output(vec![ib::div_64(4, 0, 2)], "div_64");
+}
+
+#[test]
+fn single_divu_64() {
+    assert_machine_output(vec![ib::divu_64(4, 0, 2)], "divu_64");
+}
+
+#[test]
+fn single_rems_64() {
+    assert_machine_output(vec![ib::rems_64(4, 0, 2)], "rems_64");
+}
+
+#[test]
+fn single_remu_64() {
+    assert_machine_output(vec![ib::remu_64(4, 0, 2)], "remu_64");
+}
+
+#[test]
+fn single_div_imm_64() {
+    assert_machine_output(vec![ib::div_imm_64(2, 0, 7_i16)], "div_imm_64");
+}
+
+#[test]
+fn single_divu_imm_64() {
+    assert_machine_output(vec![ib::divu_imm_64(2, 0, 7_i16)], "divu_imm_64");
+}
+
+#[test]
+fn single_rems_imm_64() {
+    assert_machine_output(vec![ib::rems_imm_64(2, 0, 7_i16)], "rems_imm_64");
+}
+
+#[test]
+fn single_remu_imm_64() {
+    assert_machine_output(vec![ib::remu_imm_64(2, 0, 7_i16)], "remu_imm_64");
+}
 
 // ==================== LoadStore ====================
 

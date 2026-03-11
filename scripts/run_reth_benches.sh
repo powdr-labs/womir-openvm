@@ -46,13 +46,16 @@ dir="results/reth_${BLOCK}"
 
 ROOT_DIR=$(pwd)
 
-CACHE_DIR="$ROOT_DIR/.cache/womir-keys"
+COMPILED_DIR="$ROOT_DIR/.cache/womir-compiled-reth-${BLOCK}"
 
-# Generate and cache WOMIR proving keys (not included in benchmark metrics)
+# Compile step (not included in benchmark metrics)
 echo ""
-echo "==== WOMIR Keygen ===="
+echo "==== WOMIR Compile ===="
 echo ""
-cargo run -r $CUDA_FLAGS -- keygen "$CACHE_DIR"
+cargo run -r $CUDA_FLAGS -- compile \
+    "$ROOT_DIR/sample-programs/eth-block/openvm-client-eth.wasm" "main" \
+    --input 0 --input 0 --input "file:$ROOT_DIR/sample-programs/eth-block/${BLOCK}.bin" \
+    --output-dir "$COMPILED_DIR"
 
 mkdir -p "$dir"
 pushd "$dir"
@@ -65,12 +68,12 @@ echo ""
 
 mkdir -p "${run_name}"
 
+# Prove step (metrics captured here)
 cargo run -r $CUDA_FLAGS -- prove \
-    "$ROOT_DIR/sample-programs/eth-block/openvm-client-eth.wasm" "main" \
+    --compiled-dir "$COMPILED_DIR" \
     --input 0 --input 0 --input "file:$ROOT_DIR/sample-programs/eth-block/${BLOCK}.bin" \
     --metrics "${run_name}/metrics.json" \
     --recursion \
-    --cache-dir "$CACHE_DIR" \
     &> "${run_name}/log.txt"
 
 python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt

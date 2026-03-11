@@ -101,21 +101,19 @@ fn mul_chain() {
 }
 
 // ==================== Div sequences ====================
-// TODO(powdr-labs/powdr#3646): Uncomment once upstream non-deterministic
-// constraint ordering is fixed.
 
-// #[test]
-// fn div_chain() {
-//     assert_machine_output(vec![ib::div(3, 0, 1), ib::div(4, 3, 2)], "div_chain");
-// }
-//
-// #[test]
-// fn div_and_mul_inverse() {
-//     assert_machine_output(
-//         vec![ib::div(2, 0, 1), ib::mul(3, 2, 1)],
-//         "div_and_mul_inverse",
-//     );
-// }
+#[test]
+fn div_chain() {
+    assert_machine_output(vec![ib::div(3, 0, 1), ib::div(4, 3, 2)], "div_chain");
+}
+
+#[test]
+fn div_and_mul_inverse() {
+    assert_machine_output(
+        vec![ib::div(2, 0, 1), ib::mul(3, 2, 1)],
+        "div_and_mul_inverse",
+    );
+}
 
 // ==================== Cross-width ====================
 
@@ -197,6 +195,7 @@ fn fill_32bytes() {
         "fill_32bytes",
     );
 }
+
 
 // ==================== I64Load patterns ====================
 

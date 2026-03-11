@@ -3,6 +3,7 @@ name: PR Check
 on:
   workflow_dispatch:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
   push:
     branches:
@@ -16,6 +17,7 @@ concurrency:
 jobs:
   build-and-test:
     name: Build and Test
+    if: github.event.pull_request.draft != true
     runs-on: warp-ubuntu-2404-x64-32x
 
     steps:
@@ -52,6 +54,7 @@ jobs:
 
   clippy:
     name: Clippy
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
 
     steps:
@@ -73,6 +76,7 @@ jobs:
 
   fmt:
     name: Rustfmt
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
 
     steps:
@@ -84,6 +88,7 @@ jobs:
 
   gpu-tests:
     name: GPU Tests
+    if: github.event.pull_request.draft != true
     runs-on: [self-hosted, gpu-shared]
 
     steps:

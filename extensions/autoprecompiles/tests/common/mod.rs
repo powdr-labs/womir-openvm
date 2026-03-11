@@ -1,109 +1,26 @@
 use autoprecompiles::WomirISA;
-use itertools::Itertools;
 use openvm_instructions::instruction::Instruction;
 use openvm_stark_sdk::p3_baby_bear::BabyBear;
 use powdr_autoprecompiles::blocks::SuperBlock;
-use powdr_autoprecompiles::empirical_constraints::EmpiricalConstraints;
-use powdr_autoprecompiles::evaluation::evaluate_apc;
-use powdr_autoprecompiles::export::ExportOptions;
-use powdr_autoprecompiles::{VmConfig, build};
-use powdr_number::BabyBearField;
-use powdr_openvm::customize_exe::OpenVmBusInteractionHandler;
 use powdr_openvm::extraction_utils::OriginalVmConfig;
-use powdr_openvm::isa::OpenVmISA;
-use powdr_openvm::{BabyBearOpenVmApcAdapter, DEFAULT_DEGREE_BOUND, Instr};
-use pretty_assertions::assert_eq;
-use std::fs;
+use powdr_openvm::test_utils;
 use std::path::Path;
 use womir_circuit::WomirConfig;
-
-fn compile(superblock: SuperBlock<Instruction<BabyBear>>) -> String {
-    let original_config = OriginalVmConfig::<WomirISA>::new(WomirConfig::default());
-    let degree_bound = DEFAULT_DEGREE_BOUND;
-    let airs = original_config.airs(degree_bound).unwrap();
-    let bus_map = original_config.bus_map();
-
-    let vm_config = VmConfig {
-        instruction_handler: &airs,
-        bus_interaction_handler: OpenVmBusInteractionHandler::<BabyBearField>::default(),
-        bus_map: bus_map.clone(),
-    };
-
-    let superblock = superblock.map_instructions(Instr::<BabyBear, WomirISA>::from);
-    // for aligning the output
-    let max_pc_digits = superblock.pcs().max().unwrap().max(1).ilog10() as usize + 1;
-    let superblock_str = superblock
-        .instructions()
-        .zip(superblock.pcs())
-        .map(|(inst, pc)| format!("  {pc:>max_pc_digits$}: {}", WomirISA::format(&inst.inner)))
-        .join("\n");
-
-    let export_path = std::env::var("APC_EXPORT_PATH").ok();
-    let export_level = std::env::var("APC_EXPORT_LEVEL").ok();
-
-    let apc = build::<BabyBearOpenVmApcAdapter<WomirISA>>(
-        superblock.clone(),
-        vm_config.clone(),
-        degree_bound,
-        ExportOptions::from_env_vars(export_path, export_level, &superblock.start_pcs()),
-        &EmpiricalConstraints::default(),
-    )
-    .unwrap();
-
-    let apc_with_stats =
-        evaluate_apc::<BabyBearOpenVmApcAdapter<WomirISA>>(vm_config.instruction_handler, apc);
-
-    let evaluation = apc_with_stats.evaluation_result();
-    let apc = &apc_with_stats.apc().machine;
-
-    format!(
-        "Instructions:\n{superblock_str}\n\n{evaluation}\n\n{}",
-        apc.render(&bus_map)
-    )
-}
 
 pub fn assert_machine_output(
     program: SuperBlock<Instruction<BabyBear>>,
     module_name: &str,
     test_name: &str,
 ) {
-    let actual = compile(program);
-
-    let expected_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+    let original_config = OriginalVmConfig::<WomirISA>::new(WomirConfig::default());
+    let snapshot_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
-        .join("apc_snapshots")
-        .join(module_name)
-        .join(format!("{test_name}.txt"));
-
-    let should_update_expectation = std::env::var("UPDATE_EXPECT")
-        .map(|v| v.as_str() == "1")
-        .unwrap_or(false);
-
-    let expected = expected_path
-        .exists()
-        .then(|| fs::read_to_string(&expected_path).unwrap());
-
-    match (expected, should_update_expectation) {
-        (Some(expected), _) if expected == actual => {
-            // Test succeeded.
-        }
-        (Some(expected), false) => {
-            // The expectation file exists, is different from "actual" and we are
-            // not allowed to update it.
-            assert_eq!(
-                expected.trim(),
-                actual.trim(),
-                "The output of `{test_name}` does not match the expected output. \
-                 To overwrite the expected output with the currently generated one, \
-                 re-run the test with the environment variable `UPDATE_EXPECT=1` or \
-                 delete the file `{test_name}.txt`.",
-            );
-        }
-        _ => {
-            // Expectation file does not exist or is different from "actual" and we are allowed to update it.
-            fs::create_dir_all(expected_path.parent().unwrap()).unwrap();
-            fs::write(&expected_path, &actual).unwrap();
-            println!("Expected output for `{test_name}` was created. Re-run the test to confirm.");
-        }
-    }
+        .join("apc_snapshots");
+    test_utils::assert_apc_machine_output::<WomirISA>(
+        &original_config,
+        program,
+        &snapshot_dir,
+        module_name,
+        test_name,
+    );
 }
