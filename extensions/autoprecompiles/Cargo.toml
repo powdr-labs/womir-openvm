@@ -29,4 +29,5 @@ womir-circuit.workspace = true
 womir-translation.workspace = true
 
 [dev-dependencies]
+powdr-openvm = { workspace = true, features = ["test-utils"] }
 powdr-autoprecompiles.workspace = true
