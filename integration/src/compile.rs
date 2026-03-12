@@ -28,6 +28,7 @@ pub fn compile_womir_to_disk(
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(output_dir)?;
 
+    let apc_start = std::time::Instant::now();
     let compiled = if apc_count > 0 {
         let execution_profile = execution_profile_from_guest(&original_program, stdin);
         customize(
@@ -47,6 +48,7 @@ pub fn compile_womir_to_disk(
             EmpiricalConstraints::default(),
         )
     };
+    tracing::info!("APC generation took {:?}", apc_start.elapsed());
 
     // Serialize compiled program
     tracing::info!("Serializing compiled program...");
@@ -63,6 +65,8 @@ pub fn compile_womir_to_disk(
     let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
     let sdk = WomirSdk::new_without_transpiler(app_config)?;
 
+    let keygen_start = std::time::Instant::now();
+
     tracing::info!("Generating app proving key...");
     let app_pk = sdk.app_pk();
     let app_pk_bytes = rmp_serde::to_vec(app_pk)?;
@@ -74,6 +78,8 @@ pub fn compile_womir_to_disk(
     let agg_pk_bytes = rmp_serde::to_vec(agg_pk)?;
     std::fs::write(output_dir.join(AGG_PK_FILE), &agg_pk_bytes)?;
     tracing::info!("Wrote agg_pk ({:.1} MB)", agg_pk_bytes.len() as f64 / 1e6);
+
+    tracing::info!("Keygen took {:?}", keygen_start.elapsed());
 
     Ok(())
 }
@@ -97,6 +103,7 @@ pub fn compile_riscv_to_disk(
     )
     .map_err(|e| eyre::eyre!("{e}"))?;
 
+    let apc_start = std::time::Instant::now();
     let config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
     let pgo_config = if apc_count > 0 {
         let execution_profile =
@@ -112,6 +119,7 @@ pub fn compile_riscv_to_disk(
         powdr_autoprecompiles::empirical_constraints::EmpiricalConstraints::default(),
     )
     .map_err(|e| eyre::eyre!("{e}"))?;
+    tracing::info!("APC generation took {:?}", apc_start.elapsed());
 
     // Serialize compiled program
     tracing::info!("Serializing compiled RISC-V program...");
@@ -128,6 +136,8 @@ pub fn compile_riscv_to_disk(
     let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
     let sdk = RiscvSdk::new_without_transpiler(app_config)?;
 
+    let keygen_start = std::time::Instant::now();
+
     tracing::info!("Generating app proving key...");
     let app_pk = sdk.app_pk();
     let app_pk_bytes = rmp_serde::to_vec(app_pk)?;
@@ -139,6 +149,8 @@ pub fn compile_riscv_to_disk(
     let agg_pk_bytes = rmp_serde::to_vec(agg_pk)?;
     std::fs::write(output_dir.join(AGG_PK_FILE), &agg_pk_bytes)?;
     tracing::info!("Wrote agg_pk ({:.1} MB)", agg_pk_bytes.len() as f64 / 1e6);
+
+    tracing::info!("Keygen took {:?}", keygen_start.elapsed());
 
     Ok(())
 }
