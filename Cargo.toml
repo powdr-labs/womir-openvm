@@ -79,7 +79,7 @@ itertools = "0.14"
 rrs-lib = "0.1.0"
 tracing = "0.1.40"
 
-womir = { git = "https://github.com/powdr-labs/womir.git", rev = "6887576" }
+womir = { git = "https://github.com/powdr-labs/womir.git", rev = "0e8ed76" }
 wasmparser = { version = "0.235", default-features = false }
 
 # Uncomment for local development with path patches:

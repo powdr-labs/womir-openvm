@@ -209,10 +209,11 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         let mut labels = BTreeMap::<u64, Vec<String>>::new();
 
         for (name, value) in &self.label_map {
-            labels
-                .entry(value.pc as u64)
-                .or_default()
-                .push(name.clone());
+            let prefixed = match value.namespace.as_deref() {
+                Some(namespace) if !namespace.is_empty() => format!("{namespace}::{name}"),
+                _ => name.clone(),
+            };
+            labels.entry(value.pc as u64).or_default().push(prefixed);
         }
 
         for names in labels.values_mut() {
@@ -305,6 +306,7 @@ pub enum Directive<F> {
     Nop,
     Label {
         id: String,
+        namespace: Option<String>,
         frame_size: Option<u32>,
     },
     Jump {
@@ -409,9 +411,10 @@ impl<F: PrimeField32> womir::loader::settings::Settings for OpenVMSettings<F> {
 
 #[allow(refining_impl_trait)]
 impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMSettings<F> {
-    fn emit_label(&self, _c: &mut Ctx<'a, '_>, name: String) -> Directive<F> {
+    fn emit_label(&self, c: &mut Ctx<'a, '_>, name: String) -> Directive<F> {
         Directive::Label {
             id: name,
+            namespace: c.function_name().map(str::to_owned),
             frame_size: None,
         }
     }
@@ -1346,6 +1349,7 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
                 // alternative label
                 Directive::Label {
                     id: non_zero_label,
+                    namespace: c.function_name().map(str::to_owned),
                     frame_size: None,
                 }
                 .into(),
@@ -1354,6 +1358,7 @@ fn translate_complex_ins_with_const<'a, F: PrimeField32>(
                 // continuation label
                 Directive::Label {
                     id: continuation_label,
+                    namespace: c.function_name().map(str::to_owned),
                     frame_size: None,
                 }
                 .into(),
@@ -2035,12 +2040,14 @@ fn translate_complex_ins<'a, F: PrimeField32>(
                 // Error case: write 0xFFFFFFFF to output.
                 Directive::Label {
                     id: error_label,
+                    namespace: c.function_name().map(str::to_owned),
                     frame_size: None,
                 },
                 Directive::Instruction(ib::const_32_imm(output, 0xFFFF, 0xFFFF)),
                 // Continue:
                 Directive::Label {
                     id: continuation_label,
+                    namespace: c.function_name().map(str::to_owned),
                     frame_size: None,
                 },
             ]);
@@ -2507,9 +2514,15 @@ impl<F: Clone> womir::interpreter::linker::Directive for Directive<F> {
     }
 
     fn as_label(&self) -> Option<womir::interpreter::linker::Label<'_>> {
-        if let Directive::Label { id, frame_size } = self {
+        if let Directive::Label {
+            id,
+            namespace,
+            frame_size,
+        } = self
+        {
             Some(womir::interpreter::linker::Label {
                 id,
+                namespace: namespace.as_deref(),
                 frame_size: *frame_size,
             })
         } else {
