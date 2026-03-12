@@ -209,23 +209,6 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         let mut labels = BTreeMap::<u64, Vec<String>>::new();
 
         for (name, value) in &self.label_map {
-            labels
-                .entry(value.pc as u64)
-                .or_default()
-                .push(name.clone());
-        }
-
-        for names in labels.values_mut() {
-            names.sort();
-        }
-
-        labels
-    }
-
-    pub fn labels_prefixed_by_namespace(&self) -> BTreeMap<u64, Vec<String>> {
-        let mut labels = BTreeMap::<u64, Vec<String>>::new();
-
-        for (name, value) in &self.label_map {
             let prefixed = match value.namespace.as_deref() {
                 Some(namespace) if !namespace.is_empty() => format!("{namespace}::{name}"),
                 _ => name.clone(),

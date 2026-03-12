@@ -98,7 +98,7 @@ impl OpenVmISA for WomirISA {
     fn get_symbol_table<'a>(program: &Self::Program<'a>) -> SymbolTable {
         SymbolTable::from_table(
             program
-                .labels_prefixed_by_namespace()
+                .labels()
                 .into_iter()
                 .map(|(key, values)| (key.try_into().unwrap(), values))
                 .collect(),
