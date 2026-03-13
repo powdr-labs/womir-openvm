@@ -1,6 +1,6 @@
 //! Compile-to-disk pipelines for WOMIR and RISC-V.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use autoprecompiles::WomirISA;
 use openvm_sdk::StdIn;
@@ -24,15 +24,21 @@ pub fn compile_womir_to_disk(
     original_program: OriginalCompiledProgram<WomirISA>,
     stdin: StdIn,
     apc_count: u64,
+    apc_candidates_dir: Option<PathBuf>,
     output_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(output_dir)?;
+
+    let mut config = default_powdr_openvm_config(apc_count, 0);
+    if let Some(apc_candidates_dir) = apc_candidates_dir {
+        config = config.with_apc_candidates_dir(apc_candidates_dir);
+    }
 
     let compiled = if apc_count > 0 {
         let execution_profile = execution_profile_from_guest(&original_program, stdin);
         customize(
             original_program,
-            default_powdr_openvm_config(apc_count, 0),
+            config,
             CellPgo::<_, OpenVmApcCandidate<WomirISA>>::with_pgo_data_and_max_columns(
                 execution_profile,
                 None,
@@ -42,7 +48,7 @@ pub fn compile_womir_to_disk(
     } else {
         customize(
             original_program,
-            default_powdr_openvm_config(apc_count, 0),
+            config,
             NonePgo::default(),
             EmpiricalConstraints::default(),
         )
@@ -84,6 +90,7 @@ pub fn compile_riscv_to_disk(
     program: &str,
     stdin: StdIn,
     apc_count: u64,
+    apc_candidates_dir: Option<PathBuf>,
     output_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(output_dir)?;
@@ -97,7 +104,10 @@ pub fn compile_riscv_to_disk(
     )
     .map_err(|e| eyre::eyre!("{e}"))?;
 
-    let config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
+    let mut config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
+    if let Some(apc_candidates_dir) = apc_candidates_dir {
+        config = config.with_apc_candidates_dir(apc_candidates_dir);
+    }
     let pgo_config = if apc_count > 0 {
         let execution_profile =
             powdr_openvm::execution_profile_from_guest(&original, stdin.clone());

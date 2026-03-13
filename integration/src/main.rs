@@ -76,6 +76,9 @@ enum Commands {
         /// Number of APCs to generate
         #[arg(long, default_value_t = 0)]
         apc_count: u64,
+        /// Directory to persist all APC candidates + a metrics summary
+        #[arg(long)]
+        apc_candidates_dir: Option<PathBuf>,
         /// Directory to write the compiled artifact to
         #[arg(long)]
         output_dir: PathBuf,
@@ -92,6 +95,9 @@ enum Commands {
         /// Number of APCs to generate
         #[arg(long, default_value_t = 0)]
         apc_count: u64,
+        /// Directory to persist all APC candidates + a metrics summary
+        #[arg(long)]
+        apc_candidates_dir: Option<PathBuf>,
         /// Directory to write the compiled artifact to
         #[arg(long)]
         output_dir: PathBuf,
@@ -118,6 +124,9 @@ enum Commands {
         /// Number of apcs to use (convenience mode only)
         #[arg(long, default_value_t = 0)]
         apc_count: u64,
+        /// Directory to persist all APC candidates + a metrics summary
+        #[arg(long)]
+        apc_candidates_dir: Option<PathBuf>,
         /// Directory with cached proving keys (from `keygen` command, convenience mode only)
         #[arg(long)]
         cache_dir: Option<PathBuf>,
@@ -157,6 +166,9 @@ enum Commands {
         /// Number of apcs to use (convenience mode only)
         #[arg(long, default_value_t = 0)]
         apc_count: u64,
+        /// Directory to persist all APC candidates + a metrics summary
+        #[arg(long)]
+        apc_candidates_dir: Option<PathBuf>,
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
@@ -216,24 +228,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             function,
             input,
             apc_count,
+            apc_candidates_dir,
             output_dir,
         } => {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let original_program = load_wasm_original_program(&wasm_bytes, &function);
             let stdin = make_stdin(&input);
-            compile::compile_womir_to_disk(original_program, stdin, apc_count, &output_dir)
-                .map_err(|e| eyre::eyre!("{e}"))?;
+            compile::compile_womir_to_disk(
+                original_program,
+                stdin,
+                apc_count,
+                apc_candidates_dir,
+                &output_dir,
+            )
+            .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled to {}", output_dir.display());
         }
         Commands::CompileRiscv {
             program,
             input,
             apc_count,
+            apc_candidates_dir,
             output_dir,
         } => {
             let stdin = make_stdin(&input);
-            compile::compile_riscv_to_disk(&program, stdin, apc_count, &output_dir)
-                .map_err(|e| eyre::eyre!("{e}"))?;
+            compile::compile_riscv_to_disk(
+                &program,
+                stdin,
+                apc_count,
+                apc_candidates_dir,
+                &output_dir,
+            )
+            .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled RISC-V to {}", output_dir.display());
         }
         Commands::Prove {
@@ -242,6 +268,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             input,
             recursion,
             apc_count,
+            apc_candidates_dir,
             metrics,
             cache_dir,
             compiled_dir,
@@ -264,6 +291,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         stdin,
                         recursion,
                         apc_count,
+                        apc_candidates_dir,
                         cache_dir.as_deref(),
                     )
                     .map_err(|e| eyre::eyre!("{e}"))?;
@@ -316,6 +344,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             input,
             apc_count,
+            apc_candidates_dir,
             metrics,
             compiled_dir,
         } => {
@@ -338,7 +367,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )
                     .map_err(|e| eyre::eyre!("{e}"))?;
 
-                    let config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
+                    let mut config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
+                    if let Some(apc_candidates_dir) = apc_candidates_dir {
+                        config = config.with_apc_candidates_dir(apc_candidates_dir);
+                    }
                     let pgo_config = if apc_count > 0 {
                         let stdin = make_stdin(&input);
                         let execution_profile =

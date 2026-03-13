@@ -54,7 +54,7 @@ run_bench_wasm() {
     local compiled_dir="${run_name}/compiled"
 
     # Compile step (not included in metrics)
-    cargo run -r $CUDA_FLAGS -- compile --apc-count "$apc_count" --output-dir "$compiled_dir" "$guest" "main" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
+    cargo run -r $CUDA_FLAGS -- compile --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "main" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
 
     # Prove step (metrics captured here)
     cargo run -r $CUDA_FLAGS -- prove --compiled-dir "$compiled_dir" --recursion "${input_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
@@ -80,7 +80,7 @@ run_bench_riscv() {
     local compiled_dir="${run_name}/compiled"
 
     # Compile step (not included in metrics)
-    cargo run -r $CUDA_FLAGS -- compile-riscv --apc-count "$apc_count" --output-dir "$compiled_dir" "$guest" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
+    cargo run -r $CUDA_FLAGS -- compile-riscv --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
 
     # Prove step (metrics captured here)
     cargo run -r $CUDA_FLAGS -- prove-riscv --compiled-dir "$compiled_dir" "${input_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
