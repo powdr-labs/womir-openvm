@@ -234,8 +234,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let original_program = load_wasm_original_program(&wasm_bytes, &function);
             let stdin = make_stdin(&input);
-            compile::compile_womir_to_disk(original_program, stdin, apc_count, apc_candidates_dir, &output_dir)
-                .map_err(|e| eyre::eyre!("{e}"))?;
+            compile::compile_womir_to_disk(
+                original_program,
+                stdin,
+                apc_count,
+                apc_candidates_dir,
+                &output_dir,
+            )
+            .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled to {}", output_dir.display());
         }
         Commands::CompileRiscv {
@@ -246,8 +252,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             output_dir,
         } => {
             let stdin = make_stdin(&input);
-            compile::compile_riscv_to_disk(&program, stdin, apc_count, apc_candidates_dir, &output_dir)
-                .map_err(|e| eyre::eyre!("{e}"))?;
+            compile::compile_riscv_to_disk(
+                &program,
+                stdin,
+                apc_count,
+                apc_candidates_dir,
+                &output_dir,
+            )
+            .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled RISC-V to {}", output_dir.display());
         }
         Commands::Prove {
