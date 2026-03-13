@@ -12,6 +12,19 @@ use crate::{
     instruction_builder::{self as ib, AluImm},
 };
 use arrayvec::ArrayVec;
+use crush::{
+    interpreter::linker::LabelValue,
+    loader::{
+        FunctionAsm, FunctionRef, Global, MemoryEntry, Module,
+        passes::dag::WasmValue,
+        rwm::flattening::Context,
+        settings::{
+            ComparisonFunction, JumpCondition, LabelType, MaybeConstant, TrapReason, WasmOpInput,
+            func_idx_to_label,
+        },
+    },
+    utils::tree::Tree,
+};
 use crush_circuit::CrushConfig;
 use itertools::Itertools;
 use openvm_circuit::{
@@ -30,19 +43,6 @@ use openvm_instructions::{
 };
 use openvm_stark_backend::p3_field::PrimeField32;
 use wasmparser::{MemArg, Operator as Op, ValType};
-use womir::{
-    interpreter::linker::LabelValue,
-    loader::{
-        FunctionAsm, FunctionRef, Global, MemoryEntry, Module,
-        passes::dag::WasmValue,
-        rwm::flattening::Context,
-        settings::{
-            ComparisonFunction, JumpCondition, LabelType, MaybeConstant, TrapReason, WasmOpInput,
-            func_idx_to_label,
-        },
-    },
-    utils::tree::Tree,
-};
 
 /// This is our convention for null function references.
 ///
@@ -72,7 +72,7 @@ pub struct LinkedProgram<'a, F: PrimeField32> {
 
 impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
     pub fn new(mut module: Module<'a>, functions: Vec<FunctionAsm<Directive<F>>>) -> Self {
-        let (linked_program, mut label_map) = womir::interpreter::linker::link(functions, 1);
+        let (linked_program, mut label_map) = crush::interpreter::linker::link(functions, 1);
 
         for v in label_map.values_mut() {
             v.pc *= riscv::RV32_REGISTER_NUM_LIMBS as u32;
@@ -156,7 +156,7 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         let mut linked_instructions = self.linked_instructions.clone();
         linked_instructions.extend(create_startup_code(&self.module, entry_point));
 
-        // TODO: make womir read and carry debug info
+        // TODO: make crush read and carry debug info
         // The first instruction was removed, which was a nop inserted by the linker,
         // so we need to set PC base to DEFAULT_PC_STEP, skipping position 0.
         let program = Program::new_without_debug_infos(&linked_instructions, DEFAULT_PC_STEP);
@@ -233,8 +233,8 @@ where
     let entry_point_func_type = &ctx.get_func_type(entry_point.func_idx.unwrap()).ty;
     let params = entry_point_func_type.params();
     let results = entry_point_func_type.results();
-    let num_input_words = womir::loader::word_count_types::<OpenVMSettings<F>>(params) as usize;
-    let num_output_words = womir::loader::word_count_types::<OpenVMSettings<F>>(results) as usize;
+    let num_input_words = crush::loader::word_count_types::<OpenVMSettings<F>>(params) as usize;
+    let num_output_words = crush::loader::word_count_types::<OpenVMSettings<F>>(results) as usize;
 
     // Registers used by startup code (relative to initial FP):
     //   reg 0: zero_reg (holds value 0, also used as pointer to mem[0])
@@ -365,7 +365,7 @@ impl<F> OpenVMSettings<F> {
     }
 }
 
-impl<F: PrimeField32> womir::loader::settings::Settings for OpenVMSettings<F> {
+impl<F: PrimeField32> crush::loader::settings::Settings for OpenVMSettings<F> {
     type Directive = Directive<F>;
 
     fn bytes_per_word() -> u32 {
@@ -410,7 +410,7 @@ impl<F: PrimeField32> womir::loader::settings::Settings for OpenVMSettings<F> {
 }
 
 #[allow(refining_impl_trait)]
-impl<'a, F: PrimeField32> womir::loader::rwm::settings::Settings<'a> for OpenVMSettings<F> {
+impl<'a, F: PrimeField32> crush::loader::rwm::settings::Settings<'a> for OpenVMSettings<F> {
     fn emit_label(&self, c: &mut Ctx<'a, '_>, name: String) -> Directive<F> {
         Directive::Label {
             id: name,
@@ -2508,19 +2508,19 @@ fn store_to_const_addr<'a, F: PrimeField32>(
     directives
 }
 
-impl<F: Clone> womir::interpreter::linker::Directive for Directive<F> {
+impl<F: Clone> crush::interpreter::linker::Directive for Directive<F> {
     fn nop() -> Directive<F> {
         Directive::Nop
     }
 
-    fn as_label(&self) -> Option<womir::interpreter::linker::Label<'_>> {
+    fn as_label(&self) -> Option<crush::interpreter::linker::Label<'_>> {
         if let Directive::Label {
             id,
             namespace,
             frame_size,
         } = self
         {
-            Some(womir::interpreter::linker::Label {
+            Some(crush::interpreter::linker::Label {
                 id,
                 namespace: namespace.as_deref(),
                 frame_size: *frame_size,

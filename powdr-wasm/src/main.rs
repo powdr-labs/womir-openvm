@@ -5,6 +5,10 @@ mod proving;
 mod tests;
 
 use clap::{Parser, Subcommand};
+use crush::loader::rwm::RWMStages;
+use crush::loader::{
+    CommonStages, FunctionAsm, FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics,
+};
 use eyre::Result;
 use itertools::Itertools;
 use metrics_tracing_context::{MetricsLayer, TracingContextLayer};
@@ -22,10 +26,6 @@ use std::sync::{Mutex, RwLock};
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
-use womir::loader::rwm::RWMStages;
-use womir::loader::{
-    CommonStages, FunctionAsm, FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics,
-};
 
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
@@ -462,7 +462,7 @@ fn load_wasm_with_settings(
     settings: OpenVMSettings<F>,
 ) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) {
     let PartiallyParsedProgram { s: _, m, functions } =
-        womir::loader::load_wasm(settings, wasm_bytes).unwrap();
+        crush::loader::load_wasm(settings, wasm_bytes).unwrap();
 
     let num_functions = functions.len() as u32;
     let tracker = RwLock::new(Some(builtin_functions::Tracker::new(num_functions)));

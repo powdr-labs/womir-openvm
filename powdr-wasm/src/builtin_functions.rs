@@ -3,14 +3,14 @@ use std::{
     sync::{Mutex, atomic::AtomicU32},
 };
 
-use itertools::Itertools;
-use openvm_stark_backend::p3_field::PrimeField32;
-use wasmparser::{Operator, ValType};
-use womir::loader::{
+use crush::loader::{
     FunctionAsm, FunctionProcessingStage, Module,
     passes::blockless_dag::{BlocklessDag, Operation},
     rwm::RWMStages,
 };
+use itertools::Itertools;
+use openvm_stark_backend::p3_field::PrimeField32;
+use wasmparser::{Operator, ValType};
 
 use crush_translation::{Directive, OpenVMSettings};
 
@@ -615,7 +615,7 @@ impl BuiltinFunction {
     ) -> FunctionAsm<Directive<F>> {
         // Load the built-in function module.
         let program =
-            womir::loader::load_wasm(OpenVMSettings::<F>::new(), self.definition.wasm_bytes)
+            crush::loader::load_wasm(OpenVMSettings::<F>::new(), self.definition.wasm_bytes)
                 .unwrap();
 
         // Extract the function, either by export name or as the sole function.

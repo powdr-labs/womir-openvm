@@ -79,7 +79,7 @@ itertools = "0.14"
 rrs-lib = "0.1.0"
 tracing = "0.1.40"
 
-womir = { git = "https://github.com/powdr-labs/womir.git", rev = "0e8ed76" }
+crush = { git = "https://github.com/powdr-labs/crush.git", rev = "0e8ed76", package = "womir" }
 wasmparser = { version = "0.235", default-features = false }
 
 # Uncomment for local development with path patches:
@@ -90,8 +90,8 @@ wasmparser = { version = "0.235", default-features = false }
 # [patch."https://github.com/powdr-labs/stark-backend.git"]
 # openvm-stark-sdk = { path = "../stark-backend/crates/stark-sdk/", default-features = false }
 #
-# [patch."https://github.com/powdr-labs/womir.git"]
-# womir = { path = "../womir" }
+# [patch."https://github.com/powdr-labs/crush.git"]
+# crush = { path = "../crush" }
 
 # [patch."https://github.com/powdr-labs/powdr.git"]
 # powdr-autoprecompiles = { path = "../powdr/autoprecompiles"}

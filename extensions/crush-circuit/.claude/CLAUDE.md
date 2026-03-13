@@ -26,7 +26,7 @@ Understand the opcode → chip mapping:
 extensions/openvm-transpiler/src/instructions.rs
 
 Check crush instruction semantics:
-`<womir>/src/interpreter/mod.rs`
+`<crush>/src/interpreter/mod.rs`
 
 **2. Find relevant RISC-V chips** in OpenVM to reuse or learn from. Read the opcode reference:
 `<openvm>/extensions/rv32im/transpiler/src/instructions.rs`

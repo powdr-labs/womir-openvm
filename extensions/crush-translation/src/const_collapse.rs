@@ -1,5 +1,5 @@
+use crush::loader::{passes::dag::WasmValue as Val, settings};
 use wasmparser::Operator as Op;
-use womir::loader::{passes::dag::WasmValue as Val, settings};
 
 pub fn collapse_const_if_possible(op: &Op, inputs: &[settings::MaybeConstant]) {
     use settings::MaybeConstant::{NonConstant, ReferenceConstant};

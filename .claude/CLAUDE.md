@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-[powdr-wasm](https://github.com/powdr-labs/powdr-wasm) (this repository) implements the [crush](https://github.com/powdr-labs/womir) ISA extension for [OpenVM](https://github.com/openvm-org/openvm/), enabling WebAssembly programs to be proven in a zkVM.
+[powdr-wasm](https://github.com/powdr-labs/powdr-wasm) (this repository) implements the [crush](https://github.com/powdr-labs/crush) ISA extension for [OpenVM](https://github.com/openvm-org/openvm/), enabling WebAssembly programs to be proven in a zkVM.
 
 ## Build & Test Commands
 
