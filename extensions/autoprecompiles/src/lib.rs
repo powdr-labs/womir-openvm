@@ -12,7 +12,7 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_stark_sdk::{
     config::baby_bear_poseidon2::BabyBearPoseidon2Engine, p3_baby_bear::BabyBear,
 };
-use openvm_womir_transpiler::{
+use openvm_wasm_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode,
     Eq64Opcode, EqOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
     Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
@@ -30,7 +30,7 @@ use powdr_openvm::powdr_extension::trace_generator::cpu::SharedPeripheryChipsCpu
 use powdr_openvm::program::OriginalCompiledProgram;
 use powdr_riscv_elf::debug_info::SymbolTable;
 use strum::IntoEnumIterator;
-use womir_circuit::{WomirConfig, WomirConfigExecutor, WomirCpuBuilder, WomirCpuProverExt};
+use wasm_circuit::{WomirConfig, WomirConfigExecutor, WomirCpuBuilder, WomirCpuProverExt};
 use womir_translation::LinkedProgram;
 
 mod formatter;
@@ -45,7 +45,7 @@ impl OpenVmISA for WomirISA {
     type Config = WomirConfig;
     type CpuBuilder = WomirCpuBuilder;
     #[cfg(feature = "cuda")]
-    type GpuBuilder = womir_circuit::WomirGpuBuilder;
+    type GpuBuilder = wasm_circuit::WomirGpuBuilder;
 
     fn create_original_chip_complex(
         config: &Self::Config,
@@ -171,7 +171,7 @@ impl OpenVmISA for WomirISA {
             inventory,
         )?;
         VmProverExtension::extend_prover(
-            &womir_circuit::WomirGpuProverExt,
+            &wasm_circuit::WomirGpuProverExt,
             &config.base,
             inventory,
         )?;

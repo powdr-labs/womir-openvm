@@ -1,6 +1,6 @@
 use openvm_instructions::{LocalOpcode, SystemOpcode, VmOpcode, instruction::Instruction, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
-use openvm_womir_transpiler::{
+use openvm_wasm_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, Eq64Opcode, EqOpcode,
     HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, MulOpcode, Phantom,
     Shift64Opcode, ShiftOpcode,
@@ -108,13 +108,13 @@ pub fn mul_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -
 
 /// rd = (rs1 * rs2)[63:0] (low 64 bits)
 pub fn mul_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    use openvm_womir_transpiler::Mul64Opcode;
+    use openvm_wasm_transpiler::Mul64Opcode;
     instr_r(Mul64Opcode::MUL.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 /// rd = (rs1 * imm)[63:0] (low 64 bits)
 pub fn mul_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instruction<F> {
-    use openvm_womir_transpiler::Mul64Opcode;
+    use openvm_wasm_transpiler::Mul64Opcode;
     instr_i(Mul64Opcode::MUL.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -124,49 +124,49 @@ pub fn mul_imm_64<F: PrimeField32>(rd: usize, rs1: usize, imm: AluImm) -> Instru
 
 /// rd = rs1 /s rs2 (signed division, 32-bit)
 pub fn div<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRemOpcode;
+    use openvm_wasm_transpiler::DivRemOpcode;
     instr_r(DivRemOpcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 /// rd = rs1 /u rs2 (unsigned division, 32-bit)
 pub fn divu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRemOpcode;
+    use openvm_wasm_transpiler::DivRemOpcode;
     instr_r(DivRemOpcode::DIVU.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 /// rd = rs1 %s rs2 (signed remainder, 32-bit)
 pub fn rems<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRemOpcode;
+    use openvm_wasm_transpiler::DivRemOpcode;
     instr_r(DivRemOpcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 /// rd = rs1 %u rs2 (unsigned remainder, 32-bit)
 pub fn remu<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRemOpcode;
+    use openvm_wasm_transpiler::DivRemOpcode;
     instr_r(DivRemOpcode::REMU.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 /// rd = rs1 /s imm (signed division by immediate, 32-bit)
 pub fn div_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRemOpcode;
+    use openvm_wasm_transpiler::DivRemOpcode;
     instr_i(DivRemOpcode::DIV.global_opcode().as_usize(), rd, rs1, imm)
 }
 
 /// rd = rs1 /u imm (unsigned division by immediate, 32-bit)
 pub fn divu_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRemOpcode;
+    use openvm_wasm_transpiler::DivRemOpcode;
     instr_i(DivRemOpcode::DIVU.global_opcode().as_usize(), rd, rs1, imm)
 }
 
 /// rd = rs1 %s imm (signed remainder by immediate, 32-bit)
 pub fn rems_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRemOpcode;
+    use openvm_wasm_transpiler::DivRemOpcode;
     instr_i(DivRemOpcode::REM.global_opcode().as_usize(), rd, rs1, imm)
 }
 
 /// rd = rs1 %u imm (unsigned remainder by immediate, 32-bit)
 pub fn remu_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRemOpcode;
+    use openvm_wasm_transpiler::DivRemOpcode;
     instr_i(DivRemOpcode::REMU.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -174,13 +174,13 @@ pub fn remu_imm<F: PrimeField32>(rd: usize, rs1: usize, imm: impl Into<AluImm>) 
 
 /// rd = rs1 /s rs2 (signed division, 64-bit)
 pub fn div_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRem64Opcode;
+    use openvm_wasm_transpiler::DivRem64Opcode;
     instr_r(DivRem64Opcode::DIV.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 /// rd = rs1 /u rs2 (unsigned division, 64-bit)
 pub fn divu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRem64Opcode;
+    use openvm_wasm_transpiler::DivRem64Opcode;
     instr_r(
         DivRem64Opcode::DIVU.global_opcode().as_usize(),
         rd,
@@ -191,13 +191,13 @@ pub fn divu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instructio
 
 /// rd = rs1 %s rs2 (signed remainder, 64-bit)
 pub fn rems_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRem64Opcode;
+    use openvm_wasm_transpiler::DivRem64Opcode;
     instr_r(DivRem64Opcode::REM.global_opcode().as_usize(), rd, rs1, rs2)
 }
 
 /// rd = rs1 %u rs2 (unsigned remainder, 64-bit)
 pub fn remu_64<F: PrimeField32>(rd: usize, rs1: usize, rs2: usize) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRem64Opcode;
+    use openvm_wasm_transpiler::DivRem64Opcode;
     instr_r(
         DivRem64Opcode::REMU.global_opcode().as_usize(),
         rd,
@@ -212,7 +212,7 @@ pub fn div_imm_64<F: PrimeField32>(
     rs1: usize,
     imm: impl Into<AluImm>,
 ) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRem64Opcode;
+    use openvm_wasm_transpiler::DivRem64Opcode;
     instr_i(DivRem64Opcode::DIV.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -222,7 +222,7 @@ pub fn divu_imm_64<F: PrimeField32>(
     rs1: usize,
     imm: impl Into<AluImm>,
 ) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRem64Opcode;
+    use openvm_wasm_transpiler::DivRem64Opcode;
     instr_i(
         DivRem64Opcode::DIVU.global_opcode().as_usize(),
         rd,
@@ -237,7 +237,7 @@ pub fn rems_imm_64<F: PrimeField32>(
     rs1: usize,
     imm: impl Into<AluImm>,
 ) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRem64Opcode;
+    use openvm_wasm_transpiler::DivRem64Opcode;
     instr_i(DivRem64Opcode::REM.global_opcode().as_usize(), rd, rs1, imm)
 }
 
@@ -247,7 +247,7 @@ pub fn remu_imm_64<F: PrimeField32>(
     rs1: usize,
     imm: impl Into<AluImm>,
 ) -> Instruction<F> {
-    use openvm_womir_transpiler::DivRem64Opcode;
+    use openvm_wasm_transpiler::DivRem64Opcode;
     instr_i(
         DivRem64Opcode::REMU.global_opcode().as_usize(),
         rd,

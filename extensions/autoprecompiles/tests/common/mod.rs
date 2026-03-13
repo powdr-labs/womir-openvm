@@ -5,7 +5,7 @@ use powdr_autoprecompiles::blocks::SuperBlock;
 use powdr_openvm::extraction_utils::OriginalVmConfig;
 use powdr_openvm::test_utils;
 use std::path::Path;
-use womir_circuit::WomirConfig;
+use wasm_circuit::WomirConfig;
 
 pub fn assert_machine_output(
     program: SuperBlock<Instruction<BabyBear>>,

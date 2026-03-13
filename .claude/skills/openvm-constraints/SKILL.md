@@ -76,7 +76,7 @@ pub struct AdapterAirContext<T, I: VmAdapterInterface<T>> {
 
 ## Local Extensions (Frame Pointer)
 
-This project adds frame pointer (`fp`) support. Read `extensions/womir_circuit/src/execution.rs` for:
+This project adds frame pointer (`fp`) support. Read `extensions/circuit/src/execution.rs` for:
 - `ExecutionState { pc, fp, timestamp }` - extended with `fp`
 - `FpBus` - tracks fp transitions
 - `ExecutionBridge` - wraps OpenVM's `ExecutionBus` + our `FpBus`
@@ -129,7 +129,7 @@ self.bitwise_lookup_bus.send_xor(b, c, a).eval(builder, flag);
 
 ### Adapter (Local)
 
-See `extensions/womir_circuit/src/adapters/alu.rs`. Read it completely when writing adapters, to have a reference.
+See `extensions/circuit/src/adapters/alu.rs`. Read it completely when writing adapters, to have a reference.
 
 Include `crate::execution::{ExecutionBridge, ExecutionState}`, NOT the OpenVM variants (which don't handle `fp`):
 
@@ -215,8 +215,8 @@ fn eval(&self, builder: &mut AB, local: &[AB::Var], _from_pc: AB::Var) -> Adapte
 ### Local
 | Component | Path |
 |-----------|------|
-| ExecutionBridge/State/FpBus | `extensions/womir_circuit/src/execution.rs` |
-| ALU Adapter | `extensions/womir_circuit/src/adapters/alu.rs` |
+| ExecutionBridge/State/FpBus | `extensions/circuit/src/execution.rs` |
+| ALU Adapter | `extensions/circuit/src/adapters/alu.rs` |
 
 ### OpenVM Upstream
 | Component | Link | Lines |
@@ -228,4 +228,4 @@ Use the `resolve-dep-paths` skill to resolve these to local paths.
 
 ## Instantiation
 
-All chips are instantiated in `extensions/womir_circuit/src/extension/mod.rs`, in `WomirCpuProverExt::extend_prover`.
+All chips are instantiated in `extensions/circuit/src/extension/mod.rs`, in `WomirCpuProverExt::extend_prover`.

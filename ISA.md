@@ -1,10 +1,10 @@
-# WOMIR-OpenVM ISA Reference
+# powdr-wasm ISA Reference
 
-This document describes the instruction set implemented by WOMIR-OpenVM. Each instruction is documented with its encoding, semantics, and any relevant preconditions.
+This document describes the instruction set implemented by powdr-wasm. Each instruction is documented with its encoding, semantics, and any relevant preconditions.
 
-WOMIR-OpenVM reuses common parts of [OpenVM](https://github.com/openvm-org/openvm/)'s RISC-V implementation. Many of the architecture choices, constants, address spaces, and chip implementations are taken from OpenVM's RV32IM extension.
+powdr-wasm reuses common parts of [OpenVM](https://github.com/openvm-org/openvm/)'s RISC-V implementation. Many of the architecture choices, constants, address spaces, and chip implementations are taken from OpenVM's RV32IM extension.
 
-See `extensions/transpiler/src/instructions.rs` for opcode definitions and `integration/src/instruction_builder.rs` for encoding helpers.
+See `extensions/openvm-transpiler/src/instructions.rs` for opcode definitions and `extensions/womir_translation/src/instruction_builder.rs` for encoding helpers.
 
 ## Execution Model
 
@@ -18,7 +18,7 @@ The program counter advances by `DEFAULT_PC_STEP` (4) after each instruction unl
 
 ### Address Spaces
 
-Address spaces 1, 2, and 3 are the same as in OpenVM's RISC-V implementation. Address space 5 is added by WOMIR-OpenVM for frame pointer storage.
+Address spaces 1, 2, and 3 are the same as in OpenVM's RISC-V implementation. Address space 5 is added by powdr-wasm for frame pointer storage.
 
 | AS | Constant | Purpose |
 |----|----------|---------|
@@ -98,7 +98,7 @@ Opcodes from `BaseAlu64Opcode`, offset `0x2200`. Same variant names and order as
 
 32-bit opcodes from `DivRemOpcode` (re-exported from OpenVM RV32IM), offset `0x0100`. 64-bit opcodes from `DivRem64Opcode`, offset `0x2254`.
 
-**Division by zero:** The circuit constraints follow the RISC-V specification for division by zero, which differs from WebAssembly semantics. See [#24](https://github.com/powdr-labs/womir-openvm/issues/24) for details.
+**Division by zero:** The circuit constraints follow the RISC-V specification for division by zero, which differs from WebAssembly semantics. See [#24](https://github.com/powdr-labs/powdr-wasm/issues/24) for details.
 
 | Instruction | Opcode | Format | Semantics |
 |-------------|--------|--------|-----------|

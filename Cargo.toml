@@ -4,7 +4,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace]
-members = ["integration", "extensions/transpiler", "extensions/womir_circuit", "guest-io", "extensions/autoprecompiles", "extensions/womir_translation"]
+members = ["powdr-wasm", "extensions/openvm-transpiler", "extensions/circuit", "guest-io", "extensions/autoprecompiles", "extensions/womir_translation"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -18,9 +18,9 @@ powdr-autoprecompiles = { git = "https://github.com/powdr-labs/powdr.git", rev =
 powdr-number = { git = "https://github.com/powdr-labs/powdr.git", rev = "b219dc3", default-features = false }
 powdr-riscv-elf = { git = "https://github.com/powdr-labs/powdr.git", rev = "b219dc3", default-features = false }
 
-openvm-womir-transpiler = { path = "extensions/transpiler" }
+openvm-wasm-transpiler = { path = "extensions/openvm-transpiler" }
 
-womir-circuit = { path = "extensions/womir_circuit" }
+wasm-circuit = { path = "extensions/circuit" }
 autoprecompiles = { path = "extensions/autoprecompiles" }
 womir-translation = { path = "extensions/womir_translation" }
 

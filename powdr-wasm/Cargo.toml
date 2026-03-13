@@ -1,0 +1,71 @@
+[package]
+name = "powdr-wasm"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+powdr-openvm = { workspace = true }
+powdr-openvm-riscv = { workspace = true }
+powdr-autoprecompiles = { workspace = true }
+serde.workspace = true
+eyre.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+derive-new.workspace = true
+derive_more.workspace = true
+
+wasm-circuit = { workspace = true }
+autoprecompiles = { workspace = true }
+womir-translation = { workspace = true }
+
+openvm-wasm-transpiler = { workspace = true }
+openvm-sdk = { workspace = true }
+openvm-circuit-primitives = { workspace = true }
+openvm-circuit-primitives-derive = { workspace = true }
+openvm-circuit = { workspace = true }
+openvm-circuit-derive = { workspace = true }
+openvm-instructions = { workspace = true }
+openvm-rv32im-transpiler = { workspace = true }
+openvm-transpiler.workspace = true
+openvm-native-circuit = { workspace = true }
+openvm-stark-sdk = { workspace = true }
+openvm-stark-backend = { workspace = true }
+wasmparser = { workspace = true }
+womir = { workspace = true }
+serde_json = { workspace = true }
+rmp-serde = "1"
+clap = { version = "4.5.43", features = ["derive"] }
+itertools = { workspace = true }
+arrayvec = "0.7"
+num_cpus = "1.17.0"
+
+tracing-subscriber = { version = "0.3.17", features = ["std", "env-filter"] }
+tracing-forest = "0.1"
+metrics = "0.23.0"
+metrics-tracing-context = "0.16.0"
+metrics-util = "0.17.0"
+
+[dev-dependencies]
+postcard = { version = "1.1", features = ["alloc"] }
+
+[features]
+default = []
+cuda = [
+  "wasm-circuit/cuda",
+  "openvm-circuit/cuda",
+  "openvm-native-circuit/cuda",
+  "powdr-openvm/cuda",
+  "powdr-openvm-riscv/cuda",
+  "dep:openvm-cuda-backend",
+]
+touchemall = [
+  "cuda",
+  "wasm-circuit/touchemall",
+  "openvm-circuit/touchemall",
+  "openvm-native-circuit/touchemall",
+  "openvm-cuda-backend/touchemall",
+]
+
+[dependencies.openvm-cuda-backend]
+workspace = true
+optional = true

@@ -1,4 +1,4 @@
-# womir-openvm
+# powdr-wasm
 
 This repository consists of:
 
@@ -46,4 +46,3 @@ cargo run -r -- mock-prove sample-programs/fib_loop.wasm fib --input 10
 ```bash
 cargo run -r -- prove sample-programs/fib_loop.wasm fib --input 10
 ```
-
