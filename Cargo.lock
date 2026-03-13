@@ -6372,7 +6372,7 @@ dependencies = [
 [[package]]
 name = "womir"
 version = "0.0.0"
-source = "git+https://github.com/powdr-labs/womir.git?rev=6887576#68875761881fb42e6bb7de3f157f98ac23f85ff1"
+source = "git+https://github.com/powdr-labs/womir.git?rev=0e8ed76#0e8ed76ac35911bd66a7e5907ec75878fcaeb266"
 dependencies = [
  "clap",
  "derive-where",
