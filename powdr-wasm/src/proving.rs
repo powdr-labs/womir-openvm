@@ -332,7 +332,7 @@ pub fn mock_prove_gpu(
     )
 }
 
-/// Prove from a pre-compiled CRUSH artifact directory.
+/// Prove from a pre-compiled crush artifact directory.
 pub fn prove_from_compiled(
     compiled_dir: &Path,
     stdin: StdIn,

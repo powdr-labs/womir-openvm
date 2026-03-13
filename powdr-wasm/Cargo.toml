@@ -18,7 +18,7 @@ crush-circuit = { workspace = true }
 autoprecompiles = { workspace = true }
 crush-translation = { workspace = true }
 
-openvm-wasm-transpiler = { workspace = true }
+openvm-crush-transpiler = { workspace = true }
 openvm-sdk = { workspace = true }
 openvm-circuit-primitives = { workspace = true }
 openvm-circuit-primitives-derive = { workspace = true }

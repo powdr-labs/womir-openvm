@@ -1,4 +1,4 @@
-//! Compile-to-disk pipelines for CRUSH and RISC-V.
+//! Compile-to-disk pipelines for crush and RISC-V.
 
 use std::path::{Path, PathBuf};
 
@@ -18,7 +18,7 @@ use powdr_openvm::{
 
 use crate::proving::{AGG_PK_FILE, APP_PK_FILE, COMPILED_PROGRAM_FILE, CrushSdk, RiscvSdk};
 
-/// Compile a CRUSH program: load WASM, PGO, APC generation, keygen.
+/// Compile a crush program: load WASM, PGO, APC generation, keygen.
 /// Saves the compiled program and proving keys to `output_dir`.
 pub fn compile_crush_to_disk(
     original_program: OriginalCompiledProgram<CrushISA>,

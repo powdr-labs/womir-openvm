@@ -31,10 +31,10 @@ def render_bench(bench_dir: str) -> str:
                 lines.append("| " + " | ".join(row[h] for h in headers) + " |")
             lines.append("")
 
-    # CRUSH vs RISC-V comparison
+    # crush vs RISC-V comparison
     cmp_path = os.path.join(bench_dir, "crush_vs_riscv.txt")
     if os.path.isfile(cmp_path):
-        lines.append("### CRUSH vs RISC-V Comparison\n")
+        lines.append("### crush vs RISC-V Comparison\n")
         lines.append("```")
         lines.append(open(cmp_path).read().rstrip())
         lines.append("```\n")

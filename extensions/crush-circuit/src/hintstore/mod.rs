@@ -16,6 +16,10 @@ use openvm_circuit_primitives::{
     utils::not,
 };
 use openvm_circuit_primitives_derive::{AlignedBorrow, AlignedBytesBorrow};
+use openvm_crush_transpiler::{
+    HintStoreOpcode,
+    HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
+};
 use openvm_instructions::{
     LocalOpcode,
     instruction::Instruction,
@@ -29,10 +33,6 @@ use openvm_stark_backend::{
     p3_matrix::{Matrix, dense::RowMajorMatrix},
     p3_maybe_rayon::prelude::*,
     rap::{BaseAirWithPublicValues, ColumnsAir, PartitionedBaseAir},
-};
-use openvm_wasm_transpiler::{
-    HintStoreOpcode,
-    HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
 };
 
 use crate::adapters::{

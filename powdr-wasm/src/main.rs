@@ -600,7 +600,7 @@ fn load_wasm_with_settings(
     });
 
     println!(
-        "CRUSH loading statistics: {}",
+        "crush loading statistics: {}",
         global_stats.into_inner().unwrap()
     );
 

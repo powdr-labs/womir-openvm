@@ -1,4 +1,4 @@
-// CRUSH Jump adapter for CUDA tracegen.
+// crush Jump adapter for CUDA tracegen.
 // Reads FP + 1 register (condition/offset), no writes.
 // Simpler than the ALU adapter: single register read, no rs2, no write.
 #pragma once

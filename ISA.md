@@ -141,7 +141,7 @@ The 64-bit comparison operations take 64-bit inputs but always output a 32-bit r
 | `gt_s_64` | (SLT swapped) | R | `rd = (rs1 >s rs2) ? 1 : 0` — emitted as `lt_s_64(rd, rs2, rs1)` |
 | `gt_u_64` | (SLTU swapped) | R | `rd = (rs1 >u rs2) ? 1 : 0` — emitted as `lt_u_64(rd, rs2, rs1)` |
 
-`ge_s`/`ge_u`/`le_s`/`le_u` and `eqz` are synthesized by the CRUSH translator using the primitives above (e.g., `ge_u` = inverted `lt_u`, `eqz` = `lt_u` with immediate 1).
+`ge_s`/`ge_u`/`le_s`/`le_u` and `eqz` are synthesized by the crush translator using the primitives above (e.g., `ge_u` = inverted `lt_u`, `eqz` = `lt_u` with immediate 1).
 
 ## Equality Instructions
 
@@ -264,7 +264,7 @@ Unconditional relative jump by a register-specified offset.
 |-------|-------|
 | b | `RV32_REGISTER_NUM_LIMBS * offset_reg` |
 
-**Semantics:** Read offset from register `[FP + b]`. Set `PC += (offset + 1) * DEFAULT_PC_STEP`. The `+1` accounts for CRUSH's natural PC increment — without it, offset 0 would loop forever.
+**Semantics:** Read offset from register `[FP + b]`. Set `PC += (offset + 1) * DEFAULT_PC_STEP`. The `+1` accounts for crush's natural PC increment — without it, offset 0 would loop forever.
 
 #### JUMP_IF
 
@@ -390,14 +390,14 @@ Read multiple words from the hint stream and write to consecutive memory address
 
 ## System Instructions
 
-These use OpenVM's built-in `SystemOpcode` rather than CRUSH-specific opcodes.
+These use OpenVM's built-in `SystemOpcode` rather than crush-specific opcodes.
 
 ### TERMINATE (halt / trap / abort)
 
 | Instruction | Exit Code | Semantics |
 |-------------|-----------|-----------|
 | `halt` | 0 | Normal program termination |
-| `trap(code)` | `100 + code` | WebAssembly trap (e.g., unreachable, out-of-bounds). Code is the CRUSH trap reason. |
+| `trap(code)` | `100 + code` | WebAssembly trap (e.g., unreachable, out-of-bounds). Code is the crush trap reason. |
 | `abort` | 200 | Explicit abort |
 | (unimplemented) | 201 | Emitted for unimplemented instructions (e.g., SIMD, float). Only triggers if actually executed. |
 
@@ -425,4 +425,4 @@ These use OpenVM's built-in `SystemOpcode` rather than CRUSH-specific opcodes.
 | `Mul64Opcode` | 0x2250 | MUL |
 | `DivRem64Opcode` | 0x2254 | DIV, DIVU, REM, REMU |
 
-The 32-bit ALU/Mul/DivRem/Shift/LessThan opcodes are re-exported from OpenVM's RV32IM transpiler and share the same offset range. The 64-bit variants are CRUSH-specific and use offset range `0x22xx` with the same variant names and order to reuse the same core chips.
+The 32-bit ALU/Mul/DivRem/Shift/LessThan opcodes are re-exported from OpenVM's RV32IM transpiler and share the same offset range. The 64-bit variants are crush-specific and use offset range `0x22xx` with the same variant names and order to reuse the same core chips.

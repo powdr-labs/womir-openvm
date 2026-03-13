@@ -14,6 +14,7 @@ use crate::{adapters::W32_REG_OPS, execution::vm_read_multiple_ops, memory_confi
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_derive::PreflightExecutor;
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
+use openvm_crush_transpiler::EqOpcode;
 use openvm_instructions::{
     LocalOpcode,
     instruction::Instruction,
@@ -21,7 +22,6 @@ use openvm_instructions::{
     riscv::{RV32_IMM_AS, RV32_REGISTER_AS},
 };
 use openvm_stark_backend::p3_field::PrimeField32;
-use openvm_wasm_transpiler::EqOpcode;
 
 use super::core::EqExecutorInner;
 use crate::adapters::{

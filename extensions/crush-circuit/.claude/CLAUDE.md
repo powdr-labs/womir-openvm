@@ -1,6 +1,6 @@
 # crush-circuit
 
-Circuit implementations for the WASM extension of OpenVM.
+Circuit implementations for the crush extension of OpenVM.
 
 A chip = *Adapter* (fetching operands, PC/FP updates, writebacks) + *Core* (main computation).
 
@@ -25,7 +25,7 @@ extensions/crush-circuit/src/extension/mod.rs
 Understand the opcode → chip mapping:
 extensions/openvm-transpiler/src/instructions.rs
 
-Check CRUSH instruction semantics:
+Check crush instruction semantics:
 `<womir>/src/interpreter/mod.rs`
 
 **2. Find relevant RISC-V chips** in OpenVM to reuse or learn from. Read the opcode reference:
@@ -41,7 +41,7 @@ Look for related chips too (e.g., for comparison logic, check both `less_than/` 
 ```
 (Use the `resolve-dep-paths` skill to resolve these to local paths.)
 
-**4. Study existing CRUSH chips** as examples. The `base_alu/` directory shows the pattern:
+**4. Study existing crush chips** as examples. The `base_alu/` directory shows the pattern:
 - `core.rs` - Often reused directly from OpenVM (Base ALU does this)
 - `execution.rs` - Interpreter logic; main difference is frame pointer handling. Remove AOT/TCO code.
 - `mod.rs` - Type aliases and re-exports

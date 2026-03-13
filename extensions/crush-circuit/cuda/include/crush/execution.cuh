@@ -1,4 +1,4 @@
-// CRUSH ExecutionState includes frame pointer (fp) between pc and timestamp.
+// crush ExecutionState includes frame pointer (fp) between pc and timestamp.
 #pragma once
 
 template <typename T> struct CrushExecutionState {

@@ -2,9 +2,9 @@ use openvm_circuit::{
     arch::{AdapterTraceFiller, TraceFiller, get_record_from_slice},
     system::memory::MemoryAuxColsFactory,
 };
+use openvm_crush_transpiler::CallOpcode;
 use openvm_instructions::LocalOpcode;
 use openvm_stark_backend::p3_field::PrimeField32;
-use openvm_wasm_transpiler::CallOpcode;
 use std::borrow::BorrowMut;
 
 use crate::{CallCoreCols, CallCoreRecord, adapters::CallAdapterFiller};

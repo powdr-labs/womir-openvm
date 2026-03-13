@@ -12,6 +12,6 @@ openvm-circuit = { workspace = true }
 openvm-instructions = { workspace = true }
 openvm-rv32im-transpiler = { workspace = true }
 openvm-stark-backend = { workspace = true }
-openvm-wasm-transpiler = { workspace = true }
+openvm-crush-transpiler = { workspace = true }
 crush-circuit = { workspace = true }
 wasmparser = { workspace = true }

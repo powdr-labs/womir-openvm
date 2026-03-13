@@ -2,8 +2,8 @@
 
 This repository consists of:
 
-- [CRUSH](https://github.com/powdr-labs/womir) ISA extension implementation for [OpenVM](https://github.com/openvm-org/openvm/).
-- CRUSH -> OpenVM transpiler.
+- [crush](https://github.com/powdr-labs/womir) ISA extension implementation for [OpenVM](https://github.com/openvm-org/openvm/).
+- crush -> OpenVM transpiler.
 - OpenVM extension integration.
 
 ## Usage

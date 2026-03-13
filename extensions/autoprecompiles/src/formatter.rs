@@ -1,6 +1,6 @@
+use openvm_crush_transpiler::*;
 use openvm_instructions::{LocalOpcode, SystemOpcode, VmOpcode, instruction::Instruction, riscv};
 use openvm_stark_backend::p3_field::PrimeField32;
-use openvm_wasm_transpiler::*;
 use strum::IntoEnumIterator;
 
 pub fn crush_instruction_formatter<F: PrimeField32>(instruction: &Instruction<F>) -> String {

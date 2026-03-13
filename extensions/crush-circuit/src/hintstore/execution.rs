@@ -5,6 +5,10 @@ use std::{
 
 use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
+use openvm_crush_transpiler::{
+    HintStoreOpcode,
+    HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
+};
 use openvm_instructions::{
     LocalOpcode,
     instruction::Instruction,
@@ -12,10 +16,6 @@ use openvm_instructions::{
     riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
 };
 use openvm_stark_backend::p3_field::PrimeField32;
-use openvm_wasm_transpiler::{
-    HintStoreOpcode,
-    HintStoreOpcode::{HINT_BUFFER, HINT_STOREW},
-};
 
 use super::Rv32HintStoreExecutor;
 

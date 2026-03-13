@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to benchmark Reth (eth-block) via CRUSH and RISC-V.
+# Script to benchmark Reth (eth-block) via crush and RISC-V.
 # Mostly for CI usage, but can be easily modified for manual tests.
 
 # NOTE: The script expects the python environment to be set up with the required
@@ -50,7 +50,7 @@ COMPILED_DIR="$ROOT_DIR/.cache/crush-compiled-reth-${BLOCK}"
 
 # Compile step (not included in benchmark metrics)
 echo ""
-echo "==== CRUSH Compile ===="
+echo "==== crush Compile ===="
 echo ""
 cargo run -r $CUDA_FLAGS -- compile \
     "$ROOT_DIR/sample-programs/eth-block/openvm-client-eth.wasm" "main" \
@@ -60,7 +60,7 @@ cargo run -r $CUDA_FLAGS -- compile \
 mkdir -p "$dir"
 pushd "$dir"
 
-### CRUSH benchmark
+### crush benchmark
 run_name="crush"
 echo ""
 echo "==== ${run_name} ===="

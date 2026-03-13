@@ -1,4 +1,4 @@
-// CRUSH Jump core for CUDA tracegen.
+// crush Jump core for CUDA tracegen.
 // Mirrors JumpCoreFiller::fill_trace_row from jump/core.rs.
 #pragma once
 

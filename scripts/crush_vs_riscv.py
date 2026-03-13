@@ -20,7 +20,7 @@ persistent_boundary = "PersistentBoundaryAir<8>"
 vm_connector = "VmConnectorAir"
 phantom = "PhantomAir"
 
-# CRUSH specific
+# crush specific
 crush_alu_32 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, BaseAluCoreAir<4, 8>"
 crush_alu_64 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<8, 2, 2>, BaseAluCoreAir<8, 8>"
 crush_mul_32 = "VmAirWrapper<BaseAluAdapterAirDifferentInputsOutputs<4, 1, 1>, MultiplicationCoreAir<4, 8>"
@@ -62,16 +62,16 @@ def get(d, key):
 
 def compare(cat, a, b):
     print(f"\nComparing {cat}:")
-    print(f"  CRUSH: {a} cells")
+    print(f"  crush: {a} cells")
     print(f"  RISC-V: {b} cells")
     sa = sum([int(x) for x in a])
     sb = sum([int(x) for x in b])
     if sa < sb:
         d = sb - sa
         if sa > 0:
-            print(f"  CRUSH uses fewer cells by {d} ({sb/sa:.2f}x)")
+            print(f"  crush uses fewer cells by {d} ({sb/sa:.2f}x)")
         else:
-            print(f"  CRUSH uses fewer cells by {d} (100%)")
+            print(f"  crush uses fewer cells by {d} (100%)")
     elif sa > sb:
         d = sa - sb
         if sb > 0:
@@ -82,7 +82,7 @@ def compare(cat, a, b):
         print("  Both use the same number of cells")
 
 def main(crush_metrics_path, riscv_metrics_path):
-    print(f"Analysing CRUSH...")
+    print(f"Analysing crush...")
     w = compute_cells_by_air(crush_metrics_path).to_dict()
     w_total = sum(int(v) for v in w.values())
 
@@ -90,24 +90,24 @@ def main(crush_metrics_path, riscv_metrics_path):
     r = compute_cells_by_air(riscv_metrics_path).to_dict()
     r_total = sum(int(v) for v in r.values())
 
-    compare("Total CRUSH vs RISC-V", [w_total], [r_total])
+    compare("Total crush vs RISC-V", [w_total], [r_total])
 
-    compare("ALU CRUSH (32, 64) vs RISC-V 32", [get(w, crush_alu_32), get(w, crush_alu_64)], [get(r, riscv_alu)])
-    compare("Shift CRUSH (32, 64) vs RISC-V 32", [get(w, crush_shift_32), get(w, crush_shift_64)], [get(r, riscv_shift)])
-    compare("Mul CRUSH (32, 64) vs RISC-V 32", [get(w, crush_mul_32), get(w, crush_mul_64)], [get(r, riscv_mul)])
-    compare("DivRem CRUSH (32, 64) vs RISC-V 32", [get(w, crush_divrem_32), get(w, crush_divrem_64)], [get(r, riscv_divrem)])
+    compare("ALU crush (32, 64) vs RISC-V 32", [get(w, crush_alu_32), get(w, crush_alu_64)], [get(r, riscv_alu)])
+    compare("Shift crush (32, 64) vs RISC-V 32", [get(w, crush_shift_32), get(w, crush_shift_64)], [get(r, riscv_shift)])
+    compare("Mul crush (32, 64) vs RISC-V 32", [get(w, crush_mul_32), get(w, crush_mul_64)], [get(r, riscv_mul)])
+    compare("DivRem crush (32, 64) vs RISC-V 32", [get(w, crush_divrem_32), get(w, crush_divrem_64)], [get(r, riscv_divrem)])
     compare("LoadStore", [get(w, crush_loadstore), get(w, crush_loadsignextend)], [get(r, riscv_loadstore), get(r, riscv_loadsignextend)])
-    compare("Comparison CRUSH (lt_32, lt_64, eq_32, eq_64) vs RISC-V lt", [get(w, crush_less_than_32), get(w, crush_less_than_64), get(w, crush_eq_32), get(w, crush_eq_64)], [get(r, riscv_less_than)])
-    compare("Branch/Jump CRUSH (call, jump) vs RISC-V (beq, blt, jal/lui, jalr, auipc)", [get(w, crush_call), get(w, crush_jump)], [get(r, riscv_branch_eq), get(r, riscv_branch_less_than), get(r, riscv_cond_rd_write), get(r, riscv_jalr), get(r, riscv_auipc)])
+    compare("Comparison crush (lt_32, lt_64, eq_32, eq_64) vs RISC-V lt", [get(w, crush_less_than_32), get(w, crush_less_than_64), get(w, crush_eq_32), get(w, crush_eq_64)], [get(r, riscv_less_than)])
+    compare("Branch/Jump crush (call, jump) vs RISC-V (beq, blt, jal/lui, jalr, auipc)", [get(w, crush_call), get(w, crush_jump)], [get(r, riscv_branch_eq), get(r, riscv_branch_less_than), get(r, riscv_cond_rd_write), get(r, riscv_jalr), get(r, riscv_auipc)])
     compare("Comparison + Branch/Jump", [get(w, crush_less_than_32), get(w, crush_less_than_64), get(w, crush_eq_32), get(w, crush_eq_64), get(w, crush_call), get(w, crush_jump)], [get(r, riscv_less_than), get(r, riscv_branch_eq), get(r, riscv_branch_less_than), get(r, riscv_cond_rd_write), get(r, riscv_jalr), get(r, riscv_auipc)])
     compare("HintStore", [get(w, crush_hintstore)], [get(r, riscv_hintstore)])
-    compare("Consts CRUSH", [get(w, crush_consts)], [])
+    compare("Consts crush", [get(w, crush_consts)], [])
     compare("Lookups (range tuple checker, var range checker, bitwise)", [get(w, range_tuple_checker), get(w, var_range_checker), get(w, bitwise_lookup)], [get(r, range_tuple_checker), get(r, var_range_checker), get(r, bitwise_lookup)])
     compare("Continuations (poseidon, merkle, access, boundary, vm_connector)", [get(w, poseidon), get(w, memory_merkle), get(w, access_adapter), get(w, persistent_boundary), get(w, vm_connector)], [get(r, poseidon), get(r, memory_merkle), get(r, access_adapter), get(r, persistent_boundary), get(r, vm_connector)])
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compare trace cells between CRUSH and RISC-V in OpenVM proofs.")
-    parser.add_argument("crush_metrics_path", help="Path to the CRUSH metrics.json file")
+    parser = argparse.ArgumentParser(description="Compare trace cells between crush and RISC-V in OpenVM proofs.")
+    parser.add_argument("crush_metrics_path", help="Path to the crush metrics.json file")
     parser.add_argument("riscv_metrics_path", help="Path to the RISCV metrics.json file")
     args = parser.parse_args()
 

@@ -1,6 +1,6 @@
 [package]
-name = "openvm-wasm-transpiler"
-description = "OpenVM transpiler extension for WASM"
+name = "openvm-crush-transpiler"
+description = "OpenVM transpiler extension for crush"
 version.workspace = true
 edition.workspace = true
 

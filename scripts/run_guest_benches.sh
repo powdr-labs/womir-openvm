@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to collect some numbers from our OpenVM CRUSH vs RISC-V guest examples.
+# Script to collect some numbers from our OpenVM crush vs RISC-V guest examples.
 # Mostly for CI usage, but can be easily modified for manual tests.
 
 # NOTE: The script expects the python environment to be set up with the required

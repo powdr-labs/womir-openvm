@@ -18,6 +18,11 @@ use openvm_circuit_primitives::bitwise_op_lookup::{
 use openvm_circuit_primitives::range_tuple::{
     RangeTupleCheckerAir, RangeTupleCheckerBus, RangeTupleCheckerChip, SharedRangeTupleCheckerChip,
 };
+use openvm_crush_transpiler::{
+    BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode,
+    Eq64Opcode, EqOpcode, HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode,
+    LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
+};
 use openvm_instructions::LocalOpcode;
 use openvm_instructions::PhantomDiscriminant;
 use openvm_rv32im_circuit::{
@@ -30,11 +35,6 @@ use openvm_stark_backend::{
     engine::StarkEngine,
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
-};
-use openvm_wasm_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode,
-    Eq64Opcode, EqOpcode, HintStoreOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode,
-    LoadStoreOpcode, Mul64Opcode, MulOpcode, Phantom, Shift64Opcode, ShiftOpcode,
 };
 
 use serde::{Deserialize, Serialize};
@@ -62,7 +62,7 @@ cfg_if::cfg_if! {
 
 // ============ Extension Struct Definitions ============
 
-/// CRUSH Extension
+/// crush Extension
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Crush {
     #[serde(default = "default_range_tuple_checker_sizes")]

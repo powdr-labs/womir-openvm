@@ -166,7 +166,7 @@ fn same_register_not_optimized() {
     assert_machine_output(
         // Stores a constant in a register, then stores it into memory.
         //
-        // This test showcases an inefficiency in the current combination of CRUSH and the APC optimizer:
+        // This test showcases an inefficiency in the current combination of crush and the APC optimizer:
         // - In the load/store chip, the flags cannot be solved at compile time because they encode BOTH the
         //   opcode (known at compile time) and the alignment offset (only known at runtime).
         // - The flags change the address going to RAM, but not the address going to register memory.

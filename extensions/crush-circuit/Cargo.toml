@@ -1,6 +1,6 @@
 [package]
 name = "crush-circuit"
-description = "Crush circuit extension"
+description = "crush circuit extension"
 version.workspace = true
 edition.workspace = true
 
@@ -18,7 +18,7 @@ openvm-sdk = { workspace = true }
 openvm-rv32im-transpiler = { workspace = true }
 openvm-rv32im-circuit = { workspace = true }
 openvm-transpiler = { workspace = true }
-openvm-wasm-transpiler = { workspace = true }
+openvm-crush-transpiler = { workspace = true }
 strum.workspace = true
 derive-new.workspace = true
 derive_more = { workspace = true, features = ["from"] }

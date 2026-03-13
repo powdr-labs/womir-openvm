@@ -18,6 +18,10 @@ use openvm_circuit::{
     arch::{ExecutionError, Streams, VmExecutor},
     system::memory::{merkle::public_values::extract_public_values, online::LinearMemory},
 };
+use openvm_crush_transpiler::{
+    BaseAlu64Opcode, BaseAluOpcode, DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode,
+    LessThan64Opcode, LessThanOpcode, Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
+};
 use openvm_instructions::{
     exe::{SparseMemoryImage, VmExe},
     instruction::Instruction,
@@ -25,10 +29,6 @@ use openvm_instructions::{
     riscv,
 };
 use openvm_stark_backend::p3_field::PrimeField32;
-use openvm_wasm_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, DivRem64Opcode, DivRemOpcode, Eq64Opcode, EqOpcode,
-    LessThan64Opcode, LessThanOpcode, Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
-};
 use wasmparser::{MemArg, Operator as Op, ValType};
 use womir::{
     interpreter::linker::LabelValue,

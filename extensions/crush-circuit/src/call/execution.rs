@@ -8,12 +8,12 @@ use openvm_circuit::{
     system::memory::online::{GuestMemory, TracingMemory},
 };
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
+use openvm_crush_transpiler::CallOpcode;
 use openvm_instructions::{
     LocalOpcode, VmOpcode, instruction::Instruction, program::DEFAULT_PC_STEP,
     riscv::RV32_REGISTER_AS,
 };
 use openvm_stark_backend::p3_field::PrimeField32;
-use openvm_wasm_transpiler::CallOpcode;
 
 use crate::adapters::RV32_REGISTER_NUM_LIMBS;
 use crate::adapters::call::{CallAdapterWrite, CallData};

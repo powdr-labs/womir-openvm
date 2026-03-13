@@ -9,15 +9,15 @@ use openvm_circuit::arch::{
 use openvm_circuit::system::SystemCpuBuilder;
 #[cfg(feature = "cuda")]
 use openvm_circuit::system::cuda::extensions::SystemGpuBuilder;
+use openvm_crush_transpiler::{
+    BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode,
+    Eq64Opcode, EqOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
+    Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
+};
 use openvm_instructions::{LocalOpcode, VmOpcode, instruction::Instruction};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_stark_sdk::{
     config::baby_bear_poseidon2::BabyBearPoseidon2Engine, p3_baby_bear::BabyBear,
-};
-use openvm_wasm_transpiler::{
-    BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode,
-    Eq64Opcode, EqOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
-    Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
 };
 use powdr_openvm::BabyBearSC;
 #[cfg(feature = "cuda")]

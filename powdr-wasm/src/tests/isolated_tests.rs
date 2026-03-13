@@ -1,6 +1,6 @@
-//! Isolated testing infrastructure for CRUSH instructions.
+//! Isolated testing infrastructure for crush instructions.
 //!
-//! This module provides a framework for testing CRUSH instructions
+//! This module provides a framework for testing crush instructions
 //! through isolated execution:
 //! - Raw execution (InterpretedInstance::execute_from_state)
 //! - Metered execution (InterpretedInstance::execute_metered_from_state)

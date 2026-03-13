@@ -11,11 +11,11 @@ use openvm_circuit::{
     },
 };
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
+use openvm_crush_transpiler::JumpOpcode;
 use openvm_instructions::{
     LocalOpcode, instruction::Instruction, program::DEFAULT_PC_STEP, riscv::RV32_REGISTER_AS,
 };
 use openvm_stark_backend::p3_field::PrimeField32;
-use openvm_wasm_transpiler::JumpOpcode;
 use strum::EnumCount;
 
 use super::core::{JumpCoreFiller, JumpCoreRecord};

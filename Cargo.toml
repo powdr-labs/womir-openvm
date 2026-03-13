@@ -18,7 +18,7 @@ powdr-autoprecompiles = { git = "https://github.com/powdr-labs/powdr.git", rev =
 powdr-number = { git = "https://github.com/powdr-labs/powdr.git", rev = "b219dc3", default-features = false }
 powdr-riscv-elf = { git = "https://github.com/powdr-labs/powdr.git", rev = "b219dc3", default-features = false }
 
-openvm-wasm-transpiler = { path = "extensions/openvm-transpiler" }
+openvm-crush-transpiler = { path = "extensions/openvm-transpiler" }
 
 crush-circuit = { path = "extensions/crush-circuit" }
 autoprecompiles = { path = "extensions/autoprecompiles" }

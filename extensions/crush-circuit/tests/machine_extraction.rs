@@ -1,6 +1,6 @@
-//! Snapshot test for CRUSH machine constraints.
+//! Snapshot test for crush machine constraints.
 //!
-//! This test extracts the symbolic constraints from all AIRs in the CRUSH VM
+//! This test extracts the symbolic constraints from all AIRs in the crush VM
 //! and compares them against a snapshot file. This helps catch unintended
 //! changes to the constraint system.
 

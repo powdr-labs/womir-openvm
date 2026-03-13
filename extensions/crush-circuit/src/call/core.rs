@@ -2,13 +2,13 @@ use std::borrow::Borrow;
 
 use openvm_circuit::arch::{AdapterAirContext, VmCoreAir};
 use openvm_circuit_primitives_derive::AlignedBorrow;
+use openvm_crush_transpiler::CallOpcode;
 use openvm_stark_backend::{
     interaction::InteractionBuilder,
     p3_air::{AirBuilder, BaseAir},
     p3_field::{Field, FieldAlgebra},
     rap::{BaseAirWithPublicValues, ColumnsAir},
 };
-use openvm_wasm_transpiler::CallOpcode;
 use struct_reflection::{StructReflection, StructReflectionHelper};
 use strum::IntoEnumIterator;
 
