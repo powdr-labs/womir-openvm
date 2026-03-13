@@ -1,4 +1,4 @@
-// Float conversion operations for WOMIR.
+// Float conversion operations for CRUSH.
 // Uses u64 directly for i64/f64 values to match WASM stack types.
 
 typedef unsigned int u32;

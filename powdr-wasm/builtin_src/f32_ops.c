@@ -1,4 +1,4 @@
-// Software float32 operations for WOMIR.
+// Software float32 operations for CRUSH.
 // Each function is exported individually.
 // Float values are passed as unsigned 32-bit integers (bit representation).
 

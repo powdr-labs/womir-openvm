@@ -1,12 +1,12 @@
 //! Test-only helpers: metered execution and preflight.
 //! For mock proof, delegates to `crate::proving::mock_prove`.
 
+use crush_circuit::{CrushConfig, CrushCpuBuilder};
 use openvm_circuit::arch::{VirtualMachine, VmState, execution_mode::Segment};
 use openvm_instructions::exe::VmExe;
 use openvm_stark_sdk::{
     engine::StarkEngine, openvm_stark_backend::prover::hal::DeviceDataTransporter,
 };
-use wasm_circuit::{WomirConfig, WomirCpuBuilder};
 
 use crate::proving::{F, default_engine, vm_proving_key};
 
@@ -18,8 +18,8 @@ pub fn test_metered_execution(
     let engine = default_engine();
     let pk = vm_proving_key();
     let d_pk = engine.device().transport_pk_to_device(pk);
-    let vm_config = WomirConfig::default();
-    let vm = VirtualMachine::<_, WomirCpuBuilder>::new(engine, WomirCpuBuilder, vm_config, d_pk)?;
+    let vm_config = CrushConfig::default();
+    let vm = VirtualMachine::<_, CrushCpuBuilder>::new(engine, CrushCpuBuilder, vm_config, d_pk)?;
 
     let metered_ctx = vm.build_metered_ctx(exe);
     let metered_instance = vm.metered_interpreter(exe)?;
@@ -37,8 +37,8 @@ pub fn test_preflight(
     let engine = default_engine();
     let pk = vm_proving_key();
     let d_pk = engine.device().transport_pk_to_device(pk);
-    let vm_config = WomirConfig::default();
-    let vm = VirtualMachine::<_, WomirCpuBuilder>::new(engine, WomirCpuBuilder, vm_config, d_pk)?;
+    let vm_config = CrushConfig::default();
+    let vm = VirtualMachine::<_, CrushCpuBuilder>::new(engine, CrushCpuBuilder, vm_config, d_pk)?;
 
     // Run metered execution to discover segments.
     let metered_ctx = vm.build_metered_ctx(exe);

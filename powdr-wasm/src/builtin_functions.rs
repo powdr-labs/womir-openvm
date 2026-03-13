@@ -12,7 +12,7 @@ use womir::loader::{
     rwm::RWMStages,
 };
 
-use womir_translation::{Directive, OpenVMSettings};
+use crush_translation::{Directive, OpenVMSettings};
 
 pub struct BuiltinDefinition {
     wasm_bytes: &'static [u8],

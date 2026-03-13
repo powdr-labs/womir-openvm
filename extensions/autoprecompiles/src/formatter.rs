@@ -3,7 +3,7 @@ use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_wasm_transpiler::*;
 use strum::IntoEnumIterator;
 
-pub fn womir_instruction_formatter<F: PrimeField32>(instruction: &Instruction<F>) -> String {
+pub fn crush_instruction_formatter<F: PrimeField32>(instruction: &Instruction<F>) -> String {
     let Instruction {
         opcode,
         a,

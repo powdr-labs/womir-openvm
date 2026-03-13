@@ -1,0 +1,17 @@
+[package]
+name = "crush-translation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+womir = { workspace = true }
+arrayvec = "0.7"
+itertools = { workspace = true }
+openvm-circuit = { workspace = true }
+openvm-instructions = { workspace = true }
+openvm-rv32im-transpiler = { workspace = true }
+openvm-stark-backend = { workspace = true }
+openvm-wasm-transpiler = { workspace = true }
+crush-circuit = { workspace = true }
+wasmparser = { workspace = true }

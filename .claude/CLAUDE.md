@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-[powdr-wasm](https://github.com/powdr-labs/powdr-wasm) (this repository) implements the [WOMIR](https://github.com/powdr-labs/womir) ISA extension for [OpenVM](https://github.com/openvm-org/openvm/), enabling WebAssembly programs to be proven in a zkVM.
+[powdr-wasm](https://github.com/powdr-labs/powdr-wasm) (this repository) implements the [CRUSH](https://github.com/powdr-labs/womir) ISA extension for [OpenVM](https://github.com/openvm-org/openvm/), enabling WebAssembly programs to be proven in a zkVM.
 
 ## Build & Test Commands
 
@@ -29,10 +29,10 @@ cargo fmt --all -- --check
 
 ### Workspace Crates
 
-- **powdr-wasm** - CLI for loading WASM, translating to WOMIR, and proving execution
+- **powdr-wasm** - CLI for loading WASM, translating to CRUSH, and proving execution
   - `powdr-wasm/src/main.rs` also includes integration tests
-- **extensions/openvm-transpiler** (`openvm-wasm-transpiler`) - Transpiles WOMIR instructions to OpenVM format
-- **extensions/circuit** (`wasm-circuit`) - Circuit implementation for the WASM extension
+- **extensions/openvm-transpiler** (`openvm-wasm-transpiler`) - Transpiles CRUSH instructions to OpenVM format
+- **extensions/crush-circuit** (`crush-circuit`) - Circuit implementation for the Crush extension
 
 ### Key Dependencies
 

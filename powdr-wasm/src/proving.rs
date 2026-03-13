@@ -3,7 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use autoprecompiles::WomirISA;
+use autoprecompiles::CrushISA;
+use crush_circuit::{CrushConfig, CrushCpuBuilder};
 use openvm_circuit::arch::{
     Executor, MeteredExecutor, PreflightExecutor, VirtualMachine, VmBuilder, VmCircuitConfig,
     VmExecutionConfig, VmState, debug_proving_ctx,
@@ -36,7 +37,6 @@ use powdr_openvm::{
     default_powdr_openvm_config, execution_profile_from_guest,
     program::OriginalCompiledProgram,
 };
-use wasm_circuit::{WomirConfig, WomirCpuBuilder};
 
 pub type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 type SC = BabyBearPoseidon2Config;
@@ -111,7 +111,7 @@ pub fn gpu_engine() -> openvm_cuda_backend::engine::GpuBabyBearPoseidon2Engine {
 
 pub fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
     VM_PROVING_KEY.get_or_init(|| {
-        let config = WomirConfig::default();
+        let config = CrushConfig::default();
         let engine = cpu_engine();
         let circuit = config
             .create_airs()
@@ -121,10 +121,10 @@ pub fn vm_proving_key() -> &'static MultiStarkProvingKey<SC> {
 }
 
 #[cfg(not(feature = "cuda"))]
-pub(crate) type WomirSdk = powdr_openvm::PowdrSdkCpu<WomirISA>;
+pub(crate) type CrushSdk = powdr_openvm::PowdrSdkCpu<CrushISA>;
 
 #[cfg(feature = "cuda")]
-pub(crate) type WomirSdk = powdr_openvm::PowdrSdkGpu<WomirISA>;
+pub(crate) type CrushSdk = powdr_openvm::PowdrSdkGpu<CrushISA>;
 
 #[cfg(not(feature = "cuda"))]
 pub(crate) type RiscvSdk = powdr_openvm::PowdrSdkCpu<powdr_openvm_riscv::RiscvISA>;
@@ -136,9 +136,9 @@ pub(crate) const APP_PK_FILE: &str = "app_pk.bin";
 pub(crate) const AGG_PK_FILE: &str = "agg_pk.bin";
 pub(crate) const COMPILED_PROGRAM_FILE: &str = "compiled_program.bin";
 
-fn default_app_config_without_apcs() -> AppConfig<SpecializedConfig<WomirISA>> {
-    let vm_config = WomirConfig::default();
-    let app_config = powdr_openvm::SpecializedConfig::<WomirISA>::new(
+fn default_app_config_without_apcs() -> AppConfig<SpecializedConfig<CrushISA>> {
+    let vm_config = CrushConfig::default();
+    let app_config = powdr_openvm::SpecializedConfig::<CrushISA>::new(
         OriginalVmConfig::new(vm_config),
         vec![],
         DEFAULT_DEGREE_BOUND,
@@ -154,7 +154,7 @@ pub fn keygen_to_disk(cache_dir: &Path) -> Result<(), Box<dyn std::error::Error>
     std::fs::create_dir_all(cache_dir)?;
 
     let app_config = default_app_config_without_apcs();
-    let sdk = WomirSdk::new_without_transpiler(app_config)?;
+    let sdk = CrushSdk::new_without_transpiler(app_config)?;
 
     tracing::info!("Generating app proving key...");
     let app_pk = sdk.app_pk();
@@ -171,14 +171,14 @@ pub fn keygen_to_disk(cache_dir: &Path) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-fn build_sdk(cache_dir: Option<&Path>) -> Result<WomirSdk, Box<dyn std::error::Error>> {
+fn build_sdk(cache_dir: Option<&Path>) -> Result<CrushSdk, Box<dyn std::error::Error>> {
     let app_config = default_app_config_without_apcs();
-    let sdk = WomirSdk::new_without_transpiler(app_config)?;
+    let sdk = CrushSdk::new_without_transpiler(app_config)?;
 
     if let Some(dir) = cache_dir {
         let app_pk_path = dir.join(APP_PK_FILE);
         tracing::info!("Loading cached app_pk from {}", app_pk_path.display());
-        let app_pk: AppProvingKey<SpecializedConfig<WomirISA>> =
+        let app_pk: AppProvingKey<SpecializedConfig<CrushISA>> =
             rmp_serde::from_slice(&std::fs::read(&app_pk_path)?)?;
         sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
 
@@ -195,7 +195,7 @@ fn build_sdk(cache_dir: Option<&Path>) -> Result<WomirSdk, Box<dyn std::error::E
 
 /// Generate and verify a real cryptographic proof, with optional recursion.
 pub fn prove(
-    original_program: OriginalCompiledProgram<WomirISA>,
+    original_program: OriginalCompiledProgram<CrushISA>,
     stdin: StdIn,
     recursion: bool,
     apc_count: u64,
@@ -211,7 +211,7 @@ pub fn prove(
         customize(
             original_program,
             powdr_config,
-            CellPgo::<_, OpenVmApcCandidate<WomirISA>>::with_pgo_data_and_max_columns(
+            CellPgo::<_, OpenVmApcCandidate<CrushISA>>::with_pgo_data_and_max_columns(
                 execution_profile,
                 None,
             ),
@@ -231,7 +231,7 @@ pub fn prove(
     let sdk = if apc_count == 0 {
         build_sdk(cache_dir)?
     } else {
-        WomirSdk::new_without_transpiler(app_config)?
+        CrushSdk::new_without_transpiler(app_config)?
     };
 
     let mut app_prover = sdk.app_prover(compiled.exe.clone())?;
@@ -264,15 +264,15 @@ pub fn mock_prove_with<E, VB>(
 ) -> Result<VmState<F>, Box<dyn std::error::Error>>
 where
     E: StarkEngine<SC = SC>,
-    VB: VmBuilder<E, VmConfig = WomirConfig> + Clone,
+    VB: VmBuilder<E, VmConfig = CrushConfig> + Clone,
     Val<E::SC>: PrimeField32,
-    <WomirConfig as VmExecutionConfig<Val<E::SC>>>::Executor: Executor<Val<E::SC>>
+    <CrushConfig as VmExecutionConfig<Val<E::SC>>>::Executor: Executor<Val<E::SC>>
         + MeteredExecutor<Val<E::SC>>
         + PreflightExecutor<Val<E::SC>, VB::RecordArena>,
 {
     let pk = vm_proving_key();
     let d_pk = engine.device().transport_pk_to_device(pk);
-    let vm_config = WomirConfig::default();
+    let vm_config = CrushConfig::default();
     let mut vm = VirtualMachine::<_, VB>::new(engine, builder, vm_config, d_pk)?;
 
     // Run metered execution to discover segments.
@@ -313,37 +313,42 @@ pub fn mock_prove(
     exe: &VmExe<F>,
     init_state: VmState<F>,
 ) -> Result<VmState<F>, Box<dyn std::error::Error>> {
-    mock_prove_with(cpu_engine(), WomirCpuBuilder, exe, init_state)
+    mock_prove_with(cpu_engine(), CrushCpuBuilder, exe, init_state)
 }
 
 /// Mock proof with constraint verification (all segments) using GPU engine.
-/// Uses the same WomirConfig as CPU but with WomirGpuBuilder for GPU tracegen.
+/// Uses the same CrushConfig as CPU but with CrushGpuBuilder for GPU tracegen.
 /// Returns the final state after all segments have been processed.
 #[cfg(feature = "cuda")]
 pub fn mock_prove_gpu(
     exe: &VmExe<F>,
     init_state: VmState<F>,
 ) -> Result<VmState<F>, Box<dyn std::error::Error>> {
-    mock_prove_with(gpu_engine(), wasm_circuit::WomirGpuBuilder, exe, init_state)
+    mock_prove_with(
+        gpu_engine(),
+        crush_circuit::CrushGpuBuilder,
+        exe,
+        init_state,
+    )
 }
 
-/// Prove from a pre-compiled WOMIR artifact directory.
+/// Prove from a pre-compiled CRUSH artifact directory.
 pub fn prove_from_compiled(
     compiled_dir: &Path,
     stdin: StdIn,
     recursion: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Loading compiled program...");
-    let compiled: CompiledProgram<WomirISA> =
+    let compiled: CompiledProgram<CrushISA> =
         rmp_serde::from_slice(&std::fs::read(compiled_dir.join(COMPILED_PROGRAM_FILE))?)?;
 
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
     let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
-    let sdk = WomirSdk::new_without_transpiler(app_config)?;
+    let sdk = CrushSdk::new_without_transpiler(app_config)?;
 
     tracing::info!("Loading cached app_pk...");
-    let app_pk: AppProvingKey<SpecializedConfig<WomirISA>> =
+    let app_pk: AppProvingKey<SpecializedConfig<CrushISA>> =
         rmp_serde::from_slice(&std::fs::read(compiled_dir.join(APP_PK_FILE))?)?;
     sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
 

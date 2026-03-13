@@ -4,7 +4,7 @@ This document describes the instruction set implemented by powdr-wasm. Each inst
 
 powdr-wasm reuses common parts of [OpenVM](https://github.com/openvm-org/openvm/)'s RISC-V implementation. Many of the architecture choices, constants, address spaces, and chip implementations are taken from OpenVM's RV32IM extension.
 
-See `extensions/openvm-transpiler/src/instructions.rs` for opcode definitions and `extensions/womir_translation/src/instruction_builder.rs` for encoding helpers.
+See `extensions/openvm-transpiler/src/instructions.rs` for opcode definitions and `extensions/crush-translation/src/instruction_builder.rs` for encoding helpers.
 
 ## Execution Model
 
@@ -141,7 +141,7 @@ The 64-bit comparison operations take 64-bit inputs but always output a 32-bit r
 | `gt_s_64` | (SLT swapped) | R | `rd = (rs1 >s rs2) ? 1 : 0` — emitted as `lt_s_64(rd, rs2, rs1)` |
 | `gt_u_64` | (SLTU swapped) | R | `rd = (rs1 >u rs2) ? 1 : 0` — emitted as `lt_u_64(rd, rs2, rs1)` |
 
-`ge_s`/`ge_u`/`le_s`/`le_u` and `eqz` are synthesized by the WOMIR translator using the primitives above (e.g., `ge_u` = inverted `lt_u`, `eqz` = `lt_u` with immediate 1).
+`ge_s`/`ge_u`/`le_s`/`le_u` and `eqz` are synthesized by the CRUSH translator using the primitives above (e.g., `ge_u` = inverted `lt_u`, `eqz` = `lt_u` with immediate 1).
 
 ## Equality Instructions
 
@@ -264,7 +264,7 @@ Unconditional relative jump by a register-specified offset.
 |-------|-------|
 | b | `RV32_REGISTER_NUM_LIMBS * offset_reg` |
 
-**Semantics:** Read offset from register `[FP + b]`. Set `PC += (offset + 1) * DEFAULT_PC_STEP`. The `+1` accounts for WOMIR's natural PC increment — without it, offset 0 would loop forever.
+**Semantics:** Read offset from register `[FP + b]`. Set `PC += (offset + 1) * DEFAULT_PC_STEP`. The `+1` accounts for CRUSH's natural PC increment — without it, offset 0 would loop forever.
 
 #### JUMP_IF
 
@@ -390,14 +390,14 @@ Read multiple words from the hint stream and write to consecutive memory address
 
 ## System Instructions
 
-These use OpenVM's built-in `SystemOpcode` rather than WOMIR-specific opcodes.
+These use OpenVM's built-in `SystemOpcode` rather than CRUSH-specific opcodes.
 
 ### TERMINATE (halt / trap / abort)
 
 | Instruction | Exit Code | Semantics |
 |-------------|-----------|-----------|
 | `halt` | 0 | Normal program termination |
-| `trap(code)` | `100 + code` | WebAssembly trap (e.g., unreachable, out-of-bounds). Code is the WOMIR trap reason. |
+| `trap(code)` | `100 + code` | WebAssembly trap (e.g., unreachable, out-of-bounds). Code is the CRUSH trap reason. |
 | `abort` | 200 | Explicit abort |
 | (unimplemented) | 201 | Emitted for unimplemented instructions (e.g., SIMD, float). Only triggers if actually executed. |
 
@@ -425,4 +425,4 @@ These use OpenVM's built-in `SystemOpcode` rather than WOMIR-specific opcodes.
 | `Mul64Opcode` | 0x2250 | MUL |
 | `DivRem64Opcode` | 0x2254 | DIV, DIVU, REM, REMU |
 
-The 32-bit ALU/Mul/DivRem/Shift/LessThan opcodes are re-exported from OpenVM's RV32IM transpiler and share the same offset range. The 64-bit variants are WOMIR-specific and use offset range `0x22xx` with the same variant names and order to reuse the same core chips.
+The 32-bit ALU/Mul/DivRem/Shift/LessThan opcodes are re-exported from OpenVM's RV32IM transpiler and share the same offset range. The 64-bit variants are CRUSH-specific and use offset range `0x22xx` with the same variant names and order to reuse the same core chips.

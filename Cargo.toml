@@ -4,7 +4,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace]
-members = ["powdr-wasm", "extensions/openvm-transpiler", "extensions/circuit", "guest-io", "extensions/autoprecompiles", "extensions/womir_translation"]
+members = ["powdr-wasm", "extensions/openvm-transpiler", "extensions/crush-circuit", "guest-io", "extensions/autoprecompiles", "extensions/crush-translation"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -20,9 +20,9 @@ powdr-riscv-elf = { git = "https://github.com/powdr-labs/powdr.git", rev = "b219
 
 openvm-wasm-transpiler = { path = "extensions/openvm-transpiler" }
 
-wasm-circuit = { path = "extensions/circuit" }
+crush-circuit = { path = "extensions/crush-circuit" }
 autoprecompiles = { path = "extensions/autoprecompiles" }
-womir-translation = { path = "extensions/womir_translation" }
+crush-translation = { path = "extensions/crush-translation" }
 
 openvm-stark-sdk = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "v1.2.2-powdr", features = [
   "parallel",

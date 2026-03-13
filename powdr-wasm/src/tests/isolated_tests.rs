@@ -1,12 +1,13 @@
-//! Isolated testing infrastructure for WOMIR instructions.
+//! Isolated testing infrastructure for CRUSH instructions.
 //!
-//! This module provides a framework for testing WOMIR instructions
+//! This module provides a framework for testing CRUSH instructions
 //! through isolated execution:
 //! - Raw execution (InterpretedInstance::execute_from_state)
 //! - Metered execution (InterpretedInstance::execute_metered_from_state)
 //! - Preflight (VirtualMachine::execute_preflight)
 //! - Proof generation (VirtualMachine::prove)
 
+use crush_circuit::{CrushConfig, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory};
 use openvm_circuit::{
     arch::{ExecutionError, VmExecutor, VmState},
     system::memory::online::GuestMemory,
@@ -18,11 +19,10 @@ use openvm_instructions::{
     riscv::RV32_REGISTER_AS,
 };
 use openvm_sdk::StdIn;
-use wasm_circuit::{WomirConfig, adapters::RV32_REGISTER_NUM_LIMBS, memory_config::FpMemory};
 
 use super::helpers;
 use crate::proving::{ALL_BACKENDS, Backend};
-use womir_translation::instruction_builder::*;
+use crush_translation::instruction_builder::*;
 
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
@@ -91,7 +91,7 @@ fn build_exe(spec: &TestSpec) -> VmExe<F> {
 
 /// Create initial VmState from spec, exe, and config.
 /// Sets up memory with initial register values, RAM values, and FP from the spec.
-fn build_initial_state(spec: &TestSpec, exe: &VmExe<F>, vm_config: &WomirConfig) -> VmState<F> {
+fn build_initial_state(spec: &TestSpec, exe: &VmExe<F>, vm_config: &CrushConfig) -> VmState<F> {
     let mut state = VmState::initial(
         &vm_config.system,
         &exe.init_memory,
@@ -177,7 +177,7 @@ fn verify_state(
 /// Raw execution using InterpretedInstance::execute_from_state.
 pub fn test_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
-    let vm_config = WomirConfig::default();
+    let vm_config = CrushConfig::default();
     let vm = VmExecutor::new(vm_config.clone()).unwrap();
     let instance = vm.instance(&exe).unwrap();
 
@@ -190,7 +190,7 @@ pub fn test_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>>
 /// Metered execution using InterpretedInstance::execute_metered_from_state.
 pub fn test_metered_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
-    let vm_config = WomirConfig::default();
+    let vm_config = CrushConfig::default();
     let (segments, final_state) =
         helpers::test_metered_execution(&exe, build_initial_state(spec, &exe, &vm_config))?;
 
@@ -201,7 +201,7 @@ pub fn test_metered_execution(spec: &TestSpec) -> Result<(), Box<dyn std::error:
 /// Preflight using VirtualMachine::execute_preflight.
 pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
-    let vm_config = WomirConfig::default();
+    let vm_config = CrushConfig::default();
     let final_state = helpers::test_preflight(&exe, build_initial_state(spec, &exe, &vm_config))?;
 
     verify_state(spec, &final_state)
@@ -213,7 +213,7 @@ pub fn test_preflight(spec: &TestSpec) -> Result<(), Box<dyn std::error::Error>>
 /// Runs on the specified backends (CPU, GPU, or both) and verifies the final state.
 pub fn test_prove(spec: &TestSpec, backends: &[Backend]) -> Result<(), Box<dyn std::error::Error>> {
     let exe = build_exe(spec);
-    let vm_config = WomirConfig::default();
+    let vm_config = CrushConfig::default();
     let init_state = build_initial_state(spec, &exe, &vm_config);
 
     for &backend in backends {
@@ -3762,14 +3762,14 @@ mod tests {
 
     #[test]
     fn test_trap() {
-        use womir_translation::ERROR_CODE_OFFSET;
+        use crush_translation::ERROR_CODE_OFFSET;
 
         setup_tracing_with_log_level(Level::WARN);
 
         let instructions: Vec<Instruction<F>> = vec![trap(42), halt()];
         let program = Program::from_instructions(&instructions);
         let exe = VmExe::new(program);
-        let vm_config = WomirConfig::default();
+        let vm_config = CrushConfig::default();
         let vm = VmExecutor::new(vm_config).unwrap();
         let instance = vm.instance(&exe).unwrap();
         match instance.execute(StdIn::default(), None) {

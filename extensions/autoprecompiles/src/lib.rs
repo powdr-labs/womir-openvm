@@ -1,5 +1,7 @@
 use std::collections::{BTreeSet, HashSet};
 
+use crush_circuit::{CrushConfig, CrushConfigExecutor, CrushCpuBuilder, CrushCpuProverExt};
+use crush_translation::LinkedProgram;
 use openvm_circuit::arch::{
     AirInventory, AirInventoryError, ChipInventoryError, VmBuilder, VmCircuitConfig,
     VmCircuitExtension, VmProverExtension,
@@ -30,29 +32,27 @@ use powdr_openvm::powdr_extension::trace_generator::cpu::SharedPeripheryChipsCpu
 use powdr_openvm::program::OriginalCompiledProgram;
 use powdr_riscv_elf::debug_info::SymbolTable;
 use strum::IntoEnumIterator;
-use wasm_circuit::{WomirConfig, WomirConfigExecutor, WomirCpuBuilder, WomirCpuProverExt};
-use womir_translation::LinkedProgram;
 
 mod formatter;
-use formatter::womir_instruction_formatter;
+use formatter::crush_instruction_formatter;
 
 #[derive(Clone, Default)]
-pub struct WomirISA;
+pub struct CrushISA;
 
-impl OpenVmISA for WomirISA {
+impl OpenVmISA for CrushISA {
     type LinkedProgram<'a> = LinkedProgram<'a, BabyBear>;
-    type Executor<F: PrimeField32> = WomirConfigExecutor<F>;
-    type Config = WomirConfig;
-    type CpuBuilder = WomirCpuBuilder;
+    type Executor<F: PrimeField32> = CrushConfigExecutor<F>;
+    type Config = CrushConfig;
+    type CpuBuilder = CrushCpuBuilder;
     #[cfg(feature = "cuda")]
-    type GpuBuilder = wasm_circuit::WomirGpuBuilder;
+    type GpuBuilder = crush_circuit::CrushGpuBuilder;
 
     fn create_original_chip_complex(
         config: &Self::Config,
         airs: AirInventory<BabyBearSC>,
     ) -> Result<OriginalCpuChipComplex, ChipInventoryError> {
-        <WomirCpuBuilder as VmBuilder<BabyBearPoseidon2Engine>>::create_chip_complex(
-            &WomirCpuBuilder,
+        <CrushCpuBuilder as VmBuilder<BabyBearPoseidon2Engine>>::create_chip_complex(
+            &CrushCpuBuilder,
             config,
             airs,
         )
@@ -92,7 +92,7 @@ impl OpenVmISA for WomirISA {
     }
 
     fn format<F: PrimeField32>(instruction: &Instruction<F>) -> String {
-        womir_instruction_formatter(instruction)
+        crush_instruction_formatter(instruction)
     }
 
     fn get_symbol_table<'a>(program: &Self::LinkedProgram<'a>) -> SymbolTable {
@@ -143,7 +143,7 @@ impl OpenVmISA for WomirISA {
         )?;
 
         VmProverExtension::<BabyBearPoseidon2Engine, _, _>::extend_prover(
-            &WomirCpuProverExt,
+            &CrushCpuProverExt,
             &config.base,
             inventory,
         )?;
@@ -171,7 +171,7 @@ impl OpenVmISA for WomirISA {
             inventory,
         )?;
         VmProverExtension::extend_prover(
-            &wasm_circuit::WomirGpuProverExt,
+            &crush_circuit::CrushGpuProverExt,
             &config.base,
             inventory,
         )?;
@@ -188,7 +188,7 @@ mod tests {
     #[test]
     fn machine_extraction() {
         let powdr_config = powdr_openvm::default_powdr_openvm_config(0, 0);
-        let original_config = OriginalVmConfig::<WomirISA>::new(WomirConfig::default());
+        let original_config = OriginalVmConfig::<CrushISA>::new(CrushConfig::default());
         let _ = original_config.airs(powdr_config.degree_bound).unwrap();
     }
 }

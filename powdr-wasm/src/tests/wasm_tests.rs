@@ -290,7 +290,7 @@ fn run_wasm_test_function_raw(
 
     // Capture the exe before module.execute() mutates memory_image.
     let exe = module.program_with_entry_point(function);
-    let vm_config = WomirConfig::default();
+    let vm_config = CrushConfig::default();
 
     let make_stdin = || {
         let mut stdin = StdIn::default();
@@ -643,7 +643,7 @@ fn test_keeper_js() {
 fn test_keeper_wasi() {
     // Same keeper program, compiled for WASI (wasip1) target.
     // Compile command:
-    //   GOOS=wasip1 GOARCH=wasm go build -gcflags=all=-d=softfloat -tags "womir" -o keeper_wasi.wasm
+    //   GOOS=wasip1 GOARCH=wasm go build -gcflags=all=-d=softfloat -tags "crush" -o keeper_wasi.wasm
     let payload = std::fs::read("../sample-programs/keeper/hoodi_payload.bin")
         .expect("failed to read hoodi_payload.bin");
     let wasm_bytes =
@@ -653,7 +653,7 @@ fn test_keeper_wasi() {
 
     // Capture exe before execute() mutates memory_image.
     let exe = module.program_with_entry_point("_start");
-    let vm_config = WomirConfig::default();
+    let vm_config = CrushConfig::default();
 
     run_wasm_test_function(&mut module, "_start", &[], &[], false, &[&payload]).unwrap();
 
@@ -683,7 +683,7 @@ fn test_keeper_decode_only() {
 
     // Capture exe before execute() mutates memory_image.
     let exe = module.program_with_entry_point("_start");
-    let vm_config = WomirConfig::default();
+    let vm_config = CrushConfig::default();
 
     run_wasm_test_function(&mut module, "_start", &[], &[], true, &[&payload]).unwrap();
 
@@ -700,8 +700,8 @@ fn test_keeper_decode_only() {
     );
 }
 
-fn keccak_rust_womir(iterations: u32, expected_first_byte: u32) {
-    run_womir_guest(
+fn keccak_rust_crush(iterations: u32, expected_first_byte: u32) {
+    run_crush_guest(
         "keccak_with_inputs",
         "main",
         &[0, 0],
@@ -712,44 +712,44 @@ fn keccak_rust_womir(iterations: u32, expected_first_byte: u32) {
 }
 
 #[test]
-fn test_keccak_rust_womir_1() {
+fn test_keccak_rust_crush_1() {
     // keccak([0; 32]) = [0x29, ...], 0x29 = 41
-    keccak_rust_womir(1, 41);
+    keccak_rust_crush(1, 41);
 }
 
 #[test]
-fn test_keccak_rust_womir_2() {
+fn test_keccak_rust_crush_2() {
     // keccak^2([0; 32]) = [0x51, ...], 0x51 = 81
-    keccak_rust_womir(2, 81);
+    keccak_rust_crush(2, 81);
 }
 
 #[test]
-fn test_keccak_rust_womir_3() {
+fn test_keccak_rust_crush_3() {
     // keccak^3([0; 32]) = [0x35, ...], 0x35 = 53
-    keccak_rust_womir(3, 53);
+    keccak_rust_crush(3, 53);
 }
 
 #[test]
 #[should_panic]
-fn test_keccak_rust_womir_1_wrong() {
-    keccak_rust_womir(1, 42);
+fn test_keccak_rust_crush_1_wrong() {
+    keccak_rust_crush(1, 42);
 }
 
 #[test]
 #[should_panic]
-fn test_keccak_rust_womir_2_wrong() {
-    keccak_rust_womir(2, 82);
+fn test_keccak_rust_crush_2_wrong() {
+    keccak_rust_crush(2, 82);
 }
 
 #[test]
 #[should_panic]
-fn test_keccak_rust_womir_3_wrong() {
-    keccak_rust_womir(3, 54);
+fn test_keccak_rust_crush_3_wrong() {
+    keccak_rust_crush(3, 54);
 }
 
 #[test]
 fn test_keccak_rust_read_vec() {
-    run_womir_guest(
+    run_crush_guest(
         "read_vec",
         "main",
         &[0, 0],
@@ -777,7 +777,7 @@ fn test_read_serde() {
     };
     let bytes = postcard::to_allocvec(&data).unwrap();
 
-    run_womir_guest("read_serde", "main", &[0, 0], &[], &[], &[&bytes])
+    run_crush_guest("read_serde", "main", &[0, 0], &[], &[], &[&bytes])
 }
 
 fn run_eth_block(block_input: &str, prove: bool) {
@@ -810,7 +810,7 @@ fn test_eth_block_24171384() {
     run_eth_block("24171384.bin", false);
 }
 
-fn run_womir_guest(
+fn run_crush_guest(
     case: &str,
     main_function: &str,
     func_inputs: &[u32],

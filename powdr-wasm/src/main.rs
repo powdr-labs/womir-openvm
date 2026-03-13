@@ -31,9 +31,9 @@ use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 
 use crate::builtin_functions::BuiltinFunction;
-use womir_translation::{Directive, LinkedProgram, OpenVMSettings};
+use crush_translation::{Directive, LinkedProgram, OpenVMSettings};
 
-use wasm_circuit::WomirConfig;
+use crush_circuit::CrushConfig;
 
 #[derive(Parser)]
 struct CliArgs {
@@ -153,7 +153,7 @@ enum Commands {
     },
     /// Proves execution of a function from the RISC-V program with the given arguments.
     /// Even though not the main goal of this crate, this is useful for benchmarking against
-    /// womir-openvm.
+    /// powdr-wasm.
     /// Can either take a Rust crate directly (convenience mode) or a pre-compiled
     /// artifact directory from `compile-riscv` (benchmark mode).
     ProveRiscv {
@@ -209,7 +209,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let stdin = make_stdin(&input);
 
             let run = || -> Result<()> {
-                let output = linked_program.execute(WomirConfig::default(), &function, stdin)?;
+                let output = linked_program.execute(CrushConfig::default(), &function, stdin)?;
                 println!("output: {output:?}");
                 Ok(())
             };
@@ -234,7 +234,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let original_program = load_wasm_original_program(&wasm_bytes, &function);
             let stdin = make_stdin(&input);
-            compile::compile_womir_to_disk(
+            compile::compile_crush_to_disk(
                 original_program,
                 stdin,
                 apc_count,
@@ -320,7 +320,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             let exe = load_wasm_exe(&program, &function);
             let stdin = make_stdin(&input);
-            let vm_config = WomirConfig::default();
+            let vm_config = CrushConfig::default();
 
             let initial_state = VmState::initial(
                 &vm_config.system,
@@ -420,11 +420,11 @@ fn load_wasm_exe(program: &str, function: &str) -> VmExe<F> {
 fn load_wasm_original_program<'a>(
     wasm_bytes: &'a [u8],
     function: &str,
-) -> OriginalCompiledProgram<'a, autoprecompiles::WomirISA> {
+) -> OriginalCompiledProgram<'a, autoprecompiles::CrushISA> {
     let (module, functions) = load_wasm(wasm_bytes);
     let linked_program = LinkedProgram::new(module, functions);
     let exe = Arc::new(linked_program.program_with_entry_point(function));
-    let vm_config = OriginalVmConfig::new(WomirConfig::default());
+    let vm_config = OriginalVmConfig::new(CrushConfig::default());
 
     OriginalCompiledProgram {
         exe,
@@ -600,7 +600,7 @@ fn load_wasm_with_settings(
     });
 
     println!(
-        "WOMIR loading statistics: {}",
+        "CRUSH loading statistics: {}",
         global_stats.into_inner().unwrap()
     );
 

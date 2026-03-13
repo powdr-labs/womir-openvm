@@ -6,7 +6,7 @@ license.workspace = true
 
 [features]
 default = []
-cuda = ["powdr-openvm/cuda", "wasm-circuit/cuda"]
+cuda = ["powdr-openvm/cuda", "crush-circuit/cuda"]
 tco = []
 
 [dependencies]
@@ -25,8 +25,8 @@ openvm-transpiler.workspace = true
 openvm-wasm-transpiler.workspace = true
 serde.workspace = true
 strum.workspace = true
-wasm-circuit.workspace = true
-womir-translation.workspace = true
+crush-circuit.workspace = true
+crush-translation.workspace = true
 
 [dev-dependencies]
 powdr-openvm = { workspace = true, features = ["test-utils"] }

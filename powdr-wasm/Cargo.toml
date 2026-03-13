@@ -14,9 +14,9 @@ tracing.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
 
-wasm-circuit = { workspace = true }
+crush-circuit = { workspace = true }
 autoprecompiles = { workspace = true }
-womir-translation = { workspace = true }
+crush-translation = { workspace = true }
 
 openvm-wasm-transpiler = { workspace = true }
 openvm-sdk = { workspace = true }
@@ -51,7 +51,7 @@ postcard = { version = "1.1", features = ["alloc"] }
 [features]
 default = []
 cuda = [
-  "wasm-circuit/cuda",
+  "crush-circuit/cuda",
   "openvm-circuit/cuda",
   "openvm-native-circuit/cuda",
   "powdr-openvm/cuda",
@@ -60,7 +60,7 @@ cuda = [
 ]
 touchemall = [
   "cuda",
-  "wasm-circuit/touchemall",
+  "crush-circuit/touchemall",
   "openvm-circuit/touchemall",
   "openvm-native-circuit/touchemall",
   "openvm-cuda-backend/touchemall",

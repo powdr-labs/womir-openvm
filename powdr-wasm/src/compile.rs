@@ -1,8 +1,8 @@
-//! Compile-to-disk pipelines for WOMIR and RISC-V.
+//! Compile-to-disk pipelines for CRUSH and RISC-V.
 
 use std::path::{Path, PathBuf};
 
-use autoprecompiles::WomirISA;
+use autoprecompiles::CrushISA;
 use openvm_sdk::StdIn;
 use openvm_sdk::config::{AppConfig, DEFAULT_APP_LOG_BLOWUP};
 use openvm_stark_sdk::config::FriParameters;
@@ -16,12 +16,12 @@ use powdr_openvm::{
     program::OriginalCompiledProgram,
 };
 
-use crate::proving::{AGG_PK_FILE, APP_PK_FILE, COMPILED_PROGRAM_FILE, RiscvSdk, WomirSdk};
+use crate::proving::{AGG_PK_FILE, APP_PK_FILE, COMPILED_PROGRAM_FILE, CrushSdk, RiscvSdk};
 
-/// Compile a WOMIR program: load WASM, PGO, APC generation, keygen.
+/// Compile a CRUSH program: load WASM, PGO, APC generation, keygen.
 /// Saves the compiled program and proving keys to `output_dir`.
-pub fn compile_womir_to_disk(
-    original_program: OriginalCompiledProgram<WomirISA>,
+pub fn compile_crush_to_disk(
+    original_program: OriginalCompiledProgram<CrushISA>,
     stdin: StdIn,
     apc_count: u64,
     apc_candidates_dir: Option<PathBuf>,
@@ -39,7 +39,7 @@ pub fn compile_womir_to_disk(
         customize(
             original_program,
             config,
-            CellPgo::<_, OpenVmApcCandidate<WomirISA>>::with_pgo_data_and_max_columns(
+            CellPgo::<_, OpenVmApcCandidate<CrushISA>>::with_pgo_data_and_max_columns(
                 execution_profile,
                 None,
             ),
@@ -67,7 +67,7 @@ pub fn compile_womir_to_disk(
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
     let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
-    let sdk = WomirSdk::new_without_transpiler(app_config)?;
+    let sdk = CrushSdk::new_without_transpiler(app_config)?;
 
     tracing::info!("Generating app proving key...");
     let app_pk = sdk.app_pk();

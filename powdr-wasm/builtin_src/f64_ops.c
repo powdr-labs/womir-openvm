@@ -1,4 +1,4 @@
-// Software float64 operations for WOMIR.
+// Software float64 operations for CRUSH.
 // f64 values are passed as u64 (i64 in WASM), matching the WASM f64 stack type.
 
 typedef unsigned int u32;
