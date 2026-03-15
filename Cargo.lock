@@ -133,9 +133,9 @@ dependencies = [
 
 [[package]]
 name = "anstream"
-version = "0.6.21"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43d5b281e737544384e969a5ccad3f1cdd24b48086a0fc1b2a5262a26b8f4f4a"
+checksum = "824a212faf96e9acacdbd09febd34438f8f711fb84e09a8916013cd7815ca28d"
 dependencies = [
  "anstyle",
  "anstyle-parse",
@@ -154,9 +154,9 @@ checksum = "5192cca8006f1fd4f7237516f40fa183bb07f8fbdfedaa0036de5ea9b0b45e78"
 
 [[package]]
 name = "anstyle-parse"
-version = "0.2.7"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e7644824f0aa2c7b9384579234ef10eb7efb6a0deb83f9630a49594dd9c15c2"
+checksum = "52ce7f38b242319f7cabaa6813055467063ecdc9d355bbb4ce0c68908cd8130e"
 dependencies = [
  "utf8parse",
 ]
@@ -495,23 +495,23 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 name = "autoprecompiles"
 version = "0.0.1"
 dependencies = [
+ "crush-circuit",
+ "crush-translation",
  "derive_more 1.0.0",
  "openvm-circuit",
  "openvm-circuit-derive",
  "openvm-circuit-primitives",
+ "openvm-crush-transpiler",
  "openvm-instructions",
  "openvm-sdk",
  "openvm-stark-backend",
  "openvm-stark-sdk",
  "openvm-transpiler",
- "openvm-womir-transpiler",
  "powdr-autoprecompiles",
  "powdr-openvm",
  "powdr-riscv-elf",
  "serde",
  "strum 0.26.3",
- "womir-circuit",
- "womir-translation",
 ]
 
 [[package]]
@@ -822,9 +822,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.60"
+version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2797f34da339ce31042b27d23607e051786132987f595b02ba4f6a6dffb7030a"
+checksum = "b193af5b67834b676abd72466a96c1024e6a6ad978a1f484bd90b85c94041351"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -832,9 +832,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.60"
+version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24a241312cea5059b13574bb9b3861cabf758b879c15190b37b6d6fd63ab6876"
+checksum = "714a53001bf66416adb0e2ef5ac857140e7dc3a0c48fb28b2f10762fc4b5069f"
 dependencies = [
  "anstream",
  "anstyle",
@@ -844,9 +844,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.55"
+version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a92793da1a46a5f2a02a6f4c46c6496b28c43638adea8306fcb0caa1634f24e5"
+checksum = "1110bd8a634a1ab8cb04345d8d878267d57c3cf1b38d91b71af6686408bbca6a"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -856,9 +856,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
+checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "cobs"
@@ -877,13 +877,12 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "console"
-version = "0.16.2"
+version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03e45a4a8926227e4197636ba97a9fc9b00477e9f4bd711395687c5f0734bec4"
+checksum = "d64e8af5551369d19cf50138de61f1c42074ab970f74e99be916646777f8fc87"
 dependencies = [
  "encode_unicode",
  "libc",
- "once_cell",
  "unicode-width",
  "windows-sys",
 ]
@@ -1048,6 +1047,66 @@ name = "crunchy"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
+
+[[package]]
+name = "crush-circuit"
+version = "0.0.1"
+dependencies = [
+ "autoprecompiles",
+ "cfg-if",
+ "derive-new 0.6.0",
+ "derive_more 1.0.0",
+ "eyre",
+ "itertools 0.14.0",
+ "openvm-circuit",
+ "openvm-circuit-derive",
+ "openvm-circuit-primitives",
+ "openvm-circuit-primitives-derive",
+ "openvm-crush-transpiler",
+ "openvm-cuda-backend",
+ "openvm-cuda-builder",
+ "openvm-cuda-common",
+ "openvm-instructions",
+ "openvm-rv32im-circuit",
+ "openvm-rv32im-transpiler",
+ "openvm-sdk",
+ "openvm-stark-backend",
+ "openvm-stark-sdk",
+ "openvm-transpiler",
+ "powdr-autoprecompiles",
+ "powdr-number",
+ "powdr-openvm",
+ "pretty_assertions",
+ "rand 0.8.5",
+ "serde",
+ "struct-reflection",
+ "strum 0.26.3",
+ "test-case",
+]
+
+[[package]]
+name = "crush-guest-io"
+version = "0.0.1"
+dependencies = [
+ "postcard",
+ "serde",
+]
+
+[[package]]
+name = "crush-translation"
+version = "0.0.1"
+dependencies = [
+ "arrayvec",
+ "crush-circuit",
+ "itertools 0.14.0",
+ "openvm-circuit",
+ "openvm-crush-transpiler",
+ "openvm-instructions",
+ "openvm-rv32im-transpiler",
+ "openvm-stark-backend",
+ "wasmparser 0.235.0",
+ "womir",
+]
 
 [[package]]
 name = "crypto-bigint"
@@ -2668,9 +2727,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.21.3"
+version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
+checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "once_cell_polyfill"
@@ -2938,6 +2997,19 @@ dependencies = [
  "openvm-stark-sdk",
  "serde",
  "static_assertions",
+]
+
+[[package]]
+name = "openvm-crush-transpiler"
+version = "0.0.1"
+dependencies = [
+ "openvm-instructions",
+ "openvm-instructions-derive",
+ "openvm-rv32im-transpiler",
+ "openvm-stark-backend",
+ "serde",
+ "strum 0.26.3",
+ "tracing",
 ]
 
 [[package]]
@@ -3651,19 +3723,6 @@ dependencies = [
  "openvm-stark-backend",
  "rrs-lib",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "openvm-womir-transpiler"
-version = "0.0.1"
-dependencies = [
- "openvm-instructions",
- "openvm-instructions-derive",
- "openvm-rv32im-transpiler",
- "openvm-stark-backend",
- "serde",
- "strum 0.26.3",
- "tracing",
 ]
 
 [[package]]
@@ -4608,6 +4667,51 @@ dependencies = [
 name = "powdr-syscalls"
 version = "0.1.4"
 source = "git+https://github.com/powdr-labs/powdr.git?rev=b219dc3#b219dc32acc705756236c1400f70cf26b00675d0"
+
+[[package]]
+name = "powdr-wasm"
+version = "0.0.1"
+dependencies = [
+ "arrayvec",
+ "autoprecompiles",
+ "clap",
+ "crush-circuit",
+ "crush-translation",
+ "derive-new 0.6.0",
+ "derive_more 1.0.0",
+ "eyre",
+ "itertools 0.14.0",
+ "metrics",
+ "metrics-tracing-context",
+ "metrics-util",
+ "num_cpus",
+ "openvm-circuit",
+ "openvm-circuit-derive",
+ "openvm-circuit-primitives",
+ "openvm-circuit-primitives-derive",
+ "openvm-crush-transpiler",
+ "openvm-cuda-backend",
+ "openvm-instructions",
+ "openvm-native-circuit",
+ "openvm-rv32im-transpiler",
+ "openvm-sdk",
+ "openvm-stark-backend",
+ "openvm-stark-sdk",
+ "openvm-transpiler",
+ "postcard",
+ "powdr-autoprecompiles",
+ "powdr-openvm",
+ "powdr-openvm-riscv",
+ "rmp-serde",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tracing",
+ "tracing-forest",
+ "tracing-subscriber",
+ "wasmparser 0.235.0",
+ "womir",
+]
 
 [[package]]
 name = "powerfmt"
@@ -5586,9 +5690,9 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "tempfile"
-version = "3.26.0"
+version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82a72c767771b47409d2345987fda8628641887d5466101319899796367354a0"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
  "getrandom 0.4.2",
@@ -5886,9 +5990,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.22"
+version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f30143827ddab0d256fd843b7a66d164e9f271cfa0dde49142c5ca0ca291f1e"
+checksum = "cb7f578e5945fb242538965c2d0b04418d38ec25c79d160cd279bf0731c8d319"
 dependencies = [
  "matchers",
  "nu-ansi-term",
@@ -6372,7 +6476,7 @@ dependencies = [
 [[package]]
 name = "womir"
 version = "0.0.0"
-source = "git+https://github.com/powdr-labs/womir.git?rev=0e8ed76#0e8ed76ac35911bd66a7e5907ec75878fcaeb266"
+source = "git+https://github.com/powdr-labs/crush.git?rev=0e8ed76#0e8ed76ac35911bd66a7e5907ec75878fcaeb266"
 dependencies = [
  "clap",
  "derive-where",
@@ -6382,111 +6486,6 @@ dependencies = [
  "log",
  "num_cpus",
  "wasmparser 0.235.0",
-]
-
-[[package]]
-name = "womir-circuit"
-version = "0.0.1"
-dependencies = [
- "autoprecompiles",
- "cfg-if",
- "derive-new 0.6.0",
- "derive_more 1.0.0",
- "eyre",
- "itertools 0.14.0",
- "openvm-circuit",
- "openvm-circuit-derive",
- "openvm-circuit-primitives",
- "openvm-circuit-primitives-derive",
- "openvm-cuda-backend",
- "openvm-cuda-builder",
- "openvm-cuda-common",
- "openvm-instructions",
- "openvm-rv32im-circuit",
- "openvm-rv32im-transpiler",
- "openvm-sdk",
- "openvm-stark-backend",
- "openvm-stark-sdk",
- "openvm-transpiler",
- "openvm-womir-transpiler",
- "powdr-autoprecompiles",
- "powdr-number",
- "powdr-openvm",
- "pretty_assertions",
- "rand 0.8.5",
- "serde",
- "struct-reflection",
- "strum 0.26.3",
- "test-case",
-]
-
-[[package]]
-name = "womir-guest-io"
-version = "0.0.1"
-dependencies = [
- "postcard",
- "serde",
-]
-
-[[package]]
-name = "womir-openvm-integration"
-version = "0.0.1"
-dependencies = [
- "arrayvec",
- "autoprecompiles",
- "clap",
- "derive-new 0.6.0",
- "derive_more 1.0.0",
- "eyre",
- "itertools 0.14.0",
- "metrics",
- "metrics-tracing-context",
- "metrics-util",
- "num_cpus",
- "openvm-circuit",
- "openvm-circuit-derive",
- "openvm-circuit-primitives",
- "openvm-circuit-primitives-derive",
- "openvm-cuda-backend",
- "openvm-instructions",
- "openvm-native-circuit",
- "openvm-rv32im-transpiler",
- "openvm-sdk",
- "openvm-stark-backend",
- "openvm-stark-sdk",
- "openvm-transpiler",
- "openvm-womir-transpiler",
- "postcard",
- "powdr-autoprecompiles",
- "powdr-openvm",
- "powdr-openvm-riscv",
- "rmp-serde",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tracing",
- "tracing-forest",
- "tracing-subscriber",
- "wasmparser 0.235.0",
- "womir",
- "womir-circuit",
- "womir-translation",
-]
-
-[[package]]
-name = "womir-translation"
-version = "0.0.1"
-dependencies = [
- "arrayvec",
- "itertools 0.14.0",
- "openvm-circuit",
- "openvm-instructions",
- "openvm-rv32im-transpiler",
- "openvm-stark-backend",
- "openvm-womir-transpiler",
- "wasmparser 0.235.0",
- "womir",
- "womir-circuit",
 ]
 
 [[package]]
@@ -6506,18 +6505,18 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "zerocopy"
-version = "0.8.41"
+version = "0.8.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96e13bc581734df6250836c59a5f44f3c57db9f9acb9dc8e3eaabdaf6170254d"
+checksum = "f2578b716f8a7a858b7f02d5bd870c14bf4ddbbcf3a4c05414ba6503640505e3"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.41"
+version = "0.8.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3545ea9e86d12ab9bba9fcd99b54c1556fd3199007def5a03c375623d05fac1c"
+checksum = "7e6cc098ea4d3bd6246687de65af3f920c430e236bee1e3bf2e441463f08a02f"
 dependencies = [
  "proc-macro2",
  "quote",

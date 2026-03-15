@@ -1,4 +1,4 @@
-use womir_guest_io::{debug_print, read_bytes};
+use crush_guest_io::{debug_print, read_bytes};
 
 pub fn main() {
     debug_print("Hello, world!");

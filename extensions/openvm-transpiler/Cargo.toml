@@ -1,0 +1,14 @@
+[package]
+name = "openvm-crush-transpiler"
+description = "OpenVM transpiler extension for crush"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+openvm-stark-backend = { workspace = true }
+openvm-instructions = { workspace = true }
+openvm-rv32im-transpiler = { workspace = true }
+tracing = { workspace = true }
+openvm-instructions-derive = { workspace = true }
+strum = { workspace = true }
+serde = { workspace = true, features = ["derive"] }

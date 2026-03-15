@@ -1,9 +1,9 @@
 mod common;
 
+use crush_translation::instruction_builder as ib;
 use openvm_instructions::instruction::Instruction;
 use openvm_stark_sdk::p3_baby_bear::BabyBear;
 use powdr_autoprecompiles::blocks::BasicBlock;
-use womir_translation::instruction_builder as ib;
 
 fn assert_machine_output(program: Vec<Instruction<BabyBear>>, test_name: &str) {
     let bb = BasicBlock {
@@ -166,7 +166,7 @@ fn same_register_not_optimized() {
     assert_machine_output(
         // Stores a constant in a register, then stores it into memory.
         //
-        // This test showcases an inefficiency in the current combination of WOMIR and the APC optimizer:
+        // This test showcases an inefficiency in the current combination of crush and the APC optimizer:
         // - In the load/store chip, the flags cannot be solved at compile time because they encode BOTH the
         //   opcode (known at compile time) and the alignment offset (only known at runtime).
         // - The flags change the address going to RAM, but not the address going to register memory.

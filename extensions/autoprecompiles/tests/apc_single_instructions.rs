@@ -1,9 +1,9 @@
 mod common;
 
+use crush_translation::instruction_builder::{self as ib, AluImm};
 use openvm_instructions::instruction::Instruction;
 use openvm_stark_sdk::p3_baby_bear::BabyBear;
 use powdr_autoprecompiles::blocks::BasicBlock;
-use womir_translation::instruction_builder::{self as ib, AluImm};
 
 fn assert_machine_output(program: Vec<Instruction<BabyBear>>, test_name: &str) {
     let bb = BasicBlock {

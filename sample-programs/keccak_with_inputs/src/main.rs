@@ -24,7 +24,7 @@ mod platform {
 #[cfg(not(target_os = "zkvm"))]
 mod platform {
     pub fn read_u32() -> u32 {
-        womir_guest_io::read_u32()
+        crush_guest_io::read_u32()
     }
 
     pub fn finish(first_byte: u8) {
