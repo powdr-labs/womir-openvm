@@ -35,6 +35,32 @@ make_input_flags() {
   echo "${flags[@]}"
 }
 
+# Run a command, capture its wall time, and append {label: seconds} to a JSON file.
+# Usage: timed <json_file> <label> <command...>
+timed() {
+    local json_file="$1"; shift
+    local label="$1"; shift
+    local start end elapsed
+    start=$(date +%s.%N)
+    "$@"
+    local exit_code=$?
+    end=$(date +%s.%N)
+    elapsed=$(echo "$end - $start" | bc)
+    # Append to JSON file (builds up object entries, finalized later)
+    echo "\"${label}\": ${elapsed}" >> "${json_file}.tmp"
+    return $exit_code
+}
+
+# Finalize wall_times JSON from collected entries.
+finalize_wall_times() {
+    local json_file="$1"
+    echo "{" > "$json_file"
+    # Join entries with commas
+    sed '$!s/$/,/' "${json_file}.tmp" >> "$json_file"
+    echo "}" >> "$json_file"
+    rm -f "${json_file}.tmp"
+}
+
 # Compile+prove pipeline: compile is excluded from metrics, prove is measured.
 run_bench_wasm() {
   local guest="$1"
@@ -52,12 +78,17 @@ run_bench_wasm() {
   input_flags=($(make_input_flags "$input"))
 
   local compiled_dir="${run_name}/compiled"
+  local wall_times="${run_name}/wall_times.json"
 
   # Compile step (not included in metrics)
-  cargo run -r $CUDA_FLAGS -- compile --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "main" "${input_flags[@]}" &>"${run_name}/compile_log.txt"
+  timed "$wall_times" "compile" \
+    cargo run -r $CUDA_FLAGS -- compile --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "main" "${input_flags[@]}" &>"${run_name}/compile_log.txt"
 
   # Prove step (metrics captured here)
-  cargo run -r $CUDA_FLAGS -- prove --compiled-dir "$compiled_dir" --recursion "${input_flags[@]}" --metrics "${run_name}/metrics.json" &>"${run_name}/log.txt"
+  timed "$wall_times" "prove" \
+    cargo run -r $CUDA_FLAGS -- prove --compiled-dir "$compiled_dir" --recursion "${input_flags[@]}" --metrics "${run_name}/metrics.json" &>"${run_name}/log.txt"
+
+  finalize_wall_times "$wall_times"
 
   python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json >"${run_name}"/trace_cells.txt
 }
@@ -78,12 +109,17 @@ run_bench_riscv() {
   input_flags=($(make_input_flags "$input"))
 
   local compiled_dir="${run_name}/compiled"
+  local wall_times="${run_name}/wall_times.json"
 
   # Compile step (not included in metrics)
-  cargo run -r $CUDA_FLAGS -- compile-riscv --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "${input_flags[@]}" &>"${run_name}/compile_log.txt"
+  timed "$wall_times" "compile" \
+    cargo run -r $CUDA_FLAGS -- compile-riscv --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "${input_flags[@]}" &>"${run_name}/compile_log.txt"
 
   # Prove step (metrics captured here)
-  cargo run -r $CUDA_FLAGS -- prove-riscv --compiled-dir "$compiled_dir" "${input_flags[@]}" --metrics "${run_name}/metrics.json" &>"${run_name}/log.txt"
+  timed "$wall_times" "prove" \
+    cargo run -r $CUDA_FLAGS -- prove-riscv --compiled-dir "$compiled_dir" "${input_flags[@]}" --metrics "${run_name}/metrics.json" &>"${run_name}/log.txt"
+
+  finalize_wall_times "$wall_times"
 
   python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json >"${run_name}"/trace_cells.txt
 

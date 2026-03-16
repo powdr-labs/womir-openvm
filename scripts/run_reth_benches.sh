@@ -12,18 +12,20 @@ set -e
 # Parse flags
 CUDA_FLAGS=""
 BLOCK=""
+APC_COUNT="0"
 RETH_BENCH_DIR=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --cuda) CUDA_FLAGS="--features cuda"; shift ;;
         --block-number) BLOCK="$2"; shift 2 ;;
+        --apc-count) APC_COUNT="$2"; shift 2 ;;
         --reth-bench-dir) RETH_BENCH_DIR="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
 
 if [[ -z "$BLOCK" ]]; then
-    echo "Usage: $0 [--cuda] --block-number <number> [--reth-bench-dir <path>]"
+    echo "Usage: $0 [--cuda] --block-number <number> [--apc-count <apcs>] [--reth-bench-dir <path>]"
     exit 1
 fi
 
@@ -34,6 +36,30 @@ fi
 
 SCRIPT_PATH=$(realpath "${BASH_SOURCE[0]}")
 SCRIPTS_DIR=$(dirname "$SCRIPT_PATH")
+
+# Run a command, capture its wall time, and append {label: seconds} to a JSON file.
+# Usage: timed <json_file> <label> <command...>
+timed() {
+    local json_file="$1"; shift
+    local label="$1"; shift
+    local start end elapsed
+    start=$(date +%s.%N)
+    "$@"
+    local exit_code=$?
+    end=$(date +%s.%N)
+    elapsed=$(echo "$end - $start" | bc)
+    echo "\"${label}\": ${elapsed}" >> "${json_file}.tmp"
+    return $exit_code
+}
+
+# Finalize wall_times JSON from collected entries.
+finalize_wall_times() {
+    local json_file="$1"
+    echo "{" > "$json_file"
+    sed '$!s/$/,/' "${json_file}.tmp" >> "$json_file"
+    echo "}" >> "$json_file"
+    rm -f "${json_file}.tmp"
+}
 
 # Download shared analysis scripts from powdr upstream.
 POWDR_SCRIPTS_URL="https://raw.githubusercontent.com/powdr-labs/powdr/main/openvm-riscv/scripts"
@@ -52,48 +78,59 @@ COMPILED_DIR="$ROOT_DIR/.cache/crush-compiled-reth-${BLOCK}"
 echo ""
 echo "==== crush Compile ===="
 echo ""
-cargo run -r $CUDA_FLAGS -- compile \
-    "$ROOT_DIR/sample-programs/eth-block/openvm-client-eth.wasm" "main" \
-    --input 0 --input 0 --input "file:$ROOT_DIR/sample-programs/eth-block/${BLOCK}.bin" \
-    --output-dir "$COMPILED_DIR"
 
 mkdir -p "$dir"
 pushd "$dir"
 
 ### crush benchmark
-run_name="crush"
+run_name="crush_apc_${APC_COUNT}"
+mkdir -p "${run_name}"
+wall_times="${run_name}/wall_times.json"
+
+timed "$wall_times" "compile" \
+    cargo run -r $CUDA_FLAGS -- compile \
+    "$ROOT_DIR/sample-programs/eth-block/openvm-client-eth.wasm" "main" \
+    --input 0 --input 0 --input "file:$ROOT_DIR/sample-programs/eth-block/${BLOCK}.bin" \
+    --apc-count "$APC_COUNT" --apc-candidates-dir "${run_name}" --output-dir "$COMPILED_DIR" &> "${run_name}/compile_log.txt"
+
 echo ""
 echo "==== ${run_name} ===="
 echo ""
 
-mkdir -p "${run_name}"
-
 # Prove step (metrics captured here)
-cargo run -r $CUDA_FLAGS -- prove \
+timed "$wall_times" "prove" \
+    cargo run -r $CUDA_FLAGS -- prove \
     --compiled-dir "$COMPILED_DIR" \
     --input 0 --input 0 --input "file:$ROOT_DIR/sample-programs/eth-block/${BLOCK}.bin" \
     --metrics "${run_name}/metrics.json" \
     --recursion \
     &> "${run_name}/log.txt"
 
+finalize_wall_times "$wall_times"
+
 python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
 
 ### RISC-V benchmark (via openvm-reth-benchmark)
 if [[ -n "$RETH_BENCH_DIR" ]]; then
-    run_name="riscv"
+    run_name="riscv_apc_${APC_COUNT}"
     echo ""
     echo "==== ${run_name} ===="
     echo ""
 
     mkdir -p "${run_name}"
+    riscv_wall_times="${run_name}/wall_times.json"
 
     # Compile (keygen) first so it doesn't appear in prove metrics
     pushd "$RETH_BENCH_DIR"
-    ./run.sh --no-precompiles $CUDA_FLAG --mode compile --block-number "$BLOCK" &> "$OLDPWD/${run_name}/compile_log.txt"
+    timed "$OLDPWD/$riscv_wall_times" "compile" \
+        ./run.sh --no-precompiles $CUDA_FLAG --apcs "$APC_COUNT" --mode compile --block-number "$BLOCK" &> "$OLDPWD/${run_name}/compile_log.txt"
     # Prove
-    ./run.sh --no-precompiles $CUDA_FLAG --mode prove-stark --block-number "$BLOCK" &> "$OLDPWD/${run_name}/log.txt"
+    timed "$OLDPWD/$riscv_wall_times" "prove" \
+        ./run.sh --no-precompiles $CUDA_FLAG --mode prove-stark --block-number "$BLOCK" &> "$OLDPWD/${run_name}/log.txt"
     cp metrics.json "$OLDPWD/${run_name}/metrics.json"
     popd
+
+    finalize_wall_times "$riscv_wall_times"
 
     python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
 
