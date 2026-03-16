@@ -36,6 +36,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
+name = "crush-guest-io"
+version = "0.0.1"
+dependencies = [
+ "postcard",
+ "serde",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -95,9 +103,9 @@ dependencies = [
 name = "keccak_with_inputs"
 version = "0.0.0"
 dependencies = [
+ "crush-guest-io",
  "openvm",
  "tiny-keccak",
- "womir-guest-io",
 ]
 
 [[package]]
@@ -470,14 +478,6 @@ name = "wit-bindgen"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
-
-[[package]]
-name = "womir-guest-io"
-version = "0.0.1"
-dependencies = [
- "postcard",
- "serde",
-]
 
 [[package]]
 name = "zerocopy"

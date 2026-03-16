@@ -747,6 +747,20 @@ fn test_keccak_rust_crush_3_wrong() {
     keccak_rust_crush(3, 54);
 }
 
+fn u256_matmul_crush(reps: u32) {
+    run_crush_guest("u256_matmul", "main", &[0, 0], &[reps], &[], &[])
+}
+
+#[test]
+fn test_u256_crush_1() {
+    u256_matmul_crush(1);
+}
+
+#[test]
+fn test_u256_crush_2() {
+    u256_matmul_crush(2);
+}
+
 #[test]
 fn test_keccak_rust_read_vec() {
     run_crush_guest(

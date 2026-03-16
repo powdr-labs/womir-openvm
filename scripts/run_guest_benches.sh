@@ -12,8 +12,8 @@ set -e
 # Parse --cuda flag
 CUDA_FLAGS=""
 if [[ "$1" == "--cuda" ]]; then
-    CUDA_FLAGS="--features cuda"
-    shift
+  CUDA_FLAGS="--features cuda"
+  shift
 fi
 
 SCRIPT_PATH=$(realpath "${BASH_SOURCE[0]}")
@@ -28,11 +28,11 @@ curl -sL "$POWDR_SCRIPTS_URL/plot_trace_cells.py" -o "$SCRIPTS_DIR/plot_trace_ce
 # Convert space-separated values into --input flags for the CLI.
 # E.g. "0 0 10 155" -> "--input 0 --input 0 --input 10 --input 155"
 make_input_flags() {
-    local flags=()
-    for val in $1; do
-        flags+=(--input "$val")
-    done
-    echo "${flags[@]}"
+  local flags=()
+  for val in $1; do
+    flags+=(--input "$val")
+  done
+  echo "${flags[@]}"
 }
 
 # Run a command, capture its wall time, and append {label: seconds} to a JSON file.
@@ -63,69 +63,71 @@ finalize_wall_times() {
 
 # Compile+prove pipeline: compile is excluded from metrics, prove is measured.
 run_bench_wasm() {
-    local guest="$1"
-    local input="$2"
-    local run_name="$3"
-    local apc_count="$4"
+  local guest="$1"
+  local input="$2"
+  local run_name="$3"
+  local apc_count="$4"
 
-    echo ""
-    echo "==== ${run_name} ===="
-    echo ""
+  echo ""
+  echo "==== ${run_name} ===="
+  echo ""
 
-    mkdir -p "${run_name}"
+  mkdir -p "${run_name}"
 
-    local input_flags
-    input_flags=($(make_input_flags "$input"))
+  local input_flags
+  input_flags=($(make_input_flags "$input"))
 
-    local compiled_dir="${run_name}/compiled"
-    local wall_times="${run_name}/wall_times.json"
+  local compiled_dir="${run_name}/compiled"
+  local wall_times="${run_name}/wall_times.json"
 
-    # Compile step (not included in metrics)
-    timed "$wall_times" "compile" \
-        cargo run -r $CUDA_FLAGS -- compile --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "main" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
+  # Compile step (not included in metrics)
+  timed "$wall_times" "compile" \
+    cargo run -r $CUDA_FLAGS -- compile --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "main" "${input_flags[@]}" &>"${run_name}/compile_log.txt"
 
-    # Prove step (metrics captured here)
-    timed "$wall_times" "prove" \
-        cargo run -r $CUDA_FLAGS -- prove --compiled-dir "$compiled_dir" --recursion "${input_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
+  # Prove step (metrics captured here)
+  timed "$wall_times" "prove" \
+    cargo run -r $CUDA_FLAGS -- prove --compiled-dir "$compiled_dir" --recursion "${input_flags[@]}" --metrics "${run_name}/metrics.json" &>"${run_name}/log.txt"
 
-    finalize_wall_times "$wall_times"
+  finalize_wall_times "$wall_times"
 
-    python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
+  python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json >"${run_name}"/trace_cells.txt
 }
 
 run_bench_riscv() {
-    local guest="$1"
-    local input="$2"
-    local run_name="$3"
-    local apc_count="$4"
+  local guest="$1"
+  local input="$2"
+  local run_name="$3"
+  local apc_count="$4"
 
-    echo ""
-    echo "==== ${run_name} ===="
-    echo ""
+  echo ""
+  echo "==== ${run_name} ===="
+  echo ""
 
-    mkdir -p "${run_name}"
+  mkdir -p "${run_name}"
 
-    local input_flags
-    input_flags=($(make_input_flags "$input"))
+  local input_flags
+  input_flags=($(make_input_flags "$input"))
 
-    local compiled_dir="${run_name}/compiled"
-    local wall_times="${run_name}/wall_times.json"
+  local compiled_dir="${run_name}/compiled"
+  local wall_times="${run_name}/wall_times.json"
 
-    # Compile step (not included in metrics)
-    timed "$wall_times" "compile" \
-        cargo run -r $CUDA_FLAGS -- compile-riscv --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
+  # Compile step (not included in metrics)
+  timed "$wall_times" "compile" \
+    cargo run -r $CUDA_FLAGS -- compile-riscv --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "${input_flags[@]}" &>"${run_name}/compile_log.txt"
 
-    # Prove step (metrics captured here)
-    timed "$wall_times" "prove" \
-        cargo run -r $CUDA_FLAGS -- prove-riscv --compiled-dir "$compiled_dir" "${input_flags[@]}" --metrics "${run_name}/metrics.json" &> "${run_name}/log.txt"
+  # Prove step (metrics captured here)
+  timed "$wall_times" "prove" \
+    cargo run -r $CUDA_FLAGS -- prove-riscv --compiled-dir "$compiled_dir" "${input_flags[@]}" --metrics "${run_name}/metrics.json" &>"${run_name}/log.txt"
 
-    finalize_wall_times "$wall_times"
+  finalize_wall_times "$wall_times"
 
-    python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
+  python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json >"${run_name}"/trace_cells.txt
 
-    # Clean up some files that we don't want to push.
-    rm -f debug.pil
+  # Clean up some files that we don't want to push.
+  rm -f debug.pil
 }
+
+ROOT_DIR=$(pwd)
 
 ### Keccak 1000 iterations
 dir="results/keccak_1000"
@@ -135,8 +137,6 @@ input_riscv="1000"
 # The WASM guest takes as input the main arguments [argc, argv], the input number of iterations,
 # and the first byte of the result to be asserted inside the guest program.
 input_wasm="0 0 1000 39"
-
-ROOT_DIR=$(pwd)
 
 mkdir -p "$dir"
 pushd "$dir"
@@ -148,8 +148,34 @@ run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unkno
 run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "crush_apc_1" "1"
 run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "crush_apc_10" "10"
 
-python3 "$SCRIPTS_DIR"/basic_metrics.py summary-table --csv */metrics.json > basic_metrics.csv
-python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush/metrics.json" "riscv/metrics.json" > crush_apc_0_vs_riscv.txt
-python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_1/metrics.json" "riscv_apc_1/metrics.json" > crush_apc_1_vs_riscv_apc_1.txt
-python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_10/metrics.json" "riscv_apc_10/metrics.json" > crush_apc_10_vs_riscv_apc_10.txt
+python3 "$SCRIPTS_DIR"/basic_metrics.py summary-table --csv */metrics.json >basic_metrics.csv
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush/metrics.json" "riscv/metrics.json" >crush_apc_0_vs_riscv.txt
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_1/metrics.json" "riscv_apc_1/metrics.json" >crush_apc_1_vs_riscv_apc_1.txt
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_10/metrics.json" "riscv_apc_10/metrics.json" >crush_apc_10_vs_riscv_apc_10.txt
+popd
+
+### U256 matrix multiply (10x10 identity * constant, 1 repetition)
+dir="results/u256"
+# The RISC-V guest takes as input the number of repetitions.
+input_riscv="1"
+# The WASM guest takes as input the main arguments [argc, argv] and the number of repetitions.
+input_wasm="0 0 1"
+
+# Build the WASM guest binary first.
+cargo build --release --target wasm32-unknown-unknown --manifest-path "${ROOT_DIR}/sample-programs/u256_matmul/Cargo.toml"
+
+mkdir -p "$dir"
+pushd "$dir"
+
+run_bench_riscv "$ROOT_DIR/sample-programs/u256_matmul" "$input_riscv" "riscv" "0"
+run_bench_riscv "$ROOT_DIR/sample-programs/u256_matmul" "$input_riscv" "riscv_apc_2" "2"
+run_bench_riscv "$ROOT_DIR/sample-programs/u256_matmul" "$input_riscv" "riscv_apc_10" "10"
+run_bench_wasm "$ROOT_DIR/sample-programs/u256_matmul/target/wasm32-unknown-unknown/release/u256_matmul.wasm" "$input_wasm" "crush" "0"
+run_bench_wasm "$ROOT_DIR/sample-programs/u256_matmul/target/wasm32-unknown-unknown/release/u256_matmul.wasm" "$input_wasm" "crush_apc_2" "2"
+run_bench_wasm "$ROOT_DIR/sample-programs/u256_matmul/target/wasm32-unknown-unknown/release/u256_matmul.wasm" "$input_wasm" "crush_apc_10" "10"
+
+python3 "$SCRIPTS_DIR"/basic_metrics.py summary-table --csv */metrics.json >basic_metrics.csv
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush/metrics.json" "riscv/metrics.json" >crush_apc_0_vs_riscv.txt
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_2/metrics.json" "riscv_apc_2/metrics.json" >crush_apc_2_vs_riscv_apc_2.txt
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_10/metrics.json" "riscv_apc_10/metrics.json" >crush_apc_10_vs_riscv_apc_10.txt
 popd
