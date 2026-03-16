@@ -117,3 +117,29 @@ python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush/metrics.json" "riscv/metrics.jso
 python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_1/metrics.json" "riscv_apc_1/metrics.json" > crush_apc_1_vs_riscv_apc_1.txt
 python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_10/metrics.json" "riscv_apc_10/metrics.json" > crush_apc_10_vs_riscv_apc_10.txt
 popd
+
+### U256 matrix multiply (10x10 identity * constant, 1 repetition)
+dir="results/u256"
+# The RISC-V guest takes as input the number of repetitions.
+input_riscv="1"
+# The WASM guest takes as input the main arguments [argc, argv] and the number of repetitions.
+input_wasm="0 0 1"
+
+# Build the WASM guest binary first.
+cargo build --release --target wasm32-unknown-unknown --manifest-path sample-programs/guest_u256/Cargo.toml
+
+mkdir -p "$dir"
+pushd "$dir"
+
+run_bench_riscv "$ROOT_DIR/sample-programs/guest_u256" "$input_riscv" "riscv" "0"
+run_bench_riscv "$ROOT_DIR/sample-programs/guest_u256" "$input_riscv" "riscv_apc_2" "2"
+run_bench_riscv "$ROOT_DIR/sample-programs/guest_u256" "$input_riscv" "riscv_apc_10" "10"
+run_bench_wasm "$ROOT_DIR/sample-programs/guest_u256/target/wasm32-unknown-unknown/release/guest_u256.wasm" "$input_wasm" "crush" "0"
+run_bench_wasm "$ROOT_DIR/sample-programs/guest_u256/target/wasm32-unknown-unknown/release/guest_u256.wasm" "$input_wasm" "crush_apc_2" "2"
+run_bench_wasm "$ROOT_DIR/sample-programs/guest_u256/target/wasm32-unknown-unknown/release/guest_u256.wasm" "$input_wasm" "crush_apc_10" "10"
+
+python3 "$SCRIPTS_DIR"/basic_metrics.py summary-table --csv */metrics.json > basic_metrics.csv
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush/metrics.json" "riscv/metrics.json" > crush_apc_0_vs_riscv.txt
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_2/metrics.json" "riscv_apc_2/metrics.json" > crush_apc_2_vs_riscv_apc_2.txt
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_10/metrics.json" "riscv_apc_10/metrics.json" > crush_apc_10_vs_riscv_apc_10.txt
+popd
