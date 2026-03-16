@@ -42,7 +42,7 @@ fn test_keccak_rust_openvm() {
 #[test]
 fn test_u256_openvm() {
     let path = format!(
-        "{}/../sample-programs/guest_u256",
+        "{}/../sample-programs/u256_matmul",
         env!("CARGO_MANIFEST_DIR")
     );
     run_openvm_guest(&path, &[1]).unwrap();

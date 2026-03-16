@@ -1,6 +1,6 @@
 [workspace]
 [package]
-name = "guest_u256"
+name = "u256_matmul"
 version = "0.0.0"
 edition = "2021"
 
