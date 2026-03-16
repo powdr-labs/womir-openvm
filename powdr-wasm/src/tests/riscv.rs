@@ -38,3 +38,12 @@ fn test_keccak_rust_openvm() {
     // TODO When the function above does check the outputs, pass expectation &[41].
     run_openvm_guest(&path, &[1]).unwrap();
 }
+
+#[test]
+fn test_u256_openvm() {
+    let path = format!(
+        "{}/../sample-programs/u256_matmul",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    run_openvm_guest(&path, &[1]).unwrap();
+}
