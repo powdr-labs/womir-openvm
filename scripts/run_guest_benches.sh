@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to collect some numbers from our OpenVM WOMIR vs RISC-V guest examples.
+# Script to collect some numbers from our OpenVM crush vs RISC-V guest examples.
 # Mostly for CI usage, but can be easily modified for manual tests.
 
 # NOTE: The script expects the python environment to be set up with the required
@@ -82,7 +82,7 @@ run_bench_wasm() {
 
     # Compile step (not included in metrics)
     timed "$wall_times" "compile" \
-        cargo run -r $CUDA_FLAGS -- compile --apc-count "$apc_count" --output-dir "$compiled_dir" "$guest" "main" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
+        cargo run -r $CUDA_FLAGS -- compile --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "main" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
 
     # Prove step (metrics captured here)
     timed "$wall_times" "prove" \
@@ -113,7 +113,7 @@ run_bench_riscv() {
 
     # Compile step (not included in metrics)
     timed "$wall_times" "compile" \
-        cargo run -r $CUDA_FLAGS -- compile-riscv --apc-count "$apc_count" --output-dir "$compiled_dir" "$guest" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
+        cargo run -r $CUDA_FLAGS -- compile-riscv --apc-count "$apc_count" --apc-candidates-dir "${run_name}" --output-dir "$compiled_dir" "$guest" "${input_flags[@]}" &> "${run_name}/compile_log.txt"
 
     # Prove step (metrics captured here)
     timed "$wall_times" "prove" \
@@ -144,12 +144,12 @@ pushd "$dir"
 run_bench_riscv "$ROOT_DIR/sample-programs/keccak_with_inputs" "$input_riscv" "riscv" "0"
 run_bench_riscv "$ROOT_DIR/sample-programs/keccak_with_inputs" "$input_riscv" "riscv_apc_1" "1"
 run_bench_riscv "$ROOT_DIR/sample-programs/keccak_with_inputs" "$input_riscv" "riscv_apc_10" "10"
-run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "womir" "0"
-run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "womir_apc_1" "1"
-run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "womir_apc_10" "10"
+run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "crush" "0"
+run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "crush_apc_1" "1"
+run_bench_wasm "$ROOT_DIR/sample-programs/keccak_with_inputs/target/wasm32-unknown-unknown/release/keccak_with_inputs.wasm" "$input_wasm" "crush_apc_10" "10"
 
 python3 "$SCRIPTS_DIR"/basic_metrics.py summary-table --csv */metrics.json > basic_metrics.csv
-python3 "$SCRIPTS_DIR"/womir_vs_riscv.py "womir/metrics.json" "riscv/metrics.json" > womir_apc_0_vs_riscv.txt
-python3 "$SCRIPTS_DIR"/womir_vs_riscv.py "womir_apc_1/metrics.json" "riscv_apc_1/metrics.json" > womir_apc_1_vs_riscv_apc_1.txt
-python3 "$SCRIPTS_DIR"/womir_vs_riscv.py "womir_apc_10/metrics.json" "riscv_apc_10/metrics.json" > womir_apc_10_vs_riscv_apc_10.txt
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush/metrics.json" "riscv/metrics.json" > crush_apc_0_vs_riscv.txt
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_1/metrics.json" "riscv_apc_1/metrics.json" > crush_apc_1_vs_riscv_apc_1.txt
+python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush_apc_10/metrics.json" "riscv_apc_10/metrics.json" > crush_apc_10_vs_riscv_apc_10.txt
 popd

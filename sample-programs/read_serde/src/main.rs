@@ -2,7 +2,7 @@ extern crate alloc;
 
 use alloc::string::String;
 use serde::Deserialize;
-use womir_guest_io::{debug_print, read};
+use crush_guest_io::{debug_print, read};
 
 /// A struct whose postcard encoding differs from raw field layout:
 /// - `label` is length-prefixed (varint length + UTF-8 bytes)

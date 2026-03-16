@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to benchmark Reth (eth-block) via WOMIR and RISC-V.
+# Script to benchmark Reth (eth-block) via crush and RISC-V.
 # Mostly for CI usage, but can be easily modified for manual tests.
 
 # NOTE: The script expects the python environment to be set up with the required
@@ -72,18 +72,18 @@ dir="results/reth_${BLOCK}"
 
 ROOT_DIR=$(pwd)
 
-COMPILED_DIR="$ROOT_DIR/.cache/womir-compiled-reth-${BLOCK}"
+COMPILED_DIR="$ROOT_DIR/.cache/crush-compiled-reth-${BLOCK}"
 
 # Compile step (not included in benchmark metrics)
 echo ""
-echo "==== WOMIR Compile ===="
+echo "==== crush Compile ===="
 echo ""
 
 mkdir -p "$dir"
 pushd "$dir"
 
-### WOMIR benchmark
-run_name="womir_apc_${APC_COUNT}"
+### crush benchmark
+run_name="crush_apc_${APC_COUNT}"
 mkdir -p "${run_name}"
 wall_times="${run_name}/wall_times.json"
 
@@ -91,7 +91,7 @@ timed "$wall_times" "compile" \
     cargo run -r $CUDA_FLAGS -- compile \
     "$ROOT_DIR/sample-programs/eth-block/openvm-client-eth.wasm" "main" \
     --input 0 --input 0 --input "file:$ROOT_DIR/sample-programs/eth-block/${BLOCK}.bin" \
-    --apc-count "$APC_COUNT" --output-dir "$COMPILED_DIR" &> "${run_name}/compile_log.txt"
+    --apc-count "$APC_COUNT" --apc-candidates-dir "${run_name}" --output-dir "$COMPILED_DIR" &> "${run_name}/compile_log.txt"
 
 echo ""
 echo "==== ${run_name} ===="
@@ -134,7 +134,7 @@ if [[ -n "$RETH_BENCH_DIR" ]]; then
 
     python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
 
-    python3 "$SCRIPTS_DIR"/womir_vs_riscv.py "womir/metrics.json" "riscv/metrics.json" > womir_vs_riscv.txt
+    python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush/metrics.json" "riscv/metrics.json" > crush_vs_riscv.txt
 fi
 
 python3 "$SCRIPTS_DIR"/basic_metrics.py summary-table --csv */metrics.json > basic_metrics.csv

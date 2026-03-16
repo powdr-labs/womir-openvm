@@ -1,9 +1,9 @@
-# womir-openvm
+# powdr-wasm
 
 This repository consists of:
 
-- [WOMIR](https://github.com/powdr-labs/womir) ISA extension implementation for [OpenVM](https://github.com/openvm-org/openvm/).
-- WOMIR -> OpenVM transpiler.
+- [crush](https://github.com/powdr-labs/crush) ISA extension implementation for [OpenVM](https://github.com/openvm-org/openvm/).
+- crush -> OpenVM transpiler.
 - OpenVM extension integration.
 
 ## Usage
@@ -46,4 +46,3 @@ cargo run -r -- mock-prove sample-programs/fib_loop.wasm fib --input 10
 ```bash
 cargo run -r -- prove sample-programs/fib_loop.wasm fib --input 10
 ```
-
