@@ -79,7 +79,7 @@ itertools = "0.14"
 rrs-lib = "0.1.0"
 tracing = "0.1.40"
 
-crush = { git = "https://github.com/powdr-labs/crush.git", rev = "0e8ed76", package = "womir" }
+crush = { git = "https://github.com/powdr-labs/crush.git", rev = "be459c5" }
 wasmparser = { version = "0.235", default-features = false }
 
 # Uncomment for local development with path patches:
