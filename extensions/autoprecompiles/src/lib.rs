@@ -91,6 +91,21 @@ impl OpenVmISA for CrushISA {
         set
     }
 
+    fn unconditional_jump_target<F: PrimeField32>(
+        instruction: &Instruction<F>,
+        _pc: u64,
+    ) -> Option<u64> {
+        match instruction.opcode {
+            opcode if opcode == JumpOpcode::JUMP.global_opcode() => {
+                Some(instruction.a.as_canonical_u64())
+            }
+            opcode if opcode == CallOpcode::CALL.global_opcode() => {
+                Some(instruction.c.as_canonical_u64())
+            }
+            _ => None,
+        }
+    }
+
     fn format<F: PrimeField32>(instruction: &Instruction<F>) -> String {
         crush_instruction_formatter(instruction)
     }
