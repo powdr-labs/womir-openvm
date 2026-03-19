@@ -84,6 +84,7 @@ pushd "$dir"
 
 ### crush benchmark
 run_name="crush_apc_${APC_COUNT}"
+crush_run_name="${run_name}"
 mkdir -p "${run_name}"
 wall_times="${run_name}/wall_times.json"
 
@@ -134,7 +135,7 @@ if [[ -n "$RETH_BENCH_DIR" ]]; then
 
     python3 "$SCRIPTS_DIR"/plot_trace_cells.py -o "${run_name}"/trace_cells.png "${run_name}"/metrics.json > "${run_name}"/trace_cells.txt
 
-    python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "crush/metrics.json" "riscv/metrics.json" > crush_vs_riscv.txt
+    python3 "$SCRIPTS_DIR"/crush_vs_riscv.py "${crush_run_name}/metrics.json" "${run_name}/metrics.json" > crush_vs_riscv.txt
 fi
 
 python3 "$SCRIPTS_DIR"/basic_metrics.py summary-table --csv */metrics.json > basic_metrics.csv
