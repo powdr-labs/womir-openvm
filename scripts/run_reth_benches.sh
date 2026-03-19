@@ -123,7 +123,7 @@ if [[ -n "$RETH_BENCH_DIR" ]]; then
     # Compile (keygen) first so it doesn't appear in prove metrics
     pushd "$RETH_BENCH_DIR"
     timed "$OLDPWD/$riscv_wall_times" "compile" \
-        ./run.sh --no-precompiles $CUDA_FLAG --apcs "$APC_COUNT" --mode compile --block-number "$BLOCK" &> "$OLDPWD/${run_name}/compile_log.txt"
+        ./run.sh --no-precompiles $CUDA_FLAG --apc "$APC_COUNT" --mode compile --block-number "$BLOCK" &> "$OLDPWD/${run_name}/compile_log.txt"
     # Prove
     timed "$OLDPWD/$riscv_wall_times" "prove" \
         ./run.sh --no-precompiles $CUDA_FLAG --mode prove-stark --block-number "$BLOCK" &> "$OLDPWD/${run_name}/log.txt"
