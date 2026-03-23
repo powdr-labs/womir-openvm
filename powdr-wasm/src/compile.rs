@@ -1,18 +1,19 @@
 //! Compile-to-disk pipelines for crush and RISC-V.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use autoprecompiles::CrushISA;
 use openvm_sdk::StdIn;
 use openvm_sdk::config::{AppConfig, DEFAULT_APP_LOG_BLOWUP};
 use openvm_stark_sdk::config::FriParameters;
 use powdr_autoprecompiles::{
+    PowdrConfig,
     empirical_constraints::EmpiricalConstraints,
     pgo::{CellPgo, NonePgo},
 };
 use powdr_openvm::{
     customize_exe::{OpenVmApcCandidate, customize},
-    default_powdr_openvm_config, execution_profile_from_guest,
+    execution_profile_from_guest,
     program::OriginalCompiledProgram,
 };
 
@@ -23,18 +24,13 @@ use crate::proving::{AGG_PK_FILE, APP_PK_FILE, COMPILED_PROGRAM_FILE, CrushSdk, 
 pub fn compile_crush_to_disk(
     original_program: OriginalCompiledProgram<CrushISA>,
     stdin: StdIn,
-    apc_count: u64,
-    apc_candidates_dir: Option<PathBuf>,
+    config: PowdrConfig,
     output_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(output_dir)?;
 
     let apc_start = std::time::Instant::now();
-
-    let mut config = default_powdr_openvm_config(apc_count, 0);
-    if let Some(apc_candidates_dir) = apc_candidates_dir {
-        config = config.with_apc_candidates_dir(apc_candidates_dir);
-    }
+    let apc_count = config.autoprecompiles;
 
     let compiled = if apc_count > 0 {
         let execution_profile = execution_profile_from_guest(&original_program, stdin);
@@ -96,8 +92,7 @@ pub fn compile_crush_to_disk(
 pub fn compile_riscv_to_disk(
     program: &str,
     stdin: StdIn,
-    apc_count: u64,
-    apc_candidates_dir: Option<PathBuf>,
+    config: PowdrConfig,
     output_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(output_dir)?;
@@ -112,10 +107,7 @@ pub fn compile_riscv_to_disk(
     .map_err(|e| eyre::eyre!("{e}"))?;
 
     let apc_start = std::time::Instant::now();
-    let mut config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
-    if let Some(apc_candidates_dir) = apc_candidates_dir {
-        config = config.with_apc_candidates_dir(apc_candidates_dir);
-    }
+    let apc_count = config.autoprecompiles;
     let pgo_config = if apc_count > 0 {
         let execution_profile =
             powdr_openvm::execution_profile_from_guest(&original, stdin.clone());
