@@ -229,7 +229,7 @@ fn parse_val(s: &str) -> Result<u32, Box<dyn std::error::Error>> {
 }
 
 fn load_wasm_module(wasm_bytes: &[u8]) -> LinkedProgram<'_, F> {
-    let (module, functions) = load_wasm(wasm_bytes);
+    let (module, functions) = load_wasm(wasm_bytes, false);
     LinkedProgram::new(module, functions)
 }
 
