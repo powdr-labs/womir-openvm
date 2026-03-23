@@ -1,6 +1,6 @@
 //! Proving infrastructure: engine setup, cached proving key, mock proof, and real proof.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::OnceLock;
 
 use autoprecompiles::CrushISA;
@@ -26,6 +26,7 @@ use openvm_stark_sdk::{
     },
 };
 use powdr_autoprecompiles::{
+    PowdrConfig,
     empirical_constraints::EmpiricalConstraints,
     pgo::{CellPgo, NonePgo},
 };
@@ -34,7 +35,7 @@ use powdr_openvm::program::CompiledProgram;
 use powdr_openvm::{DEFAULT_DEGREE_BOUND, SpecializedConfig};
 use powdr_openvm::{
     customize_exe::{OpenVmApcCandidate, customize},
-    default_powdr_openvm_config, execution_profile_from_guest,
+    execution_profile_from_guest,
     program::OriginalCompiledProgram,
 };
 
@@ -198,14 +199,10 @@ pub fn prove(
     original_program: OriginalCompiledProgram<CrushISA>,
     stdin: StdIn,
     recursion: bool,
-    apc_count: u64,
-    apc_candidates_dir: Option<PathBuf>,
+    powdr_config: PowdrConfig,
     cache_dir: Option<&Path>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut powdr_config = default_powdr_openvm_config(apc_count, 0);
-    if let Some(apc_candidates_dir) = apc_candidates_dir {
-        powdr_config = powdr_config.with_apc_candidates_dir(apc_candidates_dir);
-    }
+    let apc_count = powdr_config.autoprecompiles;
     let compiled = if apc_count > 0 {
         let execution_profile = execution_profile_from_guest(&original_program, stdin.clone());
         customize(

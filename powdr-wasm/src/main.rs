@@ -4,7 +4,7 @@ mod proving;
 #[cfg(test)]
 mod tests;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use crush::loader::rwm::RWMStages;
 use crush::loader::{
     CommonStages, FunctionAsm, FunctionProcessingStage, Module, PartiallyParsedProgram, Statistics,
@@ -34,11 +34,48 @@ use crate::builtin_functions::BuiltinFunction;
 use crush_translation::{Directive, LinkedProgram, OpenVMSettings};
 
 use crush_circuit::CrushConfig;
+use powdr_autoprecompiles::PowdrConfig;
 
 #[derive(Parser)]
 struct CliArgs {
     #[command(subcommand)]
     command: Commands,
+}
+
+#[derive(Args)]
+struct PowdrArgs {
+    /// Number of APCs to generate
+    #[arg(long, default_value_t = 0)]
+    apc_count: u64,
+    /// Directory to persist all APC candidates + a metrics summary
+    #[arg(long)]
+    apc_candidates_dir: Option<PathBuf>,
+    /// Maximum number of instructions in an APC
+    #[arg(long)]
+    apc_max_instructions: Option<u32>,
+    /// Ignore APCs executed less times than the cutoff
+    #[arg(long)]
+    apc_exec_count_cutoff: Option<u32>,
+}
+
+impl PowdrArgs {
+    fn build_powdr_config(&self) -> PowdrConfig {
+        let mut config = powdr_openvm::default_powdr_openvm_config(self.apc_count, 0);
+        if let Some(ref apc_candidates_dir) = self.apc_candidates_dir {
+            config = config.with_apc_candidates_dir(apc_candidates_dir);
+        }
+        config = config.with_superblocks(1, self.apc_max_instructions, self.apc_exec_count_cutoff);
+        config
+    }
+
+    fn build_riscv_powdr_config(&self) -> PowdrConfig {
+        let mut config = powdr_openvm_riscv::default_powdr_openvm_config(self.apc_count, 0);
+        if let Some(ref apc_candidates_dir) = self.apc_candidates_dir {
+            config = config.with_apc_candidates_dir(apc_candidates_dir);
+        }
+        config = config.with_superblocks(1, self.apc_max_instructions, self.apc_exec_count_cutoff);
+        config
+    }
 }
 
 #[derive(Subcommand)]
@@ -79,12 +116,8 @@ enum Commands {
         /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
         input: Vec<String>,
-        /// Number of APCs to generate
-        #[arg(long, default_value_t = 0)]
-        apc_count: u64,
-        /// Directory to persist all APC candidates + a metrics summary
-        #[arg(long)]
-        apc_candidates_dir: Option<PathBuf>,
+        #[command(flatten)]
+        powdr: PowdrArgs,
         /// Directory to write the compiled artifact to
         #[arg(long)]
         output_dir: PathBuf,
@@ -101,12 +134,8 @@ enum Commands {
         /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
         input: Vec<String>,
-        /// Number of APCs to generate
-        #[arg(long, default_value_t = 0)]
-        apc_count: u64,
-        /// Directory to persist all APC candidates + a metrics summary
-        #[arg(long)]
-        apc_candidates_dir: Option<PathBuf>,
+        #[command(flatten)]
+        powdr: PowdrArgs,
         /// Directory to write the compiled artifact to
         #[arg(long)]
         output_dir: PathBuf,
@@ -124,18 +153,14 @@ enum Commands {
         /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
         input: Vec<String>,
+        #[command(flatten)]
+        powdr: PowdrArgs,
         /// Also run aggregation (inner recursion) after the app proof
         #[arg(long, default_value_t = false)]
         recursion: bool,
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
-        /// Number of apcs to use (convenience mode only)
-        #[arg(long, default_value_t = 0)]
-        apc_count: u64,
-        /// Directory to persist all APC candidates + a metrics summary
-        #[arg(long)]
-        apc_candidates_dir: Option<PathBuf>,
         /// Directory with cached proving keys (from `keygen` command, convenience mode only)
         #[arg(long)]
         cache_dir: Option<PathBuf>,
@@ -178,12 +203,8 @@ enum Commands {
         /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
         input: Vec<String>,
-        /// Number of apcs to use (convenience mode only)
-        #[arg(long, default_value_t = 0)]
-        apc_count: u64,
-        /// Directory to persist all APC candidates + a metrics summary
-        #[arg(long)]
-        apc_candidates_dir: Option<PathBuf>,
+        #[command(flatten)]
+        powdr: PowdrArgs,
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
@@ -246,8 +267,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             function,
             input,
-            apc_count,
-            apc_candidates_dir,
+            powdr,
             output_dir,
             unaligned_memory,
         } => {
@@ -255,41 +275,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let original_program =
                 load_wasm_original_program(&wasm_bytes, &function, unaligned_memory);
             let stdin = make_stdin(&input);
-            compile::compile_crush_to_disk(
-                original_program,
-                stdin,
-                apc_count,
-                apc_candidates_dir,
-                &output_dir,
-            )
-            .map_err(|e| eyre::eyre!("{e}"))?;
+            let powdr_config = powdr.build_powdr_config();
+            compile::compile_crush_to_disk(original_program, stdin, powdr_config, &output_dir)
+                .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled to {}", output_dir.display());
         }
         Commands::CompileRiscv {
             program,
             input,
-            apc_count,
-            apc_candidates_dir,
+            powdr,
             output_dir,
         } => {
             let stdin = make_stdin(&input);
-            compile::compile_riscv_to_disk(
-                &program,
-                stdin,
-                apc_count,
-                apc_candidates_dir,
-                &output_dir,
-            )
-            .map_err(|e| eyre::eyre!("{e}"))?;
+            let powdr_config = powdr.build_riscv_powdr_config();
+            compile::compile_riscv_to_disk(&program, stdin, powdr_config, &output_dir)
+                .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled RISC-V to {}", output_dir.display());
         }
         Commands::Prove {
             program,
             function,
             input,
+            powdr,
             recursion,
-            apc_count,
-            apc_candidates_dir,
             metrics,
             cache_dir,
             compiled_dir,
@@ -309,12 +317,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
                     let original_program =
                         load_wasm_original_program(&wasm_bytes, &function, unaligned_memory);
+                    let powdr_config = powdr.build_powdr_config();
                     proving::prove(
                         original_program,
                         stdin,
                         recursion,
-                        apc_count,
-                        apc_candidates_dir,
+                        powdr_config,
                         cache_dir.as_deref(),
                     )
                     .map_err(|e| eyre::eyre!("{e}"))?;
@@ -367,8 +375,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::ProveRiscv {
             program,
             input,
-            apc_count,
-            apc_candidates_dir,
+            powdr,
             metrics,
             compiled_dir,
         } => {
@@ -391,11 +398,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )
                     .map_err(|e| eyre::eyre!("{e}"))?;
 
-                    let mut config = powdr_openvm_riscv::default_powdr_openvm_config(apc_count, 0);
-                    if let Some(apc_candidates_dir) = apc_candidates_dir {
-                        config = config.with_apc_candidates_dir(apc_candidates_dir);
-                    }
-                    let pgo_config = if apc_count > 0 {
+                    let config = powdr.build_riscv_powdr_config();
+                    let pgo_config = if powdr.apc_count > 0 {
                         let stdin = make_stdin(&input);
                         let execution_profile =
                             powdr_openvm::execution_profile_from_guest(&original, stdin);
