@@ -73,8 +73,7 @@ impl ApcArgs {
     }
 
     fn build_riscv_powdr_config(&self) -> PowdrConfig {
-        let mut config =
-            powdr_openvm_riscv::default_powdr_openvm_config(self.apc_count, 0);
+        let mut config = powdr_openvm_riscv::default_powdr_openvm_config(self.apc_count, 0);
         if let Some(ref apc_candidates_dir) = self.apc_candidates_dir {
             config = config.with_apc_candidates_dir(apc_candidates_dir);
         }
@@ -243,13 +242,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let original_program = load_wasm_original_program(&wasm_bytes, &function);
             let stdin = make_stdin(&apc.input);
             let powdr_config = apc.build_powdr_config();
-            compile::compile_crush_to_disk(
-                original_program,
-                stdin,
-                powdr_config,
-                &output_dir,
-            )
-            .map_err(|e| eyre::eyre!("{e}"))?;
+            compile::compile_crush_to_disk(original_program, stdin, powdr_config, &output_dir)
+                .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled to {}", output_dir.display());
         }
         Commands::CompileRiscv {
@@ -259,13 +253,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             let stdin = make_stdin(&apc.input);
             let powdr_config = apc.build_riscv_powdr_config();
-            compile::compile_riscv_to_disk(
-                &program,
-                stdin,
-                powdr_config,
-                &output_dir,
-            )
-            .map_err(|e| eyre::eyre!("{e}"))?;
+            compile::compile_riscv_to_disk(&program, stdin, powdr_config, &output_dir)
+                .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled RISC-V to {}", output_dir.display());
         }
         Commands::Prove {
