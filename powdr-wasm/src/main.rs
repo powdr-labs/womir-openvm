@@ -43,11 +43,7 @@ struct CliArgs {
 }
 
 #[derive(Args)]
-struct ApcArgs {
-    /// Guest inputs for PGO profiling (needed when apc_count > 0).
-    /// Each value is either a u32 literal or file:<path> for binary file contents.
-    #[arg(long)]
-    input: Vec<String>,
+struct PowdrArgs {
     /// Number of APCs to generate
     #[arg(long, default_value_t = 0)]
     apc_count: u64,
@@ -62,7 +58,7 @@ struct ApcArgs {
     apc_exec_count_cutoff: Option<u32>,
 }
 
-impl ApcArgs {
+impl PowdrArgs {
     fn build_powdr_config(&self) -> PowdrConfig {
         let mut config = powdr_openvm::default_powdr_openvm_config(self.apc_count, 0);
         if let Some(ref apc_candidates_dir) = self.apc_candidates_dir {
@@ -110,8 +106,12 @@ enum Commands {
         program: String,
         /// Function name (entry point)
         function: String,
+        /// Guest inputs for PGO profiling (needed when apc_count > 0).
+        /// Each value is either a u32 literal or file:<path> for binary file contents.
+        #[arg(long)]
+        input: Vec<String>,
         #[command(flatten)]
-        apc: ApcArgs,
+        powdr: PowdrArgs,
         /// Directory to write the compiled artifact to
         #[arg(long)]
         output_dir: PathBuf,
@@ -121,8 +121,12 @@ enum Commands {
     CompileRiscv {
         /// Path to the Rust crate
         program: String,
+        /// Guest inputs for PGO profiling (needed when apc_count > 0).
+        /// Each value is either a u32 literal or file:<path> for binary file contents.
+        #[arg(long)]
+        input: Vec<String>,
         #[command(flatten)]
-        apc: ApcArgs,
+        powdr: PowdrArgs,
         /// Directory to write the compiled artifact to
         #[arg(long)]
         output_dir: PathBuf,
@@ -136,8 +140,12 @@ enum Commands {
         program: Option<String>,
         /// Function name (required in convenience mode)
         function: Option<String>,
+        /// Guest inputs in the order the guest reads them.
+        /// Each value is either a u32 literal or file:<path> for binary file contents.
+        #[arg(long)]
+        input: Vec<String>,
         #[command(flatten)]
-        apc: ApcArgs,
+        powdr: PowdrArgs,
         /// Also run aggregation (inner recursion) after the app proof
         #[arg(long, default_value_t = false)]
         recursion: bool,
@@ -176,8 +184,12 @@ enum Commands {
     ProveRiscv {
         /// Path to the Rust crate (convenience mode)
         program: Option<String>,
+        /// Guest inputs in the order the guest reads them.
+        /// Each value is either a u32 literal or file:<path> for binary file contents.
+        #[arg(long)]
+        input: Vec<String>,
         #[command(flatten)]
-        apc: ApcArgs,
+        powdr: PowdrArgs,
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
@@ -235,24 +247,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Compile {
             program,
             function,
-            apc,
+            input,
+            powdr,
             output_dir,
         } => {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let original_program = load_wasm_original_program(&wasm_bytes, &function);
-            let stdin = make_stdin(&apc.input);
-            let powdr_config = apc.build_powdr_config();
+            let stdin = make_stdin(&input);
+            let powdr_config = powdr.build_powdr_config();
             compile::compile_crush_to_disk(original_program, stdin, powdr_config, &output_dir)
                 .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled to {}", output_dir.display());
         }
         Commands::CompileRiscv {
             program,
-            apc,
+            input,
+            powdr,
             output_dir,
         } => {
-            let stdin = make_stdin(&apc.input);
-            let powdr_config = apc.build_riscv_powdr_config();
+            let stdin = make_stdin(&input);
+            let powdr_config = powdr.build_riscv_powdr_config();
             compile::compile_riscv_to_disk(&program, stdin, powdr_config, &output_dir)
                 .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled RISC-V to {}", output_dir.display());
@@ -260,13 +274,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Prove {
             program,
             function,
-            apc,
+            input,
+            powdr,
             recursion,
             metrics,
             cache_dir,
             compiled_dir,
         } => {
-            let stdin = make_stdin(&apc.input);
+            let stdin = make_stdin(&input);
 
             let prove = || -> Result<()> {
                 if let Some(compiled_dir) = compiled_dir {
@@ -279,7 +294,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         function.expect("function is required when --compiled-dir is not provided");
                     let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
                     let original_program = load_wasm_original_program(&wasm_bytes, &function);
-                    let powdr_config = apc.build_powdr_config();
+                    let powdr_config = powdr.build_powdr_config();
                     proving::prove(
                         original_program,
                         stdin,
@@ -335,13 +350,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::ProveRiscv {
             program,
-            apc,
+            input,
+            powdr,
             metrics,
             compiled_dir,
         } => {
             let prove = || -> Result<()> {
                 if let Some(compiled_dir) = compiled_dir {
-                    let stdin = make_stdin(&apc.input);
+                    let stdin = make_stdin(&input);
                     proving::prove_riscv_from_compiled(&compiled_dir, stdin, true)
                         .map_err(|e| eyre::eyre!("{e}"))?;
                 } else {
@@ -358,9 +374,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )
                     .map_err(|e| eyre::eyre!("{e}"))?;
 
-                    let config = apc.build_riscv_powdr_config();
-                    let pgo_config = if apc.apc_count > 0 {
-                        let stdin = make_stdin(&apc.input);
+                    let config = powdr.build_riscv_powdr_config();
+                    let pgo_config = if powdr.apc_count > 0 {
+                        let stdin = make_stdin(&input);
                         let execution_profile =
                             powdr_openvm::execution_profile_from_guest(&original, stdin);
                         powdr_openvm_riscv::PgoConfig::Cell(execution_profile, None)
@@ -376,7 +392,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )
                     .map_err(|e| eyre::eyre!("{e}"))?;
 
-                    let stdin = make_stdin(&apc.input);
+                    let stdin = make_stdin(&input);
                     powdr_openvm_riscv::prove(&compiled, false, true, stdin, None)
                         .map_err(|e| eyre::eyre!("{e}"))?;
                 }
