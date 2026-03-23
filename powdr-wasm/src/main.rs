@@ -19,13 +19,13 @@ use openvm_sdk::StdIn;
 use openvm_stark_sdk::bench::serialize_metric_snapshot;
 use powdr_openvm::{extraction_utils::OriginalVmConfig, program::OriginalCompiledProgram};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 use std::sync::mpsc::channel;
+use std::sync::Arc;
 use std::sync::{Mutex, RwLock};
 use tracing_forest::ForestLayer;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
+use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
 use tracing::Level;
 type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
@@ -84,6 +84,9 @@ enum Commands {
     Print {
         /// Path to the WASM program
         program: String,
+        /// Support unaligned memory accesses (needed for e.g. Go-compiled WASM)
+        #[arg(long, default_value_t = false)]
+        unaligned_memory: bool,
     },
     /// Runs a function from the program with arguments
     Run {
@@ -98,6 +101,9 @@ enum Commands {
         /// Path to output metrics JSON file
         #[arg(long)]
         metrics: Option<PathBuf>,
+        /// Support unaligned memory accesses (needed for e.g. Go-compiled WASM)
+        #[arg(long, default_value_t = false)]
+        unaligned_memory: bool,
     },
     /// Compile a WASM program: WASM loading, PGO, APC generation, and keygen.
     /// Outputs a compiled artifact directory that can be used by `prove` or `prove-riscv`.
@@ -115,6 +121,9 @@ enum Commands {
         /// Directory to write the compiled artifact to
         #[arg(long)]
         output_dir: PathBuf,
+        /// Support unaligned memory accesses (needed for e.g. Go-compiled WASM)
+        #[arg(long, default_value_t = false)]
+        unaligned_memory: bool,
     },
     /// Compile a RISC-V program: Rust compilation, PGO, APC generation, and keygen.
     /// Outputs a compiled artifact directory that can be used by `prove-riscv`.
@@ -158,6 +167,9 @@ enum Commands {
         /// Directory with pre-compiled artifact (from `compile` command)
         #[arg(long)]
         compiled_dir: Option<PathBuf>,
+        /// Support unaligned memory accesses (needed for e.g. Go-compiled WASM)
+        #[arg(long, default_value_t = false)]
+        unaligned_memory: bool,
     },
     /// Generate and cache proving keys to a directory (for use with `prove --cache-dir`)
     Keygen {
@@ -175,6 +187,9 @@ enum Commands {
         /// Each value is either a u32 literal or file:<path> for binary file contents.
         #[arg(long)]
         input: Vec<String>,
+        /// Support unaligned memory accesses (needed for e.g. Go-compiled WASM)
+        #[arg(long, default_value_t = false)]
+        unaligned_memory: bool,
     },
     /// Proves execution of a function from the RISC-V program with the given arguments.
     /// Even though not the main goal of this crate, this is useful for benchmarking against
@@ -205,9 +220,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command line arguments
     let cli_args = CliArgs::parse();
     match cli_args.command {
-        Commands::Print { program } => {
+        Commands::Print {
+            program,
+            unaligned_memory,
+        } => {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
-            let (_module, functions) = load_wasm(&wasm_bytes);
+            let (_module, functions) = load_wasm(&wasm_bytes, unaligned_memory);
 
             for func in &functions {
                 println!("Function {}:", func.func_idx);
@@ -221,9 +239,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             function,
             input,
             metrics,
+            unaligned_memory,
         } => {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
-            let (module, functions) = load_wasm(&wasm_bytes);
+            let (module, functions) = load_wasm(&wasm_bytes, unaligned_memory);
 
             // Create and execute program
             let mut linked_program = LinkedProgram::new(module, functions);
@@ -250,9 +269,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             input,
             powdr,
             output_dir,
+            unaligned_memory,
         } => {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
-            let original_program = load_wasm_original_program(&wasm_bytes, &function);
+            let original_program =
+                load_wasm_original_program(&wasm_bytes, &function, unaligned_memory);
             let stdin = make_stdin(&input);
             let powdr_config = powdr.build_powdr_config();
             compile::compile_crush_to_disk(original_program, stdin, powdr_config, &output_dir)
@@ -280,6 +301,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             metrics,
             cache_dir,
             compiled_dir,
+            unaligned_memory,
         } => {
             let stdin = make_stdin(&input);
 
@@ -293,7 +315,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let function =
                         function.expect("function is required when --compiled-dir is not provided");
                     let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
-                    let original_program = load_wasm_original_program(&wasm_bytes, &function);
+                    let original_program =
+                        load_wasm_original_program(&wasm_bytes, &function, unaligned_memory);
                     let powdr_config = powdr.build_powdr_config();
                     proving::prove(
                         original_program,
@@ -325,8 +348,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             program,
             function,
             input,
+            unaligned_memory,
         } => {
-            let exe = load_wasm_exe(&program, &function);
+            let exe = load_wasm_exe(&program, &function, unaligned_memory);
             let stdin = make_stdin(&input);
             let vm_config = CrushConfig::default();
 
@@ -414,9 +438,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn load_wasm_exe(program: &str, function: &str) -> VmExe<F> {
+fn load_wasm_exe(program: &str, function: &str, unaligned_memory: bool) -> VmExe<F> {
     let wasm_bytes = std::fs::read(program).expect("Failed to read WASM file");
-    let (module, functions) = load_wasm(&wasm_bytes);
+    let (module, functions) = load_wasm(&wasm_bytes, unaligned_memory);
     let linked_program = LinkedProgram::new(module, functions);
     linked_program.program_with_entry_point(function)
 }
@@ -424,8 +448,9 @@ fn load_wasm_exe(program: &str, function: &str) -> VmExe<F> {
 fn load_wasm_original_program<'a>(
     wasm_bytes: &'a [u8],
     function: &str,
+    unaligned_memory: bool,
 ) -> OriginalCompiledProgram<'a, autoprecompiles::CrushISA> {
-    let (module, functions) = load_wasm(wasm_bytes);
+    let (module, functions) = load_wasm(wasm_bytes, unaligned_memory);
     let linked_program = LinkedProgram::new(module, functions);
     let exe = Arc::new(linked_program.program_with_entry_point(function));
     let vm_config = OriginalVmConfig::new(CrushConfig::default());
@@ -457,8 +482,15 @@ fn make_stdin(inputs: &[String]) -> StdIn {
     stdin
 }
 
-fn load_wasm(wasm_bytes: &[u8]) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) {
-    load_wasm_with_settings(wasm_bytes, OpenVMSettings::<F>::new())
+fn load_wasm(
+    wasm_bytes: &[u8],
+    unaligned_memory: bool,
+) -> (Module<'_>, Vec<FunctionAsm<Directive<F>>>) {
+    let mut settings = OpenVMSettings::<F>::new();
+    if unaligned_memory {
+        settings = settings.with_unaligned_memory();
+    }
+    load_wasm_with_settings(wasm_bytes, settings)
 }
 
 fn load_wasm_with_settings(
