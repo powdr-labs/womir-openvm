@@ -6,30 +6,31 @@ use openvm_circuit::arch::{
     AirInventory, AirInventoryError, ChipInventoryError, VmBuilder, VmCircuitConfig,
     VmCircuitExtension, VmProverExtension,
 };
-use openvm_circuit::system::SystemCpuBuilder;
 #[cfg(feature = "cuda")]
 use openvm_circuit::system::cuda::extensions::SystemGpuBuilder;
+use openvm_circuit::system::SystemCpuBuilder;
 use openvm_crush_transpiler::{
     BaseAlu64Opcode, BaseAluOpcode, CallOpcode, ConstOpcodes, DivRem64Opcode, DivRemOpcode,
     Eq64Opcode, EqOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
     Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
 };
-use openvm_instructions::{LocalOpcode, VmOpcode, instruction::Instruction};
+use openvm_instructions::{instruction::Instruction, LocalOpcode, VmOpcode};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_stark_sdk::{
     config::baby_bear_poseidon2::BabyBearPoseidon2Engine, p3_baby_bear::BabyBear,
 };
-use powdr_openvm::BabyBearSC;
-#[cfg(feature = "cuda")]
-use powdr_openvm::GpuBabyBearPoseidon2Engine;
 #[cfg(feature = "cuda")]
 use powdr_openvm::isa::OriginalGpuChipComplex;
 use powdr_openvm::isa::{OpenVmISA, OriginalCpuChipComplex};
+use powdr_openvm::powdr_extension::trace_generator::cpu::SharedPeripheryChipsCpuProverExt;
 use powdr_openvm::powdr_extension::trace_generator::SharedPeripheryChipsCpu;
 #[cfg(feature = "cuda")]
 use powdr_openvm::powdr_extension::trace_generator::SharedPeripheryChipsGpu;
-use powdr_openvm::powdr_extension::trace_generator::cpu::SharedPeripheryChipsCpuProverExt;
 use powdr_openvm::program::OriginalCompiledProgram;
+use powdr_openvm::BabyBearSC;
+#[cfg(feature = "cuda")]
+use powdr_openvm::GpuBabyBearPoseidon2Engine;
+use powdr_openvm::Instr;
 use powdr_riscv_elf::debug_info::SymbolTable;
 use strum::IntoEnumIterator;
 
@@ -89,6 +90,20 @@ impl OpenVmISA for CrushISA {
         set.extend(CallOpcode::iter().map(|x| x.global_opcode()));
         set.extend(ConstOpcodes::iter().map(|x| x.global_opcode()));
         set
+    }
+
+    fn try_static_target<F: PrimeField32>(
+        (_pc, instruction): (u64, &Instr<F, Self>),
+        _previous: Option<(u64, &Instr<F, Self>)>,
+    ) -> Option<u64> {
+        let opcode = instruction.inner.opcode;
+        if opcode == JumpOpcode::JUMP.global_opcode() {
+            Some(u64::from(instruction.inner.a.as_canonical_u32()))
+        } else if opcode == CallOpcode::CALL.global_opcode() {
+            Some(u64::from(instruction.inner.c.as_canonical_u32()))
+        } else {
+            None
+        }
     }
 
     fn format<F: PrimeField32>(instruction: &Instruction<F>) -> String {
