@@ -52,6 +52,7 @@ postcard = { version = "1.1", features = ["alloc"] }
 default = []
 cuda = [
   "crush-circuit/cuda",
+  "autoprecompiles/cuda",
   "openvm-circuit/cuda",
   "openvm-native-circuit/cuda",
   "powdr-openvm/cuda",
