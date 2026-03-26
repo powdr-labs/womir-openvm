@@ -170,7 +170,8 @@ enum Commands {
         /// Support unaligned memory accesses (needed for e.g. Go-compiled WASM)
         #[arg(long, default_value_t = false)]
         unaligned_memory: bool,
-        /// Max trace height per chip in a segment.
+        /// Max trace height per chip in a segment (must be a power of two,
+        /// since traces are padded to the next power of two anyway).
         /// Lower values cause earlier segmentation, reducing peak GPU memory usage.
         /// Default: 2^22 (4194304).
         #[arg(long)]
@@ -216,7 +217,8 @@ enum Commands {
         /// Directory with pre-compiled artifact (from `compile-riscv` command)
         #[arg(long)]
         compiled_dir: Option<PathBuf>,
-        /// Max trace height per chip in a segment.
+        /// Max trace height per chip in a segment (must be a power of two,
+        /// since traces are padded to the next power of two anyway).
         /// Lower values cause earlier segmentation, reducing peak GPU memory usage.
         /// Default: 2^22 (4194304).
         #[arg(long)]
