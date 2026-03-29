@@ -34,3 +34,5 @@ sample-programs/**/Cargo.lock
 
 # Cached proving keys
 .cache/
+keccak-benchmark-results/
+keccak-benchmark-results/

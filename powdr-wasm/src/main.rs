@@ -332,8 +332,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let prove = || -> Result<()> {
                 if let Some(compiled_dir) = compiled_dir {
-                    proving::prove_from_compiled(&compiled_dir, stdin, recursion)
-                        .map_err(|e| eyre::eyre!("{e}"))?;
+                    if keccak {
+                        proving::prove_from_compiled_keccak(&compiled_dir, stdin, recursion)
+                            .map_err(|e| eyre::eyre!("{e}"))?;
+                    } else {
+                        proving::prove_from_compiled(&compiled_dir, stdin, recursion)
+                            .map_err(|e| eyre::eyre!("{e}"))?;
+                    }
                 } else {
                     let program =
                         program.expect("program is required when --compiled-dir is not provided");

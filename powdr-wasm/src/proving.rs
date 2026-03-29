@@ -419,6 +419,52 @@ pub fn prove_from_compiled(
     Ok(())
 }
 
+/// Prove from a pre-compiled crush+keccak artifact directory.
+pub fn prove_from_compiled_keccak(
+    compiled_dir: &Path,
+    stdin: StdIn,
+    recursion: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use autoprecompiles::CrushKeccakISA;
+
+    tracing::info!("Loading compiled program...");
+    let compiled: CompiledProgram<CrushKeccakISA> =
+        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(COMPILED_PROGRAM_FILE))?)?;
+
+    let app_fri_params =
+        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
+    let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
+    let sdk =
+        powdr_openvm::PowdrSdkCpu::<CrushKeccakISA>::new_without_transpiler(app_config)?;
+
+    tracing::info!("Loading cached app_pk...");
+    let app_pk: AppProvingKey<SpecializedConfig<CrushKeccakISA>> =
+        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(APP_PK_FILE))?)?;
+    sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
+
+    if recursion {
+        tracing::info!("Loading cached agg_pk...");
+        let agg_pk: AggProvingKey =
+            rmp_serde::from_slice(&std::fs::read(compiled_dir.join(AGG_PK_FILE))?)?;
+        sdk.set_agg_pk(agg_pk).map_err(|_| "agg_pk already set")?;
+    }
+
+    let mut app_prover = sdk.app_prover(compiled.exe.clone())?;
+    let app_proof = app_prover.prove(stdin)?;
+
+    let app_vk = sdk.app_pk().get_app_vk();
+    verify_app_proof(&app_vk, &app_proof)?;
+
+    if recursion {
+        let mut agg_prover = sdk.prover(compiled.exe.clone())?.agg_prover;
+        let start = std::time::Instant::now();
+        let _ = agg_prover.generate_root_verifier_input(app_proof)?;
+        tracing::info!("Agg proof (inner recursion) took {:?}", start.elapsed());
+    }
+
+    Ok(())
+}
+
 /// Prove from a pre-compiled RISC-V artifact directory.
 pub fn prove_riscv_from_compiled(
     compiled_dir: &Path,

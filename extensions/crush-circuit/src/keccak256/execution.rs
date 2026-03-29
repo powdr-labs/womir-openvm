@@ -1,11 +1,10 @@
 use std::{
     borrow::{Borrow, BorrowMut},
-    convert::TryInto,
     mem::size_of,
 };
 
 use openvm_circuit::{
-    arch::{StaticProgramError, *},
+    arch::*,
     system::memory::online::GuestMemory,
 };
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
@@ -13,56 +12,58 @@ use openvm_instructions::{
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS},
+    LocalOpcode,
 };
+use openvm_crush_transpiler::Keccak256Opcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 use p3_keccak_air::NUM_ROUNDS;
 
-use super::{KeccakfExecutor, NUM_OP_ROWS_PER_INS};
-use crate::{
-    keccak256::keccakf_op::keccakf_postimage_bytes,
-    keccak256::{KECCAK_WIDTH_BYTES, KECCAK_WORD_SIZE},
-    memory_config::FpMemory,
-};
+use crate::memory_config::FpMemory;
+
+use super::{KeccakVmExecutor, KECCAK_WORD_SIZE};
+use crate::keccak256::utils::{keccak256, num_keccak_f};
 
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
-struct KeccakfPreCompute {
+struct KeccakPreCompute {
     a: u8,
+    b: u8,
+    c: u8,
 }
 
-impl KeccakfExecutor {
+impl KeccakVmExecutor {
     fn pre_compute_impl<F: PrimeField32>(
         &self,
         pc: u32,
         inst: &Instruction<F>,
-        data: &mut KeccakfPreCompute,
+        data: &mut KeccakPreCompute,
     ) -> Result<(), StaticProgramError> {
         let Instruction {
-            opcode: _,
+            opcode,
             a,
-            b: _,
-            c: _,
+            b,
+            c,
             d,
             e,
             ..
         } = inst;
-
         let e_u32 = e.as_canonical_u32();
         if d.as_canonical_u32() != RV32_REGISTER_AS || e_u32 != RV32_MEMORY_AS {
             return Err(StaticProgramError::InvalidInstruction(pc));
         }
-
-        *data = KeccakfPreCompute {
+        *data = KeccakPreCompute {
             a: a.as_canonical_u32() as u8,
+            b: b.as_canonical_u32() as u8,
+            c: c.as_canonical_u32() as u8,
         };
-
+        assert_eq!(&Keccak256Opcode::KECCAK256.global_opcode(), opcode);
         Ok(())
     }
 }
 
-impl<F: PrimeField32> InterpreterExecutor<F> for KeccakfExecutor {
+impl<F: PrimeField32> InterpreterExecutor<F> for KeccakVmExecutor {
     fn pre_compute_size(&self) -> usize {
-        size_of::<KeccakfPreCompute>()
+        size_of::<KeccakPreCompute>()
     }
 
     #[cfg(not(feature = "tco"))]
@@ -75,7 +76,7 @@ impl<F: PrimeField32> InterpreterExecutor<F> for KeccakfExecutor {
     where
         Ctx: ExecutionCtxTrait,
     {
-        let data: &mut KeccakfPreCompute = data.borrow_mut();
+        let data: &mut KeccakPreCompute = data.borrow_mut();
         self.pre_compute_impl(pc, inst, data)?;
         Ok(execute_e1_impl::<_, _>)
     }
@@ -90,15 +91,15 @@ impl<F: PrimeField32> InterpreterExecutor<F> for KeccakfExecutor {
     where
         Ctx: ExecutionCtxTrait,
     {
-        let data: &mut KeccakfPreCompute = data.borrow_mut();
+        let data: &mut KeccakPreCompute = data.borrow_mut();
         self.pre_compute_impl(pc, inst, data)?;
         Ok(execute_e1_handler)
     }
 }
 
-impl<F: PrimeField32> InterpreterMeteredExecutor<F> for KeccakfExecutor {
+impl<F: PrimeField32> InterpreterMeteredExecutor<F> for KeccakVmExecutor {
     fn metered_pre_compute_size(&self) -> usize {
-        size_of::<KeccakfPreCompute>()
+        size_of::<E2PreCompute<KeccakPreCompute>>()
     }
 
     #[cfg(not(feature = "tco"))]
@@ -112,7 +113,7 @@ impl<F: PrimeField32> InterpreterMeteredExecutor<F> for KeccakfExecutor {
     where
         Ctx: MeteredExecutionCtxTrait,
     {
-        let data: &mut E2PreCompute<KeccakfPreCompute> = data.borrow_mut();
+        let data: &mut E2PreCompute<KeccakPreCompute> = data.borrow_mut();
         data.chip_idx = chip_idx as u32;
         self.pre_compute_impl(pc, inst, &mut data.data)?;
         Ok(execute_e2_impl::<_, _>)
@@ -129,11 +130,53 @@ impl<F: PrimeField32> InterpreterMeteredExecutor<F> for KeccakfExecutor {
     where
         Ctx: MeteredExecutionCtxTrait,
     {
-        let data: &mut E2PreCompute<KeccakfPreCompute> = data.borrow_mut();
+        let data: &mut E2PreCompute<KeccakPreCompute> = data.borrow_mut();
         data.chip_idx = chip_idx as u32;
         self.pre_compute_impl(pc, inst, &mut data.data)?;
-        Ok(execute_e2_handler)
+        Ok(execute_e2_handler::<_, _>)
     }
+}
+
+#[inline(always)]
+unsafe fn execute_e12_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const IS_E1: bool>(
+    pre_compute: &KeccakPreCompute,
+    exec_state: &mut VmExecState<F, GuestMemory, CTX>,
+) -> u32 {
+    // Read FP from memory
+    let fp = exec_state.memory.fp::<F>();
+
+    let dst = exec_state.vm_read(RV32_REGISTER_AS, pre_compute.a as u32 + fp);
+    let src = exec_state.vm_read(RV32_REGISTER_AS, pre_compute.b as u32 + fp);
+    let len = exec_state.vm_read(RV32_REGISTER_AS, pre_compute.c as u32 + fp);
+    let dst_u32 = u32::from_le_bytes(dst);
+    let src_u32 = u32::from_le_bytes(src);
+    let len_u32 = u32::from_le_bytes(len);
+
+    let (output, height) = if IS_E1 {
+        // SAFETY: RV32_MEMORY_AS is memory address space of type u8
+        let message = exec_state.vm_read_slice(RV32_MEMORY_AS, src_u32, len_u32 as usize);
+        let output = keccak256(message);
+        (output, 0)
+    } else {
+        let num_reads = (len_u32 as usize).div_ceil(KECCAK_WORD_SIZE);
+        let message: Vec<_> = (0..num_reads)
+            .flat_map(|i| {
+                exec_state.vm_read::<u8, KECCAK_WORD_SIZE>(
+                    RV32_MEMORY_AS,
+                    src_u32 + (i * KECCAK_WORD_SIZE) as u32,
+                )
+            })
+            .collect();
+        let output = keccak256(&message[..len_u32 as usize]);
+        let height = (num_keccak_f(len_u32 as usize) * NUM_ROUNDS) as u32;
+        (output, height)
+    };
+    exec_state.vm_write(RV32_MEMORY_AS, dst_u32, &output);
+
+    let pc = exec_state.pc();
+    exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
+
+    height
 }
 
 #[create_handler]
@@ -142,40 +185,9 @@ unsafe fn execute_e1_impl<F: PrimeField32, CTX: ExecutionCtxTrait>(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
-    let pre_compute: &KeccakfPreCompute =
-        std::slice::from_raw_parts(pre_compute, size_of::<KeccakfPreCompute>()).borrow();
+    let pre_compute: &KeccakPreCompute =
+        std::slice::from_raw_parts(pre_compute, size_of::<KeccakPreCompute>()).borrow();
     execute_e12_impl::<F, CTX, true>(pre_compute, exec_state);
-}
-
-#[inline(always)]
-unsafe fn execute_e12_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const IS_E1: bool>(
-    pre_compute: &KeccakfPreCompute,
-    exec_state: &mut VmExecState<F, GuestMemory, CTX>,
-) {
-    // Read FP
-    let fp = exec_state.memory.fp::<F>();
-    let rd_ptr = fp + pre_compute.a as u32;
-    let buffer_ptr_limbs: [u8; 4] = exec_state.vm_read(RV32_REGISTER_AS, rd_ptr);
-    let buffer_ptr = u32::from_le_bytes(buffer_ptr_limbs);
-
-    let preimage: &[u8] =
-        exec_state.host_read_slice(RV32_MEMORY_AS, buffer_ptr, KECCAK_WIDTH_BYTES);
-    let postimage = keccakf_postimage_bytes(preimage.try_into().unwrap());
-
-    if IS_E1 {
-        exec_state.vm_write(RV32_MEMORY_AS, buffer_ptr, &postimage);
-    } else {
-        for (word_idx, word) in postimage.chunks_exact(KECCAK_WORD_SIZE).enumerate() {
-            exec_state.vm_write::<u8, KECCAK_WORD_SIZE>(
-                RV32_MEMORY_AS,
-                buffer_ptr + (word_idx * KECCAK_WORD_SIZE) as u32,
-                word.try_into().unwrap(),
-            );
-        }
-    }
-
-    let pc = exec_state.pc();
-    exec_state.set_pc(pc.wrapping_add(DEFAULT_PC_STEP));
 }
 
 #[create_handler]
@@ -184,23 +196,11 @@ unsafe fn execute_e2_impl<F: PrimeField32, CTX: MeteredExecutionCtxTrait>(
     pre_compute: *const u8,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
-    let pre_compute: &E2PreCompute<KeccakfPreCompute> =
-        std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<KeccakfPreCompute>>())
+    let pre_compute: &E2PreCompute<KeccakPreCompute> =
+        std::slice::from_raw_parts(pre_compute, size_of::<E2PreCompute<KeccakPreCompute>>())
             .borrow();
-
-    let op_air_idx = pre_compute.chip_idx as usize;
-
+    let height = execute_e12_impl::<F, CTX, false>(&pre_compute.data, exec_state);
     exec_state
         .ctx
-        .on_height_change(op_air_idx, NUM_OP_ROWS_PER_INS as u32);
-
-    // HACK: KeccakfPermAir is added right before KeccakfOpAir in extend_circuit,
-    // and due to reverse ordering of AIR indices, perm_air_idx = op_air_idx + 1.
-    let perm_air_idx = op_air_idx + 1;
-
-    exec_state
-        .ctx
-        .on_height_change(perm_air_idx, NUM_ROUNDS as u32);
-
-    execute_e12_impl::<F, CTX, false>(&pre_compute.data, exec_state);
+        .on_height_change(pre_compute.chip_idx as usize, height);
 }

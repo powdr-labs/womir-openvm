@@ -211,10 +211,10 @@ impl OpenVmISA for CrushKeccakISA {
     }
 
     fn allowed_opcodes() -> HashSet<VmOpcode> {
-        use openvm_crush_transpiler::{KeccakfOpcode, XorinOpcode};
-        let mut set = CrushISA::allowed_opcodes();
-        set.extend(KeccakfOpcode::iter().map(|x| x.global_opcode()));
-        set.extend(XorinOpcode::iter().map(|x| x.global_opcode()));
+        // Keccak256Opcode is NOT added to allowed_opcodes because its AIR
+        // cannot be symbolically extracted (wraps p3-keccak-air). The APC
+        // pipeline will preserve keccak instructions as-is.
+        let set = CrushISA::allowed_opcodes();
         set
     }
 

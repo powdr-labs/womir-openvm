@@ -1,36 +1,31 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use derive_more::derive::From;
 use openvm_circuit::{
     arch::{
         AirInventory, AirInventoryError, ChipInventory, ChipInventoryError, ExecutionBridge,
-        ExecutorInventoryBuilder, ExecutorInventoryError, RowMajorMatrixArena,
-        VmCircuitExtension, VmExecutionExtension, VmProverExtension,
+        ExecutorInventoryBuilder, ExecutorInventoryError, RowMajorMatrixArena, VmCircuitExtension,
+        VmExecutionExtension, VmProverExtension,
     },
-    system::{memory::SharedMemoryHelper, SystemPort},
+    system::{SystemPort, memory::SharedMemoryHelper},
 };
 use openvm_circuit_derive::{AnyEnum, Executor, MeteredExecutor, PreflightExecutor};
 use openvm_circuit_primitives::bitwise_op_lookup::{
     BitwiseOperationLookupAir, BitwiseOperationLookupBus, BitwiseOperationLookupChip,
     SharedBitwiseOperationLookupChip,
 };
-use openvm_crush_transpiler::{KeccakfOpcode, XorinOpcode};
+use openvm_crush_transpiler::Keccak256Opcode;
 use openvm_instructions::LocalOpcode;
 use openvm_stark_backend::{
     config::{StarkGenericConfig, Val},
     engine::StarkEngine,
-    interaction::PermutationCheckBus,
     p3_field::PrimeField32,
     prover::cpu::{CpuBackend, CpuDevice},
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
-use crate::keccak256::{
-    keccakf_op::{KeccakfExecutor, KeccakfOpAir, KeccakfOpChip},
-    keccakf_perm::{KeccakfPermAir, KeccakfPermChip},
-    xorin::{air::XorinVmAir, XorinVmChip, XorinVmExecutor, XorinVmFiller},
-};
+use super::{KeccakVmAir, KeccakVmChip, KeccakVmExecutor, KeccakVmFiller};
 
 // =================================== VM Extension Implementation =================================
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
@@ -38,11 +33,10 @@ pub struct Keccak256;
 
 #[derive(Clone, Copy, From, AnyEnum, Executor, MeteredExecutor, PreflightExecutor)]
 pub enum Keccak256Executor {
-    Keccakf(KeccakfExecutor),
-    Xorin(XorinVmExecutor),
+    Keccak256(KeccakVmExecutor),
 }
 
-impl<F: PrimeField32> VmExecutionExtension<F> for Keccak256 {
+impl<F> VmExecutionExtension<F> for Keccak256 {
     type Executor = Keccak256Executor;
 
     fn extend_execution(
@@ -50,17 +44,11 @@ impl<F: PrimeField32> VmExecutionExtension<F> for Keccak256 {
         inventory: &mut ExecutorInventoryBuilder<F, Keccak256Executor>,
     ) -> Result<(), ExecutorInventoryError> {
         let pointer_max_bits = inventory.pointer_max_bits();
-
-        let xorin_executor = XorinVmExecutor::new(XorinOpcode::CLASS_OFFSET, pointer_max_bits);
+        let keccak_step =
+            KeccakVmExecutor::new(Keccak256Opcode::CLASS_OFFSET, pointer_max_bits);
         inventory.add_executor(
-            xorin_executor,
-            XorinOpcode::iter().map(|x| x.global_opcode()),
-        )?;
-
-        let keccak_executor = KeccakfExecutor::new(KeccakfOpcode::CLASS_OFFSET, pointer_max_bits);
-        inventory.add_executor(
-            keccak_executor,
-            KeccakfOpcode::iter().map(|x| x.global_opcode()),
+            keccak_step,
+            Keccak256Opcode::iter().map(|x| x.global_opcode()),
         )?;
 
         Ok(())
@@ -90,35 +78,22 @@ impl<SC: StarkGenericConfig> VmCircuitExtension<SC> for Keccak256 {
             }
         };
 
-        let xorin_air = XorinVmAir::new(
+        let keccak = KeccakVmAir::new(
             exec_bridge,
             memory_bridge,
             bitwise_lu,
             pointer_max_bits,
-            XorinOpcode::CLASS_OFFSET,
+            Keccak256Opcode::CLASS_OFFSET,
         );
-        inventory.add_air(xorin_air);
-
-        let keccakf_state_bus = PermutationCheckBus::new(inventory.new_bus_idx());
-        let periphery_air = KeccakfPermAir::new(keccakf_state_bus);
-        inventory.add_air(periphery_air);
-
-        let op_air = KeccakfOpAir::new(
-            exec_bridge,
-            memory_bridge,
-            bitwise_lu,
-            keccakf_state_bus,
-            pointer_max_bits,
-            KeccakfOpcode::CLASS_OFFSET,
-        );
-        inventory.add_air(op_air);
+        inventory.add_air(keccak);
 
         Ok(())
     }
 }
 
 pub struct Keccak256CpuProverExt;
-
+// This implementation is specific to CpuBackend because the lookup chips (VariableRangeChecker,
+// BitwiseOperationLookupChip) are specific to CpuBackend.
 impl<E, SC, RA> VmProverExtension<E, RA, Keccak256> for Keccak256CpuProverExt
 where
     SC: StarkGenericConfig,
@@ -133,14 +108,13 @@ where
     ) -> Result<(), ChipInventoryError> {
         let range_checker = inventory.range_checker()?.clone();
         let timestamp_max_bits = inventory.timestamp_max_bits();
-        let mem_helper = SharedMemoryHelper::new(range_checker, timestamp_max_bits);
+        let mem_helper = SharedMemoryHelper::new(range_checker.clone(), timestamp_max_bits);
         let pointer_max_bits = inventory.airs().pointer_max_bits();
 
         let bitwise_lu = {
             let existing_chip = inventory
                 .find_chip::<SharedBitwiseOperationLookupChip<8>>()
                 .next();
-
             if let Some(chip) = existing_chip {
                 chip.clone()
             } else {
@@ -151,29 +125,12 @@ where
             }
         };
 
-        inventory.next_air::<XorinVmAir>()?;
-        let xorin_chip = XorinVmChip::new(
-            XorinVmFiller::new(bitwise_lu.clone(), pointer_max_bits),
-            mem_helper.clone(),
-        );
-        inventory.add_executor_chip(xorin_chip);
-
-        inventory.next_air::<KeccakfPermAir>()?;
-        let shared_records = Arc::new(Mutex::new(Vec::new()));
-        let periphery_chip = KeccakfPermChip::new(shared_records.clone());
-        // WARNING: the OpChip must be added _after_ the periphery chip so that its tracegen is done
-        // _first_. After OpChip tracegen, the shared_record is set to the execution records,
-        // effectively passing the records to the periphery chip.
-        inventory.add_periphery_chip(periphery_chip);
-
-        inventory.next_air::<KeccakfOpAir>()?;
-        let op_chip = KeccakfOpChip::new(
-            bitwise_lu,
-            pointer_max_bits,
+        inventory.next_air::<KeccakVmAir>()?;
+        let keccak = KeccakVmChip::new(
+            KeccakVmFiller::new(bitwise_lu, pointer_max_bits),
             mem_helper,
-            shared_records,
         );
-        inventory.add_executor_chip(op_chip);
+        inventory.add_executor_chip(keccak);
 
         Ok(())
     }

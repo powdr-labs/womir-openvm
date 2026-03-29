@@ -662,83 +662,47 @@ impl<'a, F: PrimeField32> crush::loader::rwm::settings::Settings<'a> for OpenVMS
                 )));
                 directives
             }
-            ("env", "__native_keccakf") => {
+            ("env", "__native_keccak256") => {
+                // fn(input: *const u8, len: usize, output: *mut u8)
                 assert!(outputs.is_empty());
                 let mem_start = c
                     .module()
                     .linear_memory_start()
                     .expect("no memory allocated");
-                let buffer_ptr = inputs[0].as_register().unwrap().start as usize;
+                let input_ptr = inputs[0].as_register().unwrap().start as usize;
+                let len_reg = inputs[1].as_register().unwrap().start as usize;
+                let output_ptr = inputs[2].as_register().unwrap().start as usize;
                 let mut directives = vec![];
-                let effective_ptr = if mem_start > 0 {
-                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    if let Ok(imm) = AluImm::try_from(mem_start) {
-                        directives.push(Directive::Instruction(ib::add_imm(tmp, buffer_ptr, imm)));
-                    } else {
-                        let tmp2 =
+
+                // Helper closure to add mem_start offset to a pointer register
+                let mut add_offset = |directives: &mut Vec<_>, ptr: usize| -> usize {
+                    if mem_start > 0 {
+                        let tmp =
                             c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                        directives.push(Directive::Instruction(ib::const_32_imm(
-                            tmp2,
-                            mem_start as u16,
-                            (mem_start >> 16) as u16,
-                        )));
-                        directives.push(Directive::Instruction(ib::add(tmp, buffer_ptr, tmp2)));
-                    }
-                    tmp
-                } else {
-                    buffer_ptr
-                };
-                directives.push(Directive::Instruction(ib::keccakf(effective_ptr)));
-                directives
-            }
-            ("env", "__native_xorin") => {
-                assert!(outputs.is_empty());
-                let mem_start = c
-                    .module()
-                    .linear_memory_start()
-                    .expect("no memory allocated");
-                let buffer_ptr = inputs[0].as_register().unwrap().start as usize;
-                let input_ptr = inputs[1].as_register().unwrap().start as usize;
-                let len_reg = inputs[2].as_register().unwrap().start as usize;
-                let mut directives = vec![];
-                let effective_buffer = if mem_start > 0 {
-                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    if let Ok(imm) = AluImm::try_from(mem_start) {
-                        directives.push(Directive::Instruction(ib::add_imm(tmp, buffer_ptr, imm)));
+                        if let Ok(imm) = AluImm::try_from(mem_start) {
+                            directives.push(Directive::Instruction(ib::add_imm(tmp, ptr, imm)));
+                        } else {
+                            let tmp2 = c
+                                .allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32)
+                                .start as usize;
+                            directives.push(Directive::Instruction(ib::const_32_imm(
+                                tmp2,
+                                mem_start as u16,
+                                (mem_start >> 16) as u16,
+                            )));
+                            directives.push(Directive::Instruction(ib::add(tmp, ptr, tmp2)));
+                        }
+                        tmp
                     } else {
-                        let tmp2 =
-                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                        directives.push(Directive::Instruction(ib::const_32_imm(
-                            tmp2,
-                            mem_start as u16,
-                            (mem_start >> 16) as u16,
-                        )));
-                        directives.push(Directive::Instruction(ib::add(tmp, buffer_ptr, tmp2)));
+                        ptr
                     }
-                    tmp
-                } else {
-                    buffer_ptr
                 };
-                let effective_input = if mem_start > 0 {
-                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                    if let Ok(imm) = AluImm::try_from(mem_start) {
-                        directives.push(Directive::Instruction(ib::add_imm(tmp, input_ptr, imm)));
-                    } else {
-                        let tmp2 =
-                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
-                        directives.push(Directive::Instruction(ib::const_32_imm(
-                            tmp2,
-                            mem_start as u16,
-                            (mem_start >> 16) as u16,
-                        )));
-                        directives.push(Directive::Instruction(ib::add(tmp, input_ptr, tmp2)));
-                    }
-                    tmp
-                } else {
-                    input_ptr
-                };
-                directives.push(Directive::Instruction(ib::xorin(
-                    effective_buffer,
+
+                // KECCAK256 instruction takes (dst, src, len) where dst=output, src=input
+                let effective_output = add_offset(&mut directives, output_ptr);
+                let effective_input = add_offset(&mut directives, input_ptr);
+                directives.push(Directive::Instruction(ib::keccak256(
+                    effective_output,
                     effective_input,
                     len_reg,
                 )));
