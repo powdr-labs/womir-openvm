@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use autoprecompiles::CrushISA;
-use crush_circuit::{CrushConfig, CrushCpuBuilder};
+use crush_circuit::{CrushConfig, CrushCpuBuilder, CrushKeccakConfig, CrushKeccakCpuBuilder};
 use openvm_circuit::arch::{
     Executor, MeteredExecutor, PreflightExecutor, VirtualMachine, VmBuilder, VmCircuitConfig,
     VmExecutionConfig, VmState, debug_proving_ctx,
@@ -307,6 +307,57 @@ pub fn mock_prove(
     init_state: VmState<F>,
 ) -> Result<VmState<F>, Box<dyn std::error::Error>> {
     mock_prove_with(cpu_engine(), CrushCpuBuilder, exe, init_state)
+}
+
+/// Mock proof with constraint verification for CrushKeccakConfig.
+pub fn mock_prove_keccak(
+    exe: &VmExe<F>,
+    init_state: VmState<F>,
+) -> Result<VmState<F>, Box<dyn std::error::Error>> {
+    static KECCAK_PK: OnceLock<MultiStarkProvingKey<SC>> = OnceLock::new();
+    let pk = KECCAK_PK.get_or_init(|| {
+        let config = CrushKeccakConfig::default();
+        let engine = cpu_engine();
+        let circuit = config
+            .create_airs()
+            .expect("failed to create AIR inventory for keygen");
+        circuit.keygen(&engine)
+    });
+
+    let engine = cpu_engine();
+    let d_pk = engine.device().transport_pk_to_device(pk);
+    let vm_config = CrushKeccakConfig::default();
+    let mut vm =
+        VirtualMachine::<_, CrushKeccakCpuBuilder>::new(engine, CrushKeccakCpuBuilder, vm_config, d_pk)?;
+
+    let metered_ctx = vm.build_metered_ctx(exe);
+    let metered_instance = vm.metered_interpreter(exe)?;
+    let (segments, _) =
+        metered_instance.execute_metered_from_state(init_state.clone(), metered_ctx)?;
+
+    let cached_program_trace = vm.commit_program_on_device(&exe.program);
+    vm.load_program(cached_program_trace);
+
+    let mut preflight_interpreter = vm.preflight_interpreter(exe)?;
+    let mut state = init_state;
+    for segment in &segments {
+        vm.transport_init_memory_to_device(&state.memory);
+        let preflight_output = vm.execute_preflight(
+            &mut preflight_interpreter,
+            state,
+            Some(segment.num_insns),
+            &segment.trace_heights,
+        )?;
+        state = preflight_output.to_state;
+
+        let ctx = vm.generate_proving_ctx(
+            preflight_output.system_records,
+            preflight_output.record_arenas,
+        )?;
+        debug_proving_ctx(&vm, pk, &ctx);
+    }
+
+    Ok(state)
 }
 
 /// Mock proof with constraint verification (all segments) using GPU engine.

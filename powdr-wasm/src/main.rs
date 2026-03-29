@@ -387,11 +387,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             function,
             input,
             unaligned_memory,
-            keccak: _keccak,
+            keccak,
         } => {
             let exe = load_wasm_exe(&program, &function, unaligned_memory);
             let stdin = make_stdin(&input);
-            // TODO: support --keccak for mock prove
+            if keccak {
+                let vm_config = CrushKeccakConfig::default();
+                let initial_state = VmState::initial(
+                    &vm_config.system,
+                    &exe.init_memory,
+                    exe.pc_start,
+                    stdin.clone(),
+                );
+                proving::mock_prove_keccak(&exe, initial_state)
+                    .map_err(|e| eyre::eyre!("{e}"))?;
+                println!("Keccak mock proof verified successfully.");
+                return Ok(());
+            }
             let vm_config = CrushConfig::default();
 
             let initial_state = VmState::initial(

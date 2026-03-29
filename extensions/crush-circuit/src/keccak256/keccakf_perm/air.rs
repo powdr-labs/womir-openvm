@@ -66,6 +66,8 @@ impl<AB: InteractionBuilder> Air<AB> for KeccakfPermAir {
             .assert_one(local.is_last_round());
 
         // preimage
+        // With transposed input to p3, preimage[y][x] = A[x, y].
+        // Sequential bytes: state[i] = A[i%5, i/5] = preimage[i/5][i%5].
         self.keccakf_state_bus.receive(
             builder,
             iter::empty()
