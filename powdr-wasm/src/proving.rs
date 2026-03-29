@@ -225,11 +225,7 @@ pub fn prove<ISA: powdr_openvm::isa::OpenVmISA>(
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
     let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
-    let sdk = if apc_count == 0 {
-        build_sdk(cache_dir)?
-    } else {
-        CrushSdk::new_without_transpiler(app_config)?
-    };
+    let sdk = powdr_openvm::PowdrSdkCpu::<ISA>::new_without_transpiler(app_config)?;
 
     let mut app_prover = sdk.app_prover(compiled.exe.clone())?;
     let app_proof = app_prover.prove(stdin)?;

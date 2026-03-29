@@ -205,6 +205,41 @@ impl<'a, F: PrimeField32> LinkedProgram<'a, F> {
         Ok(public_values)
     }
 
+    pub fn execute_keccak(
+        &mut self,
+        vm_config: crush_circuit::CrushKeccakConfig,
+        entry_point: &str,
+        inputs: impl Into<Streams<F>>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        let exe = self.program_with_entry_point(entry_point);
+
+        let vm = VmExecutor::new(vm_config.clone()).unwrap();
+        let instance = vm.instance(&exe).unwrap();
+        let final_state = instance.execute(inputs, None)?;
+        let public_values = extract_public_values(
+            vm_config.system.num_public_values,
+            &final_state.memory.memory,
+        );
+
+        self.memory_image = final_state
+            .memory
+            .memory
+            .get_memory()
+            .iter()
+            .enumerate()
+            .flat_map(|(addr_space, linear_mem)| {
+                linear_mem
+                    .as_slice()
+                    .iter()
+                    .enumerate()
+                    .map(move |(addr, v)| (addr_space as u32, addr as u32, *v))
+            })
+            .filter_map(|(addr_space, addr, v)| (v != 0).then_some(((addr_space, addr), v)))
+            .collect();
+
+        Ok(public_values)
+    }
+
     pub fn labels(&self) -> BTreeMap<u64, Vec<String>> {
         let mut labels = BTreeMap::<u64, Vec<String>>::new();
 

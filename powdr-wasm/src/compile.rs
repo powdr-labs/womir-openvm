@@ -17,7 +17,7 @@ use powdr_openvm::{
     program::OriginalCompiledProgram,
 };
 
-use crate::proving::{AGG_PK_FILE, APP_PK_FILE, COMPILED_PROGRAM_FILE, CrushSdk, RiscvSdk};
+use crate::proving::{AGG_PK_FILE, APP_PK_FILE, COMPILED_PROGRAM_FILE, RiscvSdk};
 
 /// Compile a crush program: load WASM, PGO, APC generation, keygen.
 /// Saves the compiled program and proving keys to `output_dir`.
@@ -66,7 +66,7 @@ pub fn compile_crush_to_disk<ISA: OpenVmISA>(
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
     let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
-    let sdk = CrushSdk::new_without_transpiler(app_config)?;
+    let sdk = powdr_openvm::PowdrSdkCpu::<ISA>::new_without_transpiler(app_config)?;
 
     let keygen_start = std::time::Instant::now();
 

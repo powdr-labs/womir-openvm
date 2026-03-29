@@ -29,27 +29,40 @@ fn compile_wat_to_wasm(out_dir: &Path, name: &str) {
 fn compile_c_to_wasm(out_dir: &Path, name: &str) {
     let src_path = format!("builtin_src/{name}.c");
     let wasm_output = out_dir.join(format!("{name}.wasm"));
+    let obj_output = out_dir.join(format!("{name}.o"));
 
     // Tell cargo to re-run build.rs if the C source file changes
     println!("cargo:rerun-if-changed={src_path}");
 
-    // Compile the C file to WASM
+    // Two-step compilation to avoid wasm-opt glibc issues
     let status = Command::new("clang")
         .args([
             "--target=wasm32-unknown-unknown",
             "-O3",
-            "-ffreestanding",
-            "-nostdlib",
-            "-Wl,--no-entry",
+            "-c",
             "-o",
-            wasm_output.to_str().unwrap(),
+            obj_output.to_str().unwrap(),
             &src_path,
         ])
         .status()
         .expect("Failed to execute clang");
 
     if !status.success() {
-        panic!("Failed to compile {src_path} to WebAssembly. Please install clang and lld.");
+        panic!("Failed to compile {src_path} to object file. Please install clang.");
+    }
+
+    let status = Command::new("wasm-ld")
+        .args([
+            "--no-entry",
+            "-o",
+            wasm_output.to_str().unwrap(),
+            obj_output.to_str().unwrap(),
+        ])
+        .status()
+        .expect("Failed to execute wasm-ld");
+
+    if !status.success() {
+        panic!("Failed to link {src_path} to WebAssembly. Please install lld.");
     }
 
     println!(

@@ -263,7 +263,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let run = || -> Result<()> {
                 let output = if keccak {
-                    linked_program.execute(CrushKeccakConfig::default(), &function, stdin)?
+                    linked_program.execute_keccak(CrushKeccakConfig::default(), &function, stdin)?
                 } else {
                     linked_program.execute(CrushConfig::default(), &function, stdin)?
                 };
