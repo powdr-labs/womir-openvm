@@ -284,3 +284,27 @@ pub enum Phantom {
     /// Fill hint stream with 8 bytes of incrementing clock timestamp.
     ClockTimeGet,
 }
+
+// =================================================================================================
+// Keccak256 opcodes
+// =================================================================================================
+
+#[derive(
+    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
+    Serialize, Deserialize,
+)]
+#[opcode_offset = 0x1310]
+#[repr(usize)]
+pub enum KeccakfOpcode {
+    KECCAKF,
+}
+
+#[derive(
+    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
+    Serialize, Deserialize,
+)]
+#[opcode_offset = 0x1311]
+#[repr(usize)]
+pub enum XorinOpcode {
+    XORIN,
+}

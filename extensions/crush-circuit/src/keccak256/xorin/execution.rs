@@ -17,7 +17,7 @@ use openvm_instructions::{
 use openvm_stark_backend::p3_field::PrimeField32;
 
 use super::XorinVmExecutor;
-use crate::KECCAK_WORD_SIZE;
+use crate::{keccak256::KECCAK_WORD_SIZE, memory_config::FpMemory};
 
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]
@@ -95,9 +95,6 @@ impl<F: PrimeField32> InterpreterExecutor<F> for XorinVmExecutor {
     }
 }
 
-#[cfg(feature = "aot")]
-impl<F: PrimeField32> AotExecutor<F> for XorinVmExecutor {}
-
 impl<F: PrimeField32> InterpreterMeteredExecutor<F> for XorinVmExecutor {
     fn metered_pre_compute_size(&self) -> usize {
         size_of::<XorinPreCompute>()
@@ -138,9 +135,6 @@ impl<F: PrimeField32> InterpreterMeteredExecutor<F> for XorinVmExecutor {
     }
 }
 
-#[cfg(feature = "aot")]
-impl<F: PrimeField32> AotMeteredExecutor<F> for XorinVmExecutor {}
-
 #[create_handler]
 #[inline(always)]
 unsafe fn execute_e1_impl<F: PrimeField32, CTX: ExecutionCtxTrait>(
@@ -157,14 +151,15 @@ unsafe fn execute_e12_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const IS_E1:
     pre_compute: &XorinPreCompute,
     exec_state: &mut VmExecState<F, GuestMemory, CTX>,
 ) {
-    let buffer = exec_state.vm_read(RV32_REGISTER_AS, pre_compute.a as u32);
-    let input = exec_state.vm_read(RV32_REGISTER_AS, pre_compute.b as u32);
-    let length = exec_state.vm_read(RV32_REGISTER_AS, pre_compute.c as u32);
+    // Read FP
+    let fp = exec_state.memory.fp::<F>();
+    let buffer = exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.a as u32);
+    let input = exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.b as u32);
+    let length = exec_state.vm_read(RV32_REGISTER_AS, fp + pre_compute.c as u32);
     let buffer_u32 = u32::from_le_bytes(buffer);
     let input_u32 = u32::from_le_bytes(input);
     let length_u32 = u32::from_le_bytes(length);
 
-    // SAFETY: RV32_MEMORY_AS is memory address space of type u8
     let num_reads = (length_u32 as usize).div_ceil(KECCAK_WORD_SIZE);
     let buffer_bytes: Vec<_> = (0..num_reads)
         .flat_map(|i| {
@@ -189,9 +184,6 @@ unsafe fn execute_e12_impl<F: PrimeField32, CTX: ExecutionCtxTrait, const IS_E1:
         output_bytes[i] ^= input_bytes[i];
     }
 
-    // Write XOR result back to the buffer memory in KECCAK_WORD_SIZE chunks.
-    // Note: this means output_bytes has to be multiple of KECCAK_WORD_SIZE
-    // Todo: recheck the above condition is okay
     for (i, chunk) in output_bytes.chunks_exact(KECCAK_WORD_SIZE).enumerate() {
         let chunk: [u8; KECCAK_WORD_SIZE] = chunk.try_into().unwrap();
         exec_state.vm_write::<u8, KECCAK_WORD_SIZE>(

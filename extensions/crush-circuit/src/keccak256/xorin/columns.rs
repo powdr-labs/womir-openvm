@@ -1,9 +1,9 @@
 use openvm_circuit::system::memory::offline_checker::{MemoryReadAuxCols, MemoryWriteAuxCols};
-use openvm_circuit_primitives::{StructReflection, StructReflectionHelper};
 use openvm_circuit_primitives_derive::AlignedBorrow;
 use openvm_instructions::riscv::RV32_REGISTER_NUM_LIMBS;
+use struct_reflection::{StructReflection, StructReflectionHelper};
 
-use crate::{KECCAK_RATE_BYTES, KECCAK_WORD_SIZE};
+use crate::keccak256::{KECCAK_RATE_BYTES, KECCAK_WORD_SIZE};
 
 #[repr(C)]
 #[derive(Debug, AlignedBorrow, StructReflection)]
@@ -18,6 +18,8 @@ pub struct XorinVmCols<T> {
 #[allow(clippy::too_many_arguments)]
 pub struct XorinInstructionCols<T> {
     pub pc: T,
+    /// Frame pointer value (read from FP_AS)
+    pub fp: T,
     pub is_enabled: T,
     pub buffer_reg_ptr: T,
     pub input_reg_ptr: T,
@@ -34,9 +36,6 @@ pub struct XorinInstructionCols<T> {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, AlignedBorrow, StructReflection)]
 pub struct XorinSpongeCols<T> {
-    // is_padding_bytes is a boolean where is_padding_bytes[i] = 1 if 4*(i+1) >= len
-    // and is_padding_bytes[i] = 0 otherwise
-    // safety: notice that each 4 bytes has to have equal is_padding_bytes value
     pub is_padding_bytes: [T; KECCAK_RATE_BYTES / KECCAK_WORD_SIZE],
     pub preimage_buffer_bytes: [T; KECCAK_RATE_BYTES],
     pub input_bytes: [T; KECCAK_RATE_BYTES],
@@ -46,6 +45,8 @@ pub struct XorinSpongeCols<T> {
 #[repr(C)]
 #[derive(Clone, Debug, AlignedBorrow, StructReflection)]
 pub struct XorinMemoryCols<T> {
+    /// FP read aux + 3 register reads = 4 reads
+    pub fp_aux: MemoryReadAuxCols<T>,
     pub register_aux_cols: [MemoryReadAuxCols<T>; 3],
     pub input_bytes_read_aux_cols: [MemoryReadAuxCols<T>; KECCAK_RATE_BYTES / KECCAK_WORD_SIZE],
     pub buffer_bytes_read_aux_cols: [MemoryReadAuxCols<T>; KECCAK_RATE_BYTES / KECCAK_WORD_SIZE],

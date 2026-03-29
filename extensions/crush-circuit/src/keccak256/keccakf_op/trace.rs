@@ -12,28 +12,32 @@ use openvm_circuit::{
         SharedMemoryHelper,
     },
 };
-use openvm_circuit_primitives::{
-    bitwise_op_lookup::SharedBitwiseOperationLookupChip, AlignedBytesBorrow, Chip,
-};
+use openvm_circuit_primitives::bitwise_op_lookup::SharedBitwiseOperationLookupChip;
+use openvm_crush_transpiler::KeccakfOpcode;
 use openvm_instructions::{
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_CELL_BITS, RV32_MEMORY_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
 };
-use openvm_keccak256_transpiler::KeccakfOpcode;
-use openvm_rv32im_circuit::adapters::{timed_write, tracing_read};
 use openvm_stark_backend::{
+    config::{StarkGenericConfig, Val},
     p3_field::PrimeField32,
     p3_matrix::{dense::RowMajorMatrix, Matrix},
     p3_maybe_rayon::prelude::*,
-    prover::{AirProvingContext, ColMajorMatrix, CpuBackend},
-    StarkProtocolConfig, Val,
+    prover::{
+        cpu::CpuBackend,
+        types::AirProvingContext,
+    },
+    Chip,
 };
 
 use super::{KeccakfExecutor, NUM_OP_ROWS_PER_INS};
 use crate::{
-    keccakf_op::{columns::KeccakfOpCols, keccakf_postimage_bytes},
-    KECCAK_WIDTH_BYTES, KECCAK_WIDTH_WORDS, KECCAK_WORD_SIZE,
+    adapters::{tracing_read, tracing_read_fp},
+    keccak256::{
+        keccakf_op::{columns::KeccakfOpCols, keccakf_postimage_bytes},
+        KECCAK_WIDTH_BYTES, KECCAK_WIDTH_WORDS, KECCAK_WORD_SIZE,
+    },
 };
 
 #[derive(derive_new::new)]
@@ -41,15 +45,12 @@ pub struct KeccakfOpChip<F> {
     pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<8>,
     pub pointer_max_bits: usize,
     pub mem_helper: SharedMemoryHelper<F>,
-    // NOTE[jpw]: this is an awkward way to pass data from this execution chip to the
-    // KeccakfPeriphery chip. This can be improved with a redesign of how record arenas are shared
-    // with chips.
     pub shared_records: Arc<Mutex<Vec<KeccakfRecord>>>,
 }
 
 impl<SC, RA> Chip<RA, CpuBackend<SC>> for KeccakfOpChip<Val<SC>>
 where
-    SC: StarkProtocolConfig,
+    SC: StarkGenericConfig,
     Val<SC>: PrimeField32,
     RA: RowMajorMatrixArena<Val<SC>>,
 {
@@ -58,7 +59,7 @@ where
         let mut trace = arena.into_matrix();
         let mem_helper = self.mem_helper.as_borrowed();
         self.fill_trace(&mem_helper, &mut trace, rows_used);
-        AirProvingContext::simple_no_pis(ColMajorMatrix::from_row_major(&trace))
+        AirProvingContext::simple_no_pis(Arc::new(trace))
     }
 }
 
@@ -74,18 +75,19 @@ impl MultiRowMetadata for KeccakfMetadata {
 pub(crate) type KeccakfRecordLayout = MultiRowLayout<KeccakfMetadata>;
 
 #[repr(C)]
-#[derive(AlignedBytesBorrow, Debug, Clone)]
+#[derive(openvm_circuit_primitives::AlignedBytesBorrow, Debug, Clone)]
 pub struct KeccakfRecord {
     pub pc: u32,
+    pub fp: u32,
     pub timestamp: u32,
     pub rd_ptr: u32,
     pub buffer_ptr: u32,
+    pub fp_aux: MemoryReadAuxRecord,
     pub rd_aux: MemoryReadAuxRecord,
     pub buffer_word_aux: [MemoryReadAuxRecord; KECCAK_WIDTH_WORDS],
     pub preimage_buffer_bytes: [u8; KECCAK_WIDTH_BYTES],
 }
 
-/// Mutable reference wrapper for KeccakfRecord, used for record seeking in CUDA tests
 pub struct KeccakfRecordMut<'a> {
     pub inner: &'a mut KeccakfRecord,
 }
@@ -136,18 +138,21 @@ where
         record.pc = *state.pc;
         record.timestamp = state.memory.timestamp();
         record.rd_ptr = rd_ptr;
+
+        // Read FP
+        let fp = tracing_read_fp::<F>(state.memory, &mut record.fp_aux.prev_timestamp);
+        record.fp = fp;
+
+        // Read rd register at fp + rd_ptr
         let buffer_ptr = u32::from_le_bytes(tracing_read(
             state.memory,
             RV32_REGISTER_AS,
-            rd_ptr,
+            fp + rd_ptr,
             &mut record.rd_aux.prev_timestamp,
         ));
         record.buffer_ptr = buffer_ptr;
 
         let guest_mem = state.memory.data();
-        // SAFETY:
-        // - RV32_MEMORY_AS (2) consists of `u8`
-        // - get_slice will panic (if protected mode) if out of bounds
         let prestate =
             unsafe { guest_mem.get_slice(RV32_MEMORY_AS, record.buffer_ptr, KECCAK_WIDTH_BYTES) };
         record.preimage_buffer_bytes.copy_from_slice(prestate);
@@ -157,8 +162,7 @@ where
             .zip(&mut record.buffer_word_aux)
             .enumerate()
         {
-            // We don't need prev_data since we read it earlier
-            let (t_prev, _) = timed_write::<KECCAK_WORD_SIZE>(
+            let (t_prev, _) = crate::adapters::timed_write::<KECCAK_WORD_SIZE>(
                 state.memory,
                 RV32_MEMORY_AS,
                 buffer_ptr + (word_idx * KECCAK_WORD_SIZE) as u32,
@@ -186,8 +190,6 @@ impl<F: PrimeField32> TraceFiller<F> for KeccakfOpChip<F> {
 
         let width = trace_matrix.width();
         let (trace, dummy_trace) = trace_matrix.values.split_at_mut(rows_used * width);
-        // For clarity we just clone the records into a separate vector to avoid dealing with unsafe
-        // overwriting
         let records = trace
             .par_chunks_exact_mut(width * NUM_OP_ROWS_PER_INS)
             .map(|mut row| {
@@ -210,23 +212,32 @@ impl<F: PrimeField32> TraceFiller<F> for KeccakfOpChip<F> {
 
                 let local: &mut KeccakfOpCols<F> = row.borrow_mut();
 
-                local.pc = F::from_u32(record.pc);
+                local.pc = F::from_canonical_u32(record.pc);
+                local.fp = F::from_canonical_u32(record.fp);
                 local.is_valid = F::ONE;
-                local.timestamp = F::from_u32(record.timestamp);
-                local.rd_ptr = F::from_u32(record.rd_ptr);
-                local.buffer_ptr_limbs = buffer_ptr_limbs.map(F::from_u8);
+                local.timestamp = F::from_canonical_u32(record.timestamp);
+                local.rd_ptr = F::from_canonical_u32(record.rd_ptr);
+                local.buffer_ptr_limbs = buffer_ptr_limbs.map(F::from_canonical_u8);
 
                 for (dst, &byte) in local.preimage.iter_mut().zip(&record.preimage_buffer_bytes) {
-                    *dst = F::from_u8(byte);
+                    *dst = F::from_canonical_u8(byte);
                 }
                 for (dst, &byte) in local.postimage.iter_mut().zip(&postimage_buffer_bytes) {
-                    *dst = F::from_u8(byte);
+                    *dst = F::from_canonical_u8(byte);
                 }
 
                 let mut timestamp = record.timestamp;
+                // FP read aux
+                mem_helper.fill(
+                    record.fp_aux.prev_timestamp,
+                    record.timestamp,
+                    local.fp_aux.as_mut(),
+                );
+                timestamp += 1;
+                // rd read aux
                 mem_helper.fill(
                     record.rd_aux.prev_timestamp,
-                    record.timestamp,
+                    timestamp,
                     local.rd_aux.as_mut(),
                 );
                 timestamp += 1;

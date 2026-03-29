@@ -53,6 +53,8 @@ pub use shift::*;
 mod hintstore;
 pub use hintstore::*;
 
+pub mod keccak256;
+
 mod extension;
 pub use extension::*;
 

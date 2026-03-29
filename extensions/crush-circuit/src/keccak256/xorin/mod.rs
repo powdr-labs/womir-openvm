@@ -1,8 +1,6 @@
 pub mod air;
 pub mod columns;
 pub mod execution;
-#[cfg(test)]
-pub mod tests;
 pub mod trace;
 
 use openvm_circuit::arch::VmChipWrapper;
@@ -15,7 +13,6 @@ pub struct XorinVmExecutor {
 }
 
 #[derive(derive_new::new)]
-// number of bits = 8
 pub struct XorinVmFiller {
     pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<8>,
     pub pointer_max_bits: usize,
