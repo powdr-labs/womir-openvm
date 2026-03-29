@@ -1,4 +1,4 @@
-use tiny_keccak::{keccakf, Hasher, Keccak};
+use tiny_keccak::{Hasher, Keccak, keccakf};
 
 use super::KECCAK_RATE_BYTES;
 

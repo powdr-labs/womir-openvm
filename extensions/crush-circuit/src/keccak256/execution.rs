@@ -3,24 +3,21 @@ use std::{
     mem::size_of,
 };
 
-use openvm_circuit::{
-    arch::*,
-    system::memory::online::GuestMemory,
-};
+use openvm_circuit::{arch::*, system::memory::online::GuestMemory};
 use openvm_circuit_primitives_derive::AlignedBytesBorrow;
+use openvm_crush_transpiler::Keccak256Opcode;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_MEMORY_AS, RV32_REGISTER_AS},
-    LocalOpcode,
 };
-use openvm_crush_transpiler::Keccak256Opcode;
 use openvm_stark_backend::p3_field::PrimeField32;
 use p3_keccak_air::NUM_ROUNDS;
 
 use crate::memory_config::FpMemory;
 
-use super::{KeccakVmExecutor, KECCAK_WORD_SIZE};
+use super::{KECCAK_WORD_SIZE, KeccakVmExecutor};
 use crate::keccak256::utils::{keccak256, num_keccak_f};
 
 #[derive(AlignedBytesBorrow, Clone)]

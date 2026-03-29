@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use autoprecompiles::CrushISA;
-use crush_circuit::{CrushConfig, CrushCpuBuilder, CrushKeccakConfig, CrushKeccakCpuBuilder};
+use crush_circuit::{CrushConfig, CrushCpuBuilder};
 use openvm_circuit::arch::{
     Executor, MeteredExecutor, PreflightExecutor, VirtualMachine, VmBuilder, VmCircuitConfig,
     VmExecutionConfig, VmState, debug_proving_ctx,
@@ -68,13 +68,14 @@ impl Backend {
     /// Run mock proof on this backend, returning the final state.
     pub fn mock_prove(
         self,
+        vm_config: CrushConfig,
         exe: &VmExe<F>,
         init_state: VmState<F>,
     ) -> Result<VmState<F>, Box<dyn std::error::Error>> {
         match self {
-            Backend::Cpu => mock_prove(exe, init_state),
+            Backend::Cpu => mock_prove(vm_config, exe, init_state),
             #[cfg(feature = "cuda")]
-            Backend::Gpu => mock_prove_gpu(exe, init_state),
+            Backend::Gpu => mock_prove_gpu(vm_config, exe, init_state),
         }
     }
 
@@ -195,8 +196,8 @@ fn build_sdk(cache_dir: Option<&Path>) -> Result<CrushSdk, Box<dyn std::error::E
 }
 
 /// Generate and verify a real cryptographic proof, with optional recursion.
-pub fn prove<ISA: powdr_openvm::isa::OpenVmISA>(
-    original_program: OriginalCompiledProgram<ISA>,
+pub fn prove(
+    original_program: OriginalCompiledProgram<CrushISA>,
     stdin: StdIn,
     recursion: bool,
     powdr_config: PowdrConfig,
@@ -208,7 +209,7 @@ pub fn prove<ISA: powdr_openvm::isa::OpenVmISA>(
         customize(
             original_program,
             powdr_config,
-            CellPgo::<_, OpenVmApcCandidate<ISA>>::with_pgo_data_and_max_columns(
+            CellPgo::<_, OpenVmApcCandidate<CrushISA>>::with_pgo_data_and_max_columns(
                 execution_profile,
                 None,
             ),
@@ -225,7 +226,11 @@ pub fn prove<ISA: powdr_openvm::isa::OpenVmISA>(
     let app_fri_params =
         FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
     let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
-    let sdk = powdr_openvm::PowdrSdkCpu::<ISA>::new_without_transpiler(app_config)?;
+    let sdk = if apc_count == 0 {
+        build_sdk(cache_dir)?
+    } else {
+        CrushSdk::new_without_transpiler(app_config)?
+    };
 
     let mut app_prover = sdk.app_prover(compiled.exe.clone())?;
     let app_proof = app_prover.prove(stdin)?;
@@ -252,6 +257,7 @@ pub fn prove<ISA: powdr_openvm::isa::OpenVmISA>(
 pub fn mock_prove_with<E, VB>(
     engine: E,
     builder: VB,
+    vm_config: CrushConfig,
     exe: &VmExe<F>,
     init_state: VmState<F>,
 ) -> Result<VmState<F>, Box<dyn std::error::Error>>
@@ -263,9 +269,19 @@ where
         + MeteredExecutor<Val<E::SC>>
         + PreflightExecutor<Val<E::SC>, VB::RecordArena>,
 {
-    let pk = vm_proving_key();
-    let d_pk = engine.device().transport_pk_to_device(pk);
-    let vm_config = CrushConfig::default();
+    // Use cached key for default config, fresh key when extensions differ
+    let (pk_ref, pk_owned);
+    if vm_config.keccak.is_none() {
+        pk_ref = vm_proving_key();
+        pk_owned = None;
+    } else {
+        let circuit = vm_config
+            .create_airs()
+            .expect("failed to create AIR inventory for keygen");
+        pk_owned = Some(circuit.keygen(&engine));
+        pk_ref = pk_owned.as_ref().unwrap();
+    }
+    let d_pk = engine.device().transport_pk_to_device(pk_ref);
     let mut vm = VirtualMachine::<_, VB>::new(engine, builder, vm_config, d_pk)?;
 
     // Run metered execution to discover segments.
@@ -294,7 +310,7 @@ where
             preflight_output.system_records,
             preflight_output.record_arenas,
         )?;
-        debug_proving_ctx(&vm, pk, &ctx);
+        debug_proving_ctx(&vm, pk_ref, &ctx);
     }
 
     Ok(state)
@@ -303,61 +319,11 @@ where
 /// Mock proof with constraint verification (all segments) using CPU engine.
 /// Returns the final state after all segments have been processed.
 pub fn mock_prove(
+    vm_config: CrushConfig,
     exe: &VmExe<F>,
     init_state: VmState<F>,
 ) -> Result<VmState<F>, Box<dyn std::error::Error>> {
-    mock_prove_with(cpu_engine(), CrushCpuBuilder, exe, init_state)
-}
-
-/// Mock proof with constraint verification for CrushKeccakConfig.
-pub fn mock_prove_keccak(
-    exe: &VmExe<F>,
-    init_state: VmState<F>,
-) -> Result<VmState<F>, Box<dyn std::error::Error>> {
-    static KECCAK_PK: OnceLock<MultiStarkProvingKey<SC>> = OnceLock::new();
-    let pk = KECCAK_PK.get_or_init(|| {
-        let config = CrushKeccakConfig::default();
-        let engine = cpu_engine();
-        let circuit = config
-            .create_airs()
-            .expect("failed to create AIR inventory for keygen");
-        circuit.keygen(&engine)
-    });
-
-    let engine = cpu_engine();
-    let d_pk = engine.device().transport_pk_to_device(pk);
-    let vm_config = CrushKeccakConfig::default();
-    let mut vm =
-        VirtualMachine::<_, CrushKeccakCpuBuilder>::new(engine, CrushKeccakCpuBuilder, vm_config, d_pk)?;
-
-    let metered_ctx = vm.build_metered_ctx(exe);
-    let metered_instance = vm.metered_interpreter(exe)?;
-    let (segments, _) =
-        metered_instance.execute_metered_from_state(init_state.clone(), metered_ctx)?;
-
-    let cached_program_trace = vm.commit_program_on_device(&exe.program);
-    vm.load_program(cached_program_trace);
-
-    let mut preflight_interpreter = vm.preflight_interpreter(exe)?;
-    let mut state = init_state;
-    for segment in &segments {
-        vm.transport_init_memory_to_device(&state.memory);
-        let preflight_output = vm.execute_preflight(
-            &mut preflight_interpreter,
-            state,
-            Some(segment.num_insns),
-            &segment.trace_heights,
-        )?;
-        state = preflight_output.to_state;
-
-        let ctx = vm.generate_proving_ctx(
-            preflight_output.system_records,
-            preflight_output.record_arenas,
-        )?;
-        debug_proving_ctx(&vm, pk, &ctx);
-    }
-
-    Ok(state)
+    mock_prove_with(cpu_engine(), CrushCpuBuilder, vm_config, exe, init_state)
 }
 
 /// Mock proof with constraint verification (all segments) using GPU engine.
@@ -365,12 +331,14 @@ pub fn mock_prove_keccak(
 /// Returns the final state after all segments have been processed.
 #[cfg(feature = "cuda")]
 pub fn mock_prove_gpu(
+    vm_config: CrushConfig,
     exe: &VmExe<F>,
     init_state: VmState<F>,
 ) -> Result<VmState<F>, Box<dyn std::error::Error>> {
     mock_prove_with(
         gpu_engine(),
         crush_circuit::CrushGpuBuilder,
+        vm_config,
         exe,
         init_state,
     )
@@ -393,52 +361,6 @@ pub fn prove_from_compiled(
 
     tracing::info!("Loading cached app_pk...");
     let app_pk: AppProvingKey<SpecializedConfig<CrushISA>> =
-        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(APP_PK_FILE))?)?;
-    sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
-
-    if recursion {
-        tracing::info!("Loading cached agg_pk...");
-        let agg_pk: AggProvingKey =
-            rmp_serde::from_slice(&std::fs::read(compiled_dir.join(AGG_PK_FILE))?)?;
-        sdk.set_agg_pk(agg_pk).map_err(|_| "agg_pk already set")?;
-    }
-
-    let mut app_prover = sdk.app_prover(compiled.exe.clone())?;
-    let app_proof = app_prover.prove(stdin)?;
-
-    let app_vk = sdk.app_pk().get_app_vk();
-    verify_app_proof(&app_vk, &app_proof)?;
-
-    if recursion {
-        let mut agg_prover = sdk.prover(compiled.exe.clone())?.agg_prover;
-        let start = std::time::Instant::now();
-        let _ = agg_prover.generate_root_verifier_input(app_proof)?;
-        tracing::info!("Agg proof (inner recursion) took {:?}", start.elapsed());
-    }
-
-    Ok(())
-}
-
-/// Prove from a pre-compiled crush+keccak artifact directory.
-pub fn prove_from_compiled_keccak(
-    compiled_dir: &Path,
-    stdin: StdIn,
-    recursion: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use autoprecompiles::CrushKeccakISA;
-
-    tracing::info!("Loading compiled program...");
-    let compiled: CompiledProgram<CrushKeccakISA> =
-        rmp_serde::from_slice(&std::fs::read(compiled_dir.join(COMPILED_PROGRAM_FILE))?)?;
-
-    let app_fri_params =
-        FriParameters::standard_with_100_bits_conjectured_security(DEFAULT_APP_LOG_BLOWUP);
-    let app_config = AppConfig::new(app_fri_params, compiled.vm_config.clone());
-    let sdk =
-        powdr_openvm::PowdrSdkCpu::<CrushKeccakISA>::new_without_transpiler(app_config)?;
-
-    tracing::info!("Loading cached app_pk...");
-    let app_pk: AppProvingKey<SpecializedConfig<CrushKeccakISA>> =
         rmp_serde::from_slice(&std::fs::read(compiled_dir.join(APP_PK_FILE))?)?;
     sdk.set_app_pk(app_pk).map_err(|_| "app_pk already set")?;
 

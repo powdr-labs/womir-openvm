@@ -33,7 +33,7 @@ type F = openvm_stark_sdk::p3_baby_bear::BabyBear;
 use crate::builtin_functions::BuiltinFunction;
 use crush_translation::{Directive, LinkedProgram, OpenVMSettings};
 
-use crush_circuit::{CrushConfig, CrushKeccakConfig};
+use crush_circuit::CrushConfig;
 use powdr_autoprecompiles::PowdrConfig;
 
 #[derive(Parser)]
@@ -262,11 +262,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let stdin = make_stdin(&input);
 
             let run = || -> Result<()> {
-                let output = if keccak {
-                    linked_program.execute_keccak(CrushKeccakConfig::default(), &function, stdin)?
+                let config = if keccak {
+                    CrushConfig::default().with_keccak()
                 } else {
-                    linked_program.execute(CrushConfig::default(), &function, stdin)?
+                    CrushConfig::default()
                 };
+                let output = linked_program.execute(config, &function, stdin)?;
                 println!("output: {output:?}");
                 Ok(())
             };
@@ -292,15 +293,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
             let stdin = make_stdin(&input);
             let powdr_config = powdr.build_powdr_config();
-            if keccak {
-                let original_program =
-                    load_wasm_original_program_keccak(&wasm_bytes, &function, unaligned_memory);
-                compile::compile_crush_to_disk(original_program, stdin, powdr_config, &output_dir)
+            let config = if keccak {
+                CrushConfig::default().with_keccak()
             } else {
-                let original_program =
-                    load_wasm_original_program(&wasm_bytes, &function, unaligned_memory);
-                compile::compile_crush_to_disk(original_program, stdin, powdr_config, &output_dir)
-            }
+                CrushConfig::default()
+            };
+            let original_program =
+                load_wasm_original_program(&wasm_bytes, &function, unaligned_memory, config);
+            compile::compile_crush_to_disk(original_program, stdin, powdr_config, &output_dir)
                 .map_err(|e| eyre::eyre!("{e}"))?;
             println!("Compiled to {}", output_dir.display());
         }
@@ -332,13 +332,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let prove = || -> Result<()> {
                 if let Some(compiled_dir) = compiled_dir {
-                    if keccak {
-                        proving::prove_from_compiled_keccak(&compiled_dir, stdin, recursion)
-                            .map_err(|e| eyre::eyre!("{e}"))?;
-                    } else {
-                        proving::prove_from_compiled(&compiled_dir, stdin, recursion)
-                            .map_err(|e| eyre::eyre!("{e}"))?;
-                    }
+                    proving::prove_from_compiled(&compiled_dir, stdin, recursion)
+                        .map_err(|e| eyre::eyre!("{e}"))?;
                 } else {
                     let program =
                         program.expect("program is required when --compiled-dir is not provided");
@@ -346,29 +341,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         function.expect("function is required when --compiled-dir is not provided");
                     let wasm_bytes = std::fs::read(&program).expect("Failed to read WASM file");
                     let powdr_config = powdr.build_powdr_config();
-                    if keccak {
-                        let original_program =
-                            load_wasm_original_program_keccak(&wasm_bytes, &function, unaligned_memory);
-                        proving::prove(
-                            original_program,
-                            stdin,
-                            recursion,
-                            powdr_config,
-                            cache_dir.as_deref(),
-                        )
-                        .map_err(|e| eyre::eyre!("{e}"))?;
+                    let config = if keccak {
+                        CrushConfig::default().with_keccak()
                     } else {
-                        let original_program =
-                            load_wasm_original_program(&wasm_bytes, &function, unaligned_memory);
-                        proving::prove(
-                            original_program,
-                            stdin,
-                            recursion,
-                            powdr_config,
-                            cache_dir.as_deref(),
-                        )
-                        .map_err(|e| eyre::eyre!("{e}"))?;
-                    }
+                        CrushConfig::default()
+                    };
+                    let original_program = load_wasm_original_program(
+                        &wasm_bytes,
+                        &function,
+                        unaligned_memory,
+                        config,
+                    );
+                    proving::prove(
+                        original_program,
+                        stdin,
+                        recursion,
+                        powdr_config,
+                        cache_dir.as_deref(),
+                    )
+                    .map_err(|e| eyre::eyre!("{e}"))?;
                 }
                 println!("Proof verified successfully.");
                 Ok(())
@@ -396,20 +387,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             let exe = load_wasm_exe(&program, &function, unaligned_memory);
             let stdin = make_stdin(&input);
-            if keccak {
-                let vm_config = CrushKeccakConfig::default();
-                let initial_state = VmState::initial(
-                    &vm_config.system,
-                    &exe.init_memory,
-                    exe.pc_start,
-                    stdin.clone(),
-                );
-                proving::mock_prove_keccak(&exe, initial_state)
-                    .map_err(|e| eyre::eyre!("{e}"))?;
-                println!("Keccak mock proof verified successfully.");
-                return Ok(());
-            }
-            let vm_config = CrushConfig::default();
+            let vm_config = if keccak {
+                CrushConfig::default().with_keccak()
+            } else {
+                CrushConfig::default()
+            };
 
             let initial_state = VmState::initial(
                 &vm_config.system,
@@ -420,12 +402,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             #[cfg(feature = "cuda")]
             {
-                proving::mock_prove_gpu(&exe, initial_state).map_err(|e| eyre::eyre!("{e}"))?;
+                proving::mock_prove_gpu(vm_config, &exe, initial_state)
+                    .map_err(|e| eyre::eyre!("{e}"))?;
                 println!("GPU mock proof verified successfully.");
             }
             #[cfg(not(feature = "cuda"))]
             {
-                proving::mock_prove(&exe, initial_state).map_err(|e| eyre::eyre!("{e}"))?;
+                proving::mock_prove(vm_config, &exe, initial_state)
+                    .map_err(|e| eyre::eyre!("{e}"))?;
                 println!("Mock proof verified successfully.");
             }
         }
@@ -506,28 +490,12 @@ fn load_wasm_original_program<'a>(
     wasm_bytes: &'a [u8],
     function: &str,
     unaligned_memory: bool,
+    config: CrushConfig,
 ) -> OriginalCompiledProgram<'a, autoprecompiles::CrushISA> {
     let (module, functions) = load_wasm(wasm_bytes, unaligned_memory);
     let linked_program = LinkedProgram::new(module, functions);
     let exe = Arc::new(linked_program.program_with_entry_point(function));
-    let vm_config = OriginalVmConfig::new(CrushConfig::default());
-
-    OriginalCompiledProgram {
-        exe,
-        vm_config,
-        linked_program,
-    }
-}
-
-fn load_wasm_original_program_keccak<'a>(
-    wasm_bytes: &'a [u8],
-    function: &str,
-    unaligned_memory: bool,
-) -> OriginalCompiledProgram<'a, autoprecompiles::CrushKeccakISA> {
-    let (module, functions) = load_wasm(wasm_bytes, unaligned_memory);
-    let linked_program = LinkedProgram::new(module, functions);
-    let exe = Arc::new(linked_program.program_with_entry_point(function));
-    let vm_config = OriginalVmConfig::new(CrushKeccakConfig::default());
+    let vm_config = OriginalVmConfig::new(config);
 
     OriginalCompiledProgram {
         exe,

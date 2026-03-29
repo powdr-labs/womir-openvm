@@ -289,34 +289,25 @@ pub enum Phantom {
 // Keccak opcodes
 // =================================================================================================
 
-#[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
-    Serialize, Deserialize,
-)]
-#[opcode_offset = 0x1310]
-#[repr(usize)]
-pub enum KeccakfOpcode {
-    KECCAKF,
-}
-
-#[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
-    Serialize, Deserialize,
-)]
-#[opcode_offset = 0x1311]
-#[repr(usize)]
-pub enum XorinOpcode {
-    XORIN,
-}
-
 /// Keccak256 precompile opcode: computes keccak256 hash of variable-length input.
 /// Instruction format: KECCAK256 dst, src, len
 ///   dst: register pointer to destination (32 bytes output)
 ///   src: register pointer to source data
 ///   len: register pointer to length in bytes
 #[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter, FromRepr, LocalOpcode,
-    Serialize, Deserialize,
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumCount,
+    EnumIter,
+    FromRepr,
+    LocalOpcode,
+    Serialize,
+    Deserialize,
 )]
 #[opcode_offset = 0x1312]
 #[repr(usize)]

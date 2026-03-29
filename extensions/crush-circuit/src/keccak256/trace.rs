@@ -7,27 +7,27 @@ use std::{
 use openvm_circuit::{
     arch::*,
     system::memory::{
+        MemoryAuxColsFactory,
         offline_checker::{MemoryReadAuxRecord, MemoryWriteBytesAuxRecord},
         online::TracingMemory,
-        MemoryAuxColsFactory,
     },
 };
 use openvm_circuit_primitives::AlignedBytesBorrow;
+use openvm_crush_transpiler::Keccak256Opcode;
 use openvm_instructions::{
+    LocalOpcode,
     instruction::Instruction,
     program::DEFAULT_PC_STEP,
     riscv::{RV32_CELL_BITS, RV32_MEMORY_AS, RV32_REGISTER_AS, RV32_REGISTER_NUM_LIMBS},
-    LocalOpcode,
 };
-use openvm_crush_transpiler::Keccak256Opcode;
 use openvm_rv32im_circuit::adapters::{read_rv32_register, tracing_read, tracing_write};
 use openvm_stark_backend::{
     p3_field::PrimeField32,
-    p3_matrix::{dense::RowMajorMatrix, Matrix},
+    p3_matrix::{Matrix, dense::RowMajorMatrix},
     p3_maybe_rayon::prelude::*,
 };
 use p3_keccak_air::{
-    generate_trace_rows, NUM_KECCAK_COLS as NUM_KECCAK_PERM_COLS, NUM_ROUNDS, U64_LIMBS,
+    NUM_KECCAK_COLS as NUM_KECCAK_PERM_COLS, NUM_ROUNDS, U64_LIMBS, generate_trace_rows,
 };
 use tiny_keccak::keccakf;
 
@@ -35,13 +35,13 @@ use crate::adapters::tracing_read_fp;
 use crate::memory_config::FpMemory;
 
 use super::{
-    columns::KeccakVmCols, KECCAK_ABSORB_READS, KECCAK_DIGEST_WRITES, KECCAK_RATE_BYTES,
-    KECCAK_REGISTER_READS, NUM_ABSORB_ROUNDS,
+    KECCAK_ABSORB_READS, KECCAK_DIGEST_WRITES, KECCAK_RATE_BYTES, KECCAK_REGISTER_READS,
+    NUM_ABSORB_ROUNDS, columns::KeccakVmCols,
 };
 use crate::keccak256::{
+    KECCAK_DIGEST_BYTES, KECCAK_RATE_U16S, KECCAK_WORD_SIZE, KeccakVmExecutor, KeccakVmFiller,
     columns::NUM_KECCAK_VM_COLS,
-    utils::{keccak256, keccak_f, num_keccak_f},
-    KeccakVmExecutor, KeccakVmFiller, KECCAK_DIGEST_BYTES, KECCAK_RATE_U16S, KECCAK_WORD_SIZE,
+    utils::{keccak_f, keccak256, num_keccak_f},
 };
 
 #[derive(Clone, Copy)]

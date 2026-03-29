@@ -1,19 +1,19 @@
 use std::{array::from_fn, borrow::Borrow, iter::zip};
 
-use itertools::{izip, Itertools};
+use itertools::{Itertools, izip};
 use openvm_circuit::{
     arch::ExecutionBridge,
     system::memory::{
-        offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols},
         MemoryAddress,
+        offline_checker::{MemoryBridge, MemoryReadAuxCols, MemoryWriteAuxCols},
     },
 };
 use openvm_circuit_primitives::{
     bitwise_op_lookup::BitwiseOperationLookupBus,
     utils::{assert_array_eq, not, select},
 };
-use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_MEMORY_AS, RV32_REGISTER_NUM_LIMBS};
 use openvm_crush_transpiler::Keccak256Opcode;
+use openvm_instructions::riscv::{RV32_CELL_BITS, RV32_MEMORY_AS, RV32_REGISTER_NUM_LIMBS};
 use openvm_rv32im_circuit::adapters::abstract_compose;
 use openvm_stark_backend::{
     air_builders::sub::SubAirBuilder,
@@ -29,10 +29,10 @@ use crate::adapters::{fp_addr, reg_addr};
 use crate::execution::ExecutionState;
 
 use super::{
-    columns::{KeccakVmCols, NUM_KECCAK_VM_COLS},
     KECCAK_ABSORB_READS, KECCAK_DIGEST_BYTES, KECCAK_DIGEST_WRITES, KECCAK_RATE_BYTES,
     KECCAK_RATE_U16S, KECCAK_REGISTER_READS, KECCAK_WIDTH_U16S, KECCAK_WORD_SIZE,
     NUM_ABSORB_ROUNDS,
+    columns::{KeccakVmCols, NUM_KECCAK_VM_COLS},
 };
 
 #[derive(Clone, Copy, Debug, derive_new::new)]

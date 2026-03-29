@@ -5,10 +5,10 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-# No tiny-keccak needed - using native keccak precompile
 
 [target.'cfg(target_os = "zkvm")'.dependencies]
-openvm = { git = "https://github.com/powdr-labs/openvm.git", rev = "62c5d26" }
+openvm = { git = "https://github.com/powdr-labs/openvm.git", tag = "v1.4.2-powdr-rc.3" }
+openvm-keccak256 = { git = "https://github.com/powdr-labs/openvm.git", tag = "v1.4.2-powdr-rc.3" }
 
 [target.'cfg(not(target_os = "zkvm"))'.dependencies]
 crush-guest-io = { path = "../../guest-io" }

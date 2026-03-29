@@ -1,7 +1,8 @@
 #![cfg_attr(target_os = "zkvm", no_std)]
 #![cfg_attr(target_os = "zkvm", no_main)]
 
-// OpenVM specific
+use core::hint::black_box;
+
 #[cfg(target_os = "zkvm")]
 mod platform {
     use crate::main;
@@ -18,7 +19,6 @@ mod platform {
     }
 }
 
-// WASM specific
 #[cfg(not(target_os = "zkvm"))]
 mod platform {
     pub fn read_u32() -> u32 {
@@ -31,14 +31,20 @@ mod platform {
     }
 }
 
-// Shared bench: same as keccak_with_inputs but uses native keccak precompile
 pub fn main() {
     let n: u32 = platform::read_u32();
 
     let mut output = [0u8; 32];
 
     for _ in 0..n {
-        output = crush_guest_keccak::keccak256(&output);
+        #[cfg(target_os = "zkvm")]
+        {
+            output = openvm_keccak256::keccak256(&black_box(output));
+        }
+        #[cfg(not(target_os = "zkvm"))]
+        {
+            output = crush_guest_keccak::keccak256(&output);
+        }
     }
 
     platform::finish(output[0]);
