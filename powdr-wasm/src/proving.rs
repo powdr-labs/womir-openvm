@@ -195,8 +195,8 @@ fn build_sdk(cache_dir: Option<&Path>) -> Result<CrushSdk, Box<dyn std::error::E
 }
 
 /// Generate and verify a real cryptographic proof, with optional recursion.
-pub fn prove(
-    original_program: OriginalCompiledProgram<CrushISA>,
+pub fn prove<ISA: powdr_openvm::isa::OpenVmISA>(
+    original_program: OriginalCompiledProgram<ISA>,
     stdin: StdIn,
     recursion: bool,
     powdr_config: PowdrConfig,
@@ -208,7 +208,7 @@ pub fn prove(
         customize(
             original_program,
             powdr_config,
-            CellPgo::<_, OpenVmApcCandidate<CrushISA>>::with_pgo_data_and_max_columns(
+            CellPgo::<_, OpenVmApcCandidate<ISA>>::with_pgo_data_and_max_columns(
                 execution_profile,
                 None,
             ),
