@@ -627,6 +627,88 @@ impl<'a, F: PrimeField32> crush::loader::rwm::settings::Settings<'a> for OpenVMS
                 )));
                 directives
             }
+            ("env", "__native_keccakf") => {
+                assert!(outputs.is_empty());
+                let mem_start = c
+                    .module()
+                    .linear_memory_start()
+                    .expect("no memory allocated");
+                let buffer_ptr = inputs[0].as_register().unwrap().start as usize;
+                let mut directives = vec![];
+                let effective_ptr = if mem_start > 0 {
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    if let Ok(imm) = AluImm::try_from(mem_start) {
+                        directives.push(Directive::Instruction(ib::add_imm(tmp, buffer_ptr, imm)));
+                    } else {
+                        let tmp2 =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                        directives.push(Directive::Instruction(ib::const_32_imm(
+                            tmp2,
+                            mem_start as u16,
+                            (mem_start >> 16) as u16,
+                        )));
+                        directives.push(Directive::Instruction(ib::add(tmp, buffer_ptr, tmp2)));
+                    }
+                    tmp
+                } else {
+                    buffer_ptr
+                };
+                directives.push(Directive::Instruction(ib::keccakf(effective_ptr)));
+                directives
+            }
+            ("env", "__native_xorin") => {
+                assert!(outputs.is_empty());
+                let mem_start = c
+                    .module()
+                    .linear_memory_start()
+                    .expect("no memory allocated");
+                let buffer_ptr = inputs[0].as_register().unwrap().start as usize;
+                let input_ptr = inputs[1].as_register().unwrap().start as usize;
+                let len_reg = inputs[2].as_register().unwrap().start as usize;
+                let mut directives = vec![];
+                let effective_buffer = if mem_start > 0 {
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    if let Ok(imm) = AluImm::try_from(mem_start) {
+                        directives.push(Directive::Instruction(ib::add_imm(tmp, buffer_ptr, imm)));
+                    } else {
+                        let tmp2 =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                        directives.push(Directive::Instruction(ib::const_32_imm(
+                            tmp2,
+                            mem_start as u16,
+                            (mem_start >> 16) as u16,
+                        )));
+                        directives.push(Directive::Instruction(ib::add(tmp, buffer_ptr, tmp2)));
+                    }
+                    tmp
+                } else {
+                    buffer_ptr
+                };
+                let effective_input = if mem_start > 0 {
+                    let tmp = c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                    if let Ok(imm) = AluImm::try_from(mem_start) {
+                        directives.push(Directive::Instruction(ib::add_imm(tmp, input_ptr, imm)));
+                    } else {
+                        let tmp2 =
+                            c.allocate_tmp_type::<OpenVMSettings<F>>(ValType::I32).start as usize;
+                        directives.push(Directive::Instruction(ib::const_32_imm(
+                            tmp2,
+                            mem_start as u16,
+                            (mem_start >> 16) as u16,
+                        )));
+                        directives.push(Directive::Instruction(ib::add(tmp, input_ptr, tmp2)));
+                    }
+                    tmp
+                } else {
+                    input_ptr
+                };
+                directives.push(Directive::Instruction(ib::xorin(
+                    effective_buffer,
+                    effective_input,
+                    len_reg,
+                )));
+                directives
+            }
             ("env", "abort") => {
                 vec![Directive::Instruction(ib::abort())]
             }
