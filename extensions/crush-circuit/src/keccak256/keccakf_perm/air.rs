@@ -7,7 +7,7 @@ use openvm_stark_backend::{
     p3_air::{Air, AirBuilder, BaseAir},
     p3_field::FieldAlgebra,
     p3_matrix::Matrix,
-    rap::{BaseAirWithPublicValues, PartitionedBaseAir},
+    rap::{BaseAirWithPublicValues, ColumnsAir, PartitionedBaseAir},
 };
 use p3_keccak_air::{KeccakAir, KeccakCols, NUM_KECCAK_COLS, U64_LIMBS};
 use struct_reflection::StructReflectionHelper;
@@ -46,6 +46,7 @@ pub const NUM_KECCAKF_PERM_COLS: usize = size_of::<KeccakfPermCols<u8>>();
 
 impl<F> BaseAirWithPublicValues<F> for KeccakfPermAir {}
 impl<F> PartitionedBaseAir<F> for KeccakfPermAir {}
+impl<F> ColumnsAir<F> for KeccakfPermAir {}
 impl<F> BaseAir<F> for KeccakfPermAir {
     fn width(&self) -> usize {
         NUM_KECCAKF_PERM_COLS

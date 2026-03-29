@@ -172,6 +172,9 @@ pub fn system_config() -> SystemConfig {
     SystemConfig::default_from_memory(memory_config_with_fp())
 }
 
+pub mod crush_keccak_config;
+pub use crush_keccak_config::*;
+
 #[cfg(feature = "cuda")]
 #[derive(Clone, Default)]
 pub struct CrushGpuBuilder;

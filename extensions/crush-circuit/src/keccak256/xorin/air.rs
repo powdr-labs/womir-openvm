@@ -19,7 +19,7 @@ use openvm_stark_backend::{
     p3_air::{Air, AirBuilder, BaseAir},
     p3_field::FieldAlgebra,
     p3_matrix::Matrix,
-    rap::{BaseAirWithPublicValues, PartitionedBaseAir},
+    rap::{BaseAirWithPublicValues, ColumnsAir, PartitionedBaseAir},
 };
 
 use crate::{
@@ -39,6 +39,11 @@ pub struct XorinVmAir {
 
 impl<F> BaseAirWithPublicValues<F> for XorinVmAir {}
 impl<F> PartitionedBaseAir<F> for XorinVmAir {}
+impl<F> ColumnsAir<F> for XorinVmAir {
+    fn columns(&self) -> Option<Vec<String>> {
+        <XorinVmCols<F> as struct_reflection::StructReflectionHelper>::struct_reflection()
+    }
+}
 impl<F> BaseAir<F> for XorinVmAir {
     fn width(&self) -> usize {
         NUM_XORIN_VM_COLS

@@ -19,7 +19,7 @@ use openvm_stark_backend::{
     p3_air::{Air, BaseAir},
     p3_field::FieldAlgebra,
     p3_matrix::Matrix,
-    rap::{BaseAirWithPublicValues, PartitionedBaseAir},
+    rap::{BaseAirWithPublicValues, ColumnsAir, PartitionedBaseAir},
 };
 use struct_reflection::StructReflectionHelper;
 
@@ -48,6 +48,11 @@ pub struct KeccakfOpAir {
 
 impl<F> BaseAirWithPublicValues<F> for KeccakfOpAir {}
 impl<F> PartitionedBaseAir<F> for KeccakfOpAir {}
+impl<F> ColumnsAir<F> for KeccakfOpAir {
+    fn columns(&self) -> Option<Vec<String>> {
+        <KeccakfOpCols<F> as struct_reflection::StructReflectionHelper>::struct_reflection()
+    }
+}
 impl<F> BaseAir<F> for KeccakfOpAir {
     fn width(&self) -> usize {
         NUM_KECCAKF_OP_COLS

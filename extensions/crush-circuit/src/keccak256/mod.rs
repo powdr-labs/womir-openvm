@@ -9,3 +9,6 @@ pub mod xorin;
 
 pub(crate) mod constants;
 pub use constants::*;
+
+mod extension;
+pub use extension::*;
