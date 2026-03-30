@@ -1,51 +1,34 @@
 //! Stateful keccak256 hasher with frame pointer support.
 //! Handles full keccak sponge (padding, absorb, keccak-f) on variable length inputs
 //! read from VM memory. Register addresses are offset by the frame pointer.
-
-use openvm_circuit_primitives::bitwise_op_lookup::SharedBitwiseOperationLookupChip;
+//!
+//! Reuses sponge columns, constants, and utility functions from the upstream
+//! `openvm-keccak256-circuit` crate. Only the FP-specific parts (instruction columns,
+//! memory columns, register read logic) are defined here.
 
 pub mod air;
 pub mod columns;
-mod crush_compat;
+pub(crate) mod crush_compat;
 pub mod execution;
 pub mod extension;
 pub mod trace;
-pub mod utils;
 
 pub use air::KeccakVmAir;
 pub use extension::*;
+
+// Re-export upstream constants and utilities so consumers don't need to depend on
+// openvm-keccak256-circuit directly.
+pub use openvm_keccak256_circuit::{
+    KECCAK_CAPACITY_BYTES, KECCAK_CAPACITY_U16S, KECCAK_DIGEST_BYTES, KECCAK_DIGEST_U64S,
+    KECCAK_RATE_BYTES, KECCAK_RATE_U16S, KECCAK_WIDTH_BYTES, KECCAK_WIDTH_U16S,
+    NUM_ABSORB_ROUNDS,
+};
+
+/// Re-export upstream utilities (keccak_f, keccak256, num_keccak_f).
+pub use openvm_keccak256_circuit::utils;
+
 use openvm_circuit::arch::*;
-
-// ==== Constants for register/memory adapter ====
-/// Register reads to get fp, dst, src, len
-const KECCAK_REGISTER_READS: usize = 4;
-/// Number of cells to read/write in a single memory access
-const KECCAK_WORD_SIZE: usize = 4;
-/// Memory reads for absorb per row
-const KECCAK_ABSORB_READS: usize = KECCAK_RATE_BYTES / KECCAK_WORD_SIZE;
-/// Memory writes for digest per row
-const KECCAK_DIGEST_WRITES: usize = KECCAK_DIGEST_BYTES / KECCAK_WORD_SIZE;
-
-// ==== Do not change these constants! ====
-/// Total number of sponge bytes: number of rate bytes + number of capacity
-/// bytes.
-pub const KECCAK_WIDTH_BYTES: usize = 200;
-/// Total number of 16-bit limbs in the sponge.
-pub const KECCAK_WIDTH_U16S: usize = KECCAK_WIDTH_BYTES / 2;
-/// Number of rate bytes.
-pub const KECCAK_RATE_BYTES: usize = 136;
-/// Number of 16-bit rate limbs.
-pub const KECCAK_RATE_U16S: usize = KECCAK_RATE_BYTES / 2;
-/// Number of absorb rounds, equal to rate in u64s.
-pub const NUM_ABSORB_ROUNDS: usize = KECCAK_RATE_BYTES / 8;
-/// Number of capacity bytes.
-pub const KECCAK_CAPACITY_BYTES: usize = 64;
-/// Number of 16-bit capacity limbs.
-pub const KECCAK_CAPACITY_U16S: usize = KECCAK_CAPACITY_BYTES / 2;
-/// Number of output digest bytes used during the squeezing phase.
-pub const KECCAK_DIGEST_BYTES: usize = 32;
-/// Number of 64-bit digest limbs.
-pub const KECCAK_DIGEST_U64S: usize = KECCAK_DIGEST_BYTES / 8;
+use openvm_circuit_primitives::bitwise_op_lookup::SharedBitwiseOperationLookupChip;
 
 pub type KeccakVmChip<F> = VmChipWrapper<F, KeccakVmFiller>;
 
@@ -60,3 +43,13 @@ pub struct KeccakVmFiller {
     pub bitwise_lookup_chip: SharedBitwiseOperationLookupChip<8>,
     pub pointer_max_bits: usize,
 }
+
+// ==== FP-specific constants ====
+/// Register reads: 1 FP read + 3 register reads (dst, src, len)
+pub(crate) const KECCAK_REGISTER_READS: usize = 4;
+/// Number of cells to read/write in a single memory access
+pub(crate) const KECCAK_WORD_SIZE: usize = 4;
+/// Memory reads for absorb per row
+pub(crate) const KECCAK_ABSORB_READS: usize = KECCAK_RATE_BYTES / KECCAK_WORD_SIZE;
+/// Memory writes for digest per row
+pub(crate) const KECCAK_DIGEST_WRITES: usize = KECCAK_DIGEST_BYTES / KECCAK_WORD_SIZE;

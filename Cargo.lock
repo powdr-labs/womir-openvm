@@ -2397,6 +2397,7 @@ dependencies = [
  "openvm-circuit-primitives-derive",
  "openvm-crush-transpiler",
  "openvm-instructions",
+ "openvm-keccak256-circuit",
  "openvm-rv32im-circuit",
  "openvm-stark-backend",
  "p3-keccak-air",

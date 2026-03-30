@@ -22,6 +22,7 @@ openvm-crush-transpiler = { path = "extensions/openvm-transpiler" }
 
 crush-circuit = { path = "extensions/crush-circuit" }
 keccak-circuit = { path = "extensions/keccak-circuit" }
+openvm-keccak256-circuit = { git = "https://github.com/powdr-labs/openvm.git", tag = "v1.4.2-powdr-rc.3", default-features = false }
 autoprecompiles = { path = "extensions/autoprecompiles" }
 crush-translation = { path = "extensions/crush-translation" }
 crush-guest-keccak = { path = "guest-libs/rust/keccak" }

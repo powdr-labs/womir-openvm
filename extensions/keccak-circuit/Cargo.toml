@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 openvm-crush-transpiler = { workspace = true }
+openvm-keccak256-circuit = { workspace = true }
 openvm-stark-backend = { workspace = true }
 openvm-circuit-primitives = { workspace = true }
 openvm-circuit-primitives-derive = { workspace = true }
