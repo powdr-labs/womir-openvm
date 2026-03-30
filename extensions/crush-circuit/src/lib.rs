@@ -2,8 +2,8 @@
 #![cfg_attr(feature = "tco", feature(explicit_tail_calls))]
 #![cfg_attr(feature = "tco", allow(internal_features))]
 #![cfg_attr(feature = "tco", feature(core_intrinsics))]
-use crate::keccak256::{Keccak256, Keccak256CpuProverExt, Keccak256Executor};
 use crate::memory_config::memory_config_with_fp;
+use keccak_circuit::{Keccak256, Keccak256CpuProverExt, Keccak256Executor};
 use openvm_circuit::{
     arch::{
         AirInventory, ChipInventoryError, InitFileGenerator, MatrixRecordArena, SystemConfig,
@@ -53,8 +53,6 @@ pub use shift::*;
 
 mod hintstore;
 pub use hintstore::*;
-
-pub mod keccak256;
 
 mod extension;
 pub use extension::*;

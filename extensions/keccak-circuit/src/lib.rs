@@ -6,6 +6,7 @@ use openvm_circuit_primitives::bitwise_op_lookup::SharedBitwiseOperationLookupCh
 
 pub mod air;
 pub mod columns;
+mod crush_compat;
 pub mod execution;
 pub mod extension;
 pub mod trace;

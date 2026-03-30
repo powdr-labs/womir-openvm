@@ -25,10 +25,10 @@ use openvm_stark_backend::{
 };
 use p3_keccak_air::{KeccakAir, NUM_KECCAK_COLS as NUM_KECCAK_PERM_COLS, U64_LIMBS};
 
-use crate::adapters::{fp_addr, reg_addr};
-use crate::execution::ExecutionState;
+use crate::crush_compat::adapters::{fp_addr, reg_addr};
+use crate::crush_compat::execution::ExecutionState;
 
-use super::{
+use crate::{
     KECCAK_ABSORB_READS, KECCAK_DIGEST_BYTES, KECCAK_DIGEST_WRITES, KECCAK_RATE_BYTES,
     KECCAK_RATE_U16S, KECCAK_REGISTER_READS, KECCAK_WIDTH_U16S, KECCAK_WORD_SIZE,
     NUM_ABSORB_ROUNDS,

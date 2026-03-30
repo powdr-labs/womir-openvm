@@ -25,7 +25,7 @@ use openvm_stark_backend::{
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
-use super::{KeccakVmAir, KeccakVmChip, KeccakVmExecutor, KeccakVmFiller};
+use crate::{KeccakVmAir, KeccakVmChip, KeccakVmExecutor, KeccakVmFiller};
 
 // =================================== VM Extension Implementation =================================
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]

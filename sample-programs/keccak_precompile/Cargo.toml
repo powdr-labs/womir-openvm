@@ -12,7 +12,7 @@ openvm-keccak256 = { git = "https://github.com/powdr-labs/openvm.git", tag = "v1
 
 [target.'cfg(not(target_os = "zkvm"))'.dependencies]
 crush-guest-io = { path = "../../guest-io" }
-crush-guest-keccak = { path = "../../guest-keccak" }
+crush-guest-keccak = { path = "../../guest-libs/rust/keccak" }
 
 [profile.release]
 panic = "abort"

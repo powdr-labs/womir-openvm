@@ -15,10 +15,10 @@ use openvm_instructions::{
 use openvm_stark_backend::p3_field::PrimeField32;
 use p3_keccak_air::NUM_ROUNDS;
 
-use crate::memory_config::FpMemory;
+use crate::crush_compat::memory_config::FpMemory;
 
-use super::{KECCAK_WORD_SIZE, KeccakVmExecutor};
-use crate::keccak256::utils::{keccak256, num_keccak_f};
+use crate::{KECCAK_WORD_SIZE, KeccakVmExecutor};
+use crate::utils::{keccak256, num_keccak_f};
 
 #[derive(AlignedBytesBorrow, Clone)]
 #[repr(C)]

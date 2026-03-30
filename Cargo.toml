@@ -4,7 +4,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace]
-members = ["powdr-wasm", "extensions/openvm-transpiler", "extensions/crush-circuit", "guest-io", "guest-keccak", "extensions/autoprecompiles", "extensions/crush-translation"]
+members = ["powdr-wasm", "extensions/openvm-transpiler", "extensions/crush-circuit", "extensions/keccak-circuit", "guest-io", "guest-libs/rust/keccak", "extensions/autoprecompiles", "extensions/crush-translation"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -21,9 +21,10 @@ powdr-riscv-elf = { git = "https://github.com/powdr-labs/powdr.git", rev = "8720
 openvm-crush-transpiler = { path = "extensions/openvm-transpiler" }
 
 crush-circuit = { path = "extensions/crush-circuit" }
+keccak-circuit = { path = "extensions/keccak-circuit" }
 autoprecompiles = { path = "extensions/autoprecompiles" }
 crush-translation = { path = "extensions/crush-translation" }
-crush-guest-keccak = { path = "guest-keccak" }
+crush-guest-keccak = { path = "guest-libs/rust/keccak" }
 
 openvm-stark-sdk = { git = "https://github.com/powdr-labs/stark-backend.git", rev = "v1.2.2-powdr", features = [
   "parallel",

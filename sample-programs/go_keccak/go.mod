@@ -9,4 +9,4 @@ require (
 	golang.org/x/sys v0.29.0 // indirect
 )
 
-replace github.com/powdr-labs/powdr-wasm/guest-keccak-go => ../../guest-keccak-go
+replace github.com/powdr-labs/powdr-wasm/guest-keccak-go => ../../guest-libs/go/keccak

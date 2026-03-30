@@ -1,9 +1,7 @@
 use std::collections::{BTreeSet, HashSet};
 
-use crush_circuit::{
-    CrushConfig, CrushConfigExecutor, CrushCpuBuilder, CrushCpuProverExt,
-    keccak256::Keccak256CpuProverExt,
-};
+use crush_circuit::{CrushConfig, CrushConfigExecutor, CrushCpuBuilder, CrushCpuProverExt};
+use keccak_circuit::Keccak256CpuProverExt;
 use crush_translation::LinkedProgram;
 use openvm_circuit::arch::{
     AirInventory, AirInventoryError, ChipInventoryError, VmBuilder, VmCircuitConfig,

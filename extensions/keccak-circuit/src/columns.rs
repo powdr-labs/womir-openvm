@@ -7,7 +7,7 @@ use openvm_instructions::riscv::RV32_REGISTER_NUM_LIMBS;
 use openvm_stark_backend::p3_air::AirBuilder;
 use p3_keccak_air::KeccakCols as KeccakPermCols;
 
-use super::{
+use crate::{
     KECCAK_ABSORB_READS, KECCAK_DIGEST_WRITES, KECCAK_RATE_BYTES, KECCAK_RATE_U16S,
     KECCAK_REGISTER_READS, KECCAK_WORD_SIZE,
 };

@@ -1,6 +1,6 @@
 use tiny_keccak::{Hasher, Keccak, keccakf};
 
-use super::KECCAK_RATE_BYTES;
+use crate::KECCAK_RATE_BYTES;
 
 /// Wrapper function for tiny-keccak's keccak-f permutation.
 /// Returns the new state after permutation.

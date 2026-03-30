@@ -31,16 +31,14 @@ use p3_keccak_air::{
 };
 use tiny_keccak::keccakf;
 
-use crate::adapters::tracing_read_fp;
-use crate::memory_config::FpMemory;
+use crate::crush_compat::adapters::tracing_read_fp;
+use crate::crush_compat::memory_config::FpMemory;
 
-use super::{
-    KECCAK_ABSORB_READS, KECCAK_DIGEST_WRITES, KECCAK_RATE_BYTES, KECCAK_REGISTER_READS,
-    NUM_ABSORB_ROUNDS, columns::KeccakVmCols,
-};
-use crate::keccak256::{
-    KECCAK_DIGEST_BYTES, KECCAK_RATE_U16S, KECCAK_WORD_SIZE, KeccakVmExecutor, KeccakVmFiller,
-    columns::NUM_KECCAK_VM_COLS,
+use crate::{
+    KECCAK_ABSORB_READS, KECCAK_DIGEST_BYTES, KECCAK_DIGEST_WRITES, KECCAK_RATE_BYTES,
+    KECCAK_RATE_U16S, KECCAK_REGISTER_READS, KECCAK_WORD_SIZE, KeccakVmExecutor, KeccakVmFiller,
+    NUM_ABSORB_ROUNDS,
+    columns::{KeccakVmCols, NUM_KECCAK_VM_COLS},
     utils::{keccak_f, keccak256, num_keccak_f},
 };
 
