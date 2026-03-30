@@ -17,17 +17,15 @@ pub fn test_metered_execution(
     initial_state: VmState<F>,
 ) -> Result<(Vec<Segment>, VmState<F>), Box<dyn std::error::Error>> {
     let engine = default_engine();
-    let (pk_owned, pk_ref);
-    if vm_config.keccak.is_none() {
-        pk_ref = vm_proving_key();
-        pk_owned = None;
-    } else {
+    let pk_storage = if vm_config.keccak.is_some() {
         let circuit = vm_config
             .create_airs()
             .expect("failed to create AIR inventory for keygen");
-        pk_owned = Some(circuit.keygen(&engine));
-        pk_ref = pk_owned.as_ref().unwrap();
-    }
+        Some(circuit.keygen(&engine))
+    } else {
+        None
+    };
+    let pk_ref = pk_storage.as_ref().unwrap_or_else(|| vm_proving_key());
     let d_pk = engine.device().transport_pk_to_device(pk_ref);
     let vm = VirtualMachine::<_, CrushCpuBuilder>::new(engine, CrushCpuBuilder, vm_config, d_pk)?;
 
@@ -46,17 +44,15 @@ pub fn test_preflight(
     initial_state: VmState<F>,
 ) -> Result<VmState<F>, Box<dyn std::error::Error>> {
     let engine = default_engine();
-    let (pk_owned, pk_ref);
-    if vm_config.keccak.is_none() {
-        pk_ref = vm_proving_key();
-        pk_owned = None;
-    } else {
+    let pk_storage = if vm_config.keccak.is_some() {
         let circuit = vm_config
             .create_airs()
             .expect("failed to create AIR inventory for keygen");
-        pk_owned = Some(circuit.keygen(&engine));
-        pk_ref = pk_owned.as_ref().unwrap();
-    }
+        Some(circuit.keygen(&engine))
+    } else {
+        None
+    };
+    let pk_ref = pk_storage.as_ref().unwrap_or_else(|| vm_proving_key());
     let d_pk = engine.device().transport_pk_to_device(pk_ref);
     let vm = VirtualMachine::<_, CrushCpuBuilder>::new(engine, CrushCpuBuilder, vm_config, d_pk)?;
 

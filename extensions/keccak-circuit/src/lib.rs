@@ -1,3 +1,7 @@
+// The #[create_handler] macro generates unsafe fn bodies that call unsafe functions
+// without inner unsafe blocks (pre-2024-edition pattern from upstream OpenVM).
+#![allow(unsafe_op_in_unsafe_fn)]
+
 //! Stateful keccak256 hasher with frame pointer support.
 //! Handles full keccak sponge (padding, absorb, keccak-f) on variable length inputs
 //! read from VM memory. Register addresses are offset by the frame pointer.
@@ -20,8 +24,7 @@ pub use extension::*;
 // openvm-keccak256-circuit directly.
 pub use openvm_keccak256_circuit::{
     KECCAK_CAPACITY_BYTES, KECCAK_CAPACITY_U16S, KECCAK_DIGEST_BYTES, KECCAK_DIGEST_U64S,
-    KECCAK_RATE_BYTES, KECCAK_RATE_U16S, KECCAK_WIDTH_BYTES, KECCAK_WIDTH_U16S,
-    NUM_ABSORB_ROUNDS,
+    KECCAK_RATE_BYTES, KECCAK_RATE_U16S, KECCAK_WIDTH_BYTES, KECCAK_WIDTH_U16S, NUM_ABSORB_ROUNDS,
 };
 
 /// Re-export upstream utilities (keccak_f, keccak256, num_keccak_f).

@@ -269,18 +269,17 @@ where
         + MeteredExecutor<Val<E::SC>>
         + PreflightExecutor<Val<E::SC>, VB::RecordArena>,
 {
-    // Use cached key for default config, fresh key when extensions differ
-    let (pk_ref, pk_owned);
-    if vm_config.keccak.is_none() {
-        pk_ref = vm_proving_key();
-        pk_owned = None;
-    } else {
+    // Use cached key for default config, fresh key when extensions differ.
+    // pk_storage keeps the owned key alive when keccak is enabled.
+    let pk_storage = if vm_config.keccak.is_some() {
         let circuit = vm_config
             .create_airs()
             .expect("failed to create AIR inventory for keygen");
-        pk_owned = Some(circuit.keygen(&engine));
-        pk_ref = pk_owned.as_ref().unwrap();
-    }
+        Some(circuit.keygen(&engine))
+    } else {
+        None
+    };
+    let pk_ref = pk_storage.as_ref().unwrap_or_else(|| vm_proving_key());
     let d_pk = engine.device().transport_pk_to_device(pk_ref);
     let mut vm = VirtualMachine::<_, VB>::new(engine, builder, vm_config, d_pk)?;
 

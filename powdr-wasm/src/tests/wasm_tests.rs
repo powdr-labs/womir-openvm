@@ -681,7 +681,8 @@ fn test_keeper_wasi() {
     let mut stdin = StdIn::default();
     stdin.write_bytes(&payload);
     let initial_state = VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin);
-    let (segments, _) = helpers::test_metered_execution(CrushConfig::default(), &exe, initial_state).unwrap();
+    let (segments, _) =
+        helpers::test_metered_execution(CrushConfig::default(), &exe, initial_state).unwrap();
     let total_insns: u64 = segments.iter().map(|s| s.num_insns).sum();
     println!(
         "  keeper_wasi: {} segment(s), {} total instructions",
@@ -711,7 +712,8 @@ fn test_keeper_decode_only() {
     let mut stdin = StdIn::default();
     stdin.write_bytes(&payload);
     let initial_state = VmState::initial(&vm_config.system, &exe.init_memory, exe.pc_start, stdin);
-    let (segments, _) = helpers::test_metered_execution(CrushConfig::default(), &exe, initial_state).unwrap();
+    let (segments, _) =
+        helpers::test_metered_execution(CrushConfig::default(), &exe, initial_state).unwrap();
     let total_insns: u64 = segments.iter().map(|s| s.num_insns).sum();
     println!(
         "  keeper_decode_only: {} segment(s), {} total instructions",
@@ -737,8 +739,7 @@ fn keccak_precompile_crush(iterations: u32, expected_first_byte: u32) {
         env!("CARGO_MANIFEST_DIR")
     );
     build_wasm(&PathBuf::from(&path));
-    let wasm_path =
-        format!("{path}/target/wasm32-unknown-unknown/release/keccak_precompile.wasm");
+    let wasm_path = format!("{path}/target/wasm32-unknown-unknown/release/keccak_precompile.wasm");
     let wasm_bytes = std::fs::read(&wasm_path).expect("Failed to read WASM file");
     let mut module = load_wasm_module(&wasm_bytes);
     run_wasm_test_function_raw_with_config(
@@ -942,20 +943,10 @@ fn go_keccak_test(wasm_path: &str, iterations: u32, expected_byte: u32, keccak: 
 
 #[test]
 fn test_go_keccak_software_1() {
-    go_keccak_test(
-        "../sample-programs/go_keccak_software.wasm",
-        1,
-        41,
-        false,
-    );
+    go_keccak_test("../sample-programs/go_keccak_software.wasm", 1, 41, false);
 }
 
 #[test]
 fn test_go_keccak_precompile_1() {
-    go_keccak_test(
-        "../sample-programs/go_keccak_precompile.wasm",
-        1,
-        41,
-        true,
-    );
+    go_keccak_test("../sample-programs/go_keccak_precompile.wasm", 1, 41, true);
 }
