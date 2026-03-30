@@ -914,3 +914,48 @@ fn build_wasm(path: &PathBuf) {
 
     assert!(output.status.success(), "cargo build failed for {path:?}",);
 }
+
+// ==================== Go Keccak Guest Tests ====================
+
+fn go_keccak_test(wasm_path: &str, iterations: u32, expected_byte: u32, keccak: bool) {
+    let wasm_bytes = std::fs::read(wasm_path).expect("failed to read Go keccak WASM file");
+    let mut module =
+        load_wasm_module_with_settings(&wasm_bytes, OpenVMSettings::new().with_unaligned_memory());
+
+    let vm_config = if keccak {
+        CrushConfig::default().with_keccak()
+    } else {
+        CrushConfig::default()
+    };
+
+    run_wasm_test_function_raw_with_config(
+        &mut module,
+        "_start",
+        &[iterations, expected_byte],
+        0,
+        true,
+        &[],
+        vm_config,
+    )
+    .unwrap();
+}
+
+#[test]
+fn test_go_keccak_software_1() {
+    go_keccak_test(
+        "../sample-programs/go_keccak_software.wasm",
+        1,
+        41,
+        false,
+    );
+}
+
+#[test]
+fn test_go_keccak_precompile_1() {
+    go_keccak_test(
+        "../sample-programs/go_keccak_precompile.wasm",
+        1,
+        41,
+        true,
+    );
+}
