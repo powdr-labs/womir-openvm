@@ -63,7 +63,7 @@ extern "C" int _crush_alu64_tracegen(
     assert((height & (height - 1)) == 0);
     assert(height >= d_records.len());
     assert(width == sizeof(CrushBaseAlu64Cols<uint8_t>));
-    auto [grid, block] = kernel_launch_params(height);
+    auto [grid, block] = kernel_launch_params(height, 512);
     crush_alu64_tracegen<<<grid, block>>>(
         d_trace,
         height,

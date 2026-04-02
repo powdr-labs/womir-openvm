@@ -14,7 +14,7 @@ use openvm_crush_transpiler::{
     Eq64Opcode, EqOpcode, JumpOpcode, LessThan64Opcode, LessThanOpcode, LoadStoreOpcode,
     Mul64Opcode, MulOpcode, Shift64Opcode, ShiftOpcode,
 };
-use openvm_instructions::{instruction::Instruction, LocalOpcode, VmOpcode};
+use openvm_instructions::{instruction::Instruction, program::DEFAULT_PC_STEP, LocalOpcode, VmOpcode};
 use openvm_stark_backend::p3_field::PrimeField32;
 use openvm_stark_sdk::{
     config::baby_bear_poseidon2::BabyBearPoseidon2Engine, p3_baby_bear::BabyBear,
@@ -93,7 +93,7 @@ impl OpenVmISA for CrushISA {
     }
 
     fn try_static_target<F: PrimeField32>(
-        (_pc, instruction): (u64, &Instr<F, Self>),
+        (pc, instruction): (u64, &Instr<F, Self>),
         _previous: Option<(u64, &Instr<F, Self>)>,
     ) -> Option<u64> {
         let opcode = instruction.inner.opcode;
@@ -101,8 +101,11 @@ impl OpenVmISA for CrushISA {
             Some(u64::from(instruction.inner.a.as_canonical_u32()))
         } else if opcode == CallOpcode::CALL.global_opcode() {
             Some(u64::from(instruction.inner.c.as_canonical_u32()))
-        } else {
+        } else if Self::branching_opcodes().contains(&opcode) {
+            // SKIP, JUMP_IF, JUMP_IF_ZERO, RET, CALL_INDIRECT: target not statically known
             None
+        } else {
+            Some(pc + u64::from(DEFAULT_PC_STEP))
         }
     }
 
