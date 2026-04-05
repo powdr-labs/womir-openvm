@@ -404,6 +404,16 @@ impl<F: PrimeField32> crush::loader::settings::Settings for OpenVMSettings<F> {
         }
     }
 
+    fn get_static_target(directive: &Directive<F>) -> Option<&str> {
+        match directive {
+            Directive::Jump { target } => Some(target),
+            Directive::JumpIf { target, .. } => Some(target),
+            Directive::JumpIfZero { target, .. } => Some(target),
+            Directive::Call { target_pc, .. } => Some(target_pc),
+            _ => None,
+        }
+    }
+
     fn emit_jump(&self, target: String) -> Directive<F> {
         Directive::Jump { target }
     }
